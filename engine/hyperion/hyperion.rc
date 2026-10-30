@@ -1,0 +1,86 @@
+// hyperion.rc -- Hyperion.exe's icon and version resource.
+//
+// The icon is the Battlecruiser (make_icon.py). It comes first in the file, so it is
+// the one Explorer shows, and the game window takes it too (port_window.cpp).
+//
+// StarCraft 1.17 reads the product version of its own exe file on disk
+// (get_program_version_info, init.cpp): the main menu shows it as "Version 1.17.0",
+// and it goes to SNet with the rest of the version record. Run from Hyperion.exe,
+// that file is this one, so the product version is 1.17's. The file version is
+// Hyperion's own (version.h).
+//
+// The first start's window, when no game's files are found (src117/port/data/port_install.cpp),
+// and the window a failed start or a crash shows (src117/port/tools/port_errorwin.cpp).
+#include <windows.h>
+#include "version.h"
+#include "../src117/port/data/port_install_dlg.h"
+#include "../src117/port/tools/port_errorwin_dlg.h"
+
+1 ICON "hyperion.ico"
+
+IDD_PORT_INSTALL DIALOGEX 0, 0, 320, 250
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Hyperion: StarCraft's files"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+  LTEXT "Hyperion plays StarCraft from your own copy of its files. Link the ones you have: one is enough.", -1, 10, 10, 300, 10
+  LTEXT "StarCraft: Remastered, from Battle.net (free)", IDC_INSTALL_BATTLENET_TITLE, 10, 28, 300, 10
+  LTEXT "Choose the StarCraft folder itself, the one that holds StarCraft Launcher.exe and the x86_64 and Data folders, for example C:\\Program Files (x86)\\StarCraft.", -1, 10, 40, 300, 18
+  EDITTEXT IDC_INSTALL_BATTLENET_FOLDER, 10, 60, 244, 14, ES_AUTOHSCROLL | WS_GROUP | WS_TABSTOP
+  PUSHBUTTON "Browse...", IDC_INSTALL_BATTLENET_BROWSE, 260, 59, 50, 16, WS_TABSTOP
+  LTEXT "", IDC_INSTALL_BATTLENET_STATUS, 10, 78, 300, 18
+  LTEXT "Classic (1.16.1 and prior)", IDC_INSTALL_CLASSIC_TITLE, 10, 102, 300, 10
+  LTEXT "Choose the folder that holds StarDat.mpq and BrooDat.mpq, where the classic game is installed, for example C:\\Program Files (x86)\\StarCraft.", -1, 10, 114, 300, 18
+  EDITTEXT IDC_INSTALL_CLASSIC_FOLDER, 10, 134, 244, 14, ES_AUTOHSCROLL | WS_GROUP | WS_TABSTOP
+  PUSHBUTTON "Browse...", IDC_INSTALL_CLASSIC_BROWSE, 260, 133, 50, 16, WS_TABSTOP
+  LTEXT "", IDC_INSTALL_CLASSIC_STATUS, 10, 152, 300, 18
+  LTEXT "Use as the game's files:", -1, 10, 180, 90, 10
+  AUTORADIOBUTTON "StarCraft: Remastered", IDC_INSTALL_BATTLENET, 100, 179, 100, 10, WS_GROUP | WS_TABSTOP
+  AUTORADIOBUTTON "Classic", IDC_INSTALL_CLASSIC, 205, 179, 100, 10
+  LTEXT "The other stays linked: switch to it later in Settings, under Hyperion.", -1, 10, 196, 300, 10
+  DEFPUSHBUTTON "Start", IDOK, 204, 224, 50, 16, WS_GROUP | WS_TABSTOP
+  PUSHBUTTON "Quit", IDCANCEL, 260, 224, 50, 16, WS_TABSTOP
+END
+
+IDD_PORT_ERROR DIALOGEX 0, 0, 360, 266
+STYLE DS_MODALFRAME | DS_CENTER | DS_SHELLFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Hyperion"
+FONT 9, "Segoe UI", 400, 0, 1
+BEGIN
+  LTEXT "", IDC_ERROR_TITLE, 10, 8, 340, 14, SS_NOPREFIX
+  LTEXT "", IDC_ERROR_WHAT, 10, 26, 340, 44, SS_NOPREFIX | SS_EDITCONTROL
+  LTEXT "", IDC_ERROR_HINT, 10, 72, 340, 18, SS_NOPREFIX
+  DEFPUSHBUTTON "Copy to clipboard", IDC_ERROR_COPY, 10, 244, 80, 15, WS_GROUP | WS_TABSTOP
+  PUSHBUTTON "Open the folder", IDC_ERROR_OPEN, 96, 244, 80, 15, WS_TABSTOP
+  PUSHBUTTON "Close", IDCANCEL, 300, 244, 50, 15, WS_TABSTOP
+  // after the buttons, so the focus Windows gives a dialog is Copy's, not the box's, which would
+  // select its text and scroll to its end
+  EDITTEXT IDC_ERROR_TEXT, 10, 92, 340, 146, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_TABSTOP
+END
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION HYPERION_FILE_VERSION
+ PRODUCTVERSION 1,17,0,1
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+ FILEFLAGS 0
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE 0
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "FileDescription", "Hyperion"
+      VALUE "FileVersion", HYPERION_FILE_VERSION_STR
+      VALUE "InternalName", "Hyperion"
+      VALUE "OriginalFilename", "Hyperion.exe"
+      VALUE "ProductName", "Hyperion"
+      VALUE "ProductVersion", "1.17.0.1"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

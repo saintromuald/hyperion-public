@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Hyperion</title>
+<link rel="stylesheet" href="play.css">
+</head>
+<body>
+<main id="setup" class="hp-setup" hidden>
+  <section class="hp-box">
+    <p class="hp-kicker">Hyperion in the browser</p>
+    <h1 class="hp-h1" id="setup-title">Your StarCraft Files</h1>
+    <p class="hp-text" id="setup-text">Hyperion plays from a copy of StarCraft 1.17's files kept in this browser.
+      Choose the folder it is installed in: the files stay in this browser and are never sent anywhere.</p>
+    <div class="hp-actions">
+      <button type="button" class="hp-btn gold" id="use-host" hidden>Use the Host’s Files</button>
+      <button type="button" class="hp-btn" id="pick-folder-btn">Choose the StarCraft Folder</button>
+      <input id="pick-folder" type="file" webkitdirectory directory multiple hidden>
+      <label class="hp-btn" for="pick-files">Pick the Files One by One</label>
+      <input id="pick-files" type="file" multiple accept=".exe,.dll,.mpq" hidden>
+    </div>
+    <p class="hp-fine" id="setup-host" hidden>The host’s copy comes over this network, about 90 MB, and is kept in
+      this browser afterwards. It has no music or movies: those are in the two optional files below, which your own
+      folder can add.</p>
+    <p class="hp-fine" id="setup-folder-note"></p>
+    <p class="hp-fine hp-bad" id="setup-error" hidden></p>
+    <p class="hp-fine" id="setup-status" hidden></p>
+    <p class="hp-list-head">The files Hyperion uses, from the folder StarCraft is installed in:</p>
+    <ul class="hp-files" id="setup-list"></ul>
+    <div class="hp-kept" id="setup-kept" hidden>
+      <p class="hp-fine" id="setup-kept-text"></p>
+      <div class="hp-actions">
+        <button type="button" class="hp-btn gold" id="play-now">Play</button>
+        <button type="button" class="hp-btn" id="forget">Forget the Files</button>
+      </div>
+    </div>
+    <div class="hp-settings">
+      <p class="hp-fine">This browser's settings: where the files come from, and the game's own settings.</p>
+      <div class="hp-actions">
+        <button type="button" class="hp-btn" id="save-settings">Save Settings to a File</button>
+        <label class="hp-btn" for="load-settings">Load Settings from a File</label>
+        <input id="load-settings" type="file" accept=".json,application/json" hidden>
+      </div>
+      <p class="hp-fine" id="settings-note" hidden></p>
+    </div>
+  </section>
+</main>
+<main id="loading" class="hp-setup" hidden>
+  <section class="hp-box">
+    <p class="hp-kicker">Hyperion in the browser</p>
+    <h1 class="hp-h1" id="loading-title">Starting</h1>
+    <div class="hp-bar"><span id="loading-bar"></span></div>
+    <p class="hp-fine" id="loading-text"></p>
+  </section>
+</main>
+<canvas id="canvas" class="hp-canvas" tabindex="0" hidden oncontextmenu="event.preventDefault()"></canvas>
+<script src="hyperion.js"></script>
+<script src="play.js"></script>
+</body>
+</html>

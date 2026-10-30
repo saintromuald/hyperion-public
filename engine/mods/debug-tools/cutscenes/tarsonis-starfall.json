@@ -1,0 +1,309 @@
+{
+  "title": "Tarsonis: Operation Starfall",
+  "map": {"from": "(4)Tarsonis Orbital.scm"},
+  "steps": [
+    {
+      "do": "fade",
+      "to": "black",
+      "ms": 0,
+      "scale": 1.25
+    },
+    {
+      "do": "bars",
+      "on": true,
+      "size": 0.1,
+      "ms": 0
+    },
+    {
+      "do": "spawn",
+      "unit": "terran_battlecruiser",
+      "x": 800,
+      "y": 2048,
+      "player": 0,
+      "as": "flag"
+    },
+    {
+      "do": "spawn",
+      "unit": "terran_battlecruiser",
+      "x": 650,
+      "y": 1880,
+      "player": 0,
+      "count": 3,
+      "as": "fleet"
+    },
+    {
+      "do": "spawn",
+      "unit": "terran_wraith",
+      "x": 620,
+      "y": 2230,
+      "player": 0,
+      "count": 8,
+      "as": "fleet"
+    },
+    {
+      "do": "spawn",
+      "unit": 58,
+      "x": 560,
+      "y": 2050,
+      "player": 0,
+      "count": 4,
+      "as": "fleet"
+    },
+    {
+      "do": "spawn",
+      "unit": 70,
+      "x": 3350,
+      "y": 1900,
+      "player": 1,
+      "count": 10,
+      "as": "armada"
+    },
+    {
+      "do": "spawn",
+      "unit": 60,
+      "x": 3350,
+      "y": 2200,
+      "player": 1,
+      "count": 8,
+      "as": "armada"
+    },
+    {
+      "do": "camera",
+      "x": 570,
+      "y": 2048,
+      "zoom": 0.8,
+      "ms": 0
+    },
+    {
+      "do": "caption",
+      "text": "Tarsonis Orbital. 04:00 hours.",
+      "at": "top",
+      "ms": 3600,
+      "async": true
+    },
+    {
+      "do": "fade",
+      "to": "clear",
+      "scale": 1.0,
+      "ms": 2200,
+      "ease": "out"
+    },
+    {
+      "do": "transmission",
+      "unit": "flag",
+      "text": "All ships, this is the Hyperion. Form up on the flagship.",
+      "ms": 3000,
+      "async": true
+    },
+    {
+      "do": "camera",
+      "x": 601,
+      "y": 1968,
+      "zoom": 0.8,
+      "ms": 420,
+      "ease": "even"
+    },
+    {
+      "do": "camera",
+      "x": 685,
+      "y": 1909,
+      "zoom": 0.8,
+      "ms": 420,
+      "ease": "even"
+    },
+    {
+      "do": "camera",
+      "x": 800,
+      "y": 1888,
+      "zoom": 0.8,
+      "ms": 420,
+      "ease": "even"
+    },
+    {
+      "do": "camera",
+      "x": 915,
+      "y": 1909,
+      "zoom": 0.8,
+      "ms": 420,
+      "ease": "even"
+    },
+    {
+      "do": "camera",
+      "x": 999,
+      "y": 1968,
+      "zoom": 0.8,
+      "ms": 420,
+      "ease": "even"
+    },
+    {
+      "do": "camera",
+      "x": 1030,
+      "y": 2048,
+      "zoom": 0.8,
+      "ms": 420,
+      "ease": "even"
+    },
+    {
+      "do": "camera",
+      "x": 999,
+      "y": 2128,
+      "zoom": 0.8,
+      "ms": 420,
+      "ease": "even"
+    },
+    {
+      "do": "camera",
+      "x": 915,
+      "y": 2187,
+      "zoom": 0.8,
+      "ms": 420,
+      "ease": "even"
+    },
+    {
+      "do": "camera",
+      "x": 800,
+      "y": 2208,
+      "zoom": 0.8,
+      "ms": 420,
+      "ease": "even"
+    },
+    {
+      "do": "camera",
+      "x": 685,
+      "y": 2187,
+      "zoom": 0.8,
+      "ms": 420,
+      "ease": "even"
+    },
+    {
+      "do": "camera",
+      "x": 601,
+      "y": 2128,
+      "zoom": 0.8,
+      "ms": 420,
+      "ease": "even"
+    },
+    {
+      "do": "camera",
+      "x": 570,
+      "y": 2048,
+      "zoom": 0.8,
+      "ms": 420,
+      "ease": "even"
+    },
+    {
+      "do": "order",
+      "units": [
+        "flag",
+        "fleet"
+      ],
+      "to": [
+        2300,
+        2048
+      ],
+      "order": "attack"
+    },
+    {
+      "do": "fade",
+      "to": "black",
+      "ms": 120
+    },
+    {
+      "do": "camera",
+      "x": 3300,
+      "y": 2048,
+      "zoom": 1.0,
+      "ms": 0
+    },
+    {
+      "do": "fade",
+      "to": "clear",
+      "ms": 300
+    },
+    {
+      "do": "transmission",
+      "unit": "armada",
+      "text": "Terran vessels detected. Engage them.",
+      "ms": 2400
+    },
+    {
+      "do": "order",
+      "units": "armada",
+      "to": [
+        900,
+        2048
+      ],
+      "order": "attack"
+    },
+    {
+      "do": "fade",
+      "to": "black",
+      "ms": 120
+    },
+    {
+      "do": "follow",
+      "unit": "flag",
+      "zoom": 1.4,
+      "ms": 0
+    },
+    {
+      "do": "fade",
+      "to": "clear",
+      "ms": 300
+    },
+    {
+      "do": "caption",
+      "text": "Weapons free.",
+      "ms": 1600,
+      "async": true
+    },
+    {
+      "do": "wait",
+      "ms": 4200
+    },
+    {
+      "do": "camera",
+      "x": 1700,
+      "y": 2048,
+      "zoom": 2.0,
+      "ms": 3000,
+      "ease": "out"
+    },
+    {
+      "do": "wait",
+      "ms": 3500
+    },
+    {
+      "do": "camera",
+      "x": 1600,
+      "y": 2048,
+      "zoom": 1.1,
+      "ms": 4000,
+      "ease": "in_out",
+      "async": true
+    },
+    {
+      "do": "caption",
+      "text": "Not every ship would make it home.",
+      "at": "middle",
+      "ms": 3400
+    },
+    {
+      "do": "wait",
+      "ms": 800
+    },
+    {
+      "do": "fade",
+      "to": "black",
+      "scale": 0.86,
+      "ms": 1600,
+      "ease": "in_out"
+    },
+    {
+      "do": "caption",
+      "text": "To be continued...",
+      "at": "middle",
+      "ms": 2600
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+/* Hyperion in the browser: the page round the game, its files and its start. */
+:root {
+  --hp-bg: #f2f4f8;
+  --hp-panel: #ffffff;
+  --hp-ink: #10151d;
+  --hp-ink-dim: #4a5566;
+  --hp-rim: #c9d1dd;
+  --hp-gold: #b8860b;
+  --hp-gold-ink: #1b1400;
+  --hp-bad: #b3261e;
+  --hp-bar: #2f6fd6;
+  --hp-black: #000000;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --hp-bg: #05080d;
+    --hp-panel: #0c1420;
+    --hp-ink: #e6edf7;
+    --hp-ink-dim: #93a3b8;
+    --hp-rim: #22344d;
+    --hp-gold: #e0b44c;
+    --hp-gold-ink: #1b1400;
+    --hp-bad: #ff7a70;
+    --hp-bar: #5ea0ff;
+  }
+}
+:root[data-theme="dark"] {
+  --hp-bg: #05080d;
+  --hp-panel: #0c1420;
+  --hp-ink: #e6edf7;
+  --hp-ink-dim: #93a3b8;
+  --hp-rim: #22344d;
+  --hp-gold: #e0b44c;
+  --hp-gold-ink: #1b1400;
+  --hp-bad: #ff7a70;
+  --hp-bar: #5ea0ff;
+}
+html, body { margin: 0; height: 100%; background: var(--hp-bg); color: var(--hp-ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+body.hp-playing { background: var(--hp-black); overflow: hidden; }
+.hp-setup { min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
+.hp-setup[hidden], .hp-canvas[hidden] { display: none; }
+.hp-box { width: 100%; max-width: 560px; background: var(--hp-panel); border: 1px solid var(--hp-rim); border-radius: 8px;
+  padding: 24px; box-sizing: border-box; }
+.hp-kicker { margin: 0 0 6px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--hp-ink-dim); }
+.hp-h1 { margin: 0 0 12px; font-size: 26px; }
+.hp-text { margin: 0 0 18px; line-height: 1.5; }
+.hp-fine { margin: 12px 0 0; font-size: 13px; color: var(--hp-ink-dim); line-height: 1.5; }
+.hp-bad { color: var(--hp-bad); }
+.hp-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.hp-btn { display: inline-flex; align-items: center; padding: 10px 16px; border: 1px solid var(--hp-rim); border-radius: 6px;
+  background: transparent; color: var(--hp-ink); font: inherit; cursor: pointer; }
+.hp-btn.gold { background: var(--hp-gold); border-color: var(--hp-gold); color: var(--hp-gold-ink); }
+.hp-kept[hidden], .hp-btn[hidden], .hp-fine[hidden] { display: none; }
+.hp-list-head { margin: 18px 0 6px; font-size: 13px; font-weight: 600; }
+.hp-files { list-style: none; margin: 0; padding: 0; border: 1px solid var(--hp-rim); border-radius: 6px; }
+.hp-files li { display: flex; align-items: baseline; gap: 10px; padding: 8px 12px; font-size: 13px; }
+.hp-files li + li { border-top: 1px solid var(--hp-rim); }
+.hp-files b { flex: 0 0 auto; font-weight: 600; }
+.hp-files .hp-what { flex: 1 1 auto; color: var(--hp-ink-dim); }
+.hp-files .hp-mark { flex: 0 0 auto; font-size: 12px; color: var(--hp-ink-dim); }
+.hp-files .hp-mark.kept { color: var(--hp-bar); }
+.hp-files .hp-mark.need { color: var(--hp-bad); }
+@media (max-width: 480px) { .hp-files li { flex-wrap: wrap; } .hp-files .hp-what { flex-basis: 100%; order: 3; } }
+.hp-kept { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--hp-rim); }
+.hp-settings { margin-top: 18px; padding-top: 4px; border-top: 1px solid var(--hp-rim); }
+.hp-settings .hp-actions { margin-top: 10px; }
+.hp-bar { height: 8px; border-radius: 4px; background: var(--hp-rim); overflow: hidden; }
+.hp-bar span { display: block; height: 100%; width: 0; background: var(--hp-bar); transition: width 0.2s; }
+.hp-canvas { display: block; position: fixed; inset: 0; margin: auto; image-rendering: pixelated; outline: none;
+  background: var(--hp-black); }

@@ -1,0 +1,1619 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Debug Tools panel</title>
+<!--
+  Debug Tools' panel: Hyperion serves it at http://127.0.0.1:27117/ while its live
+  channel is open (src117/port/tools/port_control.cpp), and it talks to the game over the same
+  port. The demo reel, chapters that show what the engine can do on the game itself; sliders for
+  the live values, the scene commands, the sandbox's spawn, and the last snapshot; the camera's trace (port_trace.cpp), with presses and drags on the minimap and
+  held scroll keys to repeat, a plot of where the game's view and the camera went, and how even
+  a scroll's motion was; and the live numbers a second (port_present.cpp, port_perf.cpp).
+  The sections are grouped under tabs along the top, can be filtered by name and folded by their
+  titles; the tab and the folds are remembered in this browser. The live guide for editors
+  (guide.html) is served beside it at /guide.
+-->
+<style>
+  :root {
+    --background: #f4f5f7;
+    --panel: #ffffff;
+    --text: #1b1e24;
+    --muted: #5d6573;
+    --line: #d9dde3;
+    --accent: #b8860b;
+    --accent-text: #ffffff;
+    --good: #2f7d4a;
+    --bad: #b3261e;
+    --plot-game: #2f6fb3;
+    --plot-camera: #b8860b;
+    --plot-fps: #2f7d4a;
+    --plot-gfps: #2f6fb3;
+    --part-events: #5b7fa6; --part-creep: #8c4f3c; --part-ai: #b88a1e; --part-fog: #4c679a;
+    --part-units: #23899a; --part-movers: #3f8f53; --part-triggers: #8a55b0; --part-check: #6d7782;
+    --part-minimap: #3a8a7b; --part-ui: #9a9628; --part-draw: #c0474f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --background: #0f1115;
+      --panel: #181b21;
+      --text: #e6e8eb;
+      --muted: #9aa2ae;
+      --line: #2a2f38;
+      --accent: #e8b84a;
+      --accent-text: #15171b;
+      --good: #6cc48a;
+      --bad: #f08a80;
+      --plot-game: #6fa8e8;
+      --plot-camera: #e8b84a;
+      --plot-fps: #7bd88f;
+      --plot-gfps: #66d5fe;
+      --part-events: #8fb8de; --part-creep: #b0705a; --part-ai: #e6b450; --part-fog: #6f8fbf;
+      --part-units: #4fc3d9; --part-movers: #7bd88f; --part-triggers: #c792ea; --part-check: #9aa6b2;
+      --part-minimap: #5fb3a1; --part-ui: #d6d26b; --part-draw: #f07178;
+    }
+  }
+  :root[data-theme="dark"] {
+    --background: #0f1115;
+    --panel: #181b21;
+    --text: #e6e8eb;
+    --muted: #9aa2ae;
+    --line: #2a2f38;
+    --accent: #e8b84a;
+    --accent-text: #15171b;
+    --good: #6cc48a;
+    --bad: #f08a80;
+    --plot-game: #6fa8e8;
+    --plot-camera: #e8b84a;
+    --plot-fps: #7bd88f;
+    --plot-gfps: #66d5fe;
+    --part-events: #8fb8de; --part-creep: #b0705a; --part-ai: #e6b450; --part-fog: #6f8fbf;
+    --part-units: #4fc3d9; --part-movers: #7bd88f; --part-triggers: #c792ea; --part-check: #9aa6b2;
+    --part-minimap: #5fb3a1; --part-ui: #d6d26b; --part-draw: #f07178;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--text);
+    font: 14px/1.45 system-ui, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 16px;
+         grid-template-columns: minmax(0, 360px) minmax(0, 1fr); }
+  @media (max-width: 760px) { main { grid-template-columns: minmax(0, 1fr); } }
+  header { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+       margin: 0 0 10px; font-weight: 600; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; min-width: 0;
+            overflow-wrap: anywhere; }
+  .stack { min-width: 0; }
+  .value select { max-width: 100%; min-width: 0; }
+  #units { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #units td { padding: 2px 4px; border-bottom: 1px solid var(--line); }
+  .stack { display: grid; gap: 16px; align-content: start; }
+  #state { color: var(--muted); }
+  #state.on { color: var(--good); }
+  #state.off { color: var(--bad); }
+  .value { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 8px; margin-bottom: 12px;
+           align-items: center; }
+  .value label { font-weight: 600; }
+  .value input[type=number] { width: 76px; padding: 2px 6px; font-variant-numeric: tabular-nums; }
+  .value .reset { padding: 2px 8px; font-size: 12px; color: var(--muted); }
+  .value input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+  .value input[type=checkbox] { accent-color: var(--accent); width: 18px; height: 18px; }
+  .value small { grid-column: 1 / -1; color: var(--muted); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+  button, select, input[type=number] {
+    font: inherit; color: var(--text); background: var(--background);
+    border: 1px solid var(--line); border-radius: 4px; padding: 5px 10px;
+  }
+  input[type=number] { width: 80px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  #shot { width: 100%; image-rendering: pixelated; border: 1px solid var(--line); border-radius: 4px;
+          background: var(--background); min-height: 120px; display: block; }
+  #log { font: 12px/1.4 ui-monospace, Consolas, monospace; color: var(--muted); white-space: pre-wrap;
+         max-height: 180px; overflow: auto; margin: 0; }
+  .note { color: var(--muted); margin: 0 0 10px; }
+  input[type=search], input[type=text] { font: inherit; color: var(--text); background: var(--background);
+    border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px; min-width: 0; }
+  .maps { display: grid; gap: 10px; margin-bottom: 10px; }
+  .maplist { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 4px;
+             background: var(--background); }
+  .maplist .folder { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-size: 12px;
+                     padding: 4px 8px; border-bottom: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis;
+                     white-space: nowrap; }
+  .maplist button { display: block; width: 100%; text-align: left; border: 0; border-radius: 0; background: none;
+                    padding: 4px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .maplist button:hover { background: var(--panel); }
+  .maplist button.on { background: var(--accent); color: var(--accent-text); }
+  .mapcard { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 4px 10px; align-content: start;
+             min-width: 0; }
+  .mapcard > :not(img) { grid-column: 2; }
+  .mapcard > .row { grid-column: 1 / -1; margin: 4px 0 0; }
+  .mapcard img { grid-row: 1 / span 4; width: 128px; aspect-ratio: 1; object-fit: contain; image-rendering: pixelated;
+                 background: var(--background); border: 1px solid var(--line); border-radius: 4px; }
+  .mapcard img:not([src]) { visibility: hidden; }
+  .mapcard .title { font-weight: 600; }
+  .mapcard .facts, .mapcard .desc { color: var(--muted); font-size: 13px; white-space: pre-wrap; }
+  .mapcard .desc { max-height: 6.5em; overflow: auto; }
+  .sub { font-size: 12px; color: var(--muted); margin: 12px 0 6px; }
+  .lights { max-height: 420px; overflow: auto; }
+  #lights { width: 100%; border-collapse: collapse; font-size: 13px; }
+  #lights td { padding: 3px 4px; border-bottom: 1px solid var(--line); }
+  #lights td.name { color: var(--muted); max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+                    white-space: nowrap; }
+  #lights input[type=number] { width: 58px; padding: 2px 4px; }
+  #lights input[type=color] { width: 32px; height: 24px; padding: 0; border: 1px solid var(--line);
+                              background: none; }
+  #lights button { padding: 1px 7px; }
+  #camplot { width: 100%; height: 180px; display: block; border: 1px solid var(--line); border-radius: 4px;
+             background: var(--background); }
+  .key { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; }
+  .key i { width: 14px; height: 3px; display: inline-block; }
+  #camaccount { font: 12px/1.4 ui-monospace, Consolas, monospace; color: var(--muted); white-space: pre-wrap; margin: 8px 0 0; }
+  #perfplot { width: 100%; height: 140px; display: block; border: 1px solid var(--line); border-radius: 4px;
+              background: var(--background); }
+  .figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 10px; }
+  .figure { border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
+  .figure span { display: block; color: var(--muted); font-size: 12px; }
+  .figure b { font-size: 20px; font-variant-numeric: tabular-nums; font-weight: 600; }
+  #parts { display: grid; grid-template-columns: 70px 1fr 56px; gap: 3px 8px; align-items: center; font-size: 12px;
+           margin-top: 10px; }
+  #parts .bar { height: 8px; border-radius: 2px; background: var(--line); position: relative; overflow: hidden; }
+  #parts .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; }
+  #parts .ms { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  #perfnote { color: var(--muted); margin: 8px 0 0; font-size: 12px; }
+  #settings .value select { grid-column: 2 / -1; }
+  #settings .value .words { grid-column: 1 / -1; display: flex; justify-content: space-between; color: var(--muted);
+                            font-size: 12px; margin-top: -2px; }
+  #settings .value.off label { color: var(--muted); font-weight: 400; }
+  #settings .value .from { color: var(--muted); font-size: 11px; font-weight: 400; margin-left: 6px; }
+  #clockhist, #clockrecent { width: 100%; height: 120px; display: block; border: 1px solid var(--line); border-radius: 4px;
+                             background: var(--background); margin-top: 6px; }
+  #clocknote { color: var(--muted); margin: 8px 0 0; font-size: 12px; }
+  #modtypes { width: 100%; font: 12px/1.4 ui-monospace, Consolas, monospace; color: var(--text);
+              background: var(--background); border: 1px solid var(--line); border-radius: 4px; padding: 6px; }
+  #modsubs { font: 12px/1.4 ui-monospace, Consolas, monospace; color: var(--muted); white-space: pre-wrap; margin: 8px 0 0; }
+  /* the demo reel's chapters: the one playing marked, those played muted */
+  #reellist { margin: 8px 0 0; padding-left: 22px; }
+  #reellist li { margin: 3px 0; }
+  #reellist li small { display: block; color: var(--muted); }
+  #reellist li.on { color: var(--accent); font-weight: 600; }
+  #reellist li.done { color: var(--muted); }
+  /* the tabs, the filter and the folds */
+  header { position: sticky; top: 0; z-index: 5; background: var(--background); padding: 8px 0; margin: -8px 0 0; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tabs button { border-radius: 999px; padding: 3px 12px; font-size: 13px; }
+  .tabs button.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  #filter { padding: 4px 8px; font: inherit; font-size: 13px; color: var(--text); background: var(--panel);
+            border: 1px solid var(--line); border-radius: 4px; width: 150px; }
+  header .grow { flex: 1; }
+  header a { font-size: 13px; color: var(--accent); }
+  section > h2 { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
+  section > h2::before { content: ""; width: 0; height: 0; border-left: 4px solid transparent;
+                         border-right: 4px solid transparent; border-top: 5px solid var(--muted); transition: transform .15s; }
+  section.folded > h2 { margin-bottom: 0; }
+  section.folded > h2::before { transform: rotate(-90deg); }
+  section.folded > :not(h2) { display: none; }
+  section.away { display: none; }
+  /* the sections flow into as many columns as fit, whichever a tab shows */
+  main { grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); align-items: start; max-width: 1400px; }
+  .stack { display: contents; }
+  #cstext { width: 100%; font: 12px/1.4 ui-monospace, Consolas, monospace; color: var(--text);
+            background: var(--background); border: 1px solid var(--line); border-radius: 4px; padding: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Debug Tools</h1>
+    <span id="state">connecting</span>
+    <nav class="tabs" id="tabs"></nav>
+    <span class="grow"></span>
+    <input id="filter" type="search" placeholder="Find a section">
+    <a href="/guide">Live guide for editors</a>
+    <button id="copyai" title="Copies what an AI assistant needs to use the live channel: its commands, the port, where the docs are, and the game's state">Copy for AI</button>
+  </header>
+
+  <div class="stack">
+    <section>
+      <h2>Demo reel</h2>
+      <p class="note">What the engine can do, played on the game chapter by chapter: the zoom, the camera beside 1.17's
+        steps, light and colour, a scene, a battle of a thousand units, and a battle scene that hands the game to the
+        player. It switches maps itself, from the menus or a game. Stop ends it, and every value it changed goes back.</p>
+      <div class="row">
+        <button id="reelplay" class="primary">Play the reel</button>
+        <label>from <select id="reelfrom"></select></label>
+        <button id="reelstop">Stop</button>
+      </div>
+      <ol id="reellist"></ol>
+      <p id="reelnote" class="note"></p>
+    </section>
+
+    <section>
+      <h2>Settings</h2>
+      <p class="note">Hyperion's Settings, changed at once and saved as the dialog's Accept saves them.</p>
+      <div class="row"><select id="settab"></select><button id="setrefresh">Refresh</button></div>
+      <div id="settings"><p class="note">None yet.</p></div>
+    </section>
+
+    <section>
+      <h2>Live values</h2>
+      <div id="values"><p class="note">None yet.</p></div>
+    </section>
+
+    <section>
+      <h2>Scene</h2>
+      <div class="row">
+        <button data-cmd="pause">Pause</button>
+        <button data-cmd="resume">Resume</button>
+        <button id="step1">Step 1</button>
+        <button id="step24">Step 24</button>
+      </div>
+      <div class="row">
+        <label>x <input id="camx" type="number" value="1024"></label>
+        <label>y <input id="camy" type="number" value="1024"></label>
+        <button id="camera">Move view</button>
+      </div>
+      <div class="row">
+        <select id="tileset">
+          <option>badlands</option><option>platform</option><option>install</option><option>ashworld</option>
+          <option>jungle</option><option>desert</option><option>ice</option><option>twilight</option>
+        </select>
+        <label><input id="battle" type="checkbox"> with the battle</label>
+        <button id="canvas">Start canvas</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Sandbox</h2>
+      <p class="note">On the canvas only. The game is marked as changed.</p>
+      <div class="row">
+        <select id="unit"></select>
+        <label>count <input id="count" type="number" value="4" min="1" max="64"></label>
+        <label>player <input id="player" type="number" value="0" min="0" max="11"></label>
+      </div>
+      <div class="row">
+        <label>x <input id="sx" type="number" value="1024"></label>
+        <label>y <input id="sy" type="number" value="1024"></label>
+        <label><input id="attack" type="checkbox" checked> attack</label>
+        <label>to x <input id="ax" type="number" value="1536"></label>
+      </div>
+      <div class="row"><button id="spawn" class="primary">Spawn</button></div>
+    </section>
+
+    <section>
+      <h2>Overlay</h2>
+      <p class="note">In a game: the game in a window with the clock and the numbers round it, the same panels over
+        the game full screen, or a small counter. The game also has an Overlay button at its top while this is off.</p>
+      <div class="row">
+        <button class="ovmode" data-mode="off">Off</button>
+        <button class="ovmode" data-mode="window">Window</button>
+        <button class="ovmode" data-mode="full">Full screen</button>
+        <button class="ovmode" data-mode="counter">Counter</button>
+      </div>
+      <p id="ovnote" class="note"></p>
+    </section>
+
+    <section>
+      <h2>Cutscene</h2>
+      <p class="note">Steps played in turn on the game: the camera, fades and bars, captions and transmissions, and on
+        the canvas units made and ordered (docs/live-channel-for-editors.md). Escape in the game ends one.</p>
+      <div class="row">
+        <select id="cspick" title="The sample scenes in mods\debug-tools\cutscenes"></select>
+        <button id="csonmap" class="primary" title="Switch to the map the scene was made for, then play it">Play on its map</button>
+        <button id="csample" title="Put its steps below, to read or change">Load</button>
+      </div>
+      <div class="row">
+        <button id="csplay">Play here</button>
+        <button id="csstop">Stop</button>
+      </div>
+      <textarea id="cstext" rows="8" spellcheck="false" placeholder='{"steps": [{"do": "camera", "x": 1024, "y": 1024, "zoom": 1.5, "ms": 2000}]}'></textarea>
+      <p id="csnote" class="note"></p>
+    </section>
+
+    <section>
+      <h2>Map</h2>
+      <p class="note">Switch the game to another map: it goes out with a fade and a zoom, and the map comes in as a
+        skirmish's start does. The list is every map Hyperion finds: the data folder's maps, the StarCraft folder's
+        and each --maps folder, with the folders in them.</p>
+      <div class="row">
+        <input id="mfind" type="search" placeholder="Find a map by name or folder" style="flex: 1 1 180px">
+        <button id="mrefresh" title="Read the folders again">Refresh</button>
+      </div>
+      <div class="maps">
+        <div id="mlist" class="maplist"><div class="folder">Connecting</div></div>
+        <div id="mcard" class="mapcard">
+          <img id="mpic" alt="">
+          <div id="mtitle" class="title">Pick a map</div>
+          <div id="mfacts" class="facts"></div>
+          <div id="mdesc" class="desc"></div>
+          <div class="row">
+            <button id="mmelee" class="primary" disabled title="Your race's start, computers in the other starts">Play as melee</button>
+            <button id="mums" disabled title="Use Map Settings: the map's own slots, units and triggers">Use Map Settings</button>
+            <button id="mterrain" disabled title="Only the terrain, as the canvas: no units, triggers or computers">Terrain only</button>
+          </div>
+        </div>
+      </div>
+      <p class="sub">A plain map at a size and tileset</p>
+      <div class="row">
+        <select id="mtileset">
+          <option>badlands</option><option>platform</option><option>install</option><option>ashworld</option>
+          <option>jungle</option><option>desert</option><option>ice</option><option>twilight</option>
+        </select>
+        <select id="msize"><option>64</option><option>96</option><option>128</option><option>192</option><option>256</option></select>
+        <button id="mpush">Push</button>
+      </div>
+      <p class="sub">A map file anywhere else</p>
+      <div class="row">
+        <input id="mpath" type="text" placeholder="its full path (.scm, .scx, .hxm)" style="flex: 1 1 220px">
+        <button id="mload">Show</button>
+      </div>
+      <p id="mnote" class="note"></p>
+    </section>
+
+    <section>
+      <h2>Units</h2>
+      <p class="note">The units on the map: a player's, or a type's by number or name. A pushed unit shows its
+        submission.</p>
+      <div class="row">
+        <label>player <input id="uplayer" type="number" value="-1" min="-1" max="31"></label>
+        <label>type <input id="utype" type="text" size="12" placeholder="any"></label>
+        <button id="ulist" class="primary">List</button>
+        <label><input id="uauto" type="checkbox"> every second</label>
+      </div>
+      <p id="ucount" class="note"></p>
+      <div class="lights"><table id="units"></table></div>
+    </section>
+
+    <section>
+      <h2>Mod data</h2>
+      <p class="note">In the canvas: a mod's data pushed while the game runs. Units on the map keep what they were
+        made from unless replaced; spawns and command cards take the newest. A new game starts from the data
+        loaded at start-up.</p>
+      <div class="row">
+        <select id="modpick"></select>
+        <select id="modreplace">
+          <option value="">keep the units</option>
+          <option value="last">replace the last push's</option>
+          <option value="all">replace all earlier</option>
+        </select>
+      </div>
+      <div class="row">
+        <button id="modpush" class="primary">Push its folder</button>
+        <button id="modpushtext">Push the text below</button>
+      </div>
+      <textarea id="modtypes" rows="8" spellcheck="false"
+                placeholder="types.json to push in place of the folder's (the art still comes from the folder)"></textarea>
+      <pre id="modsubs"></pre>
+    </section>
+  </div>
+
+  <div class="stack">
+    <section>
+      <h2>Frame</h2>
+      <div class="row"><button id="snap" class="primary">Snapshot</button><span id="shotname" class="note"></span></div>
+      <img id="shot" alt="The last snapshot appears here.">
+    </section>
+    <section>
+      <h2>Camera trace</h2>
+      <p class="note">Where the game's view and the camera go, each time the camera is placed, and what moved
+        the view. Stopped, it is written to traces\ in the data folder.</p>
+      <div class="row">
+        <button id="camstart" class="primary">Start trace</button>
+        <button id="camstop">Stop and write</button>
+        <span id="camcount" class="note"></span>
+      </div>
+      <div class="row">
+        <button id="camclick">Minimap: press far corners</button>
+        <button id="camdrag">Minimap: drag across</button>
+        <label>step ms <input id="camstep" type="number" value="33" min="5" max="500"></label>
+      </div>
+      <div class="row">
+        <select id="scrolldir">
+          <option>right</option><option>left</option><option>down</option><option>up</option>
+          <option>down-right</option><option>up-left</option><option>up-right</option><option>down-left</option>
+        </select>
+        <label>ms <input id="scrollms" type="number" value="1500" min="100" max="10000"></label>
+        <button id="scrollgo">Hold scroll key</button>
+      </div>
+      <div class="row">
+        <span class="key"><i style="background: var(--plot-game)"></i>game view x</span>
+        <span class="key"><i style="background: var(--plot-camera)"></i>camera x</span>
+        <span class="key">dashed: y</span>
+      </div>
+      <canvas id="camplot"></canvas>
+      <pre id="camaccount"></pre>
+    </section>
+
+    <section>
+      <h2>Performance</h2>
+      <p class="note">A line a second while it is on: frames shown and game frames a second, units, and what a game
+        frame's parts cost. The same numbers a benchmark run logs.</p>
+      <div class="row">
+        <button id="perfon" class="primary">Start</button>
+        <button id="perfoff">Stop</button>
+        <span id="perfstate" class="note"></span>
+      </div>
+      <div class="figures">
+        <div class="figure"><span>Frames a second</span><b id="ffps">-</b></div>
+        <div class="figure"><span>Game frames a second</span><b id="fgfps">-</b></div>
+        <div class="figure"><span>Expected at this speed</span><b id="fexpect">-</b></div>
+        <div class="figure"><span>Units</span><b id="funits">-</b></div>
+        <div class="figure"><span>Present ms</span><b id="fpresent">-</b></div>
+      </div>
+      <div class="row">
+        <span class="key"><i style="background: var(--plot-fps)"></i>frames shown a second</span>
+        <span class="key"><i style="background: var(--plot-gfps)"></i>game frames a second</span>
+      </div>
+      <canvas id="perfplot"></canvas>
+      <div id="parts"></div>
+      <p id="perfnote"></p>
+    </section>
+
+    <section>
+      <h2>Game clock</h2>
+      <p class="note">When each game frame came against when it was due, the game's pace against wall time, and
+        how many frames were shown in each game frame. A pause or a hold is left out.</p>
+      <div class="row">
+        <button id="clockon" class="primary">Start</button>
+        <button id="clockoff">Stop</button>
+        <span id="clockstate" class="note"></span>
+      </div>
+      <div class="figures">
+        <div class="figure"><span>Game frames a second</span><b id="cpace">-</b></div>
+        <div class="figure"><span>Due a second</span><b id="cdue">-</b></div>
+        <div class="figure"><span>Drift ms</span><b id="cdrift">-</b></div>
+        <div class="figure"><span>Between frames ms</span><b id="cgap">-</b></div>
+        <div class="figure"><span>Within 2 ms of due</span><b id="cwithin">-</b></div>
+        <div class="figure"><span>Shown a game frame</span><b id="cshown">-</b></div>
+      </div>
+      <div class="row">
+        <span class="key"><i style="background: var(--plot-gfps)"></i>time between game frames, ms</span>
+        <span class="key"><i style="background: var(--bad)"></i>due</span>
+      </div>
+      <canvas id="clockhist"></canvas>
+      <canvas id="clockrecent"></canvas>
+      <p id="clocknote"></p>
+    </section>
+
+    <section>
+      <h2>Lights</h2>
+      <p class="note" id="lightsnote">The images that give light. They show with effects and lights on.</p>
+      <div class="row">
+        <label>image <input id="newlight" type="number" min="0" max="998" value="0"></label>
+        <button id="addlight">Add</button>
+        <button id="reloadlights">Refresh</button>
+        <button id="savelights" class="primary">Save lights.json</button>
+      </div>
+      <div class="lights"><table id="lights"></table></div>
+    </section>
+
+    <section>
+      <h2>Answers</h2>
+      <pre id="log"></pre>
+    </section>
+  </div>
+</main>
+<script>
+const UNITS = {
+  marine: 0, ghost: 1, vulture: 2, goliath: 3, tank: 5, wraith: 8, vessel: 9, battlecruiser: 12,
+  firebat: 32, medic: 34, valkyrie: 58, zergling: 37, hydralisk: 38, ultralisk: 39, mutalisk: 43,
+  guardian: 44, queen: 45, defiler: 46, scourge: 47, devourer: 62, lurker: 103, corsair: 60,
+  dark_templar: 61, dark_archon: 63, zealot: 65, dragoon: 66, high_templar: 67, archon: 68,
+  scout: 70, arbiter: 71, carrier: 72, reaver: 83
+};
+const $ = id => document.getElementById(id);
+for (const [name, n] of Object.entries(UNITS)) {
+  const o = document.createElement("option");
+  o.value = n; o.textContent = name.replace("_", " ");
+  $("unit").appendChild(o);
+}
+
+let ws = null, nextId = 1;
+const waiting = new Map();
+// the channel's key, from the link this page was opened by (Debug Tools' Copy link)
+const KEY = new URLSearchParams(location.search).get("t") || "";
+const keyed = path => path + (path.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(KEY);
+document.querySelector('a[href="/guide"]').href = keyed("/guide");
+
+function log(text) {
+  const el = $("log");
+  el.textContent = (text + "\n" + el.textContent).slice(0, 6000);
+}
+
+function call(cmd, args = {}) {
+  return new Promise(resolve => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) { resolve({ ok: false, error: "not connected" }); return; }
+    const id = nextId++;
+    waiting.set(id, resolve);
+    ws.send(JSON.stringify({ id, cmd, ...args }));
+  });
+}
+
+async function act(cmd, args = {}) {
+  const answer = await call(cmd, args);
+  log(cmd + ": " + (answer.ok ? "ok" : answer.error) + (answer.frame !== undefined ? " (frame " + answer.frame + ")" : ""));
+  return answer;
+}
+
+function connect() {
+  ws = new WebSocket("ws://" + location.host + keyed("/"));
+  ws.onopen = async () => {
+    refreshValues(); refreshStatus(); refreshLights(); refreshSettings(); refreshMods(); refreshMaps();
+    // a clock someone else started (a script on the channel) shows here too
+    const a = await call("clock");
+    if (a.ok && a.on) { clockOn = true; clockShow(a); }
+  };
+  ws.onmessage = e => {
+    const answer = JSON.parse(e.data);
+    const resolve = waiting.get(answer.id);
+    if (resolve) { waiting.delete(answer.id); resolve(answer); }
+  };
+  ws.onclose = () => {
+    $("state").textContent = KEY ? "not connected: is Hyperion running with its channel open? After a restart, open this page again from Debug Tools' Copy link"
+                                 : "not connected: open this page from the link Debug Tools' Copy link gives, which holds the channel's key";
+    $("state").className = "off";
+    setTimeout(connect, 2000);
+  };
+}
+
+async function refreshStatus() {
+  const s = await call("status");
+  if (!s.ok) return;
+  const parts = [s.state];
+  if (s.state === "game") parts.push("frame " + s.frame, s.paused ? "paused" : "running");
+  if (s.canvas) parts.push("canvas");
+  if (s.changed) parts.push("changed");
+  parts.push(s.presenter);
+  $("state").textContent = parts.join(" · ");
+  $("state").className = "on";
+}
+
+async function refreshValues() {
+  const answer = await call("list");
+  if (!answer.ok) return;
+  const box = $("values");
+  box.textContent = "";
+  for (const v of answer.values) {
+    const div = document.createElement("div");
+    div.className = "value";
+    // a switch (step 1 between 0 and 1) is a checkbox; any other value a slider with a
+    // number box, in fine steps unless the game gives its own
+    const isSwitch = v.step === 1 && v.min === 0 && v.max === 1;
+    const step = v.step > 0 ? v.step : (v.max - v.min) / 500;
+    div.innerHTML = isSwitch
+      ? '<label></label><span></span><input type="checkbox"><small></small>'
+      : '<label></label><input type="number"><button class="reset" title="back to the default">reset</button>' +
+        '<input type="range"><small></small>';
+    div.querySelector("label").textContent = v.name;
+    div.querySelector("small").textContent = v.help + " (" + v.min + " to " + v.max + ", default " +
+                                             +v.default.toFixed(3) + ")";
+    if (isSwitch) {
+      const check = div.querySelector("input");
+      check.checked = v.value >= 0.5;
+      check.addEventListener("change", () => call("set", { name: v.name, value: check.checked ? 1 : 0 }));
+    } else {
+      const range = div.querySelector("input[type=range]"), num = div.querySelector("input[type=number]");
+      Object.assign(range, { min: v.min, max: v.max, step, value: v.value });
+      Object.assign(num, { min: v.min, max: v.max, step, value: +v.value.toFixed(3) });
+      const set = async value => {
+        const a = await call("set", { name: v.name, value });
+        if (a.ok) { range.value = a.value; num.value = +a.value.toFixed(3); }
+      };
+      range.addEventListener("input", () => { num.value = +(+range.value).toFixed(3); set(+range.value); });
+      num.addEventListener("change", () => set(+num.value));
+      div.querySelector(".reset").addEventListener("click", () => set(v.default));
+    }
+    box.appendChild(div);
+  }
+}
+
+document.querySelectorAll("[data-cmd]").forEach(b => b.addEventListener("click", () => act(b.dataset.cmd)));
+$("step1").onclick = () => act("step", { frames: 1 });
+$("step24").onclick = () => act("step", { frames: 24 });
+$("camera").onclick = () => act("camera", { x: +$("camx").value, y: +$("camy").value });
+$("canvas").onclick = () => act("canvas", { tileset: $("tileset").value, battle: $("battle").checked });
+$("spawn").onclick = () => {
+  const args = { unit: +$("unit").value, x: +$("sx").value, y: +$("sy").value,
+                 player: +$("player").value, count: +$("count").value };
+  if ($("attack").checked) args.attack = [+$("ax").value, +$("sy").value];
+  act("spawn", args);
+};
+$("snap").onclick = async () => {
+  const a = await act("snapshot", { name: "panel" });
+  if (a.ok) {
+    $("shot").src = keyed("/snapshots/panel.png?" + Date.now());
+    $("shotname").textContent = a.width + "x" + a.height;
+  }
+};
+// The lights' table: each row's colour, radius, intensity and flicker set as they change.
+async function refreshLights() {
+  const answer = await call("lights");
+  if (!answer.ok) return;
+  $("lightsnote").textContent = answer.lights.length + " images give light, from " + answer.source +
+                                "; " + answer.frame + " lit in the last pass.";
+  const table = $("lights");
+  table.textContent = "";
+  for (const l of answer.lights) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = '<td></td><td class="name"></td><td><input type="color"></td>' +
+                   '<td><input type="number" min="1" max="512" step="1" title="radius"></td>' +
+                   '<td><input type="number" min="0" max="8" step="0.05" title="intensity"></td>' +
+                   '<td><input type="number" min="0" max="1" step="0.05" title="flicker"></td>' +
+                   '<td><button title="take it out of the table">×</button></td>';
+    tr.children[0].textContent = l.image;
+    tr.children[1].textContent = l.name;
+    tr.children[1].title = l.name;
+    const [color, radius, intensity, flicker] = tr.querySelectorAll("input");
+    color.value = l.color;
+    radius.value = l.radius;
+    intensity.value = l.intensity;
+    flicker.value = l.flicker;
+    color.addEventListener("input", () => call("light", { image: l.image, color: color.value }));
+    radius.addEventListener("change", () => call("light", { image: l.image, radius: +radius.value }));
+    intensity.addEventListener("change", () => call("light", { image: l.image, intensity: +intensity.value }));
+    flicker.addEventListener("change", () => call("light", { image: l.image, flicker: +flicker.value }));
+    tr.querySelector("button").addEventListener("click", async () => {
+      await act("light", { image: l.image, remove: true });
+      refreshLights();
+    });
+    table.appendChild(tr);
+  }
+}
+$("addlight").onclick = async () => { await act("light", { image: +$("newlight").value }); refreshLights(); };
+$("reloadlights").onclick = refreshLights;
+$("savelights").onclick = async () => {
+  const a = await act("lights_save");
+  if (a.ok) log("saved to " + a.path);
+  refreshLights();
+};
+
+// The camera's trace: rows read while it runs, whoever started it (this page or a script on
+// the channel), drawn as x and y against time.
+let camRows = [];
+async function camPoll() {
+  const last = camRows.length ? camRows[camRows.length - 1].i : -1;
+  const a = await call("trace_rows", { since: last + 1 });
+  if (!a.ok) return;
+  if (a.count <= last) camRows = [];  // a new trace
+  if (!a.rows.length) { if (a.on) $("camcount").textContent = a.count + " rows"; return; }
+  camRows = camRows.concat(a.rows).slice(-4000);
+  $("camcount").textContent = a.count + " rows" + (a.on ? "" : ", stopped");
+  camDraw();
+}
+function camDraw() {
+  const c = $("camplot"), g = c.getContext("2d");
+  const w = c.width = c.clientWidth * devicePixelRatio, h = c.height = c.clientHeight * devicePixelRatio;
+  g.clearRect(0, 0, w, h);
+  if (camRows.length < 2) return;
+  const css = getComputedStyle(document.documentElement);
+  const t0 = camRows[0].ms, t1 = camRows[camRows.length - 1].ms;
+  let lo = Infinity, hi = -Infinity;
+  for (const r of camRows) for (const v of [r.gx, r.cx, r.gy, r.cy]) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+  if (hi - lo < 1) hi = lo + 1;
+  const X = ms => (ms - t0) / Math.max(1, t1 - t0) * (w - 8) + 4;
+  const Y = v => h - 4 - (v - lo) / (hi - lo) * (h - 8);
+  const line = (key, color, dash) => {
+    g.strokeStyle = color; g.lineWidth = 1.5 * devicePixelRatio; g.setLineDash(dash);
+    g.beginPath();
+    camRows.forEach((r, k) => (k ? g.lineTo : g.moveTo).call(g, X(r.ms), Y(r[key])));
+    g.stroke();
+  };
+  line("gx", css.getPropertyValue("--plot-game").trim(), []);
+  line("cx", css.getPropertyValue("--plot-camera").trim(), []);
+  line("gy", css.getPropertyValue("--plot-game").trim(), [4 * devicePixelRatio, 4 * devicePixelRatio]);
+  line("cy", css.getPropertyValue("--plot-camera").trim(), [4 * devicePixelRatio, 4 * devicePixelRatio]);
+}
+$("camstart").onclick = async () => {
+  const a = await act("trace", { what: "camera", on: true });
+  if (!a.ok) return;
+  camRows = []; $("camaccount").textContent = "";
+};
+$("camstop").onclick = async () => {
+  await camPoll();
+  const a = await act("trace", { what: "camera", on: false });
+  if (!a.ok) return;
+  $("camaccount").textContent = a.rows + " rows written to " + a.file + "\n" + a.view_sets + " view moves by the game, " +
+    a.scrolls + " scrolls (the largest " + a.largest_scroll + " px), " + a.jumps + " jumps, the longest ease to rest " +
+    a.longest_ease_ms + " ms" + scrollAccount(a.scroll);
+};
+// How even a held scroll's motion was: the view's steps, the passes with no motion, and how
+// much the camera's move a pass varied (0 is perfectly even).
+function scrollAccount(sc) {
+  if (!sc || !sc.passes) return "";
+  return "\nscroll held: " + sc.passes + " passes, " + sc.still_passes + " showed no motion; the view stepped " +
+    sc.view_steps + " times, every " + sc.step_ms_mean + " ms (" + sc.step_ms_least + " to " + sc.step_ms_most +
+    "), by " + sc.step_px_least + " to " + sc.step_px_most + " px; the camera moved " + sc.camera_px_a_pass +
+    " px a pass, varying by " + Math.round(sc.camera_px_varies * 100) + " %";
+}
+$("scrollgo").onclick = async () => {
+  const ms = +$("scrollms").value;
+  const a = await act("scroll", { dir: $("scrolldir").value, ms });
+  if (!a.ok) return;
+  camRows = []; $("camaccount").textContent = "holding " + a.scrolling + " for " + ms + " ms";
+  // the trace stops itself a moment after the key is let go, and its account shows
+  setTimeout(() => $("camstop").onclick(), ms + 700);
+};
+$("camclick").onclick = async () => {
+  await act("minimap", { u: 0.9, v: 0.1 });
+  setTimeout(() => act("minimap", { u: 0.1, v: 0.9 }), 1500);
+};
+$("camdrag").onclick = () => {
+  const path = [];
+  for (let i = 0; i <= 40; i++) path.push([0.15 + 0.7 * i / 40, 0.85 - 0.7 * i / 40]);
+  act("minimap", { path, step_ms: +$("camstep").value });
+};
+addEventListener("resize", camDraw);
+setInterval(camPoll, 300);
+
+// The live numbers: a second at a time while on, the last 120 drawn.
+const SPEED_MS = [167, 111, 83, 67, 56, 48, 42];
+const SPEED_NAMES = ["Slowest", "Slower", "Slow", "Normal", "Fast", "Faster", "Fastest"];
+let perfRows = [], perfNames = [], perfLast = -1;
+async function perfPoll() {
+  const a = await call("perf", { since: perfLast + 1 });
+  if (!a.ok) return;
+  perfNames = a.names;
+  $("perfstate").textContent = a.on ? "on" : "off";
+  if (a.count <= perfLast) perfRows = [];
+  if (!a.seconds.length) return;
+  perfRows = perfRows.concat(a.seconds).slice(-120);
+  perfLast = perfRows[perfRows.length - 1].i;
+  perfShow();
+}
+function perfShow() {
+  const r = perfRows[perfRows.length - 1];
+  if (!r) return;
+  const expect = 1000 / SPEED_MS[Math.min(6, Math.max(0, r.speed))];
+  $("ffps").textContent = r.fps.toFixed(0);
+  $("fgfps").textContent = r.gfps.toFixed(1);
+  $("fexpect").textContent = r.replay ? "-" : expect.toFixed(1);
+  $("funits").textContent = r.units;
+  $("fpresent").textContent = r.present_ms.toFixed(2);
+  const notes = [SPEED_NAMES[r.speed] || ("speed " + r.speed), r.replay ? "a replay" : "a game",
+                 r.active ? "window active" : "window not active", "frame " + r.frame];
+  if (!r.replay && r.gfps < expect * 0.9 && r.gfps > 0)
+    notes.push("the game runs " + Math.round((1 - r.gfps / expect) * 100) + " % below its speed");
+  $("perfnote").textContent = notes.join(" · ");
+  // the parts, averaged over the last ten seconds
+  const last = perfRows.slice(-10), css = getComputedStyle(document.documentElement);
+  const avg = perfNames.map((_, k) => last.reduce((t, x) => t + x.parts[k], 0) / last.length);
+  const most = Math.max(0.01, ...avg);
+  const box = $("parts");
+  box.textContent = "";
+  perfNames.forEach((name, k) => {
+    const label = document.createElement("span"); label.textContent = name;
+    const bar = document.createElement("div"); bar.className = "bar";
+    const fill = document.createElement("i");
+    fill.style.width = (avg[k] / most * 100) + "%";
+    fill.style.background = css.getPropertyValue("--part-" + name).trim();
+    bar.appendChild(fill);
+    const ms = document.createElement("span"); ms.className = "ms"; ms.textContent = avg[k].toFixed(3);
+    box.append(label, bar, ms);
+  });
+  perfDraw();
+}
+function perfDraw() {
+  const c = $("perfplot"), g = c.getContext("2d");
+  const w = c.width = c.clientWidth * devicePixelRatio, h = c.height = c.clientHeight * devicePixelRatio;
+  g.clearRect(0, 0, w, h);
+  if (perfRows.length < 2) return;
+  const css = getComputedStyle(document.documentElement);
+  const fpsTop = Math.max(...perfRows.map(r => r.fps)) * 1.1 || 1;
+  const gTop = Math.max(...perfRows.map(r => r.gfps)) * 1.1 || 1;
+  const X = k => k / (perfRows.length - 1) * (w - 8) + 4;
+  const line = (key, top, color) => {
+    g.strokeStyle = color; g.lineWidth = 1.5 * devicePixelRatio; g.beginPath();
+    perfRows.forEach((r, k) => (k ? g.lineTo : g.moveTo).call(g, X(k), h - 4 - r[key] / top * (h - 8)));
+    g.stroke();
+  };
+  line("fps", fpsTop, css.getPropertyValue("--plot-fps").trim());
+  line("gfps", gTop, css.getPropertyValue("--plot-gfps").trim());
+}
+$("perfon").onclick = () => act("perf", { on: true });
+$("perfoff").onclick = () => act("perf", { on: false });
+addEventListener("resize", perfDraw);
+setInterval(perfPoll, 1000);
+
+// Overlay: the in-game overlay's mode, set here or by its key and button, shown lit.
+function showOverlay(mode, error) {
+  for (const b of document.querySelectorAll(".ovmode")) b.classList.toggle("primary", b.dataset.mode === mode);
+  $("ovnote").textContent = error || "";
+}
+async function refreshOverlay() {
+  const a = await call("overlay", {});
+  if (a.ok) showOverlay(a.mode);
+}
+for (const b of document.querySelectorAll(".ovmode")) {
+  b.onclick = async () => {
+    const a = await call("overlay", { mode: b.dataset.mode });
+    showOverlay(a.ok ? a.mode : null, a.ok ? (b.dataset.mode !== "off" ? "Shown when a game runs." : "") : a.error);
+  };
+}
+setInterval(refreshOverlay, 2000);
+
+// Cutscene: steps sent as cutscene_play. The samples are the files in cutscenes\ beside this page;
+// each names the map it was made for ("map": push, or from with or as a stand-in).
+const samples = new Map();
+async function refreshSamples() {
+  try {
+    const files = await (await fetch("/cutscenes/")).json();
+    const pick = $("cspick");
+    pick.textContent = "";
+    for (const file of files) {
+      const scene = await (await fetch("/cutscenes/" + file)).json();
+      samples.set(file, scene);
+      const o = document.createElement("option");
+      o.value = file;
+      o.textContent = scene.title || file;
+      pick.appendChild(o);
+    }
+  } catch (e) {
+    $("csnote").textContent = "The samples could not be read: " + e.message;
+  }
+}
+refreshSamples();
+$("csample").onclick = () => {
+  const scene = samples.get($("cspick").value);
+  if (scene) $("cstext").value = JSON.stringify(scene, null, 2);
+};
+// a scene's map, then the scene when it comes in (map_push's scene); a map file not found falls
+// back to the stand-in the scene names
+async function playOnMap(scene, note) {
+  const m = scene.map || {};
+  const push = m.push ? Object.assign({}, m.push) : m.from ? { from: m.from } : null;
+  if (!push) {
+    const a = await call("cutscene_play", scene);
+    note(a.ok ? "Playing here: the scene names no map." : a.error);
+    return;
+  }
+  let a = await call("map_push", Object.assign(push, { scene, reveal: true }));
+  if (!a.ok && m.or) {
+    a = await call("map_push", Object.assign({}, m.or, { scene, reveal: true }));
+    if (a.ok) { note(m.from + " was not found; playing on " + m.or.tileset + " ground of its size."); return; }
+  }
+  note(a.ok ? "Switching to " + (m.from || `${push.tileset}, ${push.width}x${push.height}`) + "; the scene plays when it comes in." : a.error);
+}
+$("csonmap").onclick = async () => {
+  const scene = samples.get($("cspick").value);
+  if (scene) await playOnMap(scene, t => { $("csnote").textContent = t; csNoteAt = Date.now(); });
+};
+$("csplay").onclick = async () => {
+  let scene;
+  try {
+    scene = JSON.parse($("cstext").value || JSON.stringify(samples.get($("cspick").value) || {}));
+  } catch (e) {
+    $("csnote").textContent = "Not JSON: " + e.message;
+    return;
+  }
+  const a = await call("cutscene_play", scene);
+  $("csnote").textContent = a.ok ? "Playing." : a.error;
+};
+$("csstop").onclick = () => call("cutscene_stop");
+// the step playing, once a switch's answer has been up a few seconds
+let csNoteAt = 0;
+async function refreshCutscene() {
+  const a = await call("cutscene_status");
+  if (a.ok && a.playing && Date.now() - csNoteAt > 4000)
+    $("csnote").textContent = `Step ${a.step + 1} of ${a.steps}: ${a.do}${a.ending ? ", ending" : ""}`;
+}
+setInterval(refreshCutscene, 1000);
+
+// Map: the maps Hyperion finds (maps), one picked shown (map_info: its minimap, size, players,
+// title), played as melee or Use Map Settings (map_load) or its terrain only (map_push from); a
+// plain map pushed at a size; maps played lately kept in this browser.
+let allMaps = [], pickedMap = null;
+const recentKey = "hyperion.panel.recentMaps";
+function recentMaps() {
+  try { return JSON.parse(localStorage.getItem(recentKey) || "[]"); } catch (_) { return []; }
+}
+function rememberMap(path) {
+  try { localStorage.setItem(recentKey, JSON.stringify([path, ...recentMaps().filter(p => p !== path)].slice(0, 6))); }
+  catch (_) {}
+}
+async function refreshMaps(fresh) {
+  const a = await call("maps", { fresh: !!fresh });
+  if (!a.ok) return;
+  allMaps = a.maps;
+  showMaps();
+}
+function rootName(m) {
+  return m.root === "data" ? "Hyperion's maps" : m.root === "install" ? "StarCraft's maps" : m.root;
+}
+function showMaps() {
+  const list = $("mlist");
+  const want = $("mfind").value.trim().toLowerCase();
+  list.textContent = "";
+  const groups = new Map();
+  const recent = recentMaps();
+  if (!want && recent.length) groups.set("Played lately", allMaps.filter(m => recent.includes(m.path))
+    .sort((x, y) => recent.indexOf(x.path) - recent.indexOf(y.path)));
+  for (const m of allMaps) {
+    if (want && !(m.folder + m.name).toLowerCase().includes(want)) continue;
+    const g = rootName(m) + (m.folder ? " \\ " + m.folder.replace(/\\$/, "") : "");
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(m);
+  }
+  let shown = 0;
+  for (const [g, maps] of groups) {
+    if (!maps.length) continue;
+    const head = document.createElement("div");
+    head.className = "folder";
+    head.textContent = g;
+    list.appendChild(head);
+    for (const m of maps) {
+      const b = document.createElement("button");
+      b.textContent = m.name.replace(/\.(scm|scx|hxm)$/i, "");
+      b.title = m.path;
+      b.dataset.path = m.path;
+      if (pickedMap && pickedMap.path === m.path) b.className = "on";
+      b.onclick = () => pickMap(m.path);
+      list.appendChild(b);
+      ++shown;
+    }
+  }
+  if (!shown) {
+    const head = document.createElement("div");
+    head.className = "folder";
+    head.textContent = allMaps.length ? "No map has that in its name" : "No maps found";
+    list.appendChild(head);
+  }
+}
+async function pickMap(path) {
+  const a = await call("map_info", { path });
+  for (const b of $("mlist").querySelectorAll("button")) b.classList.toggle("on", b.dataset.path === path);
+  for (const id of ["mmelee", "mums", "mterrain"]) $(id).disabled = !a.ok;
+  if (!a.ok) {
+    pickedMap = null;
+    $("mtitle").textContent = "Could not read it";
+    $("mfacts").textContent = a.error;
+    $("mdesc").textContent = "";
+    $("mpic").removeAttribute("src");
+    return;
+  }
+  pickedMap = a;
+  if (a.preview) $("mpic").src = a.preview + "?t=" + Date.now(); else $("mpic").removeAttribute("src");
+  $("mtitle").textContent = a.title || a.name;
+  $("mfacts").textContent = `${a.width} x ${a.height}, ${a.tileset}, ${a.players} player` + (a.players === 1 ? "" : "s") +
+    `\n${a.name}`;
+  $("mdesc").textContent = a.description;
+  $("mterrain").disabled = !a.pushable;
+  $("mterrain").title = a.pushable ? "Only the terrain, as the canvas: no units, triggers or computers"
+    : "Terrain only takes maps 64, 96, 128, 192 or 256 tiles a side";
+}
+async function playPicked(cmd, args) {
+  if (!pickedMap) return;
+  const a = await call(cmd, args);
+  if (a.ok) rememberMap(pickedMap.path);
+  $("mnote").textContent = a.ok ? "On its way: " + pickedMap.name + "." : a.error;
+}
+$("mfind").oninput = showMaps;
+$("mfind").onkeydown = e => {
+  if (e.key !== "Enter") return;
+  const first = $("mlist").querySelector("button");
+  if (first) pickMap(first.dataset.path);
+};
+$("mrefresh").onclick = () => refreshMaps(true);
+$("mmelee").onclick = () => playPicked("map_load", { path: pickedMap.path, ums: false });
+$("mums").onclick = () => playPicked("map_load", { path: pickedMap.path, ums: true });
+$("mterrain").onclick = () => playPicked("map_push", { from: pickedMap.path });
+$("mpush").onclick = async () => {
+  const n = +$("msize").value;
+  const a = await call("map_push", { tileset: $("mtileset").value, width: n, height: n });
+  $("mnote").textContent = a.ok ? `On its way: ${a.tileset}, ${a.size[0]}x${a.size[1]}.` : a.error;
+};
+$("mload").onclick = () => { const p = $("mpath").value.trim(); if (p) pickMap(p); };
+$("mpath").onkeydown = e => { if (e.key === "Enter") $("mload").onclick(); };
+
+// Units: a listing of the units on the map, filtered by player and type.
+async function listUnits() {
+  const args = { max: 300 };
+  if (+$("uplayer").value >= 0) args.player = +$("uplayer").value;
+  const t = $("utype").value.trim();
+  if (t) args.type = /^\d+$/.test(t) ? +t : t;
+  const a = await call("units", args);
+  if (!a.ok) { $("ucount").textContent = a.error; return; }
+  $("ucount").textContent = a.count + " units at frame " + a.frame + (a.count > a.units.length ? ", the first " + a.units.length + " listed" : "");
+  const table = $("units");
+  table.textContent = "";
+  const head = document.createElement("tr");
+  for (const h of ["id", "type", "player", "x", "y", "order", "hp", "shields", "energy", "pushed"]) {
+    const th = document.createElement("td"); th.textContent = h; th.className = "name"; head.appendChild(th);
+  }
+  table.appendChild(head);
+  for (const u of a.units) {
+    const tr = document.createElement("tr");
+    for (const v of [u.id, u.name ? u.name + " (" + u.type + ")" : u.type, u.player, u.x, u.y, u.order, u.hp, u.shields,
+                     u.energy, u.submission || ""]) {
+      const td = document.createElement("td"); td.textContent = v; tr.appendChild(td);
+    }
+    table.appendChild(tr);
+  }
+}
+$("ulist").onclick = listUnits;
+setInterval(() => { if ($("uauto").checked) listUnits(); }, 1000);
+
+// Mod data: the mods that bring data, a push of one's folder or of the text given, and the
+// pushes so far, whose units join the sandbox's list.
+async function refreshMods() {
+  const a = await call("mods");
+  if (!a.ok) return;
+  const pick = $("modpick"), was = pick.value;
+  pick.textContent = "";
+  for (const m of a.mods) {
+    const o = document.createElement("option");
+    o.value = m.id; o.textContent = m.name; o.title = m.folder;
+    pick.appendChild(o);
+  }
+  if (was) pick.value = was;
+  refreshSubmissions();
+}
+async function refreshSubmissions() {
+  const a = await call("mod_submissions");
+  if (!a.ok) return;
+  $("modsubs").textContent = a.submissions.length
+    ? a.submissions.map(s => "submission " + s.submission + " of " + s.mod + " at " + s.at + ": " +
+                             s.units.map(u => u.name + " (" + u.id + ")").join(", ")).join("\n")
+    : "No pushes in this game.";
+  // the newest of each pushed unit, by name, in the sandbox's list
+  const unit = $("unit");
+  unit.querySelectorAll("option[data-mod]").forEach(o => o.remove());
+  const newest = new Map();
+  for (const s of a.submissions) for (const u of s.units) newest.set(u.name, u.id);
+  for (const [name, n] of newest) {
+    const o = document.createElement("option");
+    o.value = n; o.dataset.mod = "1"; o.textContent = name.replace(/_/g, " ") + " (mod)";
+    unit.appendChild(o);
+  }
+}
+async function modPush(withText) {
+  const args = { mod: $("modpick").value };
+  if ($("modreplace").value) args.replace = $("modreplace").value;
+  if (withText) {
+    try { args.types = JSON.parse($("modtypes").value); }
+    catch (e) { log("mod_push: the text is not JSON: " + e.message); return; }
+  }
+  const a = await act("mod_push", args);
+  if (a.ok) log("submission " + a.submission + ": " + a.units.map(u => u.name).join(", ") +
+                (a.replaced ? ", " + a.replaced + " units replaced" : ""));
+  refreshSubmissions();
+}
+$("modpush").onclick = () => modPush(false);
+$("modpushtext").onclick = () => modPush(true);
+
+// Settings: the rows of one tab at a time, each sent as it changes.
+const TAB_NAMES = { game: "Game", graphics: "Graphics", sound: "Sound", interface: "Interface", hotkeys: "Hotkeys",
+                    access: "Accessibility", hyperion: "Data and mods" };
+let settingRows = [];
+async function refreshSettings() {
+  const a = await call("settings");
+  if (!a.ok) return;
+  settingRows = a.settings;
+  const tabs = [...new Set(settingRows.map(s => s.tab))], pick = $("settab"), was = pick.value;
+  pick.textContent = "";
+  for (const t of tabs) {
+    const o = document.createElement("option");
+    o.value = t; o.textContent = TAB_NAMES[t] || t;
+    pick.appendChild(o);
+  }
+  if (tabs.includes(was)) pick.value = was;
+  showSettings();
+}
+function showSettings() {
+  const box = $("settings");
+  box.textContent = "";
+  for (const s of settingRows.filter(r => r.tab === $("settab").value)) {
+    const div = document.createElement("div");
+    div.className = "value" + (s.live ? "" : " off");
+    const label = document.createElement("label");
+    label.textContent = s.name;
+    const from = document.createElement("span");
+    from.className = "from"; from.textContent = s.from + (s.applies !== "live" ? ", " + s.applies : "");
+    label.appendChild(from);
+    const note = document.createElement("small");
+    note.textContent = s.live ? s.note : "Not yet: " + (s.needs || "not built");
+    const send = async (value, on) => {
+      const args = { name: s.name, value };
+      if (on !== undefined) args.on = on;
+      const r = await act("setting", args);
+      if (r.ok) {
+        Object.assign(s, r.setting);
+        if (r.restart) log(s.name + " takes effect after a restart");
+      }
+      showSettings();
+    };
+    if (s.kind === "toggle") {
+      const check = document.createElement("input");
+      check.type = "checkbox"; check.checked = s.value >= 0.5; check.disabled = !s.live;
+      check.addEventListener("change", () => send(check.checked ? 1 : 0));
+      div.append(label, document.createElement("span"), check, note);
+    } else if (s.kind === "choice") {
+      const sel = document.createElement("select");
+      s.words.forEach((w, k) => { const o = document.createElement("option"); o.value = k; o.textContent = w; sel.appendChild(o); });
+      sel.value = Math.round(s.value); sel.disabled = !s.live;
+      sel.addEventListener("change", () => send(+sel.value));
+      div.append(label, sel, note);
+    } else {
+      // a slider 0 to 1 between its two ends, or steps through its words
+      const steps = s.kind === "steps", range = document.createElement("input");
+      Object.assign(range, { type: "range", min: 0, max: steps ? s.words.length - 1 : 1, step: steps ? 1 : 0.01,
+                             value: s.value, disabled: !s.live });
+      const shown = document.createElement("span");
+      shown.textContent = steps ? s.words[Math.round(s.value)] : Math.round(s.value * 100) + " %";
+      const on = document.createElement("input");
+      on.type = "checkbox"; on.checked = s.on; on.disabled = !s.live; on.title = "on";
+      on.style.visibility = s.switch ? "visible" : "hidden";
+      range.addEventListener("input", () => {
+        shown.textContent = steps ? s.words[+range.value] : Math.round(range.value * 100) + " %";
+      });
+      range.addEventListener("change", () => send(+range.value));
+      on.addEventListener("change", () => send(+range.value, on.checked));
+      const words = document.createElement("div");
+      words.className = "words";
+      if (!steps) for (const w of s.words) { const e = document.createElement("span"); e.textContent = w; words.appendChild(e); }
+      div.append(label, shown, on, range, words, note);
+    }
+    box.appendChild(div);
+  }
+}
+$("settab").onchange = showSettings;
+$("setrefresh").onclick = refreshSettings;
+
+// The game clock: read a second at a time while it is on.
+let clockOn = false;
+async function clockPoll() {
+  if (!clockOn) return;
+  const a = await call("clock");
+  if (!a.ok) return;
+  clockOn = a.on;
+  clockShow(a);
+}
+function clockShow(a) {
+  $("clockstate").textContent = (a.on ? "on" : "stopped") + ", " + a.seconds + " s, " + a.game_ms.n + " game frames";
+  $("cpace").textContent = a.pace_per_s ? a.pace_per_s.toFixed(2) : "-";
+  $("cdue").textContent = a.nominal_per_s.toFixed(2);
+  $("cdrift").textContent = a.drift_ms.toFixed(0);
+  $("cgap").textContent = a.game_ms.n ? a.game_ms.mean.toFixed(1) + " ± " + a.game_ms.sd.toFixed(1) : "-";
+  $("cwithin").textContent = a.game_ms.n ? a.within_2ms_pct.toFixed(0) + " %" : "-";
+  const per = a.shown_per_game_frame;
+  const most = per.length ? per.reduce((m, x) => x[1] > m[1] ? x : m) : null;
+  $("cshown").textContent = most ? most[0] + (per.length > 1 ? " (" + per[0][0] + "-" + per[per.length - 1][0] + ")" : "") : "-";
+  const notes = ["due every " + a.nominal_ms.toFixed(1) + " ms", a.replay ? "a replay" : "a game"];
+  if (a.game_ms.n) notes.push("between " + a.game_ms.least.toFixed(1) + " and " + a.game_ms.most.toFixed(1) + " ms");
+  if (a.gaps) notes.push(a.gaps + " pauses or holds left out");
+  if (a.shown_ms.n) notes.push("a frame shown every " + a.shown_ms.mean.toFixed(1) + " ms ± " + a.shown_ms.sd.toFixed(1));
+  if (a.scroll_ms.n) notes.push("scroll steps every " + a.scroll_ms.mean.toFixed(1) + " ms ± " + a.scroll_ms.sd.toFixed(1));
+  $("clocknote").textContent = notes.join(" · ");
+  clockDraw(a);
+}
+function clockDraw(a) {
+  const css = getComputedStyle(document.documentElement);
+  const bar = css.getPropertyValue("--plot-gfps").trim(), due = css.getPropertyValue("--bad").trim();
+  // the histogram: whole ms from half the due time to twice it
+  let c = $("clockhist"), g = c.getContext("2d");
+  let w = c.width = c.clientWidth * devicePixelRatio, h = c.height = c.clientHeight * devicePixelRatio;
+  g.clearRect(0, 0, w, h);
+  const lo = Math.floor(a.nominal_ms * 0.5), hi = Math.ceil(a.nominal_ms * 1.75);
+  const top = Math.max(1, ...a.game_hist.map(x => x[1]));
+  const bw = (w - 8) / (hi - lo + 1);
+  g.fillStyle = bar;
+  for (const [ms, n] of a.game_hist) {
+    if (ms < lo || ms > hi) continue;
+    const bh = n / top * (h - 8);
+    g.fillRect(4 + (ms - lo) * bw, h - 4 - bh, Math.max(1, bw - 1), bh);
+  }
+  g.fillStyle = due;
+  g.fillRect(4 + (a.nominal_ms - lo) * bw + bw / 2 - devicePixelRatio, 0, 2 * devicePixelRatio, h);
+  g.fillStyle = css.getPropertyValue("--muted").trim();
+  g.font = (11 * devicePixelRatio) + "px system-ui";
+  g.fillText(lo + " ms", 6, 14 * devicePixelRatio);
+  g.fillText(hi + " ms", w - 50 * devicePixelRatio, 14 * devicePixelRatio);
+  // the last game frames, each one's time since the one before
+  c = $("clockrecent"); g = c.getContext("2d");
+  w = c.width = c.clientWidth * devicePixelRatio; h = c.height = c.clientHeight * devicePixelRatio;
+  g.clearRect(0, 0, w, h);
+  const r = a.recent;
+  if (r.length < 2) return;
+  const yTop = Math.max(a.nominal_ms * 1.5, ...r), Y = v => h - 4 - v / yTop * (h - 8);
+  g.strokeStyle = due; g.lineWidth = devicePixelRatio; g.setLineDash([4 * devicePixelRatio, 4 * devicePixelRatio]);
+  g.beginPath(); g.moveTo(0, Y(a.nominal_ms)); g.lineTo(w, Y(a.nominal_ms)); g.stroke();
+  g.setLineDash([]); g.strokeStyle = bar; g.lineWidth = 1.5 * devicePixelRatio; g.beginPath();
+  r.forEach((v, k) => (k ? g.lineTo : g.moveTo).call(g, 4 + k / (r.length - 1) * (w - 8), Y(v)));
+  g.stroke();
+}
+$("clockon").onclick = async () => { const a = await act("clock", { on: true }); if (a.ok) { clockOn = true; clockShow(a); } };
+$("clockoff").onclick = async () => { const a = await act("clock", { on: false }); if (a.ok) { clockOn = false; clockShow(a); } };
+setInterval(clockPoll, 1000);
+
+setInterval(refreshStatus, 1000);
+connect();
+
+// The demo reel: what the engine can do, played on the game in chapters, each switching to the
+// map it needs, playing its scenes and changing the look and the camera between them over the
+// channel. A live value or Settings row it changes is noted the first time and put back at the
+// end or on Stop.
+// The chapters on Volcanis (96 tiles a side) after the first make its outpost themselves when
+// the reel starts at them; the scenes of chapters 5 and 7 are the samples in cutscenes\.
+const REEL_VOLCANIS = { from: "(2)Volcanis.scm", or: { tileset: "ashworld", width: 128, height: 128 } };
+const REEL_OUTPOST = [
+  { do: "spawn", unit: "terran_marine", x: 2480, y: 2480, player: 0, count: 10, as: "line" },
+  { do: "spawn", unit: "terran_firebat", x: 2384, y: 2576, player: 0, count: 4, as: "line" },
+  { do: "spawn", unit: "terran_medic", x: 2608, y: 2700, player: 0, count: 3, as: "line" },
+  { do: "spawn", unit: "terran_siege_tank_siege_mode", x: 2672, y: 2780, player: 0, count: 2, as: "tanks" }
+];
+const REEL_SWITCHES = ["effects", "lights", "colour.full", "camera.smooth"];
+let reelPlaying = false, reelStopping = false;
+const reelKept = new Map();  // a live value's name, and its value before the reel
+const reelKeptSettings = new Map();  // a Settings row's, the same
+class ReelStopped extends Error {}
+function reelCheck() { if (reelStopping) throw new ReelStopped(); }
+async function reelCall(cmd, args = {}) {
+  reelCheck();
+  const a = await call(cmd, args);
+  if (!a.ok) throw new Error(cmd + ": " + a.error);
+  return a;
+}
+async function reelWait(ms) {
+  const end = Date.now() + ms;
+  for (let left = ms; left > 0; left = end - Date.now()) {
+    reelCheck();
+    await new Promise(r => setTimeout(r, Math.min(100, left)));
+  }
+}
+const reelUntil = (t0, ms) => reelWait(t0 + ms - Date.now());
+async function reelKeep(name) {
+  if (reelKept.has(name)) return;
+  const a = await reelCall("get", { name });
+  reelKept.set(name, a.value);
+}
+async function reelSet(name, value) {
+  await reelKeep(name);
+  await reelCall("set", { name, value });
+}
+// live values eased together to theirs over ms; a switch is set at the end
+async function reelTween(to, ms) {
+  const from = {};
+  for (const name in to) {
+    await reelKeep(name);
+    from[name] = (await reelCall("get", { name })).value;
+  }
+  const t0 = Date.now();
+  for (;;) {
+    const u = Math.min(1, (Date.now() - t0) / ms), e = u * u * (3 - 2 * u);
+    for (const name in to)
+      if (!REEL_SWITCHES.includes(name) || u >= 1)
+        await reelCall("set", { name, value: from[name] + (to[name] - from[name]) * e });
+    if (u >= 1) return;
+    await reelWait(40);
+  }
+}
+// the look as it was before the reel, eased back over ms (reelPutBack puts it all back at once)
+async function reelLookBack(ms) {
+  const to = {};
+  for (const [name, value] of reelKept) if (name !== "camera.smooth") to[name] = value;
+  await reelTween(to, ms);
+}
+// a Settings row changed as its Accept does, its first value kept to put back
+async function reelSetting(name, value) {
+  if (!reelKeptSettings.has(name)) {
+    const row = (await reelCall("settings")).settings.find(s => s.name === name);
+    if (!row) throw new Error("no setting named " + name);
+    reelKeptSettings.set(name, row.value);
+  }
+  await reelCall("setting", { name, value });
+}
+async function reelPutBack() {
+  for (const [name, value] of reelKept) await call("set", { name, value });
+  for (const [name, value] of reelKeptSettings) await call("setting", { name, value });
+  reelKept.clear();
+  reelKeptSettings.clear();
+}
+// a scene played to its end; one a map's arrival plays may not have begun when it is asked
+async function reelSceneEnd(begun = true) {
+  for (let n = 0; !begun && n < 40; n++) {
+    await reelWait(250);
+    const a = await call("cutscene_status");
+    begun = a.ok && a.playing;
+  }
+  for (;;) {
+    await reelWait(250);
+    const a = await call("cutscene_status");
+    if (a.ok && !a.playing) return;
+  }
+}
+async function reelScene(steps, opts = {}) {
+  await reelCall("cutscene_play", Object.assign({ steps }, opts));
+  await reelSceneEnd();
+}
+// words over the game while the player's keys still work: a scene of a caption alone
+const reelCaption = (text, ms) =>
+  reelCall("cutscene_play", { steps: [{ do: "caption", text, at: "top", ms }], hold: false, rest: false });
+// a map switched to, with the scene it plays as it comes in (map_push's scene)
+async function reelMap(map, scene) {
+  const args = m => Object.assign({}, m.push || (m.from ? { from: m.from } : m), { reveal: true }, scene ? { scene } : {});
+  reelCheck();
+  let a = await call("map_push", args(map));
+  if (!a.ok && map.or) a = await call("map_push", args(map.or));
+  if (!a.ok) throw new Error("map_push: " + a.error);
+  for (let n = 0; ; n++) {
+    await reelWait(250);
+    const s = await call("status");
+    if (s.ok && s.state === "game" && s.map_swap === "none") break;
+    if (s.ok && s.map_swap === "none" && s.map_swap_error) throw new Error("the map did not start: " + s.map_swap_error);
+    if (n > 160) throw new Error("the map did not come in within 40 seconds");
+  }
+  if (scene) await reelSceneEnd(false);
+}
+const reelOnVolcanis = () => reelMap(REEL_VOLCANIS, { steps: REEL_OUTPOST.concat([{ do: "camera", x: 2500, y: 2600, ms: 0 }]) });
+
+const REEL = [
+  {
+    title: "Hyperion",
+    line: "Volcanis comes in under cinema bars, the camera gliding down from the whole map",
+    async play() {
+      await reelMap(REEL_VOLCANIS, { rest: false, steps: [
+        { do: "fade", to: "black", ms: 0, scale: 0.9 },
+        { do: "bars", on: true, size: 0.12, ms: 0 },
+        ...REEL_OUTPOST,
+        { do: "camera", x: 1536, y: 1536, zoom: 32, ms: 0 },
+        { do: "caption", text: "HYPERION", at: "middle", ms: 3400, async: true },
+        { do: "fade", to: "clear", scale: 1.0, ms: 2200, async: true },
+        { do: "wait", ms: 1800 },
+        { do: "camera", x: 2500, y: 2600, zoom: 1.0, ms: 7000, ease: "in_out", async: true },
+        { do: "wait", ms: 1800 },
+        { do: "caption", text: "StarCraft 1.17, rebuilt as a 64-bit engine", ms: 3200 },
+        { do: "caption", text: "Every game and replay plays exactly as the original's", ms: 3200 }
+      ] });
+    }
+  },
+  {
+    title: "Zoom",
+    line: "In closer than 1.17 draws, then out to the whole map in one move",
+    setup: reelOnVolcanis,
+    async play() {
+      await reelScene([
+        { do: "camera", x: 2480, y: 2500, zoom: 0.55, ms: 2600, ease: "in_out", async: true },
+        { do: "caption", text: "In closer than 1.17 ever drew", ms: 3200 },
+        { do: "wait", ms: 600 },
+        { do: "camera", x: 1536, y: 1536, zoom: 32, ms: 5500, ease: "in_out", async: true },
+        { do: "wait", ms: 2200 },
+        { do: "caption", text: "Out to the whole map, every unit still drawn", ms: 3800 },
+        { do: "wait", ms: 600 },
+        { do: "camera", x: 2500, y: 2600, zoom: 1.0, ms: 3200, ease: "in_out" }
+      ], { rest: false });
+    }
+  },
+  {
+    title: "The camera, beside 1.17's",
+    line: "The same scroll key held twice: in 1.17's uneven steps, then glided evenly",
+    setup: reelOnVolcanis,
+    async play() {
+      // at the game's own zoom and the slowest key scroll, from the map's middle, so the key has
+      // room both ways; at the usual speed 1.17's key scroll crosses a map in a second
+      const traced = (await call("trace_rows", { since: 1e9 })).on;
+      const map = (await reelCall("status")).map;
+      await reelSet("zoom", 1);
+      await reelSetting("Keyboard scroll speed", 0);
+      await reelCall("camera", { x: map.width / 2, y: map.height / 2 });
+      await reelWait(2200);
+      const both = async () => {
+        await reelCall("scroll", { dir: "right", ms: 700 });
+        await reelWait(2000);
+        await reelCall("scroll", { dir: "left", ms: 700 });
+        await reelWait(2000);
+      };
+      await reelSet("camera.smooth", 0);
+      await reelCaption("1.17's scroll: 8-pixel steps on its own clock, uneven on screen", 6400);
+      await reelWait(500);
+      await both();
+      await reelWait(800);
+      await reelSet("camera.smooth", 1);
+      await reelCaption("Hyperion's: the same steps, glided evenly at the display's rate", 6400);
+      await reelWait(500);
+      await both();
+      await reelWait(800);
+      await reelTween({ zoom: reelKept.get("zoom") }, 1200);
+      if (!traced) await call("trace", { what: "camera", on: false });
+    }
+  },
+  {
+    title: "Light and colour",
+    line: "1.17's pixels, then full colour, bloom, and night lit by fire, explosions and psionic energy",
+    setup: reelOnVolcanis,
+    async play() {
+      await reelSet("lights", 0);
+      await reelSet("effects", 0);
+      await reelSet("colour.full", 0);
+      await reelCall("cutscene_play", { steps: [
+        { do: "camera", x: 2400, y: 2440, zoom: 1.15, ms: 1600, ease: "in_out" },
+        { do: "spawn", unit: 68, x: 2600, y: 2420, player: 0, count: 2, as: "aiur" },
+        { do: "spawn", unit: 66, x: 2640, y: 2520, player: 0, count: 4, as: "aiur" },
+        { do: "spawn", unit: "zerg_zergling", x: 2160, y: 2128, player: 1, count: 24, as: "swarm" },
+        { do: "spawn", unit: "zerg_hydralisk", x: 1872, y: 2544, player: 1, count: 10, as: "swarm" },
+        { do: "spawn", unit: "zerg_ultralisk", x: 2416, y: 1968, player: 1, count: 3, as: "swarm" },
+        { do: "caption", text: "1.17's picture, to the pixel", at: "top", ms: 3400 },
+        { do: "order", units: "swarm", to: [2500, 2560], order: "attack" },
+        { do: "caption", text: "Full colour: shadows and translucency blended as colour", at: "top", ms: 3600 },
+        { do: "caption", text: "Bloom: bright light spills into the dark", at: "top", ms: 3600 },
+        { do: "caption", text: "Night: fire, explosions and psionic energy light the ground", at: "top", ms: 6500 },
+        { do: "caption", text: "Each of these is a value a tool changes while the game runs", at: "top", ms: 4000 },
+        { do: "wait", ms: 2500 }
+      ], rest: false });
+      const t0 = Date.now();
+      await reelUntil(t0, 1600 + 3400);
+      await reelSet("colour.full", 1);
+      await reelUntil(t0, 1600 + 3400 + 3600);
+      await reelSet("bloom.strength", 0);
+      await reelSet("effects", 1);
+      await reelTween({ "bloom.strength": 1.4 }, 1800);
+      await reelUntil(t0, 1600 + 3400 + 3600 + 3600);
+      await reelSet("lights", 1);
+      await reelTween({ "lights.ambient": 0.35, "vignette.strength": 0.45, "grade.temperature": -0.2 }, 2500);
+      await reelUntil(t0, 1600 + 3400 + 3600 + 3600 + 6500 + 2000);
+      await reelLookBack(2500);
+      await reelSceneEnd();
+    }
+  },
+  {
+    title: "A scene",
+    line: "Theta-9: a scene scripted over the channel, with its fades, sounds and transmissions",
+    async play() {
+      const scene = samples.get("theta-9-haunting.json");
+      if (!scene) throw new Error("the sample theta-9-haunting.json was not read");
+      const steps = scene.steps.slice();
+      steps.splice(2, 0, { do: "caption", text: "Scenes, scripted live on any map", at: "middle", ms: 2600 });
+      await reelMap(scene.map, { steps });
+    }
+  },
+  {
+    title: "A thousand units",
+    line: "Two armies of 512 meet on Volcanis, seen whole and then up close",
+    async play() {
+      // on Volcanis' open ground south-east of its plateau, the armies 1,100 pixels apart and sent
+      // at once, so they meet as the camera comes in
+      const steps = [{ do: "fade", to: "black", ms: 0, scale: 0.9 }, { do: "bars", on: true, size: 0.1, ms: 0 }];
+      // 32 at each of 16 places a side: 64 marines round one place do not all fit
+      for (let i = 0; i < 16; i++) {
+        const dx = (i % 4) * 120, y = 2120 + Math.floor(i / 4) * 190;
+        steps.push({ do: "spawn", unit: "terran_marine", x: 1700 + dx, y, player: 0, count: 32, as: "west" },
+                   { do: "spawn", unit: "zerg_zergling", x: 2620 + dx, y, player: 1, count: 32, as: "east" });
+      }
+      steps.push(
+        { do: "order", units: "west", to: [2900, 2500], order: "attack" },
+        { do: "order", units: "east", to: [1700, 2500], order: "attack" },
+        { do: "camera", x: 1536, y: 1536, zoom: 32, ms: 0 },
+        { do: "fade", to: "clear", scale: 1.0, ms: 1600 },
+        { do: "caption", text: "1,024 units in one battle", at: "top", ms: 3000 },
+        { do: "camera", x: 2280, y: 2500, zoom: 1.5, ms: 3500, ease: "in_out", async: true },
+        { do: "caption", text: "A game of two keeps 1.17's 1,700 units; Hyperion's larger games hold 22,100", at: "top", ms: 5000 },
+        { do: "wait", ms: 1500 },
+        { do: "camera", x: 1536, y: 1536, zoom: 32, ms: 3500, ease: "in_out" },
+        { do: "wait", ms: 1200 },
+        { do: "fade", to: "black", ms: 900 }
+      );
+      await reelMap(REEL_VOLCANIS, { steps });
+    }
+  },
+  {
+    title: "Your turn",
+    line: "Volcanis' last stand: a battle scene that ends with the game in the player's hands",
+    async play() {
+      const scene = samples.get("volcanis-last-stand.json");
+      if (!scene) throw new Error("the sample volcanis-last-stand.json was not read");
+      const steps = scene.steps.concat([{ do: "caption", text: "Your turn.", at: "middle", ms: 2400 }]);
+      await reelMap(REEL_VOLCANIS, { steps });
+    }
+  }
+];
+
+async function reelPlay(from) {
+  if (reelPlaying) return;
+  reelPlaying = true;
+  reelStopping = false;
+  const items = [...$("reellist").children];
+  $("reelnote").textContent = "";
+  try {
+    for (let i = from; i < REEL.length; i++) {
+      items.forEach((li, j) => { li.classList.toggle("on", j === i); li.classList.toggle("done", j >= from && j < i); });
+      if (i === from && REEL[i].setup) await REEL[i].setup();
+      await REEL[i].play();
+    }
+    $("reelnote").textContent = "Played to the end: the game is the player's.";
+  } catch (e) {
+    $("reelnote").textContent = e instanceof ReelStopped ? "Stopped." : "Stopped: " + e.message;
+    await call("cutscene_stop");
+    // the bars and the HUD back, from a scene that keeps them (rest: false)
+    await call("cutscene_play", { steps: [{ do: "bars", on: false, hud: true, ms: 400 }, { do: "fade", to: "clear", ms: 300 }] });
+  } finally {
+    await reelPutBack();
+    items.forEach(li => li.classList.remove("on", "done"));
+    reelPlaying = false;
+  }
+}
+for (const [i, c] of REEL.entries()) {
+  const li = document.createElement("li");
+  li.textContent = c.title;
+  const small = document.createElement("small");
+  small.textContent = c.line;
+  li.appendChild(small);
+  $("reellist").appendChild(li);
+  const o = document.createElement("option");
+  o.value = i;
+  o.textContent = (i + 1) + ". " + c.title;
+  $("reelfrom").appendChild(o);
+}
+$("reelplay").onclick = () => reelPlay(Number($("reelfrom").value));
+$("reelstop").onclick = () => { if (reelPlaying) reelStopping = true; };
+
+// The tabs: each section in a group by its title, a filter by name, folds by a title's click.
+(() => {
+  const GROUPS = [
+    ["Demo", ["Demo reel"]],
+    ["Scenes and maps", ["Scene", "Cutscene", "Map", "Sandbox", "Units"]],
+    ["Look", ["Settings", "Live values", "Overlay", "Lights", "Frame"]],
+    ["Measure", ["Performance", "Game clock", "Camera trace", "Frame"]],
+    ["Data", ["Mod data"]],
+    ["All", null]
+  ];
+  const ALWAYS = ["Answers"];
+  const store = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (_) {} return null; };
+  const sections = [...document.querySelectorAll("main section")];
+  const title = sec => sec.querySelector("h2").textContent.trim();
+  let folded = {};
+  try { folded = JSON.parse(store("panel-folded") || "{}"); } catch (_) {}
+  let tab = store("panel-tab") || "Scenes and maps";
+  if (!GROUPS.some(g => g[0] === tab)) tab = "All";
+  const tabs = $("tabs");
+  const show = () => {
+    const words = $("filter").value.trim().toLowerCase();
+    const group = GROUPS.find(g => g[0] === tab)[1];
+    for (const sec of sections) {
+      const t = title(sec);
+      const inTab = !group || group.includes(t) || ALWAYS.includes(t);
+      const found = !words || t.toLowerCase().includes(words) || sec.textContent.toLowerCase().includes(words);
+      sec.classList.toggle("away", words ? !found : !inTab);
+      sec.classList.toggle("folded", !!folded[t] && !words);
+    }
+    for (const b of tabs.children) b.classList.toggle("on", b.textContent === tab && !words);
+  };
+  for (const [name] of GROUPS) {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.onclick = () => { tab = name; store("panel-tab", name); $("filter").value = ""; show(); };
+    tabs.appendChild(b);
+  }
+  for (const sec of sections)
+    sec.querySelector("h2").addEventListener("click", () => {
+      const t = title(sec);
+      folded[t] = !folded[t];
+      store("panel-folded", JSON.stringify(folded));
+      show();
+    });
+  $("filter").addEventListener("input", show);
+  show();
+})();
+
+// Copy for AI: the context /ai-context serves, with the game's status as it is now
+document.getElementById('copyai').addEventListener('click', async e => {
+  const b = e.currentTarget;
+  try {
+    let text = await (await fetch('/ai-context')).text();
+    const st = await call('status');
+    if (st.ok)
+      text = text.replace('Not included here: send `status` to see it.',
+                          'From `status` when this was copied:\n\n    ' + JSON.stringify(st));
+    await navigator.clipboard.writeText(text);
+    b.textContent = 'Copied';
+  } catch (err) {
+    b.textContent = 'Copy failed';
+  }
+  setTimeout(() => { b.textContent = 'Copy for AI'; }, 2000);
+});
+</script>
+</body>
+</html>

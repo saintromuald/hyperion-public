@@ -1,0 +1,10 @@
+heavy mechanical servo motor sliding a metal panel into place, short hydraulic whir ending in a solid clunk, close, dry
+
+---
+file: servo.ogg
+model: eleven_text_to_sound_v2
+settings: {"duration_seconds":1,"prompt_influence":0.5,"output_format":"mp3_44100_128"}
+id: sound-1790999493163
+created: 2026-10-03T03:51:33.163Z
+tool: media-mcp generate_sound_effect
+derived: from servo.mp3 — ffmpeg -i servo.mp3 -vn -c:a libvorbis -q:a 5 -af loudnorm=I=-16:TP=-1.5:LRA=11 -ar 48000 servo.ogg

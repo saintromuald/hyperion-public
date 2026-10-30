@@ -1,0 +1,10 @@
+sci-fi command console powering up: low electrical hum swelling, relays clicking on, a soft rising synth tone, clean, no music, no voice
+
+---
+file: hum.ogg
+model: eleven_text_to_sound_v2
+settings: {"duration_seconds":2.2,"prompt_influence":0.5,"output_format":"mp3_44100_128"}
+id: sound-1790999491314
+created: 2026-10-03T03:51:31.314Z
+tool: media-mcp generate_sound_effect
+derived: from hum.mp3 — ffmpeg -i hum.mp3 -vn -c:a libvorbis -q:a 5 -af loudnorm=I=-16:TP=-1.5:LRA=11 -ar 48000 hum.ogg

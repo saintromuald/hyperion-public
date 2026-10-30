@@ -1,0 +1,7 @@
+# Line endings (docs/cleanup-backlog.md, 2026-10-12): text is stored LF and checked out CRLF
+# on every machine, whatever its core.autocrlf, as the engine's sources and the build expect.
+# A script for a POSIX shell keeps LF, as does the Linux build's Dockerfile. Git tells text from binary for anything else.
+* text=auto eol=crlf
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.ico binary

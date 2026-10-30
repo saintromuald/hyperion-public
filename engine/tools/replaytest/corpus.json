@@ -1,0 +1,931 @@
+{
+ "about": "The classic replays the suite plays (reRS, 1.16.1 and 1.17), kept in testrun/rt_replays (gitignored). Each row's sha1 pins its file; replaytest.py corpus checks them. A set names where it runs: quick on every commit, full at a merge, archive with gate --merge. known: an end the oracle is known to reach early, which does not fail a run.",
+ "replays": [
+  {
+   "name": "m1_IronManLadder_1v1_LostTemple_2003",
+   "path": "modes/m1_IronManLadder_1v1_LostTemple_2003.rep",
+   "sha1": "e91add5e440ea6218a595f78b94b00b64496e39b",
+   "source": "https://github.com/msikma/bwscrep",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "Iron Man Ladder 1v1",
+   "map": "KBK21-The Lost Temple",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 26600,
+   "sets": [
+    "full",
+    "quick"
+   ]
+  },
+  {
+   "name": "m2_Ladder_1v1_LostTemple_2006",
+   "path": "modes/m2_Ladder_1v1_LostTemple_2006.rep",
+   "sha1": "d557358a9cfcd05a1ff4e1ec614e57ec01f072a9",
+   "source": "https://github.com/msikma/bwscrep",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "Ladder 1v1",
+   "map": "The Lost Temple",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 66504,
+   "sets": [
+    "full"
+   ]
+  },
+  {
+   "name": "m3_Slaughter_4p_LostTemple_2006",
+   "path": "modes/m3_Slaughter_4p_LostTemple_2006.rep",
+   "sha1": "1cc0bf5b4e85d90764d10b05d2f918f69c54d361",
+   "source": "https://github.com/msikma/bwscrep",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "Slaughter, 4 players",
+   "map": "WCG The Lost Temple V2",
+   "size": [
+    128,
+    128
+   ],
+   "players": 4,
+   "computers": 0,
+   "frames": 28886,
+   "sets": [
+    "full"
+   ]
+  },
+  {
+   "name": "m4_TeamCTF_8p_Coulee_2009",
+   "path": "modes/m4_TeamCTF_8p_Coulee_2009.rep",
+   "sha1": "9b3ab2fd944f1f8b19b8210ff158bb9efca2bbf2",
+   "source": "https://github.com/msikma/bwscrep",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "Team Capture the Flag, 8 players",
+   "map": "WGT12 - Coulee",
+   "size": [
+    128,
+    128
+   ],
+   "players": 8,
+   "computers": 0,
+   "frames": 12448,
+   "sets": [
+    "full",
+    "quick"
+   ]
+  },
+  {
+   "name": "s1_FFA_3bots_BGH",
+   "path": "sscait_pick/s1_FFA_3bots_BGH.rep",
+   "sha1": "6cafa86422fd6f40aba72335c74a4389abeb8f92",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "free for all",
+   "map": "Big Game Hunters",
+   "size": [
+    128,
+    128
+   ],
+   "players": 3,
+   "computers": 0,
+   "frames": 56561,
+   "sets": [
+    "full"
+   ]
+  },
+  {
+   "name": "s2_TopVsBottom_5bots_BGH",
+   "path": "sscait_pick/s2_TopVsBottom_5bots_BGH.rep",
+   "sha1": "1a8822b8d46ab25d9263a01fd93e030c58e395f9",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "top vs bottom",
+   "map": "Big Game Hunters",
+   "size": [
+    128,
+    128
+   ],
+   "players": 5,
+   "computers": 3,
+   "frames": 27576,
+   "sets": [
+    "full",
+    "quick"
+   ]
+  },
+  {
+   "name": "s3_TvP_Icarus",
+   "path": "sscait_pick/s3_TvP_Icarus.rep",
+   "sha1": "691b6a9bc579d935645dbd66a0102b0332d56944",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Icarus 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 45122,
+   "sets": [
+    "full",
+    "quick"
+   ]
+  },
+  {
+   "name": "s4_PvP_Jade",
+   "path": "sscait_pick/s4_PvP_Jade.rep",
+   "sha1": "8555829b327dc4cf519216ae443b24dee507cab2",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Jade 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 40441,
+   "sets": [
+    "full"
+   ]
+  },
+  {
+   "name": "s5_ZvP",
+   "path": "sscait_pick/s5_ZvP.rep",
+   "sha1": "95cd57d00fb84da6fff012cabbd659f60d9d1bc2",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "\ub2e8\uc7a5\uc758 \ub2a5\uc120 1.1",
+   "size": [
+    128,
+    96
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 29653,
+   "sets": [
+    "full"
+   ]
+  },
+  {
+   "name": "s6_ZvT",
+   "path": "sscait_pick/s6_ZvT.rep",
+   "sha1": "f38a4191d5e02c2ab5bd110f2e3226058cc6ef34",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "\ub2e8\uc7a5\uc758 \ub2a5\uc120 1.1",
+   "size": [
+    128,
+    96
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 23453,
+   "sets": [
+    "full"
+   ]
+  },
+  {
+   "name": "a_Finals+FFA+TeamGame_FFA",
+   "path": "sscait2016/SSCAIT-replays/Finals+FFA+TeamGame/FFA.rep",
+   "sha1": "6cafa86422fd6f40aba72335c74a4389abeb8f92",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "free for all",
+   "map": "Big Game Hunters",
+   "size": [
+    128,
+    128
+   ],
+   "players": 3,
+   "computers": 0,
+   "frames": 56561,
+   "sets": [],
+   "same_as": "s1_FFA_3bots_BGH"
+  },
+  {
+   "name": "a_Finals+FFA+TeamGame_official1",
+   "path": "sscait2016/SSCAIT-replays/Finals+FFA+TeamGame/official1.rep",
+   "sha1": "7fd28bef01c2196a3ea20e8f013b9cca71a82d6c",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Jade 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 24786,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Finals+FFA+TeamGame_official2",
+   "path": "sscait2016/SSCAIT-replays/Finals+FFA+TeamGame/official2.rep",
+   "sha1": "ef953637e7c4a23600cf32529af7a64af88d75d1",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "| iCCup | MoonGlaive 2.1",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 4861,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Finals+FFA+TeamGame_official3",
+   "path": "sscait2016/SSCAIT-replays/Finals+FFA+TeamGame/official3.rep",
+   "sha1": "81ccc8186bae0af628ed45e6456f3a30e85133b0",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Circuit Breakers 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 4981,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Finals+FFA+TeamGame_official4",
+   "path": "sscait2016/SSCAIT-replays/Finals+FFA+TeamGame/official4.rep",
+   "sha1": "8c5eec405fdb887791253fb566dc2ac7a0418d40",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Python 1.1",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 5701,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Finals+FFA+TeamGame_official5",
+   "path": "sscait2016/SSCAIT-replays/Finals+FFA+TeamGame/official5.rep",
+   "sha1": "43842d8dc5e94906dd8aa333996f898c2748411f",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "\ub2e8\uc7a5\uc758 \ub2a5\uc120 1.1",
+   "size": [
+    128,
+    96
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 4981,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Finals+FFA+TeamGame_team_game",
+   "path": "sscait2016/SSCAIT-replays/Finals+FFA+TeamGame/team_game.rep",
+   "sha1": "1a8822b8d46ab25d9263a01fd93e030c58e395f9",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "top vs bottom",
+   "map": "Big Game Hunters",
+   "size": [
+    128,
+    128
+   ],
+   "players": 5,
+   "computers": 3,
+   "frames": 27576,
+   "sets": [],
+   "same_as": "s2_TopVsBottom_5bots_BGH"
+  },
+  {
+   "name": "a_Ro16_1-MART_STEA-TVZ",
+   "path": "sscait2016/SSCAIT-replays/Ro16/1-MART_STEA-TVZ.REP",
+   "sha1": "2148dcad7e30ea71b75b53d61d0ca34a65ea74cf",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "| iCCup | MoonGlaive 2.1",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 20663,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro16_2-SIJI_WULI",
+   "path": "sscait2016/SSCAIT-replays/Ro16/2-SIJI_WULI.REP",
+   "sha1": "c41ff560dc516c71d11227cf72c6b3016d26ed81",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "| iCCup | MoonGlaive 2.1",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 8759,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro16_3-Chri_Dave",
+   "path": "sscait2016/SSCAIT-replays/Ro16/3-Chri_Dave.rep",
+   "sha1": "1dbe347eb9d96d9f6662133a9cf19c15e37c7e77",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Destination 1.1",
+   "size": [
+    96,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 13502,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro16_4-Iron_ICEL-TvT",
+   "path": "sscait2016/SSCAIT-replays/Ro16/4-Iron_ICEL-TvT.rep",
+   "sha1": "b2c71fb4a9711e1ca647174fe1bc5aa383267e77",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "\ub2e8\uc7a5\uc758 \ub2a5\uc120 1.1",
+   "size": [
+    128,
+    96
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 16850,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro16_5-Bere_BeeB-PvT",
+   "path": "sscait2016/SSCAIT-replays/Ro16/5-Bere_BeeB-PvT.rep",
+   "sha1": "36aa095cea4cc7376e57bfe4753ddfdcb7adb640",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Destination 1.1",
+   "size": [
+    96,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 14029,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro16_6-TOMA_ANDR-PVP",
+   "path": "sscait2016/SSCAIT-replays/Ro16/6-TOMA_ANDR-PVP.REP",
+   "sha1": "4c440af46a6f5f16c4990513c576eaca25b506f4",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "| iCCup | MoonGlaive 2.1",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 35977,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro16_7-kras_Flas-TvP",
+   "path": "sscait2016/SSCAIT-replays/Ro16/7-kras_Flas-TvP.rep",
+   "sha1": "88f55d41599e4de9c7ae685e208f6191e38989f8",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Jade 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 30583,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro16_8-Mari_tscm-ZvP",
+   "path": "sscait2016/SSCAIT-replays/Ro16/8-Mari_tscm-ZvP.rep",
+   "sha1": "95cd57d00fb84da6fff012cabbd659f60d9d1bc2",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "\ub2e8\uc7a5\uc758 \ub2a5\uc120 1.1",
+   "size": [
+    128,
+    96
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 29653,
+   "sets": [],
+   "same_as": "s5_ZvP"
+  },
+  {
+   "name": "a_Ro4+BronzeMatch_M1G1-Leta",
+   "path": "sscait2016/SSCAIT-replays/Ro4+BronzeMatch/M1G1-Leta.REP",
+   "sha1": "f16985574bcb0b7986b619ca4d750d441e85497a",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Icarus 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 20787,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro4+BronzeMatch_M1G2-Leta",
+   "path": "sscait2016/SSCAIT-replays/Ro4+BronzeMatch/M1G2-Leta.REP",
+   "sha1": "08fb7528b6e193947d161a907a531996fb390111",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Andromeda 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 23298,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro4+BronzeMatch_M1G3-Leta",
+   "path": "sscait2016/SSCAIT-replays/Ro4+BronzeMatch/M1G3-Leta.REP",
+   "sha1": "48536f5c98cd5a51b0f957db755828839c28bc80",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Python 1.1",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 21531,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro4+BronzeMatch_M2G1-XIMP",
+   "path": "sscait2016/SSCAIT-replays/Ro4+BronzeMatch/M2G1-XIMP.REP",
+   "sha1": "74ea72754c296ceac3d60ab20376ce6188c824bc",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "\ud0dc\uc591\uc758 \uc81c\uad6d 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 23329,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro4+BronzeMatch_M2G2-XIMP",
+   "path": "sscait2016/SSCAIT-replays/Ro4+BronzeMatch/M2G2-XIMP.REP",
+   "sha1": "db6b9f010d55c1461b9836a23eba79eeddef128a",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "\ub2e8\uc7a5\uc758 \ub2a5\uc120 1.1",
+   "size": [
+    128,
+    96
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 51787,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro4+BronzeMatch_M2G3-XIMP",
+   "path": "sscait2016/SSCAIT-replays/Ro4+BronzeMatch/M2G3-XIMP.REP",
+   "sha1": "a8bb2146e25122c954b201ced505f7bba8b22ea2",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Roadrunner_SE 1.2",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 36225,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro4+BronzeMatch_M3G1-bronze",
+   "path": "sscait2016/SSCAIT-replays/Ro4+BronzeMatch/M3G1-bronze.REP",
+   "sha1": "6a3c32fae72d34a92f11b209121eb9813feeff9b",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Andromeda 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 21190,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro4+BronzeMatch_M3G2-bronze",
+   "path": "sscait2016/SSCAIT-replays/Ro4+BronzeMatch/M3G2-bronze.REP",
+   "sha1": "8b5df88e2bc8a0694b019d8b459c76853c51fcde",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Jade 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 22523,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro4+BronzeMatch_M3G3-bronze",
+   "path": "sscait2016/SSCAIT-replays/Ro4+BronzeMatch/M3G3-bronze.REP",
+   "sha1": "457465a6cf70f471066fc8fcb69b6b6863ccec50",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "| iCCup | MoonGlaive 2.1",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 33125,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro8_M1G1-Leta",
+   "path": "sscait2016/SSCAIT-replays/Ro8/M1G1-Leta.REP",
+   "sha1": "f90c4988f37d02360e332de4e1a6b83fc9ba1463",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "| iCCup | Fighting Spirit",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 19485,
+   "sets": [
+    "archive"
+   ],
+   "known": {
+    "oracle": "load_failed",
+    "why": "1.17 does not load it (2026-09-27 archive run)"
+   }
+  },
+  {
+   "name": "a_Ro8_M1G2-Leta",
+   "path": "sscait2016/SSCAIT-replays/Ro8/M1G2-Leta.REP",
+   "sha1": "89a2b848a9ecb0301398e7704e9220345530fa9d",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "\ub2e8\uc7a5\uc758 \ub2a5\uc120 1.1",
+   "size": [
+    128,
+    96
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 21593,
+   "sets": [
+    "archive"
+   ],
+   "known": {
+    "oracle": "crashed",
+    "why": "free_game dereferences a null console dialog group at the replay's end (PRD 2026-09-26); Hyperion fixes it"
+   }
+  },
+  {
+   "name": "a_Ro8_M1G3-Leta",
+   "path": "sscait2016/SSCAIT-replays/Ro8/M1G3-Leta.REP",
+   "sha1": "736c77b90dad979ed9612d399cfa9c89d2d37193",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Icarus 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 20942,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro8_M2G1-Chris",
+   "path": "sscait2016/SSCAIT-replays/Ro8/M2G1-Chris.rep",
+   "sha1": "f38a4191d5e02c2ab5bd110f2e3226058cc6ef34",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "\ub2e8\uc7a5\uc758 \ub2a5\uc120 1.1",
+   "size": [
+    128,
+    96
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 23453,
+   "sets": [],
+   "same_as": "s6_ZvT"
+  },
+  {
+   "name": "a_Ro8_M2G2-Chris",
+   "path": "sscait2016/SSCAIT-replays/Ro8/M2G2-Chris.rep",
+   "sha1": "b397b4260f9d8e46e59b42c4f428a92ccda8b653",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Icarus 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 19981,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro8_M2G3-Chris",
+   "path": "sscait2016/SSCAIT-replays/Ro8/M2G3-Chris.rep",
+   "sha1": "69dcb4a7b50bb656e91497202b10ef8ac94c028b",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "\ud0dc\uc591\uc758 \uc81c\uad6d 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 20632,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro8_M3G1-XIMP",
+   "path": "sscait2016/SSCAIT-replays/Ro8/M3G1-XIMP.rep",
+   "sha1": "4917b622a398a328e4465652e8ff613c428ed1f3",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "La Mancha 1.1",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 30614,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro8_M3G2-XIMP",
+   "path": "sscait2016/SSCAIT-replays/Ro8/M3G2-XIMP.rep",
+   "sha1": "8555829b327dc4cf519216ae443b24dee507cab2",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Jade 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 40441,
+   "sets": [],
+   "same_as": "s4_PvP_Jade"
+  },
+  {
+   "name": "a_Ro8_M3G3-XIMP",
+   "path": "sscait2016/SSCAIT-replays/Ro8/M3G3-XIMP.rep",
+   "sha1": "4c01b352905b28041774a6e83838360f7afc3890",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "\ub2e8\uc7a5\uc758 \ub2a5\uc120 1.1",
+   "size": [
+    128,
+    96
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 30893,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro8_M4G1-kras",
+   "path": "sscait2016/SSCAIT-replays/Ro8/M4G1-kras.rep",
+   "sha1": "4c25d3f98517763e85587872a76f5a0cf640304b",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "La Mancha 1.1",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 37558,
+   "sets": [
+    "archive"
+   ]
+  },
+  {
+   "name": "a_Ro8_M4G2-kras",
+   "path": "sscait2016/SSCAIT-replays/Ro8/M4G2-kras.rep",
+   "sha1": "691b6a9bc579d935645dbd66a0102b0332d56944",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Icarus 1.0",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 45122,
+   "sets": [],
+   "same_as": "s3_TvP_Icarus"
+  },
+  {
+   "name": "a_Ro8_M4G3-kras",
+   "path": "sscait2016/SSCAIT-replays/Ro8/M4G3-kras.rep",
+   "sha1": "cecd8835fd3c72b5f3e1223d039d95d603724c0c",
+   "source": "https://sscaitournament.com (SSCAIT 2016 replay archive, SSCAIT-replays.zip)",
+   "format": "reRS",
+   "expansion": true,
+   "mode": "melee 1v1",
+   "map": "Python 1.1",
+   "size": [
+    128,
+    128
+   ],
+   "players": 2,
+   "computers": 0,
+   "frames": 39883,
+   "sets": [
+    "archive"
+   ]
+  }
+ ]
+}

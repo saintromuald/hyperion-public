@@ -1,0 +1,16 @@
+{
+  "id": "bench",
+  "name": "Benchmark",
+  "by": "Hyperion",
+  "version": "0.1",
+  "line": "Big games of computers, up to 64 players on maps up to 1,024 by 1,024 tiles, watched from above and timed, to measure how far this build can be pushed. Still a work in progress.",
+  "holds": ["tools", "maps"],
+  "rules": "standard",
+  "world": "korhal",
+  "modes": [
+    {
+      "id": "bench",
+      "button": "Set Up a Benchmark"
+    }
+  ]
+}

@@ -1,0 +1,6327 @@
+{
+  "version": 3,
+  "screen": 1080,
+  "name": "Dark mech, left column, replay",
+  "race": "terran",
+  "mode": "replay",
+  "note": "Round 15: the left column for watching a replay, worn while one plays. The minimap, the selection and the portrait stand where the game layout has them. The top row is where the replay is over its length in one cell (or the share played) and the Game Menu; under the minimap, View Players, Replay TV and Follow. The players' board takes the groups' place, a row for every player with an eye for that player's vision, over two rows of selection; the replay's own card takes the card's place beside the portrait: the state and the speed, Slower, Play or Pause and Faster, and the speed's ladder of lights. The spine's light is the replay's progress, lit down from the top as it plays. No groups, idle or army button, and no resources at the top: the board has every player's. Built by huds/kits/build-mech.mjs from the parts in mech-parts.mjs.",
+  "options": [
+    {
+      "id": "width",
+      "label": "Width",
+      "default": "full",
+      "help": "16:9 keeps the column where a 16:9 screen has it, in from the edge of a wider one, and plates the side past it. On a 16:9 screen or a narrower one the two are the same.",
+      "values": [
+        {
+          "id": "full",
+          "label": "Full screen",
+          "help": "The HUD runs the width of the screen."
+        },
+        {
+          "id": "band",
+          "label": "16:9",
+          "band": 1920,
+          "help": "The HUD keeps to the middle of a wider screen, as wide as a 16:9 screen's."
+        }
+      ]
+    },
+    {
+      "id": "replayTime",
+      "label": "Replay position",
+      "default": "time",
+      "help": "How far into the replay you are, beside its length: the share of it played, or the time played. The time counts at the speed the game was recorded at, as the game's own timer does.",
+      "values": [
+        {
+          "id": "time",
+          "label": "Time played",
+          "help": "The time played over the length, as 10:05 / 20:57."
+        },
+        {
+          "id": "share",
+          "label": "Per cent",
+          "help": "How much of the replay has played, over the length.",
+          "set": {
+            "minimap.posTime": {
+              "visible": false
+            },
+            "minimap.posPct": {
+              "visible": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "statsBacking",
+      "label": "Stats backing",
+      "default": "faint",
+      "help": "What lies behind the players' stats at the side of the view (Shift+F1 in a replay or as an observer): nothing but a shadow under the type, a faint shade, or a darker one.",
+      "values": [
+        {
+          "id": "none",
+          "label": "None",
+          "help": "The rows alone over the game.",
+          "set": {
+            "statsSide.stats": {
+              "backing": 0
+            }
+          }
+        },
+        {
+          "id": "faint",
+          "label": "Faint",
+          "help": "A shade behind the rows, the game showing through."
+        },
+        {
+          "id": "plate",
+          "label": "Plate",
+          "help": "A darker shade, for a busy map.",
+          "set": {
+            "statsSide.stats": {
+              "backing": 0.72
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "statsDrawn",
+      "label": "Stats at the side",
+      "default": "game",
+      "help": "Who draws the players' stats at the side: the game's own rows, or this layout's, drawn from the HUD format alone (an each layer, a row a player), which a player could move, restyle or rebuild as they would any layer.",
+      "values": [
+        {
+          "id": "game",
+          "label": "The game's rows",
+          "help": "The game writes the rows into the layout's stats slot."
+        },
+        {
+          "id": "layout",
+          "label": "Drawn by the layout",
+          "help": "The layout's own layers draw every row, its eye, the teams and a supply chart.",
+          "set": {
+            "statsSide": {
+              "visible": false
+            },
+            "statsSideDrawn": {
+              "visible": "{stats.side}"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "assets": {},
+  "panels": [
+    {
+      "id": "alerts",
+      "ax": "left",
+      "ay": "bottom",
+      "x": 390,
+      "y": 260,
+      "w": 560,
+      "h": 110,
+      "layers": [
+        {
+          "id": "alerts",
+          "slot": "alerts"
+        }
+      ]
+    },
+    {
+      "id": "chat",
+      "ax": "left",
+      "ay": "bottom",
+      "x": 390,
+      "y": 380,
+      "w": 560,
+      "h": 140,
+      "layers": [
+        {
+          "id": "chat",
+          "slot": "chat"
+        }
+      ]
+    },
+    {
+      "id": "spine",
+      "w": 372,
+      "h": 1080,
+      "ax": "left",
+      "x": 0,
+      "tip": "right",
+      "layers": [
+        {
+          "id": "spine",
+          "x": 0,
+          "y": 0,
+          "w": 368,
+          "h": 1080,
+          "shape": true,
+          "look": "hull.back",
+          "corners": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "spineEdge",
+          "x": 360,
+          "y": 0,
+          "w": 12,
+          "h": 1080,
+          "shape": true,
+          "look": "hull.side",
+          "corners": 0,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "spineLampWell",
+          "x": 363,
+          "y": 28.5,
+          "w": 5.5,
+          "h": 1023,
+          "shape": true,
+          "look": "lamp.well",
+          "corners": 1.5,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "spineLamp",
+          "x": 364.5,
+          "y": 30,
+          "w": 2.5,
+          "h": 1020,
+          "shape": true,
+          "look": "lamp",
+          "corners": 0,
+          "cornerStyle": "chamfer",
+          "meter": "{replay.live ? 1 : replay.progress}",
+          "meterFrom": "top"
+        },
+        {
+          "id": "gapVent1",
+          "x": 18,
+          "y": 432,
+          "w": 248,
+          "h": 21,
+          "shape": true,
+          "look": "vent",
+          "corners": 2.5,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "hazard",
+          "x": 282,
+          "y": 437.5,
+          "w": 64,
+          "h": 10,
+          "shape": true,
+          "look": "hazard",
+          "corners": [
+            0,
+            3,
+            0,
+            3
+          ],
+          "cornerStyle": "chamfer"
+        }
+      ],
+      "ay": "top",
+      "y": 0,
+      "z": -1
+    },
+    {
+      "id": "minimap",
+      "w": 372,
+      "h": 422,
+      "ax": "left",
+      "x": 0,
+      "tip": "right",
+      "layers": [
+        {
+          "id": "hull",
+          "x": 0,
+          "y": 0,
+          "w": 372,
+          "h": 422,
+          "shape": true,
+          "look": "hull",
+          "path": "M 0 0 L 372 0 L 372 396 L 346 422 L 0 422 Z",
+          "pathSize": [
+            372,
+            422
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "hullLip",
+          "x": 282,
+          "y": 0,
+          "w": 90,
+          "h": 422,
+          "shape": true,
+          "look": "lip",
+          "path": "M 90 0 L 90 396 L 64 422 L 0 422 L 0 414 L 60.69 414 L 82 392.69 L 82 0 Z",
+          "pathSize": [
+            90,
+            422
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "hullLipBolt1",
+          "x": 365.6,
+          "y": 6.6,
+          "w": 4.8,
+          "h": 4.8,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.4
+        },
+        {
+          "id": "hullLipBolt2",
+          "x": 288.6,
+          "y": 415.6,
+          "w": 4.8,
+          "h": 4.8,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.4
+        },
+        {
+          "id": "shoulder",
+          "x": 262,
+          "y": 312,
+          "w": 116,
+          "h": 116,
+          "shape": true,
+          "look": "armor",
+          "path": "M 116 0 L 116 86.49 L 86.49 116 L 0 116 L 0 102 L 80.69 102 L 102 80.69 L 102 0 Z",
+          "pathSize": [
+            116,
+            116
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "shoulderBolt1",
+          "x": 368.4,
+          "y": 319.4,
+          "w": 5.2,
+          "h": 5.2,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.6
+        },
+        {
+          "id": "shoulderBolt2",
+          "x": 269.4,
+          "y": 418.4,
+          "w": 5.2,
+          "h": 5.2,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.6
+        },
+        {
+          "id": "btnWell1",
+          "x": 14,
+          "y": 10,
+          "w": 350,
+          "h": 36,
+          "shape": true,
+          "look": "recess",
+          "corners": [
+            2,
+            6,
+            2,
+            6
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "posCell",
+          "x": 18,
+          "y": 14,
+          "w": 204,
+          "h": 28,
+          "shape": true,
+          "look": "cell.lit",
+          "corners": [
+            1.5,
+            5,
+            1.5,
+            5
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "posTime",
+          "text": "{replay.live ? 'LIVE ' : ''}{replay.elapsed}{replay.live ? '' : ' / ' + replay.length}",
+          "look": "readout",
+          "x": 22,
+          "y": 14,
+          "w": 196,
+          "h": 28,
+          "align": "center",
+          "size": 15.12
+        },
+        {
+          "id": "posPct",
+          "text": "{replay.live ? 'LIVE ' + replay.elapsed : round(replay.progress * 100) + '% of ' + replay.length}",
+          "look": "readout",
+          "x": 22,
+          "y": 14,
+          "w": 196,
+          "h": 28,
+          "align": "center",
+          "size": 15.12,
+          "visible": false
+        },
+        {
+          "id": "menuFace",
+          "x": 228,
+          "y": 14,
+          "w": 132,
+          "h": 28,
+          "shape": true,
+          "look": "btn",
+          "corners": [
+            1.5,
+            5,
+            1.5,
+            5
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "menuLamp1",
+          "x": 237,
+          "y": 22.12,
+          "w": 10.38,
+          "h": 11.76,
+          "shape": true,
+          "look": "lamp",
+          "path": "M 0 0 L 4.5 0 L 10.38 5.88 L 4.5 11.76 L 0 11.76 L 5.88 5.88 Z",
+          "pathSize": [
+            10.38,
+            11.76
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "menuLamp2",
+          "x": 246,
+          "y": 22.12,
+          "w": 10.38,
+          "h": 11.76,
+          "shape": true,
+          "look": "lamp",
+          "path": "M 0 0 L 4.5 0 L 10.38 5.88 L 4.5 11.76 L 0 11.76 L 5.88 5.88 Z",
+          "pathSize": [
+            10.38,
+            11.76
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "menuLamp3",
+          "x": 255,
+          "y": 22.12,
+          "w": 10.38,
+          "h": 11.76,
+          "shape": true,
+          "look": "lamp",
+          "path": "M 0 0 L 4.5 0 L 10.38 5.88 L 4.5 11.76 L 0 11.76 L 5.88 5.88 Z",
+          "pathSize": [
+            10.38,
+            11.76
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "mmBezel",
+          "x": 27,
+          "y": 52,
+          "w": 318,
+          "h": 318,
+          "shape": true,
+          "look": "bezel",
+          "path": "M 12 0 L 315 0 L 318 3 L 318 306 L 306 318 L 3 318 L 0 315 L 0 12 Z M 11 9 L 307 9 L 309 11 L 309 307 L 307 309 L 11 309 L 9 307 L 9 11 Z",
+          "pathSize": [
+            318,
+            318
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "mmGlass",
+          "x": 36,
+          "y": 61,
+          "w": 300,
+          "h": 300,
+          "shape": true,
+          "look": "screen",
+          "corners": 2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "mmBr",
+          "x": 32,
+          "y": 57,
+          "w": 308,
+          "h": 308,
+          "shape": true,
+          "look": "bracket",
+          "path": "M 0 0 L 16 0 L 16 1.6 L 1.6 1.6 L 1.6 16 L 0 16 Z M 0 308 L 0 292 L 1.6 292 L 1.6 306.4 L 16 306.4 L 16 308 Z M 308 0 L 308 16 L 306.4 16 L 306.4 1.6 L 292 1.6 L 292 0 Z M 308 308 L 292 308 L 292 306.4 L 306.4 306.4 L 306.4 292 L 308 292 Z",
+          "pathSize": [
+            308,
+            308
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "btnWell2",
+          "x": 14,
+          "y": 376,
+          "w": 344,
+          "h": 36,
+          "shape": true,
+          "look": "recess",
+          "corners": [
+            2,
+            6,
+            2,
+            6
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "btnDip",
+          "x": 18,
+          "y": 380,
+          "w": 152,
+          "h": 28,
+          "shape": true,
+          "look": "btn",
+          "corners": [
+            1.5,
+            5,
+            1.5,
+            5
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "btnTv",
+          "x": 176,
+          "y": 380,
+          "w": 86,
+          "h": 28,
+          "shape": true,
+          "look": "btn",
+          "corners": [
+            1.5,
+            5,
+            1.5,
+            5
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "btnTvLit",
+          "x": 186,
+          "y": 381.5,
+          "w": 66,
+          "h": 2,
+          "shape": true,
+          "look": "lamp",
+          "corners": 0,
+          "cornerStyle": "chamfer",
+          "visible": "{replay.tv}"
+        },
+        {
+          "id": "btnFollow",
+          "x": 268,
+          "y": 380,
+          "w": 86,
+          "h": 28,
+          "shape": true,
+          "look": "btn",
+          "corners": [
+            1.5,
+            5,
+            1.5,
+            5
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "btnFollowLit",
+          "x": 278,
+          "y": 381.5,
+          "w": 66,
+          "h": 2,
+          "shape": true,
+          "look": "lamp",
+          "corners": 0,
+          "cornerStyle": "chamfer",
+          "visible": "{replay.follow}"
+        },
+        {
+          "id": "mmEdge",
+          "x": 35,
+          "y": 60,
+          "w": 302,
+          "h": 302,
+          "shape": true,
+          "look": "edge",
+          "corners": 3,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "menu",
+          "slot": "menu",
+          "x": 230,
+          "y": 16,
+          "w": 126,
+          "h": 24,
+          "align": "right"
+        },
+        {
+          "id": "minimap",
+          "slot": "minimap",
+          "x": 38,
+          "y": 63,
+          "w": 296,
+          "h": 296
+        },
+        {
+          "id": "terrain",
+          "slot": "terrain",
+          "x": 20,
+          "y": 382,
+          "w": 148,
+          "h": 24
+        },
+        {
+          "id": "diplomacy",
+          "slot": "diplomacy",
+          "x": 20,
+          "y": 382,
+          "w": 148,
+          "h": 24
+        },
+        {
+          "id": "tv",
+          "slot": "tv",
+          "x": 178,
+          "y": 382,
+          "w": 82,
+          "h": 24
+        },
+        {
+          "id": "follow",
+          "slot": "follow",
+          "x": 270,
+          "y": 382,
+          "w": 82,
+          "h": 24
+        }
+      ],
+      "ay": "top",
+      "y": 0,
+      "hover": true
+    },
+    {
+      "id": "info",
+      "w": 372,
+      "h": 369,
+      "ax": "left",
+      "x": 0,
+      "tip": "right",
+      "layers": [
+        {
+          "id": "hull",
+          "x": 0,
+          "y": 0,
+          "w": 372,
+          "h": 369,
+          "shape": true,
+          "look": "hull",
+          "corners": [
+            0,
+            16,
+            16,
+            0
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "hullLip",
+          "x": 282,
+          "y": 0,
+          "w": 90,
+          "h": 369,
+          "shape": true,
+          "look": "lip",
+          "path": "M 0 0 L 74 0 L 90 16 L 90 353 L 74 369 L 68.34 363.34 L 82 349.69 L 82 19.31 L 70.69 8 L 0 8 Z",
+          "pathSize": [
+            90,
+            369
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "hullLipBolt1",
+          "x": 288.6,
+          "y": 1.6,
+          "w": 4.8,
+          "h": 4.8,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.4
+        },
+        {
+          "id": "hullLipBolt2",
+          "x": 357.14,
+          "y": 357.41,
+          "w": 4.8,
+          "h": 4.8,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.4
+        },
+        {
+          "id": "shoulder",
+          "x": 272,
+          "y": -6,
+          "w": 106,
+          "h": 106,
+          "shape": true,
+          "look": "armor",
+          "path": "M 0 0 L 86.49 0 L 106 19.51 L 106 106 L 92 106 L 92 25.31 L 80.69 14 L 0 14 Z",
+          "pathSize": [
+            106,
+            106
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "shoulderBolt1",
+          "x": 279.4,
+          "y": -1.6,
+          "w": 5.2,
+          "h": 5.2,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.6
+        },
+        {
+          "id": "shoulderBolt2",
+          "x": 368.4,
+          "y": 87.4,
+          "w": 5.2,
+          "h": 5.2,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.6
+        },
+        {
+          "id": "pbBezel",
+          "x": 14,
+          "y": 14,
+          "w": 344,
+          "h": 195,
+          "shape": true,
+          "look": "bezel",
+          "path": "M 12 0 L 341 0 L 344 3 L 344 183 L 332 195 L 3 195 L 0 192 L 0 12 Z M 11 9 L 333 9 L 335 11 L 335 184 L 333 186 L 11 186 L 9 184 L 9 11 Z",
+          "pathSize": [
+            344,
+            195
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "pbGlass",
+          "x": 23,
+          "y": 23,
+          "w": 326,
+          "h": 177,
+          "shape": true,
+          "look": "screen",
+          "corners": 2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pbBr",
+          "x": 19,
+          "y": 19,
+          "w": 334,
+          "h": 185,
+          "shape": true,
+          "look": "bracket",
+          "path": "M 0 0 L 16 0 L 16 1.6 L 1.6 1.6 L 1.6 16 L 0 16 Z M 0 185 L 0 169 L 1.6 169 L 1.6 183.4 L 16 183.4 L 16 185 Z M 334 0 L 334 16 L 332.4 16 L 332.4 1.6 L 318 1.6 L 318 0 Z M 334 185 L 318 185 L 318 183.4 L 332.4 183.4 L 332.4 169 L 334 169 Z",
+          "pathSize": [
+            334,
+            185
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "selBezel",
+          "x": 10,
+          "y": 221,
+          "w": 352,
+          "h": 136,
+          "shape": true,
+          "look": "bezel",
+          "path": "M 10 0 L 349 0 L 352 3 L 352 126 L 342 136 L 3 136 L 0 133 L 0 10 Z M 11 9 L 341 9 L 343 11 L 343 125 L 341 127 L 11 127 L 9 125 L 9 11 Z",
+          "pathSize": [
+            352,
+            136
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "selGlass",
+          "x": 19,
+          "y": 230,
+          "w": 334,
+          "h": 118,
+          "shape": true,
+          "look": "screen",
+          "corners": 2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "selBr",
+          "x": 15,
+          "y": 226,
+          "w": 342,
+          "h": 126,
+          "shape": true,
+          "look": "bracket",
+          "path": "M 0 0 L 16 0 L 16 1.6 L 1.6 1.6 L 1.6 16 L 0 16 Z M 0 126 L 0 110 L 1.6 110 L 1.6 124.4 L 16 124.4 L 16 126 Z M 342 0 L 342 16 L 340.4 16 L 340.4 1.6 L 326 1.6 L 326 0 Z M 342 126 L 326 126 L 326 124.4 L 340.4 124.4 L 340.4 110 L 342 110 Z",
+          "pathSize": [
+            342,
+            126
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "pbEdge",
+          "x": 22,
+          "y": 22,
+          "w": 328,
+          "h": 179,
+          "shape": true,
+          "look": "edge",
+          "corners": 3,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "selEdge",
+          "x": 18,
+          "y": 229,
+          "w": 336,
+          "h": 120,
+          "shape": true,
+          "look": "edge",
+          "corners": 3,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "players",
+          "slot": "players",
+          "x": 27,
+          "y": 27,
+          "w": 318,
+          "h": 169,
+          "rowH": [
+            20,
+            40
+          ]
+        },
+        {
+          "id": "selection",
+          "slot": "selection",
+          "x": 23,
+          "y": 234,
+          "w": 326,
+          "h": 110,
+          "grid": {
+            "cell": [
+              60,
+              54
+            ],
+            "rows": 2,
+            "cols": [
+              5,
+              5
+            ],
+            "tabs": "left",
+            "tabW": 24
+          }
+        }
+      ],
+      "ay": "bottom",
+      "y": 246
+    },
+    {
+      "id": "command",
+      "w": 372,
+      "h": 238,
+      "ax": "left",
+      "x": 0,
+      "tip": "right",
+      "layers": [
+        {
+          "id": "hull",
+          "x": 0,
+          "y": 0,
+          "w": 372,
+          "h": 238,
+          "shape": true,
+          "look": "hull",
+          "corners": [
+            0,
+            16,
+            0,
+            0
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "hullLip",
+          "x": 282,
+          "y": 0,
+          "w": 90,
+          "h": 238,
+          "shape": true,
+          "look": "lip",
+          "path": "M 0 0 L 74 0 L 90 16 L 90 238 L 82 238 L 82 19.31 L 70.69 8 L 0 8 Z",
+          "pathSize": [
+            90,
+            238
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "hullLipBolt1",
+          "x": 288.6,
+          "y": 1.6,
+          "w": 4.8,
+          "h": 4.8,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.4
+        },
+        {
+          "id": "hullLipBolt2",
+          "x": 365.6,
+          "y": 226.6,
+          "w": 4.8,
+          "h": 4.8,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.4
+        },
+        {
+          "id": "shoulder",
+          "x": 272,
+          "y": -6,
+          "w": 106,
+          "h": 106,
+          "shape": true,
+          "look": "armor",
+          "path": "M 0 0 L 86.49 0 L 106 19.51 L 106 106 L 92 106 L 92 25.31 L 80.69 14 L 0 14 Z",
+          "pathSize": [
+            106,
+            106
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "shoulderBolt1",
+          "x": 279.4,
+          "y": -1.6,
+          "w": 5.2,
+          "h": 5.2,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.6
+        },
+        {
+          "id": "shoulderBolt2",
+          "x": 368.4,
+          "y": 87.4,
+          "w": 5.2,
+          "h": 5.2,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.6
+        },
+        {
+          "id": "portBezel",
+          "x": 14,
+          "y": 14,
+          "w": 120,
+          "h": 138,
+          "shape": true,
+          "look": "bezel",
+          "path": "M 12 0 L 117 0 L 120 3 L 120 126 L 108 138 L 3 138 L 0 135 L 0 12 Z M 11 9 L 109 9 L 111 11 L 111 127 L 109 129 L 11 129 L 9 127 L 9 11 Z",
+          "pathSize": [
+            120,
+            138
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "portGlass",
+          "x": 23,
+          "y": 23,
+          "w": 102,
+          "h": 120,
+          "shape": true,
+          "look": "screen",
+          "corners": 2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "portBr",
+          "x": 19,
+          "y": 19,
+          "w": 110,
+          "h": 128,
+          "shape": true,
+          "look": "bracket",
+          "path": "M 0 0 L 16 0 L 16 1.6 L 1.6 1.6 L 1.6 16 L 0 16 Z M 0 128 L 0 112 L 1.6 112 L 1.6 126.4 L 16 126.4 L 16 128 Z M 110 0 L 110 16 L 108.4 16 L 108.4 1.6 L 94 1.6 L 94 0 Z M 110 128 L 94 128 L 94 126.4 L 108.4 126.4 L 108.4 112 L 110 112 Z",
+          "pathSize": [
+            110,
+            128
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "ppip1",
+          "x": 23,
+          "y": 162,
+          "w": 20,
+          "h": 4,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "ppip2",
+          "x": 49,
+          "y": 162,
+          "w": 20,
+          "h": 4,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "ppip3",
+          "x": 75,
+          "y": 162,
+          "w": 20,
+          "h": 4,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "ppip4",
+          "x": 101,
+          "y": 162,
+          "w": 20,
+          "h": 4,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pvent",
+          "x": 23,
+          "y": 176,
+          "w": 102,
+          "h": 13,
+          "shape": true,
+          "look": "vent",
+          "corners": 2.5,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "cmdLbl",
+          "text": "REPLAY",
+          "look": "stencil",
+          "x": 23,
+          "y": 203,
+          "w": 102,
+          "h": 10,
+          "align": "left"
+        },
+        {
+          "id": "rpBezel",
+          "x": 136,
+          "y": 14,
+          "w": 222,
+          "h": 210,
+          "shape": true,
+          "look": "bezel",
+          "path": "M 12 0 L 219 0 L 222 3 L 222 198 L 210 210 L 3 210 L 0 207 L 0 12 Z M 11 9 L 211 9 L 213 11 L 213 199 L 211 201 L 11 201 L 9 199 L 9 11 Z",
+          "pathSize": [
+            222,
+            210
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "rpGlass",
+          "x": 145,
+          "y": 23,
+          "w": 204,
+          "h": 192,
+          "shape": true,
+          "look": "screen",
+          "corners": 2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "rpBr",
+          "x": 141,
+          "y": 19,
+          "w": 212,
+          "h": 200,
+          "shape": true,
+          "look": "bracket",
+          "path": "M 0 0 L 16 0 L 16 1.6 L 1.6 1.6 L 1.6 16 L 0 16 Z M 0 200 L 0 184 L 1.6 184 L 1.6 198.4 L 16 198.4 L 16 200 Z M 212 0 L 212 16 L 210.4 16 L 210.4 1.6 L 196 1.6 L 196 0 Z M 212 200 L 196 200 L 196 198.4 L 210.4 198.4 L 210.4 184 L 212 184 Z",
+          "pathSize": [
+            212,
+            200
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "rpStatus",
+          "x": 151,
+          "y": 29,
+          "w": 192,
+          "h": 65,
+          "shape": true,
+          "look": "cell.lit",
+          "corners": [
+            1.5,
+            6,
+            1.5,
+            6
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "rpLamp",
+          "x": 163,
+          "y": 42.65,
+          "w": 7.8,
+          "h": 7.8,
+          "shape": true,
+          "look": "lamp",
+          "corners": 2.34,
+          "cornerStyle": "chamfer",
+          "opacity": "{replay.paused ? 0.25 : 1}"
+        },
+        {
+          "id": "rpState",
+          "text": "{replay.paused ? 'PAUSED' : 'PLAYING'}",
+          "look": "readout.label",
+          "x": 178.8,
+          "y": 35.5,
+          "w": 152.2,
+          "h": 22.1,
+          "size": 12.35
+        },
+        {
+          "id": "rpSpeed",
+          "text": "{replay.speed}",
+          "look": "readout",
+          "x": 163,
+          "y": 56.3,
+          "w": 168,
+          "h": 32.5,
+          "size": 22.1,
+          "opacity": "{replay.paused ? 0.45 : 1}"
+        },
+        {
+          "id": "rpSlow",
+          "x": 151,
+          "y": 102,
+          "w": 60,
+          "h": 77,
+          "shape": true,
+          "look": "well",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "rpSlowLit",
+          "x": 161,
+          "y": 104,
+          "w": 40,
+          "h": 2,
+          "shape": true,
+          "look": "lamp",
+          "corners": 0,
+          "cornerStyle": "chamfer",
+          "opacity": "{replay.paused ? 0 : replay.step > 0 ? 1 : 0}"
+        },
+        {
+          "id": "rpPlay",
+          "x": 217,
+          "y": 102,
+          "w": 60,
+          "h": 77,
+          "shape": true,
+          "look": "well",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "rpPlayLit",
+          "x": 227,
+          "y": 104,
+          "w": 40,
+          "h": 2,
+          "shape": true,
+          "look": "lamp",
+          "corners": 0,
+          "cornerStyle": "chamfer",
+          "opacity": "{replay.paused ? 0.35 : 1}"
+        },
+        {
+          "id": "rpFast",
+          "x": 283,
+          "y": 102,
+          "w": 60,
+          "h": 77,
+          "shape": true,
+          "look": "well",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "rpFastLit",
+          "x": 293,
+          "y": 104,
+          "w": 40,
+          "h": 2,
+          "shape": true,
+          "look": "lamp",
+          "corners": 0,
+          "cornerStyle": "chamfer",
+          "opacity": "{replay.paused ? 0 : replay.step < 10 ? 1 : 0}"
+        },
+        {
+          "id": "rpLadder",
+          "x": 148,
+          "y": 186,
+          "w": 198,
+          "h": 15,
+          "shape": true,
+          "look": "recess",
+          "corners": [
+            1.5,
+            3,
+            1.5,
+            3
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "rpStep0",
+          "x": 151,
+          "y": 189,
+          "w": 14.94,
+          "h": 9,
+          "shape": true,
+          "look": "pip",
+          "corners": 2.7,
+          "cornerStyle": "chamfer",
+          "tint": "{replay.step >= 0 ? '#ffffff' : '#2a3036'}"
+        },
+        {
+          "id": "rpStep1",
+          "x": 168.25,
+          "y": 189,
+          "w": 14.94,
+          "h": 9,
+          "shape": true,
+          "look": "pip",
+          "corners": 2.7,
+          "cornerStyle": "chamfer",
+          "tint": "{replay.step >= 1 ? '#ffffff' : '#2a3036'}"
+        },
+        {
+          "id": "rpStep2",
+          "x": 185.49,
+          "y": 189,
+          "w": 14.94,
+          "h": 9,
+          "shape": true,
+          "look": "pip",
+          "corners": 2.7,
+          "cornerStyle": "chamfer",
+          "tint": "{replay.step >= 2 ? '#ffffff' : '#2a3036'}"
+        },
+        {
+          "id": "rpStep3",
+          "x": 202.74,
+          "y": 189,
+          "w": 14.94,
+          "h": 9,
+          "shape": true,
+          "look": "pip",
+          "corners": 2.7,
+          "cornerStyle": "chamfer",
+          "tint": "{replay.step >= 3 ? '#ffffff' : '#2a3036'}"
+        },
+        {
+          "id": "rpStep4",
+          "x": 219.98,
+          "y": 189,
+          "w": 14.94,
+          "h": 9,
+          "shape": true,
+          "look": "pip",
+          "corners": 2.7,
+          "cornerStyle": "chamfer",
+          "tint": "{replay.step >= 4 ? '#ffffff' : '#2a3036'}"
+        },
+        {
+          "id": "rpStep5",
+          "x": 237.23,
+          "y": 189,
+          "w": 14.94,
+          "h": 9,
+          "shape": true,
+          "look": "pip",
+          "corners": 2.7,
+          "cornerStyle": "chamfer",
+          "tint": "{replay.step >= 5 ? '#ffffff' : '#2a3036'}"
+        },
+        {
+          "id": "rpStep6",
+          "x": 254.47,
+          "y": 189,
+          "w": 14.94,
+          "h": 9,
+          "shape": true,
+          "look": "pip",
+          "corners": 2.7,
+          "cornerStyle": "chamfer",
+          "tint": "{replay.step >= 6 ? '#ffffff' : '#2a3036'}"
+        },
+        {
+          "id": "rpStep7",
+          "x": 276.32,
+          "y": 189,
+          "w": 14.94,
+          "h": 9,
+          "shape": true,
+          "look": "pip",
+          "corners": 2.7,
+          "cornerStyle": "chamfer",
+          "tint": "{replay.step >= 7 ? '#ffffff' : '#2a3036'}"
+        },
+        {
+          "id": "rpStep8",
+          "x": 293.57,
+          "y": 189,
+          "w": 14.94,
+          "h": 9,
+          "shape": true,
+          "look": "pip",
+          "corners": 2.7,
+          "cornerStyle": "chamfer",
+          "tint": "{replay.step >= 8 ? '#ffffff' : '#2a3036'}"
+        },
+        {
+          "id": "rpStep9",
+          "x": 310.81,
+          "y": 189,
+          "w": 14.94,
+          "h": 9,
+          "shape": true,
+          "look": "pip",
+          "corners": 2.7,
+          "cornerStyle": "chamfer",
+          "tint": "{replay.step >= 9 ? '#ffffff' : '#2a3036'}"
+        },
+        {
+          "id": "rpStep10",
+          "x": 328.06,
+          "y": 189,
+          "w": 14.94,
+          "h": 9,
+          "shape": true,
+          "look": "pip",
+          "corners": 2.7,
+          "cornerStyle": "chamfer",
+          "tint": "{replay.step >= 10 ? '#ffffff' : '#2a3036'}"
+        },
+        {
+          "id": "rpSlowLbl",
+          "text": "SLOWEST",
+          "look": "stencil",
+          "x": 151,
+          "y": 201,
+          "w": 115.2,
+          "h": 8,
+          "align": "left"
+        },
+        {
+          "id": "rpMaxLbl",
+          "text": "X16",
+          "look": "stencil",
+          "x": 304.6,
+          "y": 201,
+          "w": 38.4,
+          "h": 8,
+          "align": "right"
+        },
+        {
+          "id": "portEdge",
+          "x": 22,
+          "y": 22,
+          "w": 104,
+          "h": 122,
+          "shape": true,
+          "look": "edge",
+          "corners": 3,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "rpEdge",
+          "x": 144,
+          "y": 22,
+          "w": 206,
+          "h": 194,
+          "shape": true,
+          "look": "edge",
+          "corners": 3,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "portrait",
+          "slot": "portrait",
+          "x": 25,
+          "y": 25,
+          "w": 98,
+          "h": 116
+        },
+        {
+          "id": "slower",
+          "slot": "slower",
+          "x": 153,
+          "y": 104,
+          "w": 56,
+          "h": 73
+        },
+        {
+          "id": "play",
+          "slot": "play",
+          "x": 219,
+          "y": 104,
+          "w": 56,
+          "h": 73
+        },
+        {
+          "id": "faster",
+          "slot": "faster",
+          "x": 285,
+          "y": 104,
+          "w": 56,
+          "h": 73
+        }
+      ],
+      "ay": "bottom",
+      "y": 0,
+      "hover": true
+    },
+    {
+      "id": "filler",
+      "outside": "left",
+      "ay": "top",
+      "y": 0,
+      "h": 1080,
+      "overlap": [
+        0,
+        24
+      ],
+      "z": -2,
+      "layers": [
+        {
+          "id": "wall",
+          "inset": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "shape": true,
+          "look": "hull.back",
+          "corners": 0,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "strap",
+          "inset": [
+            0,
+            118,
+            0,
+            null
+          ],
+          "shape": true,
+          "look": "hull.side",
+          "corners": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "cornerStyle": "chamfer",
+          "h": 16,
+          "axis": "y",
+          "tileEvery": 210,
+          "tileEnd": 40
+        },
+        {
+          "id": "lampWell",
+          "shape": true,
+          "look": "lamp.well",
+          "corners": 1,
+          "cornerStyle": "chamfer",
+          "inset": [
+            null,
+            28.5,
+            40,
+            null
+          ],
+          "w": 5.5,
+          "h": 1023
+        },
+        {
+          "id": "lamp",
+          "shape": true,
+          "look": "lamp",
+          "corners": 0,
+          "cornerStyle": "chamfer",
+          "inset": [
+            null,
+            30,
+            41.5,
+            null
+          ],
+          "w": 2.5,
+          "h": 1020
+        }
+      ]
+    },
+    {
+      "id": "statsSide",
+      "visible": "{stats.side}",
+      "ax": "right",
+      "x": 16,
+      "ay": "top",
+      "y": 16,
+      "w": 300,
+      "h": 1048,
+      "z": 4,
+      "layers": [
+        {
+          "id": "stats",
+          "slot": "stats",
+          "x": 0,
+          "y": 0,
+          "w": 300,
+          "h": 1048,
+          "view": "side",
+          "backing": 0.38,
+          "rowH": [
+            24,
+            52
+          ]
+        }
+      ]
+    },
+    {
+      "id": "statsSideDrawn",
+      "visible": false,
+      "ax": "right",
+      "x": 16,
+      "ay": "top",
+      "y": 16,
+      "w": 300,
+      "h": 1048,
+      "z": 4,
+      "layers": [
+        {
+          "id": "rows",
+          "each": "players",
+          "inset": [
+            0,
+            0,
+            0,
+            138
+          ],
+          "rowH": [
+            24,
+            52
+          ],
+          "gap": 3,
+          "teamGap": 8,
+          "teamH": 16,
+          "order": "team",
+          "layers": [
+            {
+              "id": "shade",
+              "rect": true,
+              "inset": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "fill": "#06080a",
+              "opacity": 0.38
+            },
+            {
+              "id": "swatch",
+              "rect": true,
+              "inset": [
+                0,
+                0,
+                null,
+                0
+              ],
+              "w": 4,
+              "fill": "{p.colour}"
+            },
+            {
+              "id": "name",
+              "text": "{p.name}  {p.race.letter}",
+              "font": "saira",
+              "size": 14,
+              "color": "$figure",
+              "shadow": "#000000",
+              "shadowBlur": 3,
+              "shadowOffset": [
+                0,
+                1
+              ],
+              "x": 13,
+              "y": "{row.h >= 38 ? 3 : 0}",
+              "w": "{row.w - 120}",
+              "h": "{row.h >= 38 ? row.h / 2 - 3 : row.h}",
+              "weight": 600,
+              "tracking": 0.5
+            },
+            {
+              "id": "apm",
+              "text": "{p.apm} APM",
+              "font": "saira",
+              "size": 13,
+              "color": "$text",
+              "shadow": "#000000",
+              "shadowBlur": 3,
+              "shadowOffset": [
+                0,
+                1
+              ],
+              "x": "{row.w - 104}",
+              "y": "{row.h >= 38 ? 3 : 0}",
+              "w": 66,
+              "h": "{row.h >= 38 ? row.h / 2 - 3 : row.h}",
+              "align": "right"
+            },
+            {
+              "id": "figures",
+              "text": "M {p.minerals}    G {p.gas}    S {p.supply.used}/{p.supply.max}    W {p.workers}",
+              "font": "saira",
+              "size": 12,
+              "color": "$text",
+              "shadow": "#000000",
+              "shadowBlur": 3,
+              "shadowOffset": [
+                0,
+                1
+              ],
+              "x": 13,
+              "y": "{row.h / 2}",
+              "w": "{row.w - 50}",
+              "h": "{row.h / 2 - 3}",
+              "visible": "{row.h >= 38}"
+            },
+            {
+              "id": "eye",
+              "shape": true,
+              "path": "M 0 5 Q 8 -1.5 16 5 Q 8 11.5 0 5 Z M 8 2.4 A 2.6 2.6 0 1 0 8.01 2.4 Z",
+              "pathSize": [
+                16,
+                10
+              ],
+              "pathFit": "fit",
+              "fill": "$lamp",
+              "x": "{row.w - 30}",
+              "y": "{(row.h - 14) / 2}",
+              "w": 22,
+              "h": 14,
+              "opacity": "{p.vision ? 1 : 0.35}",
+              "visible": "{p.vision.can}",
+              "action": "vision"
+            }
+          ],
+          "team": [
+            {
+              "id": "head",
+              "text": "TEAM {t.index + 1}    ARMY {t.army}    {t.count} PLAYERS",
+              "font": "saira",
+              "size": 10,
+              "color": "$label",
+              "shadow": "#000000",
+              "shadowBlur": 3,
+              "shadowOffset": [
+                0,
+                1
+              ],
+              "inset": [
+                6,
+                0,
+                6,
+                0
+              ],
+              "tracking": 1.4
+            }
+          ],
+          "more": [
+            {
+              "id": "shade",
+              "rect": true,
+              "inset": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "fill": "#06080a",
+              "opacity": 0.38
+            },
+            {
+              "id": "more",
+              "text": "+{more.count} MORE    F1",
+              "font": "saira",
+              "size": 13,
+              "color": "$lamp",
+              "shadow": "#000000",
+              "shadowBlur": 3,
+              "shadowOffset": [
+                0,
+                1
+              ],
+              "inset": [
+                13,
+                0,
+                8,
+                0
+              ],
+              "weight": 600,
+              "tracking": 1.2,
+              "action": "stats.popup",
+              "label": "The other players, in the stats"
+            }
+          ]
+        },
+        {
+          "id": "chartShade",
+          "rect": true,
+          "inset": [
+            0,
+            null,
+            0,
+            0
+          ],
+          "h": 120,
+          "fill": "#06080a",
+          "opacity": 0.38
+        },
+        {
+          "id": "chartTitle",
+          "text": "SUPPLY OVER THE GAME",
+          "font": "saira",
+          "size": 10,
+          "color": "$label",
+          "shadow": "#000000",
+          "shadowBlur": 3,
+          "shadowOffset": [
+            0,
+            1
+          ],
+          "inset": [
+            8,
+            null,
+            8,
+            102
+          ],
+          "h": 16,
+          "tracking": 1.4
+        },
+        {
+          "id": "chart",
+          "chart": "supply.used",
+          "inset": [
+            8,
+            null,
+            8,
+            6
+          ],
+          "h": 94,
+          "stroke": "$label",
+          "gridLines": 4,
+          "dot": 2.5
+        }
+      ]
+    },
+    {
+      "id": "statsPopup",
+      "w": 1040,
+      "h": 760,
+      "layers": [
+        {
+          "id": "psBody",
+          "x": 0,
+          "y": 0,
+          "w": 1040,
+          "h": 760,
+          "shape": true,
+          "look": "hull",
+          "path": "M 26 0 L 1014 0 L 1040 26 L 1040 734 L 1014 760 L 26 760 L 0 734 L 0 26 Z",
+          "pathSize": [
+            1040,
+            760
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "psTrim",
+          "x": 0,
+          "y": 732.23,
+          "w": 1040,
+          "h": 27.77,
+          "shape": true,
+          "look": "trim",
+          "path": "M 1040 1.77 L 1014 27.77 L 26 27.77 L 0 1.77 L 1.77 0 L 27.04 25.27 L 1012.96 25.27 L 1038.23 0 Z",
+          "pathSize": [
+            1040,
+            27.77
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "pspipL1",
+          "x": 6,
+          "y": 34,
+          "w": 4,
+          "h": 6,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pspipL2",
+          "x": 6,
+          "y": 45,
+          "w": 4,
+          "h": 6,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pspipL3",
+          "x": 6,
+          "y": 56,
+          "w": 4,
+          "h": 6,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pspipL4",
+          "x": 6,
+          "y": 67,
+          "w": 4,
+          "h": 6,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pspipR1",
+          "x": 1030,
+          "y": 34,
+          "w": 4,
+          "h": 6,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pspipR2",
+          "x": 1030,
+          "y": 45,
+          "w": 4,
+          "h": 6,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pspipR3",
+          "x": 1030,
+          "y": 56,
+          "w": 4,
+          "h": 6,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pspipR4",
+          "x": 1030,
+          "y": 67,
+          "w": 4,
+          "h": 6,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "psBezel",
+          "x": 16,
+          "y": 16,
+          "w": 1008,
+          "h": 728,
+          "shape": true,
+          "look": "bezel",
+          "path": "M 12 0 L 1005 0 L 1008 3 L 1008 716 L 996 728 L 3 728 L 0 725 L 0 12 Z M 11 9 L 997 9 L 999 11 L 999 717 L 997 719 L 11 719 L 9 717 L 9 11 Z",
+          "pathSize": [
+            1008,
+            728
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "psGlass",
+          "x": 25,
+          "y": 25,
+          "w": 990,
+          "h": 710,
+          "shape": true,
+          "look": "screen",
+          "corners": 2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "psBr",
+          "x": 21,
+          "y": 21,
+          "w": 998,
+          "h": 718,
+          "shape": true,
+          "look": "bracket",
+          "path": "M 0 0 L 16 0 L 16 1.6 L 1.6 1.6 L 1.6 16 L 0 16 Z M 0 718 L 0 702 L 1.6 702 L 1.6 716.4 L 16 716.4 L 16 718 Z M 998 0 L 998 16 L 996.4 16 L 996.4 1.6 L 982 1.6 L 982 0 Z M 998 718 L 982 718 L 982 716.4 L 996.4 716.4 L 996.4 702 L 998 702 Z",
+          "pathSize": [
+            998,
+            718
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "psEdge",
+          "x": 24,
+          "y": 24,
+          "w": 992,
+          "h": 712,
+          "shape": true,
+          "look": "edge",
+          "corners": 3,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "stats",
+          "slot": "stats",
+          "x": 29,
+          "y": 29,
+          "w": 982,
+          "h": 702,
+          "view": "popup",
+          "rowH": [
+            22,
+            34
+          ]
+        }
+      ],
+      "visible": "{stats.popup}",
+      "ax": "center",
+      "x": 28,
+      "ay": "center",
+      "y": 0,
+      "z": 5
+    }
+  ],
+  "timelines": [
+    {
+      "id": "intro",
+      "on": "game.start",
+      "stops": [
+        "consoleOut"
+      ],
+      "tracks": [
+        {
+          "target": "spine",
+          "prop": "x",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              -412
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "minimap",
+          "prop": "x",
+          "delay": 60,
+          "keys": [
+            [
+              0,
+              -412
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "info",
+          "prop": "x",
+          "delay": 120,
+          "keys": [
+            [
+              0,
+              -412
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "command",
+          "prop": "x",
+          "delay": 180,
+          "keys": [
+            [
+              0,
+              -412
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp1",
+          "prop": "tint",
+          "delay": 700,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp2",
+          "prop": "tint",
+          "delay": 737,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp3",
+          "prop": "tint",
+          "delay": 774,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "spine.spineLamp",
+          "prop": "tint",
+          "delay": 811,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpLamp",
+          "prop": "tint",
+          "delay": 847,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip1",
+          "prop": "tint",
+          "delay": 884,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip2",
+          "prop": "tint",
+          "delay": 921,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip3",
+          "prop": "tint",
+          "delay": 958,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip4",
+          "prop": "tint",
+          "delay": 995,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep0",
+          "prop": "tint",
+          "delay": 1032,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep1",
+          "prop": "tint",
+          "delay": 1068,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep2",
+          "prop": "tint",
+          "delay": 1105,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep3",
+          "prop": "tint",
+          "delay": 1142,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep4",
+          "prop": "tint",
+          "delay": 1179,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep5",
+          "prop": "tint",
+          "delay": 1216,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep6",
+          "prop": "tint",
+          "delay": 1253,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep7",
+          "prop": "tint",
+          "delay": 1289,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep8",
+          "prop": "tint",
+          "delay": 1326,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep9",
+          "prop": "tint",
+          "delay": 1363,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep10",
+          "prop": "tint",
+          "delay": 1400,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmGlass",
+          "prop": "add",
+          "delay": 640,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmGlass",
+          "prop": "scan",
+          "delay": 700,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "add",
+          "delay": 730,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "scan",
+          "delay": 790,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "command.portGlass",
+          "prop": "add",
+          "delay": 820,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.portGlass",
+          "prop": "scan",
+          "delay": 880,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpGlass",
+          "prop": "add",
+          "delay": 910,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpGlass",
+          "prop": "scan",
+          "delay": 970,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "info.pbGlass",
+          "prop": "add",
+          "delay": 1000,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.pbGlass",
+          "prop": "scan",
+          "delay": 1060,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$accent"
+            ]
+          ],
+          "delay": 520
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              180,
+              0.8,
+              "out"
+            ],
+            [
+              900,
+              0,
+              "in"
+            ]
+          ],
+          "delay": 520
+        },
+        {
+          "target": "filler",
+          "prop": "x",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              -1024
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "filler.lamp",
+          "prop": "tint",
+          "delay": 811,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$deploy",
+          0.7
+        ],
+        [
+          560,
+          "$boot",
+          0.6
+        ],
+        [
+          760,
+          "$scan",
+          0.4
+        ]
+      ]
+    },
+    {
+      "id": "consoleIn",
+      "on": "console.in",
+      "stops": [
+        "consoleOut"
+      ],
+      "tracks": [
+        {
+          "target": "spine",
+          "prop": "x",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              -412
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "minimap",
+          "prop": "x",
+          "delay": 60,
+          "keys": [
+            [
+              0,
+              -412
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "info",
+          "prop": "x",
+          "delay": 120,
+          "keys": [
+            [
+              0,
+              -412
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "command",
+          "prop": "x",
+          "delay": 180,
+          "keys": [
+            [
+              0,
+              -412
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp1",
+          "prop": "tint",
+          "delay": 700,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp2",
+          "prop": "tint",
+          "delay": 737,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp3",
+          "prop": "tint",
+          "delay": 774,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "spine.spineLamp",
+          "prop": "tint",
+          "delay": 811,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpLamp",
+          "prop": "tint",
+          "delay": 847,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip1",
+          "prop": "tint",
+          "delay": 884,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip2",
+          "prop": "tint",
+          "delay": 921,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip3",
+          "prop": "tint",
+          "delay": 958,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip4",
+          "prop": "tint",
+          "delay": 995,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep0",
+          "prop": "tint",
+          "delay": 1032,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep1",
+          "prop": "tint",
+          "delay": 1068,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep2",
+          "prop": "tint",
+          "delay": 1105,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep3",
+          "prop": "tint",
+          "delay": 1142,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep4",
+          "prop": "tint",
+          "delay": 1179,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep5",
+          "prop": "tint",
+          "delay": 1216,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep6",
+          "prop": "tint",
+          "delay": 1253,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep7",
+          "prop": "tint",
+          "delay": 1289,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep8",
+          "prop": "tint",
+          "delay": 1326,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep9",
+          "prop": "tint",
+          "delay": 1363,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep10",
+          "prop": "tint",
+          "delay": 1400,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmGlass",
+          "prop": "add",
+          "delay": 640,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmGlass",
+          "prop": "scan",
+          "delay": 700,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "add",
+          "delay": 730,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "scan",
+          "delay": 790,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "command.portGlass",
+          "prop": "add",
+          "delay": 820,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.portGlass",
+          "prop": "scan",
+          "delay": 880,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpGlass",
+          "prop": "add",
+          "delay": 910,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpGlass",
+          "prop": "scan",
+          "delay": 970,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "info.pbGlass",
+          "prop": "add",
+          "delay": 1000,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.pbGlass",
+          "prop": "scan",
+          "delay": 1060,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$accent"
+            ]
+          ],
+          "delay": 520
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              180,
+              0.8,
+              "out"
+            ],
+            [
+              900,
+              0,
+              "in"
+            ]
+          ],
+          "delay": 520
+        },
+        {
+          "target": "filler",
+          "prop": "x",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              -1024
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "filler.lamp",
+          "prop": "tint",
+          "delay": 811,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$deploy",
+          0.7
+        ],
+        [
+          560,
+          "$boot",
+          0.6
+        ]
+      ]
+    },
+    {
+      "id": "consoleOut",
+      "on": "console.out",
+      "end": "hold",
+      "tracks": [
+        {
+          "target": "minimap.menuLamp1",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp2",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp3",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "spine.spineLamp",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpLamp",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip1",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip2",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip3",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip4",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep0",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep1",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep2",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep3",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep4",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep5",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep6",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep7",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep8",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep9",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep10",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "spine",
+          "prop": "x",
+          "delay": 100,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              420,
+              -412,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap",
+          "prop": "x",
+          "delay": 130,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              420,
+              -412,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info",
+          "prop": "x",
+          "delay": 160,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              420,
+              -412,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command",
+          "prop": "x",
+          "delay": 190,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              420,
+              -412,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "filler",
+          "prop": "x",
+          "delay": 100,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              420,
+              -1024,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "filler.lamp",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$deploy",
+          0.6
+        ]
+      ]
+    },
+    {
+      "id": "page",
+      "on": "selection.page",
+      "tracks": [
+        {
+          "target": "info.selection",
+          "prop": "wipe",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              260,
+              1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "scan",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              380,
+              1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0.2
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              92,
+              0.7,
+              "out"
+            ],
+            [
+              460,
+              0,
+              "in"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$scan",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "subgroup",
+      "on": "selection.subgroup",
+      "tracks": [
+        {
+          "target": "info.selEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$lamp"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              72,
+              0.5,
+              "out"
+            ],
+            [
+              360,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0.12
+            ],
+            [
+              240,
+              0,
+              "in"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "attack",
+      "on": "alert.attack",
+      "tracks": [
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$alert"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              90,
+              1,
+              "out"
+            ],
+            [
+              300,
+              0.2
+            ],
+            [
+              420,
+              1,
+              "out"
+            ],
+            [
+              640,
+              0.2
+            ],
+            [
+              760,
+              1,
+              "out"
+            ],
+            [
+              1300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp1",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ff4030"
+            ],
+            [
+              160,
+              "#ffffff"
+            ],
+            [
+              320,
+              "#ff4030"
+            ],
+            [
+              700,
+              "#ffffff"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp2",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ff4030"
+            ],
+            [
+              160,
+              "#ffffff"
+            ],
+            [
+              320,
+              "#ff4030"
+            ],
+            [
+              700,
+              "#ffffff"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp3",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ff4030"
+            ],
+            [
+              160,
+              "#ffffff"
+            ],
+            [
+              320,
+              "#ff4030"
+            ],
+            [
+              700,
+              "#ffffff"
+            ]
+          ]
+        },
+        {
+          "target": "alerts",
+          "prop": "opacity",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              160,
+              1,
+              "out"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$alert",
+          0.8
+        ]
+      ]
+    },
+    {
+      "id": "victory",
+      "on": "game.victory",
+      "end": "hold",
+      "tracks": [
+        {
+          "target": "minimap.menuLamp1",
+          "prop": "tint",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              200,
+              "#e8f4ff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp2",
+          "prop": "tint",
+          "delay": 30,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              200,
+              "#e8f4ff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp3",
+          "prop": "tint",
+          "delay": 60,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              200,
+              "#e8f4ff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "spine.spineLamp",
+          "prop": "tint",
+          "delay": 90,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              200,
+              "#e8f4ff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpLamp",
+          "prop": "tint",
+          "delay": 120,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              200,
+              "#e8f4ff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp1",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              600,
+              1.1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp2",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              600,
+              1.1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp3",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              600,
+              1.1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "spine.spineLamp",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              600,
+              1.1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpLamp",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              600,
+              1.1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp1",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp2",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp3",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        },
+        {
+          "target": "spine.spineLamp",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpLamp",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$victory"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energy",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              500,
+              0.6,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$victory"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energy",
+          "delay": 120,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              500,
+              0.6,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.portEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$victory"
+            ]
+          ]
+        },
+        {
+          "target": "command.portEdge",
+          "prop": "energy",
+          "delay": 240,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              500,
+              0.6,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$victory"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpEdge",
+          "prop": "energy",
+          "delay": 360,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              500,
+              0.6,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "filler.lamp",
+          "prop": "tint",
+          "delay": 90,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              200,
+              "#e8f4ff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "filler.lamp",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              600,
+              1.1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "filler.lamp",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.9
+        ],
+        [
+          300,
+          "$boot",
+          0.5
+        ]
+      ]
+    },
+    {
+      "id": "defeat",
+      "on": "game.defeat",
+      "end": "hold",
+      "tracks": [
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$alert"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              160,
+              0.8,
+              "out"
+            ],
+            [
+              1600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$alert"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              160,
+              0.8,
+              "out"
+            ],
+            [
+              1600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.portEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$alert"
+            ]
+          ]
+        },
+        {
+          "target": "command.portEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              160,
+              0.8,
+              "out"
+            ],
+            [
+              1600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$alert"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              160,
+              0.8,
+              "out"
+            ],
+            [
+              1600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp1",
+          "prop": "tint",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp2",
+          "prop": "tint",
+          "delay": 30,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp3",
+          "prop": "tint",
+          "delay": 60,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "spine.spineLamp",
+          "prop": "tint",
+          "delay": 90,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpLamp",
+          "prop": "tint",
+          "delay": 120,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip1",
+          "prop": "tint",
+          "delay": 150,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip2",
+          "prop": "tint",
+          "delay": 180,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip3",
+          "prop": "tint",
+          "delay": 210,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.ppip4",
+          "prop": "tint",
+          "delay": 240,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep0",
+          "prop": "tint",
+          "delay": 270,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep1",
+          "prop": "tint",
+          "delay": 300,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep2",
+          "prop": "tint",
+          "delay": 330,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep3",
+          "prop": "tint",
+          "delay": 360,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep4",
+          "prop": "tint",
+          "delay": 390,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep5",
+          "prop": "tint",
+          "delay": 420,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep6",
+          "prop": "tint",
+          "delay": 450,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep7",
+          "prop": "tint",
+          "delay": 480,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep8",
+          "prop": "tint",
+          "delay": 510,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep9",
+          "prop": "tint",
+          "delay": 540,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep10",
+          "prop": "tint",
+          "delay": 570,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmGlass",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              900,
+              "#ff8070",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              900,
+              "#ff8070",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.portGlass",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              900,
+              "#ff8070",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpGlass",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              900,
+              "#ff8070",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.pbGlass",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              900,
+              "#ff8070",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "filler.lamp",
+          "prop": "tint",
+          "delay": 90,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$denied",
+          0.9
+        ]
+      ]
+    },
+    {
+      "id": "minimapHover",
+      "on": "panel.hover",
+      "panel": "minimap",
+      "end": "hold",
+      "tracks": [
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$accent"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              200,
+              0.35,
+              "out"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "minimapLeave",
+      "on": "panel.leave",
+      "panel": "minimap",
+      "end": "hold",
+      "tracks": [
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$accent"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0.35
+            ],
+            [
+              200,
+              0,
+              "out"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "commandHover",
+      "on": "panel.hover",
+      "panel": "command",
+      "end": "hold",
+      "tracks": [
+        {
+          "target": "command.rpEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$accent"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              200,
+              0.35,
+              "out"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "commandLeave",
+      "on": "panel.leave",
+      "panel": "command",
+      "end": "hold",
+      "tracks": [
+        {
+          "target": "command.rpEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$accent"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0.35
+            ],
+            [
+              200,
+              0,
+              "out"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "menuPress",
+      "on": "panel.press",
+      "panel": "minimap",
+      "slot": "menu",
+      "tracks": [
+        {
+          "target": "minimap.menuLamp1",
+          "prop": "tint",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              "#e8f4ff"
+            ],
+            [
+              260,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp2",
+          "prop": "tint",
+          "delay": 40,
+          "keys": [
+            [
+              0,
+              "#e8f4ff"
+            ],
+            [
+              260,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp3",
+          "prop": "tint",
+          "delay": 80,
+          "keys": [
+            [
+              0,
+              "#e8f4ff"
+            ],
+            [
+              260,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp1",
+          "prop": "glow",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              1,
+              "out"
+            ],
+            [
+              360,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp2",
+          "prop": "glow",
+          "delay": 40,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              1,
+              "out"
+            ],
+            [
+              360,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.menuLamp3",
+          "prop": "glow",
+          "delay": 80,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              1,
+              "out"
+            ],
+            [
+              360,
+              0,
+              "in"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "terrainPress",
+      "on": "panel.press",
+      "panel": "minimap",
+      "slot": "terrain",
+      "tracks": [
+        {
+          "target": "minimap.btnDip",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.45,
+              "out"
+            ],
+            [
+              420,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.btnDip",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "diplomacyPress",
+      "on": "panel.press",
+      "panel": "minimap",
+      "slot": "diplomacy",
+      "tracks": [
+        {
+          "target": "minimap.btnDip",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.45,
+              "out"
+            ],
+            [
+              420,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.btnDip",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "tvPress",
+      "on": "panel.press",
+      "panel": "minimap",
+      "slot": "tv",
+      "tracks": [
+        {
+          "target": "minimap.btnTv",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              420,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.btnTv",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "followPress",
+      "on": "panel.press",
+      "panel": "minimap",
+      "slot": "follow",
+      "tracks": [
+        {
+          "target": "minimap.btnFollow",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              420,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.btnFollow",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "slowerPress",
+      "on": "panel.press",
+      "panel": "command",
+      "slot": "slower",
+      "tracks": [
+        {
+          "target": "command.rpSlow",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              420,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpSlow",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "playPress",
+      "on": "panel.press",
+      "panel": "command",
+      "slot": "play",
+      "tracks": [
+        {
+          "target": "command.rpPlay",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              420,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpPlay",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "fasterPress",
+      "on": "panel.press",
+      "panel": "command",
+      "slot": "faster",
+      "tracks": [
+        {
+          "target": "command.rpFast",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              420,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpFast",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "pause",
+      "on": "replay.pause",
+      "end": "hold",
+      "stops": [
+        "resume"
+      ],
+      "tracks": [
+        {
+          "target": "spine.spineLamp",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              260,
+              "#7d8893",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStatus",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              420,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$warn"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              112,
+              0.6,
+              "out"
+            ],
+            [
+              560,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "filler.lamp",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              260,
+              "#7d8893",
+              "out"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.3
+        ]
+      ]
+    },
+    {
+      "id": "resume",
+      "on": "replay.resume",
+      "stops": [
+        "pause"
+      ],
+      "tracks": [
+        {
+          "target": "spine.spineLamp",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#7d8893"
+            ],
+            [
+              220,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpGlass",
+          "prop": "scan",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              520,
+              1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$lamp"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              88,
+              0.6,
+              "out"
+            ],
+            [
+              440,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "filler.lamp",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#7d8893"
+            ],
+            [
+              220,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.3
+        ]
+      ]
+    },
+    {
+      "id": "speed",
+      "on": "replay.speed",
+      "tracks": [
+        {
+          "target": "command.rpStep0",
+          "prop": "add",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              340,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep1",
+          "prop": "add",
+          "delay": 16,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              340,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep2",
+          "prop": "add",
+          "delay": 32,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              340,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep3",
+          "prop": "add",
+          "delay": 48,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              340,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep4",
+          "prop": "add",
+          "delay": 64,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              340,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep5",
+          "prop": "add",
+          "delay": 80,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              340,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep6",
+          "prop": "add",
+          "delay": 96,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              340,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep7",
+          "prop": "add",
+          "delay": 112,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              340,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep8",
+          "prop": "add",
+          "delay": 128,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              340,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep9",
+          "prop": "add",
+          "delay": 144,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              340,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStep10",
+          "prop": "add",
+          "delay": 160,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              340,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.rpStatus",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0.16
+            ],
+            [
+              320,
+              0,
+              "in"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$scan",
+          0.2
+        ]
+      ]
+    },
+    {
+      "id": "vision",
+      "on": "replay.vision",
+      "tracks": [
+        {
+          "target": "info.pbEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        },
+        {
+          "target": "info.pbEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              96,
+              0.7,
+              "out"
+            ],
+            [
+              480,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.pbGlass",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0.12
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "statsSideIn",
+      "on": "stats.show",
+      "view": "side",
+      "tracks": [
+        {
+          "target": "statsSide",
+          "prop": "x",
+          "keys": [
+            [
+              0,
+              40
+            ],
+            [
+              260,
+              0,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "statsSide",
+          "prop": "opacity",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              200,
+              1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "statsSideDrawn",
+          "prop": "x",
+          "keys": [
+            [
+              0,
+              40
+            ],
+            [
+              260,
+              0,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "statsSideDrawn",
+          "prop": "opacity",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              200,
+              1,
+              "out"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "statsPopupIn",
+      "on": "stats.show",
+      "view": "popup",
+      "tracks": [
+        {
+          "target": "statsPopup",
+          "prop": "opacity",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              160,
+              1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "statsPopup",
+          "prop": "scale",
+          "keys": [
+            [
+              0,
+              0.97
+            ],
+            [
+              240,
+              1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "statsPopup.psGlass",
+          "prop": "scan",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              480,
+              1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "statsPopup.psEdge",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0.3
+            ],
+            [
+              420,
+              0,
+              "in"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$scan",
+          0.25
+        ]
+      ]
+    }
+  ]
+}

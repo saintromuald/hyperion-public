@@ -1,0 +1,1734 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hyperion live guide</title>
+<!--
+  Hyperion's live guide for map editors: what an editor, a script or an AI can do to a
+  running Hyperion over its live channel, each part tried on the game from here, with the message
+  it sends and the same in C++, Python and JavaScript. Hyperion serves it at
+  http://127.0.0.1:27117/guide while the channel is open (src117/port/tools/port_control.cpp); opened
+  as a file it reads the same, without the buttons. The protocol in full is
+  docs/live-channel-for-editors.md; the C++ client is tools/hxlive_cpp/hxlive.h.
+-->
+<style>
+  :root {
+    --background: #f4f5f7;
+    --panel: #ffffff;
+    --sunk: #eceef2;
+    --text: #1b1e24;
+    --muted: #5d6573;
+    --line: #d9dde3;
+    --accent: #b8860b;
+    --accent-soft: rgba(184, 134, 11, .12);
+    --accent-text: #ffffff;
+    --good: #2f7d4a;
+    --bad: #b3261e;
+    --code: #24292f;
+    --code-key: #8a4b08;
+    --code-str: #1f6f43;
+    --curve-even: #6d7782;
+    --curve-ease: #b8860b;
+    --curve-out: #2f6fb3;
+    --curve-inout: #8a55b0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --background: #0f1115;
+      --panel: #181b21;
+      --sunk: #12151a;
+      --text: #e6e8eb;
+      --muted: #9aa2ae;
+      --line: #2a2f38;
+      --accent: #e8b84a;
+      --accent-soft: rgba(232, 184, 74, .14);
+      --accent-text: #15171b;
+      --good: #6cc48a;
+      --bad: #f08a80;
+      --code: #d7dae0;
+      --code-key: #e8b84a;
+      --code-str: #7bd88f;
+      --curve-even: #9aa6b2;
+      --curve-ease: #e8b84a;
+      --curve-out: #6fa8e8;
+      --curve-inout: #c792ea;
+    }
+  }
+  :root[data-theme="dark"] {
+    --background: #0f1115;
+    --panel: #181b21;
+    --sunk: #12151a;
+    --text: #e6e8eb;
+    --muted: #9aa2ae;
+    --line: #2a2f38;
+    --accent: #e8b84a;
+    --accent-soft: rgba(232, 184, 74, .14);
+    --accent-text: #15171b;
+    --good: #6cc48a;
+    --bad: #f08a80;
+    --code: #d7dae0;
+    --code-key: #e8b84a;
+    --code-str: #7bd88f;
+    --curve-even: #9aa6b2;
+    --curve-ease: #e8b84a;
+    --curve-out: #6fa8e8;
+    --curve-inout: #c792ea;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 64px; }
+  body { margin: 0; background: var(--background); color: var(--text);
+         font: 15px/1.55 system-ui, "Segoe UI", sans-serif; }
+  a { color: var(--accent); }
+  code, pre, kbd { font-family: ui-monospace, Consolas, monospace; }
+  code { font-size: 13px; background: var(--sunk); border: 1px solid var(--line); border-radius: 3px;
+         padding: 0 4px; }
+
+  /* the bar along the top: the connection and the game's state */
+  .bar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+         padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .bar h1 { font-size: 16px; margin: 0; font-weight: 650; white-space: nowrap; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted);
+          border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+  .pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .pill.on i { background: var(--good); }
+  .pill.off i { background: var(--bad); }
+  #where { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 0; }
+  .bar .grow { flex: 1; }
+  .bar label { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+
+  .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); max-width: 1180px; margin: 0 auto; }
+  nav { position: sticky; top: 52px; align-self: start; max-height: calc(100vh - 52px); overflow: auto;
+        padding: 18px 8px 18px 16px; }
+  nav a { display: block; color: var(--muted); text-decoration: none; padding: 5px 10px; border-radius: 4px;
+          font-size: 14px; border-left: 2px solid transparent; }
+  nav a:hover { color: var(--text); background: var(--sunk); }
+  nav a.here { color: var(--text); border-left-color: var(--accent); background: var(--accent-soft); }
+  nav .group { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+               margin: 14px 10px 4px; }
+  main { padding: 18px 16px 80px; min-width: 0; }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    nav { position: static; max-height: none; display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 16px 0; }
+    nav .group { display: none; }
+    nav a { border: 1px solid var(--line); border-left-width: 1px; font-size: 13px; padding: 3px 8px; }
+    .bar { position: static; }
+    html { scroll-padding-top: 8px; }
+  }
+
+  section.part { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 20px 22px;
+                 margin-bottom: 18px; min-width: 0; }
+  section.part > h2 { font-size: 20px; margin: 0 0 6px; font-weight: 650; }
+  section.part h3 { font-size: 15px; margin: 22px 0 6px; font-weight: 650; }
+  .lead { color: var(--muted); margin: 0 0 14px; max-width: 72ch; }
+  p { max-width: 76ch; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin: 12px 0; }
+  .card { border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; background: var(--background);
+          min-width: 0; }
+  .card b { display: block; margin-bottom: 4px; }
+  .card span { color: var(--muted); font-size: 14px; }
+  a.card { text-decoration: none; color: inherit; }
+  a.card:hover { border-color: var(--accent); }
+
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 10px 0; }
+  .steps li { counter-increment: s; position: relative; padding: 4px 0 8px 34px; max-width: 74ch; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 4px; width: 22px; height: 22px;
+                      border-radius: 50%; background: var(--accent); color: var(--accent-text); font-size: 12px;
+                      font-weight: 700; display: grid; place-items: center; }
+
+  table.ref { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0 12px; }
+  table.ref th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; letter-spacing: .04em;
+                 text-transform: uppercase; border-bottom: 1px solid var(--line); padding: 6px 8px; }
+  table.ref td { border-bottom: 1px solid var(--line); padding: 6px 8px; vertical-align: top; }
+  table.ref td:first-child { white-space: nowrap; }
+  .scroll { overflow-x: auto; }
+
+  /* a recipe: what it is, a button that plays it, and the message and code under it */
+  .recipes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin: 10px 0; }
+  .recipe { border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: flex;
+            flex-direction: column; gap: 6px; background: var(--background); min-width: 0; }
+  .recipe b { font-size: 14px; }
+  .recipe span { color: var(--muted); font-size: 13.5px; flex: 1; }
+  .recipe .row { margin: 0; }
+  .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag { font-size: 11.5px; border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; color: var(--muted); }
+
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+  .row label { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
+  button, select, input[type=text], input[type=number] {
+    font: inherit; font-size: 14px; color: var(--text); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 4px; padding: 5px 10px; min-width: 0; }
+  input[type=text] { flex: 1; min-width: 180px; }
+  input[type=number] { width: 86px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.small { padding: 2px 8px; font-size: 12.5px; }
+
+  .out { margin-top: 10px; display: none; }
+  .out.shown { display: block; }
+  .answer { font-size: 13px; color: var(--muted); margin: 4px 0; overflow-wrap: anywhere; }
+  .answer.bad { color: var(--bad); }
+  .answer.good { color: var(--good); }
+
+  .code { position: relative; margin: 8px 0; }
+  .code pre { margin: 0; background: var(--sunk); border: 1px solid var(--line); border-radius: 6px;
+              padding: 34px 12px 10px; font-size: 12.5px; line-height: 1.5; color: var(--code); overflow-x: auto;
+              white-space: pre; max-height: 420px; }
+  .code .copy { position: absolute; right: 6px; top: 6px; }
+  .code .lang { position: absolute; right: 62px; top: 9px; font-size: 11px; color: var(--muted); }
+  .k { color: var(--code-key); }
+  .s { color: var(--code-str); }
+  .note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 8px 12px; border-radius: 0 6px 6px 0;
+          margin: 10px 0; max-width: 78ch; font-size: 14px; }
+  .warn { border-left-color: var(--bad); }
+  #filebanner { display: none; }
+  body.file #filebanner { display: block; }
+  body.file .live { opacity: .55; }
+
+  /* the switch's timeline */
+  .timeline { width: 100%; height: auto; display: block; margin: 8px 0 4px; }
+  .timeline text { fill: var(--text); font: 12px system-ui, "Segoe UI", sans-serif; }
+  .timeline .dim { fill: var(--muted); }
+  .timeline .seg-out { fill: var(--accent); }
+  .timeline .seg-black { fill: var(--code); opacity: .85; }
+  .timeline .seg-in { fill: var(--curve-out); }
+  .timeline .seg-scene { fill: var(--good); }
+  .timeline line { stroke: var(--line); }
+
+  /* the eases */
+  .eases { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 10px 0; }
+  .ease { border: 1px solid var(--line); border-radius: 6px; padding: 10px; background: var(--background); }
+  .ease canvas { width: 100%; height: 110px; display: block; }
+  .ease b { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+  .ease span { display: block; color: var(--muted); font-size: 12.5px; }
+
+  .samples { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .sample { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; background: var(--background);
+            display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .sample h3 { margin: 0; }
+  .sample p { margin: 0; color: var(--muted); font-size: 14px; }
+  .sample .map { font-size: 13px; }
+
+  #bjson { width: 100%; min-height: 300px; font: 12.5px/1.5 ui-monospace, Consolas, monospace; color: var(--text);
+           background: var(--sunk); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; resize: vertical; }
+  .palette { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+  #bcheck { font-size: 13px; margin: 6px 0; white-space: pre-wrap; }
+  .progress { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); margin: 6px 0; flex-wrap: wrap; }
+  .progress b { font-weight: 600; color: var(--text); }
+  .progress i { font-style: normal; border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; }
+  .progress i.on { border-color: var(--accent); color: var(--text); background: var(--accent-soft); }
+  .progress i.done { color: var(--good); border-color: var(--good); }
+</style>
+</head>
+<body>
+<div class="bar">
+  <h1>Hyperion live guide</h1>
+  <span id="conn" class="pill"><i></i><span>connecting</span></span>
+  <span id="where"></span>
+  <span class="grow"></span>
+  <button id="testmap" class="live small" title="A plain 128 by 128 map, the fog lifted, for trying things on">Push a test map</button>
+  <label>Code in
+    <select id="lang">
+      <option value="cpp">C++</option>
+      <option value="py">Python</option>
+      <option value="js">JavaScript</option>
+    </select>
+  </label>
+  <a href="/" class="live" style="font-size:13px">Debug Tools panel</a>
+</div>
+
+<div class="layout">
+<nav id="nav">
+  <div class="group">Begin</div>
+  <a href="#start">Start here</a>
+  <a href="#channel">The channel</a>
+  <div class="group">Capabilities</div>
+  <a href="#maps">Map switches</a>
+  <a href="#camera">Camera</a>
+  <a href="#picture">Picture transitions</a>
+  <a href="#words">Words and sound</a>
+  <a href="#units">Units in a scene</a>
+  <a href="#timing">Timing</a>
+  <div class="group">Make</div>
+  <a href="#samples">Sample scenes</a>
+  <a href="#builder">Scene builder</a>
+  <div class="group">Build it in</div>
+  <a href="#editor">In your editor</a>
+  <a href="#reference">Message reference</a>
+</nav>
+
+<main>
+
+<!-- ============================================================= start -->
+<section class="part" id="start">
+  <h2>Start here</h2>
+  <p class="lead">Hyperion plays the original StarCraft with an engine of its own. While it runs, a map editor, a
+    script or an AI can drive it over a live channel: switch the game to a map it is editing, and play a scene on
+    that map with the camera, fades, words and units, without restarting anything. This page shows each of those,
+    lets you try each on the game, and gives the code to do the same from your own program.</p>
+
+  <div id="filebanner" class="note warn">This copy is opened as a file, so its buttons cannot reach the game.
+    Start <code>Hyperion.exe --control</code> and open
+    <a href="http://127.0.0.1:27117/guide">http://127.0.0.1:27117/guide</a> for the live one; the text is the same.</div>
+
+  <div class="cards">
+    <a class="card" href="#maps"><b>Live map switches</b><span>Push a map's tiles from memory, or load a saved map,
+      and the game goes out with a fade and comes back on it.</span></a>
+    <a class="card" href="#camera"><b>Camera direction</b><span>Glides, cuts, zooms closer than a game allows, follows,
+      orbits, with four eases for the feel of a move.</span></a>
+    <a class="card" href="#picture"><b>Picture transitions</b><span>Fades with a zoom, dips to black, cinema bars, the
+      console away, the skirmish's way in and out.</span></a>
+    <a class="card" href="#words"><b>Words and sound</b><span>Captions, the game's messages, transmissions with a
+      talking portrait, any of the game's sounds.</span></a>
+    <a class="card" href="#units"><b>Units in a scene</b><span>Units made, ordered, killed or removed as the trigger
+      actions do it, named by labels the scene gives them.</span></a>
+    <a class="card" href="#editor"><b>In your editor</b><span>A C++ client in one header with no dependencies, and how
+      a Test button fits in.</span></a>
+  </div>
+
+  <h3>Getting it running</h3>
+  <ol class="steps">
+    <li>Unpack Hyperion into a StarCraft 1.17 folder and start it with the channel open:
+      <code>Hyperion.exe --control</code>. Started that way it goes straight to its menus, with no opening cinematic.</li>
+    <li>Open <a href="http://127.0.0.1:27117/guide">http://127.0.0.1:27117/guide</a> (this page, served by Hyperion).
+      The dot at the top turns green when it is connected.</li>
+    <li>Press <b>Push a test map</b> at the top, or any button marked with a map, and try the rest on it. Escape in the
+      game ends a scene that plays.</li>
+  </ol>
+  <p class="note">Only programs on the same machine reach the channel: it listens on 127.0.0.1. A browser page may
+    talk to it only when Hyperion served the page; a program that is not a browser may always.</p>
+</section>
+
+<!-- ============================================================= channel -->
+<section class="part" id="channel">
+  <h2>The channel</h2>
+  <p class="lead">A WebSocket on <code>ws://127.0.0.1:27117/?t=&lt;key&gt;</code> (another port with
+    <code>--control=&lt;port&gt;</code>). Each message is one JSON object with a <code>cmd</code>; each answer carries the
+    message's <code>id</code> and <code>ok</code>, and <code>error</code>, a sentence, when it is false.</p>
+  <p>The key is made each time Hyperion starts and written to a file only you can read:
+    <code>%LOCALAPPDATA%\Hyperion\control-27117.key</code> on Windows, <code>~/.local/share/Hyperion/control-27117.key</code>
+    elsewhere (the number is the port). The C++ and Python clients read it themselves; a page Hyperion serves has
+    it in the link Debug Tools' Copy link gives. A connection without it is refused, so no other program on the
+    machine can drive the game.</p>
+  <div class="code"><span class="lang">message and answer</span><pre>{"id": 7, "cmd": "map_push", "tileset": "jungle", "width": 128, "height": 128}
+{"id": 7, "ok": true, "tileset": "jungle", "size": [128, 128], "state": "going out"}
+
+{"id": 8, "cmd": "map_push", "tileset": "jungle", "width": 100}
+{"id": 8, "ok": false, "error": "width and height are each 64, 96, 128, 192 or 256 tiles"}</pre></div>
+  <p>Send one message and wait for its answer before the next. <code>status</code> is cheap; poll it a few times a
+    second while waiting for something, and once a second or so to show where the game is.</p>
+
+  <h3>What status says</h3>
+  <div class="scroll"><table class="ref">
+    <tr><th>field</th><th>meaning</th></tr>
+    <tr><td><code>state</code></td><td><code>"front end"</code> (Hyperion's menus), <code>"game"</code>, or <code>"menus"</code> (the original's own screens, passed through while a map starts)</td></tr>
+    <tr><td><code>frame</code></td><td>the game's frame, about 24 a second at the fastest speed; 0 out of a game</td></tr>
+    <tr><td><code>map</code></td><td>in a game, its size in map pixels: <code>{"width": 4096, "height": 4096}</code> for 128 by 128 tiles</td></tr>
+    <tr><td><code>view</code></td><td>in a game, where the camera looks: <code>{"x", "y", "zoom"}</code>, the same numbers a camera step takes</td></tr>
+    <tr><td><code>map_swap</code></td><td><code>"none"</code>, <code>"going out"</code> or <code>"loading"</code> while a map switch is on its way</td></tr>
+    <tr><td><code>map_swap_error</code></td><td>set when the last switch could not start the map, saying why</td></tr>
+    <tr><td><code>cutscene</code></td><td><code>{"playing", "step", "steps", "do", "units"}</code>: the step that plays and the units its spawns made, by label</td></tr>
+    <tr><td><code>canvas</code>, <code>changed</code>, <code>paused</code></td><td>whether the game is a pushed map, whether units were made or removed, whether it is paused</td></tr>
+  </table></div>
+  <div class="row live"><button data-try="status">Ask status</button></div>
+  <div class="out" data-out="status"></div>
+
+  <h3>A client in a few lines</h3>
+  <p>The C++ client is <code>tools\hxlive_cpp\hxlive.h</code>: one header, Windows' own WinHTTP, nothing else. The
+    Python one is <code>tools\hxlive.py</code>, the standard library only. In a browser or Node, the WebSocket is built in.</p>
+  <div class="code" data-snippet="connect"></div>
+</section>
+
+<!-- ============================================================= maps -->
+<section class="part" id="maps">
+  <h2>Map switches</h2>
+  <p class="lead">Two messages switch the game to another map. Both work from a single-player game and from Hyperion's
+    menus. From a game the picture goes out over <code>ms</code> milliseconds, the old game is left as Quit Mission
+    leaves it, the new map starts, and it comes in as a skirmish's start does.</p>
+
+  <div class="cards">
+    <div class="card"><b>map_push</b><span>Makes a map from what you send: a tileset, a size and the tiles (the MTXM
+      section, as an editor holds it in memory), or the terrain of a map file with <code>from</code>. Player 1 starts
+      on the west, player 2 (a computer with no AI) on the east, everything available. For a terrain test after every
+      change.</span></div>
+    <div class="card"><b>map_load</b><span>Plays a saved map file: <code>.scm</code>, <code>.scx</code> or Hyperion's
+      <code>.hxm</code>, as melee, or with <code>"ums": true</code> as Use Map Settings, with the map's own players,
+      units, locations and triggers. For a test of the whole map.</span></div>
+  </div>
+
+  <h3>The switch, step by step</h3>
+  <svg class="timeline" viewBox="0 0 760 120" role="img" aria-label="A map switch: going out, black while the next map starts, coming in, then the scene">
+    <text x="0" y="16" class="dim">map_swap:</text>
+    <text x="78" y="16">"going out"</text>
+    <text x="250" y="16">"loading"</text>
+    <text x="470" y="16">"none", state "game"</text>
+    <rect x="70" y="26" width="170" height="26" rx="3" class="seg-out"/>
+    <rect x="240" y="26" width="210" height="26" rx="3" class="seg-black"/>
+    <rect x="450" y="26" width="150" height="26" rx="3" class="seg-in"/>
+    <rect x="600" y="26" width="150" height="26" rx="3" class="seg-scene"/>
+    <text x="80" y="72">out: console drops, the</text><text x="80" y="88">map shrinks to 86 % into</text><text x="80" y="104">black, over ms (1000)</text>
+    <text x="250" y="72">black: the game ends and</text><text x="250" y="88">the map starts, a second</text><text x="250" y="104">or a few for a big map</text>
+    <text x="460" y="72">in: out of black, 86 %</text><text x="460" y="88">to full size, console</text><text x="460" y="104">last, 1.6 s</text>
+    <text x="610" y="72">your scene plays,</text><text x="610" y="88">if one was sent</text><text x="610" y="104">with the switch</text>
+  </svg>
+  <p>Wait for the switch by polling <code>status</code> until <code>map_swap</code> is <code>"none"</code> and
+    <code>state</code> is <code>"game"</code>; if <code>map_swap_error</code> appears instead, the map could not be
+    started and it says why. Hyperion stays on its menus then. A pushed map starts explored but fogged: send
+    <code>{"cmd": "reveal"}</code> once it runs to lift the fog, which a camera tour wants.</p>
+
+  <h3>Push tiles</h3>
+  <div class="row live">
+    <select id="ptileset">
+      <option>badlands</option><option>platform</option><option>install</option><option>ashworld</option>
+      <option selected>jungle</option><option>desert</option><option>ice</option><option>twilight</option>
+    </select>
+    <label>width <select id="pwidth"><option>64</option><option>96</option><option selected>128</option><option>192</option><option>256</option></select></label>
+    <label>height <select id="pheight"><option>64</option><option>96</option><option selected>128</option><option>192</option><option>256</option></select></label>
+    <label>fill <input id="pfill" type="number" placeholder="ground" title="One MTXM value for every cell; leave empty for the tileset's own ground"></label>
+    <label>out ms <input id="pms" type="number" value="1000"></label>
+    <label><input id="preveal" type="checkbox" checked> reveal</label>
+    <button data-try="push" class="primary">Push</button>
+  </div>
+  <div class="out" data-out="push"></div>
+  <p>Left without tiles, the ground is the tileset's first plain buildable group, varied as a brush varies it.
+    <code>tiles</code> is the MTXM values row by row (group × 16 + variation); <code>tiles_b64</code> is the same as
+    base64 of the little-endian 16-bit values, which is the MTXM section's own bytes and the better choice from a
+    program; <code>rects</code> paints boxes over them. Sizes are those the original offers: 64, 96, 128, 192 or 256 tiles a side.</p>
+  <div class="code" data-snippet="pushTiles"></div>
+
+  <h3>Push a map file's terrain</h3>
+  <div class="row live">
+    <input id="pfrom" type="text" list="maplist" value="(2)Volcanis.scm" title="A full path, or a map's name, which Hyperion looks for in every maps folder">
+    <button data-try="pushfrom" class="primary">Push its terrain</button>
+  </div>
+  <div class="out" data-out="pushfrom"></div>
+  <p><code>from</code> takes a map file's tileset, size and tiles; Hyperion reads <code>.scm</code>, <code>.scx</code> and
+    <code>.hxm</code> itself. A full path is used as it is; a name is looked for as the game looks for a map, in
+    Hyperion's data folder, the StarCraft folder (so <code>maps\(2)Volcanis.scm</code> finds the install's), then each
+    <code>--maps</code> folder, and failing that by the file's name alone in any folder under them, so
+    <code>(4)Lost Temple.scm</code> finds the one in <code>maps\ladder\</code>. The units, locations and triggers stay
+    behind: that is <code>map_load</code>'s.</p>
+
+  <h3>Load a map</h3>
+  <div class="row live">
+    <input id="lpath" type="text" list="maplist" value="(2)Volcanis.scm">
+    <datalist id="maplist"></datalist>
+    <label><input id="lums" type="checkbox"> Use Map Settings</label>
+    <button data-try="load" class="primary">Load</button>
+  </div>
+  <div class="out" data-out="load"></div>
+  <p>As melee the player gets their race's start and the other starts get computers, as <code>--map</code> plays a map;
+    as Use Map Settings the map's own slots, units and triggers decide. A map that cannot play (an <code>.hxm</code>
+    that names a mod's unit while the mod is not on, for one) answers with <code>map_swap_error</code>, and
+    <code>hyperion_hxm.log</code> in the <code>Hyperion</code> folder says why.</p>
+
+  <h3>Find maps</h3>
+  <div class="row live">
+    <input id="mfilter" type="text" value="temple" title="Part of a map's name or folder; empty lists them all">
+    <button data-try="maps">List them</button>
+    <button data-try="mapinfo" title="The first map listed: its size, players, title and minimap">About the first</button>
+  </div>
+  <div class="out" data-out="maps"></div>
+  <p><code>maps</code> lists every map file Hyperion finds: the data folder's <code>maps</code>, the StarCraft
+    folder's and each <code>--maps</code> folder, with the folders in them, each with its <code>name</code>,
+    <code>folder</code>, <code>root</code> and full <code>path</code>. <code>filter</code> keeps those whose folder
+    and name hold it; the folders are read again after ten seconds, or at once with <code>fresh: true</code>.
+    <code>map_info {path}</code> reads one map: its size, tileset, player slots, the title and description it shows
+    in the game, its start locations in pixels with their player, whether <code>map_push</code> can take its
+    terrain, and <code>preview</code>, its minimap with the starts marked, a picture served under
+    <code>/snapshots/</code>. Debug Tools' panel lists the maps the same way.</p>
+  <div class="code" data-snippet="waitSwitch"></div>
+</section>
+
+<!-- ============================================================= camera -->
+<section class="part" id="camera">
+  <h2>Camera</h2>
+  <p class="lead">Places are map pixels, 32 to a tile, from the map's top left: the middle of tile (40, 12) is
+    (1296, 400). A camera step glides the middle of the view to <code>x</code>, <code>y</code> and the zoom to
+    <code>zoom</code> over <code>ms</code>, with an <code>ease</code>; either part may be left out. <code>zoom</code> 1 is
+    the game's own view, 2 shows twice the map across, and a scene may go as close as 0.5.</p>
+  <div class="code"><span class="lang">step</span><pre>{"do": "camera", "x": 2048, "y": 1500, "zoom": 1.4, "ms": 3000, "ease": "in_out"}</pre></div>
+  <div class="row live">
+    <button data-try="capture">Capture the view as a step</button>
+    <span class="answer" id="capnote">Move the camera in the game, then capture it: the step goes into the builder.</span>
+  </div>
+
+  <h3>The eases</h3>
+  <p>How a move covers its distance over its time. The dot under each curve moves as the camera would.</p>
+  <div class="eases">
+    <div class="ease"><canvas data-ease="in_out"></canvas><b>in_out</b><span>Starts and ends gently, quick in the middle. A camera step's own; the classic glide.</span></div>
+    <div class="ease"><canvas data-ease="out"></canvas><b>out</b><span>Fast first, settling at the end. Pushes in, reveals, a move that lands.</span></div>
+    <div class="ease"><canvas data-ease="ease"></canvas><b>ease</b><span>A soft start, a long settle. A fade's own; a gentle reframe.</span></div>
+    <div class="ease"><canvas data-ease="even"></canvas><b>even</b><span>The same speed throughout. A drift, a dolly, an orbit's legs that must join without a bump.</span></div>
+  </div>
+
+  <h3>Moves to try</h3>
+  <p>Each plays around where the camera looks now, on whatever map runs.</p>
+  <div class="recipes" data-recipes="camera"></div>
+  <div class="out" data-out="camera"></div>
+
+  <h3>Follow</h3>
+  <p><code>{"do": "follow", "unit": "lings", "zoom": 1.2, "ms": 800}</code> glides onto a unit and stays on it as it
+    moves, until the next camera step. <code>unit</code> is a label a spawn gave, a unit's id, or a list of them (the
+    first alive is followed). The tracking shot above uses it.</p>
+</section>
+
+<!-- ============================================================= picture -->
+<section class="part" id="picture">
+  <h2>Picture transitions</h2>
+  <p class="lead">Black over the picture, a zoom of the picture itself, cinema bars and the console, each on its own
+    clock, so they combine: a fade can carry a zoom while the bars come in.</p>
+  <div class="scroll"><table class="ref">
+    <tr><th>step</th><th>fields</th><th>what it does</th></tr>
+    <tr><td><code>fade</code></td><td><code>to</code>, <code>ms</code>, <code>scale</code>, <code>ease</code></td><td><code>to</code> is <code>"black"</code>, <code>"clear"</code> or an amount 0 to 1; <code>scale</code> zooms the picture as it fades: 0.86 the skirmish's start, 1 as drawn, above 1 closer</td></tr>
+    <tr><td><code>bars</code></td><td><code>on</code>, <code>size</code>, <code>hud</code>, <code>ms</code></td><td>cinema bars top and bottom, <code>size</code> a share of the height each (0.12); the console leaves with them unless <code>hud</code> is true</td></tr>
+    <tr><td><code>hud</code></td><td><code>show</code>, <code>ms</code></td><td>the console dropped and faded out, or back</td></tr>
+    <tr><td><code>depart</code></td><td><code>ms</code></td><td>the picture goes out as a map switch takes it out</td></tr>
+    <tr><td><code>arrive</code></td><td></td><td>the picture comes in as a skirmish's start brings it (1.6 s)</td></tr>
+  </table></div>
+  <div class="recipes" data-recipes="picture"></div>
+  <div class="out" data-out="picture"></div>
+</section>
+
+<!-- ============================================================= words -->
+<section class="part" id="words">
+  <h2>Words and sound</h2>
+  <div class="scroll"><table class="ref">
+    <tr><th>step</th><th>fields</th><th>what it does</th></tr>
+    <tr><td><code>caption</code></td><td><code>text</code>, <code>ms</code>, <code>at</code></td><td>words over the picture, in the bottom bar when the bars are in; <code>at</code> is <code>bottom</code>, <code>middle</code> or <code>top</code>; <code>\n</code> breaks a line</td></tr>
+    <tr><td><code>text</code></td><td><code>text</code>, <code>ms</code></td><td>a line among the game's messages, as Display Text Message puts it</td></tr>
+    <tr><td><code>transmission</code></td><td><code>unit</code>, <code>portrait</code>, <code>text</code>, <code>sound</code>, <code>ms</code></td><td>as the trigger Transmission: the portrait (a unit type, else the unit's own) talks, the unit flashes and pings the minimap, the text shows, the sound plays; with the console hidden the text comes as a caption</td></tr>
+    <tr><td><code>sound</code></td><td><code>path</code></td><td>a sound from the game's files, as Play WAV plays it: <code>sound\Misc\TPwrDown.wav</code></td></tr>
+  </table></div>
+  <p>Left without <code>ms</code>, words stay for a reading time: a second and a half and 0.06 s a letter.</p>
+  <div class="recipes" data-recipes="words"></div>
+  <div class="out" data-out="words"></div>
+</section>
+
+<!-- ============================================================= units -->
+<section class="part" id="units">
+  <h2>Units in a scene</h2>
+  <p class="lead">Units made and ordered as the trigger actions do it, in a single-player game; the game is then
+    marked as changed. A scene that only moves the camera, the picture and words also plays in a replay.</p>
+  <div class="scroll"><table class="ref">
+    <tr><th>step</th><th>fields</th><th>what it does</th></tr>
+    <tr><td><code>spawn</code></td><td><code>unit</code>, <code>x</code>, <code>y</code>, <code>player</code>, <code>count</code>, <code>as</code>, <code>attack</code> or <code>move</code></td><td>units made as Create Unit makes them; <code>as</code> labels them for later steps; <code>attack</code> or <code>move</code>, an <code>[x, y]</code>, sends them on at once</td></tr>
+    <tr><td><code>order</code></td><td><code>units</code>, <code>to</code>, <code>order</code></td><td><code>move</code>, <code>attack</code> or <code>patrol</code> to <code>[x, y]</code></td></tr>
+    <tr><td><code>kill</code>, <code>remove</code></td><td><code>units</code></td><td>killed, their deaths shown, or removed</td></tr>
+  </table></div>
+  <p>A unit type is a name, as <code>.hxm</code> maps use (<code>terran_marine</code>, <code>zerg_zergling</code>,
+    <code>protoss_dragoon</code>, <code>terran_siege_tank_siege_mode</code>), or the original's number. Players count from 0.
+    The units a scene made are listed by label in <code>cutscene_status</code> and in status's <code>cutscene</code>.</p>
+  <div class="recipes" data-recipes="units"></div>
+  <div class="out" data-out="units"></div>
+</section>
+
+<!-- ============================================================= timing -->
+<section class="part" id="timing">
+  <h2>Timing</h2>
+  <p class="lead">Steps run in turn, each waiting for the one before. A step sent with <code>"async": true</code> lets the
+    next start at once, under it: a caption stays up while the camera moves, a fade runs while a zoom eases.</p>
+  <div class="scroll"><table class="ref">
+    <tr><th>step</th><th>takes, when ms is left out</th></tr>
+    <tr><td><code>camera</code></td><td>1 s</td></tr>
+    <tr><td><code>follow</code>, <code>fade</code></td><td>0.8 s</td></tr>
+    <tr><td><code>bars</code>, <code>hud</code></td><td>0.6 s</td></tr>
+    <tr><td><code>depart</code> / <code>arrive</code></td><td>1.2 s / 1.6 s</td></tr>
+    <tr><td><code>caption</code>, <code>transmission</code></td><td>1.5 s and 0.06 s a letter</td></tr>
+    <tr><td><code>wait</code></td><td>1 s</td></tr>
+    <tr><td><code>spawn</code>, <code>order</code>, <code>kill</code>, <code>remove</code>, <code>text</code>, <code>sound</code></td><td>no time: the next step starts at once</td></tr>
+  </table></div>
+  <div class="scroll"><table class="ref">
+    <tr><th>cutscene_play field</th><th>default</th><th>meaning</th></tr>
+    <tr><td><code>hold</code></td><td>true</td><td>the player's keys, clicks and the game's cursor are held while it plays</td></tr>
+    <tr><td><code>skip</code></td><td>true</td><td>Escape ends it</td></tr>
+    <tr><td><code>rest</code></td><td>true</td><td>at its end the picture eases back to the game's in half a second; false leaves it as the last step left it, so a scene can end in black before a <code>map_load</code></td></tr>
+  </table></div>
+  <p>A new <code>cutscene_play</code> ends the one playing; <code>cutscene_stop</code> ends it as Escape does. The steps
+    are checked before any runs, and the answer names the first wrong one.</p>
+  <div class="recipes" data-recipes="timing"></div>
+  <div class="out" data-out="timing"></div>
+</section>
+
+<!-- ============================================================= samples -->
+<section class="part" id="samples">
+  <h2>Sample scenes</h2>
+  <p class="lead">Five scenes made while the channel was built, each showing a different way to use it. Play switches
+    to the map each was made for, then plays it. They are in <code>tools\cutscenes\</code> to read and copy; each
+    file names its map in <code>map</code>: <code>push</code> for a made map, or <code>from</code> for a map file
+    with <code>or</code> as a stand-in when that file is not there.</p>
+  <div class="row live">
+    <label>Classic maps from <input id="mapdir" type="text" value="" placeholder="any maps folder" title="Left empty, Hyperion finds each map by its name in any maps folder; or give the folder they are in"></label>
+  </div>
+  <div class="samples" id="samplelist"></div>
+  <div class="out" data-out="samples"></div>
+</section>
+
+<!-- ============================================================= builder -->
+<section class="part" id="builder">
+  <h2>Scene builder</h2>
+  <p class="lead">Write or paste a scene, check it, play it on the game. Each button below adds a step of that kind
+    with its fields filled in from where the camera looks now.</p>
+  <div class="palette" id="palette"></div>
+  <textarea id="bjson" spellcheck="false"></textarea>
+  <div id="bcheck" class="answer"></div>
+  <div class="row">
+    <button id="bplay" class="primary live">Play</button>
+    <button id="bstop" class="live">Stop</button>
+    <button id="bcheckbtn">Check</button>
+    <button id="bview" class="live">Add the view</button>
+    <select id="bsample"><option value="">Open a sample</option></select>
+    <button id="bsave">Save as a file</button>
+    <button id="bclear">Clear</button>
+  </div>
+  <div class="progress" id="bprogress"></div>
+  <div class="code" data-snippet="playScene"></div>
+</section>
+
+<!-- ============================================================= editor -->
+<section class="part" id="editor">
+  <h2>In your editor</h2>
+  <p class="lead">What a Test in Hyperion button needs, in the order it happens. The C++ here uses
+    <code>tools\hxlive_cpp\hxlive.h</code>; <code>tools\hxlive_cpp\example.cpp</code> is the same as a whole program.</p>
+
+  <h3>1. Start Hyperion, or find it running</h3>
+  <p>Try to connect first: a Hyperion the player already started answers. If nothing answers, start
+    <code>Hyperion.exe --control</code> from the player's StarCraft 1.17 folder (the folder with
+    <code>StarCraft.exe</code>, where Hyperion was unpacked), as its working directory, and connect again until it
+    answers; it takes a few seconds. Keep it running between tests: every test after the first is a switch, a few
+    seconds, not a start.</p>
+  <div class="code" data-snippet="launch"></div>
+
+  <h3>2. Send the map</h3>
+  <p>For a terrain change, send the MTXM you hold in memory with <code>map_push</code>, no saving needed. For a test of
+    units, locations and triggers, save the map and send its path with <code>map_load</code> (with
+    <code>"ums": true</code> for a map made for Use Map Settings). Keep one connection and send one message at a time,
+    from a worker thread so the editor stays responsive while it waits.</p>
+  <div class="code" data-snippet="editorPush"></div>
+
+  <h3>3. Wait for it, then the extras</h3>
+  <p>Poll <code>status</code> until the switch has ended (above, under Map switches). Then <code>reveal</code> if the
+    tester wants the whole map in view, and a scene if they asked for one; a scene can also ride along with the switch
+    as its <code>scene</code> field, so it starts the moment the map comes in.</p>
+
+  <h3>4. Scenes from the editor's own data</h3>
+  <p>A scene is a list of steps, so an editor can make one from what it already has:</p>
+  <ul>
+    <li><b>Camera keys from the viewport.</b> The editor's view of the map gives the <code>x</code>, <code>y</code> of a
+      camera step directly (map pixels are the editor's tile × 32 + 16 for a tile's middle); its zoom gives
+      <code>zoom</code>. A list of saved views with a time each is a camera path.</li>
+    <li><b>Places from locations.</b> A location's middle is a good <code>x</code>, <code>y</code> for a spawn, an order or
+      a camera step: <code>(left + right) / 2</code>, <code>(top + bottom) / 2</code> of its rectangle.</li>
+    <li><b>Units by label.</b> Give each spawn an <code>as</code> named after what it is in the editor ("the convoy") and
+      later steps can order or follow it by that name.</li>
+    <li><b>A timeline.</b> Steps with <code>"async": true</code> run under the next, so a track per kind (camera, picture,
+      words, units) on a timeline turns into a step list by sorting the starts and putting a <code>wait</code> between
+      them.</li>
+  </ul>
+  <p>The scene's format is the same one that will be kept in an <code>.hxm</code> and started by its triggers, when
+    that comes: what an editor builds for live tests now carries over.</p>
+
+  <h3>5. When something is wrong</h3>
+  <ul>
+    <li><code>ok: false</code> answers say why in a sentence a tester can read: show it as it is.</li>
+    <li>A refused connection means Hyperion is not running with <code>--control</code>, or listens on another port.</li>
+    <li><code>map_swap_error</code> means the map did not start; Hyperion's logs in its <code>Hyperion</code> folder say more
+      (<code>hyperion_hxm.log</code> for an <code>.hxm</code>, <code>hyperion_canvas.log</code> for a push).</li>
+    <li>On a player's very first start without <code>--control</code>, the original's opening cinematic plays first; Escape skips it.</li>
+  </ul>
+</section>
+
+<!-- ============================================================= reference -->
+<section class="part" id="reference">
+  <h2>Message reference</h2>
+  <p class="lead">The messages an editor uses. <code>docs\live-channel-for-editors.md</code> has the same with more
+    detail; the channel has more, for Debug Tools (<code>list</code>, <code>set</code>, <code>perf</code> and others).</p>
+  <div class="scroll"><table class="ref">
+    <tr><th>cmd</th><th>fields</th><th>answers / does</th></tr>
+    <tr><td><code>status</code></td><td></td><td>where the game is (above)</td></tr>
+    <tr><td><code>map_push</code></td><td><code>tileset</code>, <code>width</code>, <code>height</code>, <code>tiles</code> | <code>tiles_b64</code> | <code>fill</code>, <code>rects</code>, or <code>from</code>; <code>ms</code>, <code>scene</code></td><td><code>tileset</code>, <code>size</code>, <code>state</code>; the switch goes on</td></tr>
+    <tr><td><code>map_load</code></td><td><code>path</code>, <code>ums</code>, <code>ms</code>, <code>scene</code></td><td><code>path</code> (as found), <code>state</code></td></tr>
+    <tr><td><code>cutscene_play</code></td><td><code>steps</code>, <code>hold</code>, <code>skip</code>, <code>rest</code></td><td>plays the steps; ends one playing first</td></tr>
+    <tr><td><code>cutscene_stop</code></td><td></td><td>ends it, as Escape</td></tr>
+    <tr><td><code>cutscene_status</code></td><td></td><td><code>playing</code>, <code>step</code>, <code>steps</code>, <code>do</code>, <code>units</code></td></tr>
+    <tr><td><code>reveal</code></td><td></td><td>the fog off for every player</td></tr>
+    <tr><td><code>camera</code></td><td><code>x</code>, <code>y</code></td><td>the view's middle there at once (no scene)</td></tr>
+    <tr><td><code>units</code></td><td><code>player</code>, <code>type</code></td><td>the units on the map with their ids, places and hit points</td></tr>
+    <tr><td><code>spawn</code></td><td><code>unit</code>, <code>x</code>, <code>y</code>, <code>player</code>, <code>count</code>, <code>attack</code></td><td>units made outside a scene; their ids</td></tr>
+    <tr><td><code>pause</code>, <code>resume</code>, <code>step</code></td><td><code>frames</code></td><td>the game paused, on again, or a few frames on</td></tr>
+    <tr><td><code>snapshot</code></td><td><code>name</code></td><td>the frame as a PNG in <code>Data\snapshots\</code>; the answer gives its path</td></tr>
+  </table></div>
+  <h3>Tilesets</h3>
+  <p><code>badlands</code>, <code>platform</code>, <code>install</code>, <code>ashworld</code>, <code>jungle</code>,
+    <code>desert</code>, <code>ice</code>, <code>twilight</code>, or <code>"0"</code> to <code>"7"</code> in that order (a map's ERA).</p>
+  <h3>What is planned</h3>
+  <ul>
+    <li>Scenes kept in an <code>.hxm</code> map and started by its triggers, in this same step format.</li>
+    <li>Cutscene styles of Hyperion's own, beyond the classic look: other captions, bars and transitions.</li>
+    <li><code>map_push</code> with units, locations and triggers, and past 256 tiles through <code>.hxm</code>.</li>
+  </ul>
+</section>
+
+</main>
+</div>
+
+<script>
+'use strict';
+
+// ---------------------------------------------------------------- the connection
+const FILE = location.protocol === 'file:';
+if (FILE) document.body.classList.add('file');
+// the channel's key, from the link this page was opened by (Debug Tools' Copy link)
+const KEY = new URLSearchParams(location.search).get('t') || '';
+const keyed = path => path + (path.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(KEY);
+document.querySelectorAll('a[href="/"]').forEach(a => { a.href = keyed('/'); });
+
+const Live = {
+  ws: null, open: false, nextId: 1, waiting: new Map(), chain: Promise.resolve(),
+  connect() {
+    if (FILE) { setConn('off', 'opened as a file'); return; }
+    const ws = new WebSocket('ws://' + location.host + keyed('/'));
+    this.ws = ws;
+    ws.onopen = () => { this.open = true; setConn('on', 'connected'); poll(); };
+    ws.onclose = () => {
+      this.open = false;
+      setConn('off', KEY ? 'not connected: is Hyperion running with --control? After a restart, open this page again from Debug Tools\' Copy link'
+                         : 'not connected: open this page from the link Debug Tools\' Copy link gives, which holds the channel\'s key');
+      for (const [, w] of this.waiting) w.reject(new Error('the connection closed'));
+      this.waiting.clear();
+      setTimeout(() => this.connect(), 2000);
+    };
+    ws.onmessage = e => {
+      let a;
+      try { a = JSON.parse(e.data); } catch (_) { return; }
+      const w = this.waiting.get(a.id);
+      if (w) { this.waiting.delete(a.id); w.resolve(a); }
+    };
+  },
+  // one message at a time, as the channel asks
+  call(msg) {
+    const run = () => new Promise((resolve, reject) => {
+      if (!this.open) { reject(new Error('not connected to Hyperion')); return; }
+      const id = this.nextId++;
+      this.waiting.set(id, { resolve, reject });
+      this.ws.send(JSON.stringify(Object.assign({ id }, msg)));
+      setTimeout(() => {
+        if (this.waiting.delete(id)) reject(new Error('no answer in 30 s'));
+      }, 30000);
+    });
+    const p = this.chain.then(run, run);
+    this.chain = p.catch(() => {});
+    return p;
+  }
+};
+
+function setConn(kind, text) {
+  const el = document.getElementById('conn');
+  el.className = 'pill ' + kind;
+  el.querySelector('span').textContent = text;
+}
+
+// the last status, kept for the recipes' places
+let S = {};
+async function poll() {
+  if (!Live.open) return;
+  try {
+    S = await Live.call({ cmd: 'status' });
+    showWhere();
+  } catch (_) { /* the next poll tries again */ }
+  setTimeout(poll, 1000);
+}
+
+function showWhere() {
+  const parts = [S.state || ''];
+  if (S.state === 'game' && S.map) {
+    parts.push('map ' + S.map.width / 32 + ' x ' + S.map.height / 32);
+    if (S.view) parts.push('view ' + S.view.x + ', ' + S.view.y + ' zoom ' + S.view.zoom.toFixed(2));
+  }
+  if (S.map_swap && S.map_swap !== 'none') parts.push('switch ' + S.map_swap);
+  const c = S.cutscene;
+  if (c && c.playing) parts.push('scene step ' + c.step + ' of ' + c.steps + ' (' + c.do + ')');
+  document.getElementById('where').textContent = parts.filter(Boolean).join(' · ');
+}
+
+// ---------------------------------------------------------------- code in three languages
+const LANG_KEY = 'hyperion-guide-lang';
+const langSel = document.getElementById('lang');
+try { const l = localStorage.getItem(LANG_KEY); if (l) langSel.value = l; } catch (_) {}
+langSel.addEventListener('change', () => {
+  try { localStorage.setItem(LANG_KEY, langSel.value); } catch (_) {}
+  renderSnippets();
+  for (const el of document.querySelectorAll('.out.shown')) if (el._msg) showMessage(el, el._msg, el._answer);
+});
+
+// One step on a line, spaced as a person writes it.
+function stepText(s) {
+  if (!s || typeof s !== 'object' || Array.isArray(s)) return JSON.stringify(s);
+  const value = v => Array.isArray(v) && v.every(x => typeof x === 'number') ? '[' + v.join(', ') + ']'
+    : Array.isArray(v) ? '[' + v.map(x => JSON.stringify(x)).join(', ') + ']' : JSON.stringify(v);
+  return '{' + Object.keys(s).map(k => JSON.stringify(k) + ': ' + value(s[k])).join(', ') + '}';
+}
+
+// A message as JSON a person can read: a scene's steps one to a line.
+function fmt(msg) {
+  const keys = Object.keys(msg);
+  const lines = keys.map(k => {
+    const v = msg[k];
+    if (k === 'steps' && Array.isArray(v))
+      return '  ' + JSON.stringify(k) + ': [\n' + v.map(s => '    ' + stepText(s)).join(',\n') + '\n  ]';
+    if (k === 'scene' && v && Array.isArray(v.steps))
+      return '  "scene": {"steps": [\n' + v.steps.map(s => '    ' + stepText(s)).join(',\n') + '\n  ]}';
+    return '  ' + JSON.stringify(k) + ': ' + JSON.stringify(v);
+  });
+  return '{\n' + lines.join(',\n') + '\n}';
+}
+
+function pyValue(text) {
+  return text.replace(/\btrue\b/g, 'True').replace(/\bfalse\b/g, 'False').replace(/\bnull\b/g, 'None');
+}
+
+// The code that sends msg, in the language chosen.
+function codeFor(msg) {
+  const json = fmt(msg);
+  const lang = langSel.value;
+  if (lang === 'cpp') {
+    return '// hxlive.h: one message, its answer as JSON text\n' +
+      'std::string answer, why;\n' +
+      'if (!client.Call(R"json(' + json + ')json", &answer, &why))\n' +
+      '  ShowError(why);  // the connection failed; an ok:false answer is in answer\n';
+  }
+  if (lang === 'py') {
+    return '# hxlive.py\'s ws_call: one message, its answer as a dict\n' +
+      'from hxlive import ws_call\n' +
+      'answer = ws_call(27117, ' + pyValue(json) + ')\n' +
+      'if not answer["ok"]:\n    print(answer["error"])\n';
+  }
+  return '// live.call from the client above: one message, its answer as an object\n' +
+    'const answer = await live.call(' + json + ');\n' +
+    'if (!answer.ok) console.log(answer.error);\n';
+}
+
+function codeBlock(text, label) {
+  const div = document.createElement('div');
+  div.className = 'code';
+  const pre = document.createElement('pre');
+  pre.textContent = text;
+  const copy = document.createElement('button');
+  copy.className = 'copy small';
+  copy.textContent = 'Copy';
+  copy.onclick = () => {
+    navigator.clipboard && navigator.clipboard.writeText(text);
+    copy.textContent = 'Copied';
+    setTimeout(() => (copy.textContent = 'Copy'), 1200);
+  };
+  if (label) {
+    const l = document.createElement('span');
+    l.className = 'lang';
+    l.textContent = label;
+    div.appendChild(l);
+  }
+  div.appendChild(pre);
+  div.appendChild(copy);
+  return div;
+}
+
+const LANG_NAMES = { cpp: 'C++', py: 'Python', js: 'JavaScript' };
+
+// The message a button sent, its answer, and the code for it.
+function showMessage(out, msg, answer) {
+  out._msg = msg;
+  out._answer = answer;
+  out.innerHTML = '';
+  if (answer !== undefined) {
+    const a = document.createElement('div');
+    a.className = 'answer ' + (answer instanceof Error || (answer && answer.ok === false) ? 'bad' : answer && answer.ok ? 'good' : '');
+    a.textContent = answer instanceof Error ? answer.message
+      : answer && answer.ok === false ? 'Answer: ' + answer.error
+      : 'Answer: ' + JSON.stringify(answer);
+    out.appendChild(a);
+  }
+  out.appendChild(codeBlock(codeFor(msg), LANG_NAMES[langSel.value]));
+  out.classList.add('shown');
+}
+
+function outFor(name) { return document.querySelector('[data-out="' + name + '"]'); }
+
+function note(out, text, kind) {
+  out.innerHTML = '';
+  const a = document.createElement('div');
+  a.className = 'answer ' + (kind || '');
+  a.textContent = text;
+  out.appendChild(a);
+  out.classList.add('shown');
+}
+
+// ---------------------------------------------------------------- hand-written snippets
+const SNIPPETS = {
+  connect: {
+    cpp: `#include "hxlive.h"   // Data\\tools\\hxlive_cpp\\, WinHTTP only
+
+hxlive::Client client;
+std::string why;
+if (!client.Connect(27117, &why))
+  ShowError("Hyperion is not running with --control: " + why);
+
+std::string answer;
+client.Call(R"({"cmd": "status"})", &answer, &why);
+// answer: {"id":1,"ok":true,"state":"front end",...}`,
+    py: `import json, sys
+sys.path.insert(0, r"C:\\StarCraft\\tools")   # where hxlive.py is
+from hxlive import ws_call                  # one message a call, standard library only
+
+answer = ws_call(27117, {"id": 1, "cmd": "status"})
+print(answer["state"])`,
+    js: `// in a browser page Hyperion serves, or Node 22+, which has WebSocket built in;
+// key: the channel's key, from its file, or from the page's link (?t=)
+class Live {
+  constructor(key, port = 27117) {
+    this.ws = new WebSocket('ws://127.0.0.1:' + port + '/?t=' + encodeURIComponent(key));
+    this.ready = new Promise((ok, fail) => { this.ws.onopen = ok; this.ws.onerror = fail; });
+    this.next = 1; this.waiting = new Map();
+    this.ws.onmessage = e => {
+      const a = JSON.parse(e.data);
+      this.waiting.get(a.id)?.(a);
+      this.waiting.delete(a.id);
+    };
+  }
+  async call(msg) {                         // await each call before the next
+    await this.ready;
+    const id = this.next++;
+    return new Promise(ok => {
+      this.waiting.set(id, ok);
+      this.ws.send(JSON.stringify({ id, ...msg }));
+    });
+  }
+}
+const live = new Live(new URLSearchParams(location.search).get('t'));   // in Node: channelKey() below
+console.log((await live.call({ cmd: 'status' })).state);`
+  },
+  pushTiles: {
+    cpp: `// The editor's MTXM, width * height values row by row, as it holds them
+const std::vector<uint16_t> &mtxm = map.Mtxm();
+const std::string tiles = hxlive::TilesBase64(mtxm.data(), mtxm.size());
+
+std::string answer, why;
+client.Call(hxlive::MapPushMessage("jungle", 128, 128, tiles, 1000, ""), &answer, &why);
+if (!hxlive::AnswerOk(answer))
+  ShowError(hxlive::AnswerString(answer, "error"));   // e.g. a tile the tileset lacks`,
+    py: `import base64, struct
+# mtxm: the editor's tiles, width * height values row by row
+tiles_b64 = base64.b64encode(struct.pack("<%dH" % len(mtxm), *mtxm)).decode()
+answer = ws_call(27117, {"id": 1, "cmd": "map_push", "tileset": "jungle",
+                         "width": 128, "height": 128, "tiles_b64": tiles_b64, "ms": 1000})`,
+    js: `// mtxm: a Uint16Array of width * height values, row by row
+const bytes = new Uint8Array(mtxm.length * 2);   // little-endian 16-bit values
+mtxm.forEach((v, i) => { bytes[i * 2] = v & 255; bytes[i * 2 + 1] = v >> 8; });
+const tiles_b64 = btoa(String.fromCharCode(...bytes));   // chunk this for 256 x 256 maps
+await live.call({ cmd: 'map_push', tileset: 'jungle', width: 128, height: 128, tiles_b64, ms: 1000 });`
+  },
+  waitSwitch: {
+    cpp: `// After map_push or map_load: poll status until the new game runs
+std::string why;
+if (!hxlive::WaitForSwitch(client, 60000, &why))
+  ShowError(why);        // map_swap_error's sentence, or a timeout
+else
+  client.Call(R"({"cmd": "reveal"})", &answer, &why);   // the whole map in view`,
+    py: `import time
+def wait_for_switch(port=27117, seconds=60):
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        s = ws_call(port, {"id": 1, "cmd": "status"})
+        if s.get("map_swap_error"):
+            raise RuntimeError(s["map_swap_error"])
+        if s.get("map_swap") == "none" and s.get("state") == "game":
+            return s
+        time.sleep(0.25)
+    raise TimeoutError("the map did not come in")`,
+    js: `async function waitForSwitch(live, ms = 60000) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    const s = await live.call({ cmd: 'status' });
+    if (s.map_swap_error) throw new Error(s.map_swap_error);
+    if (s.map_swap === 'none' && s.state === 'game') return s;
+    await new Promise(r => setTimeout(r, 250));
+  }
+  throw new Error('the map did not come in');
+}`
+  },
+  playScene: {
+    cpp: `// A scene the editor built, as a JSON array of steps
+const std::string steps = R"([
+  {"do": "fade", "to": "black", "ms": 0},
+  {"do": "camera", "x": 2048, "y": 2048, "zoom": 1.6, "ms": 0},
+  {"do": "fade", "to": "clear", "ms": 1200, "async": true},
+  {"do": "camera", "zoom": 1.0, "ms": 3000, "ease": "out"}
+])";
+client.Call(hxlive::CutscenePlayMessage(steps, true, true, true), &answer, &why);`,
+    py: `scene = json.load(open(r"Data\\tools\\cutscenes\\temple-flyover.json"))
+answer = ws_call(27117, dict(scene, id=1, cmd="cutscene_play"))`,
+    js: `const scene = await (await fetch('/cutscenes/temple-flyover.json')).json();
+await live.call({ cmd: 'cutscene_play', ...scene });`
+  },
+  launch: {
+    cpp: `// Find Hyperion, or start it from the player's StarCraft 1.17 folder
+bool EnsureHyperion(hxlive::Client &client, const std::wstring &starcraftFolder)
+{
+  std::string why;
+  if (client.Connect(27117, &why))
+    return true;
+  std::wstring exe = starcraftFolder + L"\\\\Hyperion.exe";
+  std::wstring cmd = L"\\"" + exe + L"\\" --control";
+  STARTUPINFOW si = {sizeof si};
+  PROCESS_INFORMATION pi = {};
+  if (!CreateProcessW(exe.c_str(), cmd.data(), nullptr, nullptr, FALSE, 0, nullptr,
+                      starcraftFolder.c_str(), &si, &pi))
+    return false;
+  CloseHandle(pi.hThread);
+  CloseHandle(pi.hProcess);
+  for (int i = 0; i < 60; ++i) {          // up to 15 s for its menus
+    Sleep(250);
+    if (client.Connect(27117, &why))
+      return true;
+  }
+  return false;
+}`,
+    py: `import subprocess, time
+def ensure_hyperion(starcraft_folder, port=27117):
+    try:
+        return ws_call(port, {"id": 1, "cmd": "status"})
+    except OSError:
+        subprocess.Popen([starcraft_folder + r"\\Hyperion.exe", "--control"], cwd=starcraft_folder)
+    for _ in range(60):
+        time.sleep(0.25)
+        try:
+            return ws_call(port, {"id": 1, "cmd": "status"})
+        except OSError:
+            pass
+    raise RuntimeError("Hyperion did not start")`,
+    js: `// Node: start Hyperion if nothing answers
+import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+// the channel's key, which Hyperion writes each time it starts
+const channelKey = (port = 27117) =>
+  readFileSync(process.env.LOCALAPPDATA + '\\\\Hyperion\\\\control-' + port + '.key', 'utf8');
+async function ensureHyperion(folder) {
+  for (let i = 0; i < 61; ++i) {
+    try { const live = new Live(channelKey()); await live.ready; return live; }
+    catch { if (i === 0) spawn(folder + '\\\\Hyperion.exe', ['--control'], { cwd: folder, detached: true }); }
+    await new Promise(r => setTimeout(r, 250));
+  }
+  throw new Error('Hyperion did not start');
+}`
+  },
+  editorPush: {
+    cpp: `// The Test button, on a worker thread
+void TestInHyperion(hxlive::Client &client, const EditorMap &map, bool saved)
+{
+  std::string answer, why;
+  const std::string message = saved
+      ? hxlive::MapLoadMessage(map.Path(), map.UsesTriggers(), 1000, "")
+      : hxlive::MapPushMessage(map.TilesetName(), map.Width(), map.Height(),
+                               hxlive::TilesBase64(map.Mtxm().data(), map.Mtxm().size()), 1000, "");
+  if (!client.Call(message, &answer, &why) || !hxlive::AnswerOk(answer)) {
+    ShowError(why.empty() ? hxlive::AnswerString(answer, "error") : why);
+    return;
+  }
+  if (!hxlive::WaitForSwitch(client, 60000, &why))
+    ShowError(why);
+}`,
+    py: `def test_in_hyperion(map_, saved):
+    if saved:
+        msg = {"cmd": "map_load", "path": map_.path, "ums": map_.uses_triggers}
+    else:
+        msg = {"cmd": "map_push", "tileset": map_.tileset, "width": map_.width,
+               "height": map_.height, "tiles_b64": map_.mtxm_b64()}
+    answer = ws_call(27117, dict(msg, id=1))
+    if not answer["ok"]:
+        raise RuntimeError(answer["error"])
+    return wait_for_switch()`,
+    js: `async function testInHyperion(live, map, saved) {
+  const msg = saved
+    ? { cmd: 'map_load', path: map.path, ums: map.usesTriggers }
+    : { cmd: 'map_push', tileset: map.tileset, width: map.width, height: map.height, tiles_b64: map.mtxmBase64() };
+  const a = await live.call(msg);
+  if (!a.ok) throw new Error(a.error);
+  return waitForSwitch(live);
+}`
+  }
+};
+
+function renderSnippets() {
+  for (const el of document.querySelectorAll('[data-snippet]')) {
+    const s = SNIPPETS[el.dataset.snippet];
+    if (!s) continue;
+    const block = codeBlock(s[langSel.value], LANG_NAMES[langSel.value]);
+    el.replaceWith(block);
+    block.dataset.snippet = el.dataset.snippet;
+  }
+}
+
+// ---------------------------------------------------------------- places from the game
+function needGame() {
+  if (FILE) throw new Error('Open this page from Hyperion (http://127.0.0.1:27117/guide) to try it.');
+  if (!Live.open) throw new Error('Not connected: start Hyperion.exe --control.');
+  if (S.state !== 'game' || !S.map) throw new Error('This plays on a game: press Push a test map at the top first.');
+}
+
+// where the camera looks, and room to move round it inside the map
+function here() {
+  const w = S.map.width, h = S.map.height;
+  const v = S.view || { x: w / 2, y: h / 2, zoom: 1 };
+  const m = 420;
+  const cx = Math.min(Math.max(v.x, m), w - m), cy = Math.min(Math.max(v.y, m), h - m);
+  const r = Math.min(cx - 200, cy - 200, w - cx - 200, h - cy - 200, 700);
+  return { x: Math.round(cx), y: Math.round(cy), zoom: v.zoom || 1, w, h, r: Math.max(r, 160) };
+}
+const R = Math.round;
+
+// ---------------------------------------------------------------- recipes
+const RECIPES = {
+  camera: [
+    { name: 'Hard cut', about: 'ms 0: the view jumps. For a montage, or to start a shot where it should.', tags: ['ms 0'],
+      steps: p => [
+        { do: 'camera', x: p.x + p.r, y: p.y, ms: 0 }, { do: 'wait', ms: 1200 },
+        { do: 'camera', x: p.x - p.r, y: p.y, ms: 0 }, { do: 'wait', ms: 1200 },
+        { do: 'camera', x: p.x, y: p.y, ms: 0 }] },
+    { name: 'Glide', about: 'The standard move, in_out: gentle at both ends.', tags: ['in_out'],
+      steps: p => [
+        { do: 'camera', x: p.x + p.r, y: R(p.y + p.r / 3), ms: 2200, ease: 'in_out' }, { do: 'wait', ms: 400 },
+        { do: 'camera', x: p.x, y: p.y, ms: 2200, ease: 'in_out' }] },
+    { name: 'Slow drift', about: 'A long even move, barely felt: tension, a quiet establishing shot.', tags: ['even', 'long ms'],
+      steps: p => [{ do: 'camera', x: R(p.x + p.r / 2), y: p.y, ms: 5000, ease: 'even' },
+                   { do: 'camera', x: p.x, y: p.y, ms: 0 }] },
+    { name: 'Whip pan', about: 'Very fast there and back: something caught the eye.', tags: ['in_out', '350 ms'],
+      steps: p => [
+        { do: 'camera', x: p.x + p.r, y: p.y, ms: 350, ease: 'in_out' }, { do: 'wait', ms: 700 },
+        { do: 'camera', x: p.x, y: p.y, ms: 350, ease: 'in_out' }] },
+    { name: 'Push in', about: 'Closer than a game allows, landing softly: attention on one thing.', tags: ['zoom 0.6', 'out'],
+      steps: p => [
+        { do: 'camera', x: p.x, y: p.y, zoom: 0.6, ms: 2600, ease: 'out' }, { do: 'wait', ms: 700 },
+        { do: 'camera', zoom: 1.0, ms: 1600, ease: 'in_out' }] },
+    { name: 'Pull back', about: 'Out to twice the view: the reveal of how big it is.', tags: ['zoom 2.2', 'out'],
+      steps: p => [
+        { do: 'camera', x: p.x, y: p.y, zoom: 2.2, ms: 3200, ease: 'out' }, { do: 'wait', ms: 900 },
+        { do: 'camera', zoom: 1.0, ms: 2000, ease: 'in_out' }] },
+    { name: 'Crane down', about: 'From high and wide down onto the place, moving and zooming together.', tags: ['zoom 2.4 to 1', 'in_out'],
+      steps: p => [
+        { do: 'camera', x: p.x, y: p.y - R(p.r / 2), zoom: 2.4, ms: 0 }, { do: 'wait', ms: 500 },
+        { do: 'camera', x: p.x, y: p.y, zoom: 1.0, ms: 4200, ease: 'in_out' }] },
+    { name: 'Orbit', about: 'A circle of short even glides round a point, made by code: radius, legs and pace are yours.', tags: ['even', '12 legs'],
+      steps: p => orbit(p.x, p.y, R(p.r / 2), 12, 380, 0.8) },
+    { name: 'Tracking shot', about: 'A unit made and sent across; the camera follows it.', tags: ['follow', 'spawn'],
+      steps: p => [
+        { do: 'spawn', unit: 'terran_vulture', x: p.x - p.r, y: p.y, player: 0, as: 'runner' },
+        { do: 'order', units: 'runner', to: [p.x + p.r, p.y], order: 'move' },
+        { do: 'follow', unit: 'runner', zoom: 1.2, ms: 600, ease: 'out' }, { do: 'wait', ms: 3200 },
+        { do: 'camera', x: p.x, y: p.y, zoom: 1.0, ms: 1000 }, { do: 'remove', units: 'runner' }] },
+    { name: 'Montage', about: 'Cuts round the place, each held a moment, closer than the game.', tags: ['ms 0', 'wait'],
+      steps: p => [
+        { do: 'camera', x: p.x - p.r, y: p.y - R(p.r / 2), zoom: 0.8, ms: 0 }, { do: 'wait', ms: 800 },
+        { do: 'camera', x: p.x + p.r, y: p.y - R(p.r / 2), zoom: 0.8, ms: 0 }, { do: 'wait', ms: 800 },
+        { do: 'camera', x: p.x + p.r, y: p.y + R(p.r / 2), zoom: 0.8, ms: 0 }, { do: 'wait', ms: 800 },
+        { do: 'camera', x: p.x - p.r, y: p.y + R(p.r / 2), zoom: 0.8, ms: 0 }, { do: 'wait', ms: 800 },
+        { do: 'camera', x: p.x, y: p.y, zoom: 1.0, ms: 0 }] }
+  ],
+  picture: [
+    { name: 'Fade out and in', about: 'To black and back, a fade\'s own ease.', tags: ['fade', 'ease'],
+      steps: () => [{ do: 'fade', to: 'black', ms: 900 }, { do: 'wait', ms: 400 }, { do: 'fade', to: 'clear', ms: 900 }] },
+    { name: 'Dip to black', about: 'A quick black to hide a cut: the camera moves while nothing shows.', tags: ['fade 150', 'cut'],
+      steps: p => [
+        { do: 'fade', to: 'black', ms: 150 }, { do: 'camera', x: p.x + p.r, y: p.y, ms: 0 }, { do: 'fade', to: 'clear', ms: 300 },
+        { do: 'wait', ms: 1200 },
+        { do: 'fade', to: 'black', ms: 150 }, { do: 'camera', x: p.x, y: p.y, ms: 0 }, { do: 'fade', to: 'clear', ms: 300 }] },
+    { name: 'Zoom fade out and in', about: 'The skirmish\'s way: the picture shrinks into black and grows back.', tags: ['scale 0.86', 'in_out'],
+      steps: () => [
+        { do: 'fade', to: 'black', scale: 0.86, ms: 1200, ease: 'in_out' }, { do: 'wait', ms: 400 },
+        { do: 'fade', to: 'clear', scale: 1.0, ms: 1200, ease: 'in_out' }] },
+    { name: 'Open from close', about: 'Out of black from a closer picture, settling to the view: a scene\'s first shot.', tags: ['scale 1.25', 'out'],
+      steps: () => [{ do: 'fade', to: 'black', scale: 1.25, ms: 0 }, { do: 'fade', to: 'clear', scale: 1.0, ms: 2200, ease: 'out' }] },
+    { name: 'Dark mood', about: 'Part black, held: night, a power cut, a memory.', tags: ['fade 0.55'],
+      steps: () => [{ do: 'fade', to: 0.55, ms: 1000 }, { do: 'wait', ms: 1800 }, { do: 'fade', to: 'clear', ms: 1000 }] },
+    { name: 'Flicker', about: 'Very short fades in a row: failing lights, a shock.', tags: ['fade 50 ms'],
+      steps: () => [
+        { do: 'fade', to: 0.9, ms: 50 }, { do: 'wait', ms: 80 }, { do: 'fade', to: 0.15, ms: 50 }, { do: 'wait', ms: 140 },
+        { do: 'fade', to: 0.85, ms: 50 }, { do: 'wait', ms: 220 }, { do: 'fade', to: 'clear', ms: 300 }] },
+    { name: 'Letterbox', about: 'Cinema bars in and the console away, then back.', tags: ['bars'],
+      steps: () => [{ do: 'bars', on: true, size: 0.12, ms: 700 }, { do: 'wait', ms: 2000 }, { do: 'bars', on: false, ms: 700 }] },
+    { name: 'Console away', about: 'The console drops and fades, bars or not.', tags: ['hud'],
+      steps: () => [{ do: 'hud', show: false, ms: 600 }, { do: 'wait', ms: 1800 }, { do: 'hud', show: true, ms: 600 }] },
+    { name: 'Depart and arrive', about: 'A map switch\'s way out and the skirmish\'s way in, on the same map.', tags: ['depart', 'arrive'],
+      steps: () => [{ do: 'depart', ms: 1200 }, { do: 'wait', ms: 400 }, { do: 'arrive' }] }
+  ],
+  words: [
+    { name: 'Captions', about: 'Bottom (in the bar), middle and top.', tags: ['caption', 'at'],
+      steps: () => [
+        { do: 'bars', on: true, ms: 500 },
+        { do: 'caption', text: 'In the bottom bar, where words go by default', ms: 2200 },
+        { do: 'caption', text: 'In the middle, for a title', at: 'middle', ms: 2200 },
+        { do: 'caption', text: 'At the top: a place and a time', at: 'top', ms: 2200 },
+        { do: 'bars', on: false, ms: 500 }] },
+    { name: 'A caption over a move', about: 'async lets the camera glide while the words stay up.', tags: ['async'],
+      steps: p => [
+        { do: 'caption', text: 'The words stay while the camera moves', ms: 3600, async: true },
+        { do: 'camera', x: p.x + p.r, y: p.y, ms: 3000 }, { do: 'camera', x: p.x, y: p.y, ms: 1200 }] },
+    { name: 'Game message', about: 'A line among the game\'s own messages.', tags: ['text'],
+      steps: () => [{ do: 'text', text: 'A message as Display Text Message puts it' }, { do: 'wait', ms: 2000 }] },
+    { name: 'Transmission', about: 'A unit talks: its portrait, a flash and a minimap ping, the words and a sound.', tags: ['transmission', 'spawn'],
+      steps: p => [
+        { do: 'spawn', unit: 'terran_marine', x: p.x, y: p.y, player: 0, as: 'speaker' },
+        { do: 'transmission', unit: 'speaker', text: 'Command, this is Alpha squad. We are in position.', ms: 3200 },
+        { do: 'remove', units: 'speaker' }] },
+    { name: 'Transmission, console hidden', about: 'With bars in, the words come as a caption instead.', tags: ['transmission', 'bars'],
+      steps: p => [
+        { do: 'spawn', unit: 'protoss_zealot', x: p.x, y: p.y, player: 0, as: 'speaker' },
+        { do: 'bars', on: true, ms: 500 },
+        { do: 'transmission', unit: 'speaker', text: 'My life for Aiur.', ms: 2600 },
+        { do: 'bars', on: false, ms: 500 }, { do: 'remove', units: 'speaker' }] },
+    { name: 'Sound', about: 'Any of the game\'s sounds by its path.', tags: ['sound'],
+      steps: () => [{ do: 'sound', path: 'sound\\Misc\\TPwrDown.wav' }, { do: 'wait', ms: 1500 }] }
+  ],
+  units: [
+    { name: 'A fight', about: 'Two sides made, one sent at the other, the camera on them.', tags: ['spawn', 'order', 'follow'],
+      steps: p => [
+        { do: 'spawn', unit: 'terran_marine', x: p.x - R(p.r / 2), y: p.y, player: 0, count: 8, as: 'marines' },
+        { do: 'spawn', unit: 'zerg_zergling', x: p.x + R(p.r / 2) + 120, y: p.y, player: 1, count: 16, as: 'lings' },
+        { do: 'order', units: 'lings', to: [p.x - R(p.r / 2), p.y], order: 'attack' },
+        { do: 'follow', unit: 'lings', zoom: 1.2, ms: 700 }, { do: 'wait', ms: 4500 },
+        { do: 'camera', x: p.x, y: p.y, zoom: 1.0, ms: 800 },
+        { do: 'kill', units: ['marines', 'lings'] }] },
+    { name: 'March past', about: 'Units made already moving, and removed off screen.', tags: ['spawn move', 'remove'],
+      steps: p => [
+        { do: 'spawn', unit: 'protoss_dragoon', x: p.x - p.r, y: p.y, player: 0, count: 6, as: 'column', move: [p.x + p.r, p.y] },
+        { do: 'camera', x: p.x, y: p.y, zoom: 0.9, ms: 800 }, { do: 'wait', ms: 4000 },
+        { do: 'remove', units: 'column' }] }
+  ],
+  timing: [
+    { name: 'One after another', about: 'Each step waits for the last: a move, then a fade.', tags: ['in turn'],
+      steps: p => [{ do: 'camera', x: p.x + p.r, y: p.y, ms: 1500 }, { do: 'fade', to: 'black', ms: 800 },
+                   { do: 'camera', x: p.x, y: p.y, ms: 0 }, { do: 'fade', to: 'clear', ms: 800 }] },
+    { name: 'Together', about: 'The fade sent async: it runs under the move.', tags: ['async'],
+      steps: p => [{ do: 'fade', to: 0.7, ms: 1500, async: true }, { do: 'camera', x: p.x + p.r, y: p.y, ms: 1500 },
+                   { do: 'fade', to: 'clear', ms: 600, async: true }, { do: 'camera', x: p.x, y: p.y, ms: 1500 }] },
+    { name: 'End in black', about: 'rest false: the picture stays black when it ends, ready for a map switch. Play any other scene to clear it.', tags: ['rest false'],
+      opts: { rest: false },
+      steps: () => [{ do: 'fade', to: 'black', ms: 1000 }] }
+  ]
+};
+
+function orbit(x, y, r, legs, ms, zoom) {
+  const steps = [];
+  for (let i = 0; i <= legs; ++i) {
+    const a = Math.PI + (2 * Math.PI * i) / legs;
+    steps.push({ do: 'camera', x: R(x + r * Math.cos(a)), y: R(y + r * Math.sin(a) * 0.6), zoom, ms: i === 0 ? 600 : ms,
+                 ease: i === 0 ? 'in_out' : 'even' });
+  }
+  steps.push({ do: 'camera', x, y, zoom: 1.0, ms: 1000 });
+  return steps;
+}
+
+async function playSteps(out, steps, opts) {
+  const msg = Object.assign({ cmd: 'cutscene_play', steps }, opts || {});
+  try {
+    const a = await Live.call(msg);
+    showMessage(out, msg, a);
+  } catch (e) {
+    showMessage(out, msg, e);
+  }
+}
+
+function renderRecipes() {
+  for (const host of document.querySelectorAll('[data-recipes]')) {
+    const group = host.dataset.recipes;
+    const out = outFor(group);
+    for (const r of RECIPES[group]) {
+      const card = document.createElement('div');
+      card.className = 'recipe';
+      card.innerHTML = '<b></b><span></span><div class="tags"></div><div class="row"></div>';
+      card.querySelector('b').textContent = r.name;
+      card.querySelector('span').textContent = r.about;
+      for (const t of r.tags) {
+        const tag = document.createElement('i');
+        tag.className = 'tag';
+        tag.textContent = t;
+        card.querySelector('.tags').appendChild(tag);
+      }
+      const play = document.createElement('button');
+      play.className = 'small primary live';
+      play.textContent = 'Play';
+      play.onclick = () => {
+        let p;
+        try { needGame(); p = here(); } catch (e) {
+          // the steps still show, at the middle of a 128-tile map, with why they did not play
+          const steps = r.steps({ x: 2048, y: 2048, zoom: 1, w: 4096, h: 4096, r: 700 });
+          showMessage(out, Object.assign({ cmd: 'cutscene_play', steps }, r.opts || {}), e);
+          return;
+        }
+        playSteps(out, r.steps(p), r.opts);
+      };
+      const toBuilder = document.createElement('button');
+      toBuilder.className = 'small';
+      toBuilder.textContent = 'To the builder';
+      toBuilder.onclick = () => {
+        let p;
+        try { needGame(); p = here(); } catch (_) { p = { x: 2048, y: 2048, zoom: 1, w: 4096, h: 4096, r: 700 }; }
+        setBuilder(Object.assign({ steps: r.steps(p) }, r.opts || {}));
+        location.hash = '#builder';
+      };
+      card.querySelector('.row').append(play, toBuilder);
+      host.appendChild(card);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- map switches
+async function waitSwitch(progress, seconds) {
+  const end = Date.now() + (seconds || 90) * 1000;
+  let seen = 'going out';
+  while (Date.now() < end) {
+    const s = await Live.call({ cmd: 'status' });
+    S = s;
+    showWhere();
+    if (s.map_swap_error) throw new Error(s.map_swap_error);
+    if (s.map_swap && s.map_swap !== 'none') seen = s.map_swap;
+    if (progress) progress(s.map_swap === 'none' && s.state === 'game' ? 'game' : seen);
+    if (s.map_swap === 'none' && s.state === 'game' && s.frame > 0) return s;
+    await new Promise(r => setTimeout(r, 250));
+  }
+  throw new Error('the map did not come in within ' + (seconds || 90) + ' s');
+}
+
+function progressUi(out) {
+  const box = document.createElement('div');
+  box.className = 'progress';
+  const names = [['going out', 'going out'], ['loading', 'loading'], ['game', 'in the game']];
+  box.innerHTML = '<b>Switch</b>' + names.map(n => '<i data-p="' + n[0] + '">' + n[1] + '</i>').join('');
+  out.appendChild(box);
+  return st => {
+    let done = true;
+    for (const [k] of names) {
+      const el = box.querySelector('[data-p="' + k + '"]');
+      if (k === st) { el.className = st === 'game' ? 'done' : 'on'; done = false; }
+      else el.className = done ? 'done' : '';
+    }
+  };
+}
+
+// A switch: the message, its answer, the wait, and a reveal when asked.
+async function switchMap(out, msg, reveal) {
+  if (FILE) { showMessage(out, msg, new Error('Open this page from Hyperion to try it.')); return false; }
+  let a;
+  try { a = await Live.call(msg); } catch (e) { showMessage(out, msg, e); return false; }
+  showMessage(out, msg, a);
+  if (!a.ok) return false;
+  const step = progressUi(out);
+  try {
+    await waitSwitch(step);
+    if (reveal) await Live.call({ cmd: 'reveal' });
+    return true;
+  } catch (e) {
+    const err = document.createElement('div');
+    err.className = 'answer bad';
+    err.textContent = e.message;
+    out.appendChild(err);
+    return false;
+  }
+}
+
+// the map names offered under the map inputs, read once the channel answers
+let mapsListed = false;
+async function listMapsForInputs() {
+  if (mapsListed || FILE) return;
+  try {
+    const a = await Live.call({ cmd: 'maps' });
+    if (!a.ok) return;
+    mapsListed = true;
+    const list = document.getElementById('maplist');
+    for (const m of a.maps) {
+      const o = document.createElement('option');
+      o.value = m.path;
+      o.label = m.folder + m.name;
+      list.appendChild(o);
+    }
+  } catch (_) {}
+}
+for (const id of ['pfrom', 'lpath']) document.getElementById(id).addEventListener('focus', listMapsForInputs);
+
+const TRY = {
+  maps: async () => {
+    const out = outFor('maps');
+    const msg = { cmd: 'maps', filter: val('mfilter'), max: 20 };
+    try { showMessage(out, msg, await Live.call(msg)); } catch (e) { showMessage(out, msg, e); }
+  },
+  mapinfo: async () => {
+    const out = outFor('maps');
+    try {
+      const list = await Live.call({ cmd: 'maps', filter: val('mfilter'), max: 1 });
+      if (!list.ok || !list.maps.length) throw new Error(list.ok ? 'No map has that in its name.' : list.error);
+      const msg = { cmd: 'map_info', path: list.maps[0].path };
+      const a = await Live.call(msg);
+      showMessage(out, msg, a);
+      if (a.ok && a.preview) {
+        const img = document.createElement('img');
+        img.src = a.preview + '?t=' + Date.now();
+        img.alt = a.name;
+        img.style.cssText = 'display:block;max-width:256px;width:100%;image-rendering:pixelated;margin-top:8px';
+        out.appendChild(img);
+      }
+    } catch (e) { showMessage(out, { cmd: 'map_info' }, e); }
+  },
+  status: async () => {
+    const out = outFor('status');
+    const msg = { cmd: 'status' };
+    try { showMessage(out, msg, await Live.call(msg)); } catch (e) { showMessage(out, msg, e); }
+  },
+  push: () => {
+    const msg = { cmd: 'map_push', tileset: val('ptileset'), width: +val('pwidth'), height: +val('pheight'), ms: +val('pms') || 1000 };
+    if (val('pfill') !== '') msg.fill = +val('pfill');
+    return switchMap(outFor('push'), msg, document.getElementById('preveal').checked);
+  },
+  pushfrom: () => switchMap(outFor('pushfrom'), { cmd: 'map_push', from: val('pfrom'), ms: 1000 }, true),
+  load: () => switchMap(outFor('load'), { cmd: 'map_load', path: val('lpath'), ums: document.getElementById('lums').checked, ms: 1000 }, false),
+  capture: () => {
+    const notePlace = document.getElementById('capnote');
+    try { needGame(); } catch (e) { notePlace.textContent = e.message; return; }
+    const v = S.view;
+    const step = { do: 'camera', x: v.x, y: v.y, zoom: +v.zoom.toFixed(2), ms: 2000, ease: 'in_out' };
+    addStep(step);
+    notePlace.textContent = 'Added to the builder: ' + JSON.stringify(step);
+  }
+};
+
+function val(id) { return document.getElementById(id).value.trim(); }
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-try]');
+  if (b && TRY[b.dataset.try]) TRY[b.dataset.try]();
+});
+
+document.getElementById('testmap').onclick = () => {
+  const out = outFor('push');
+  location.hash = '#maps';
+  switchMap(out, { cmd: 'map_push', tileset: 'jungle', width: 128, height: 128, ms: 800 }, true);
+};
+
+// ---------------------------------------------------------------- the eases, drawn
+function easeAt(kind, u) {
+  u = Math.min(Math.max(u, 0), 1);
+  if (kind === 'out') return 1 - Math.pow(1 - u, 3);
+  if (kind === 'in_out') return u < 0.5 ? 4 * u * u * u : 1 - 4 * Math.pow(1 - u, 3);
+  if (kind === 'ease') return bezier(u, 0.15, 0.6, 0.4, 1.0);
+  return u;
+}
+// the cubic-bezier Hyperion's "ease" is (UiBezier, port_ui.cpp)
+function bezier(t, x1, y1, x2, y2) {
+  const at = (u, a, b) => { const v = 1 - u; return 3 * v * v * u * a + 3 * v * u * u * b + u * u * u; };
+  let lo = 0, hi = 1, u = t;
+  for (let i = 0; i < 24; ++i) { u = (lo + hi) / 2; if (at(u, x1, x2) < t) lo = u; else hi = u; }
+  return at(u, y1, y2);
+}
+const EASE_VAR = { in_out: '--curve-inout', out: '--curve-out', ease: '--curve-ease', even: '--curve-even' };
+function drawEases(t) {
+  const css = getComputedStyle(document.documentElement);
+  for (const c of document.querySelectorAll('canvas[data-ease]')) {
+    const kind = c.dataset.ease;
+    const dpr = window.devicePixelRatio || 1;
+    const w = c.clientWidth, h = c.clientHeight;
+    if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
+    const g = c.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    const pad = 8, track = 18, ph = h - pad * 2 - track;
+    g.strokeStyle = css.getPropertyValue('--line');
+    g.lineWidth = 1;
+    g.strokeRect(pad, pad, w - pad * 2, ph);
+    const colour = css.getPropertyValue(EASE_VAR[kind]).trim();
+    g.strokeStyle = colour;
+    g.lineWidth = 2;
+    g.beginPath();
+    for (let i = 0; i <= 60; ++i) {
+      const u = i / 60;
+      const x = pad + u * (w - pad * 2), y = pad + ph - easeAt(kind, u) * ph;
+      if (i) g.lineTo(x, y); else g.moveTo(x, y);
+    }
+    g.stroke();
+    // the dot on its track: 1.6 s of motion, a pause
+    const cycle = (t / 1000) % 2.4;
+    const u = Math.min(cycle / 1.6, 1);
+    const ty = h - pad - track / 2;
+    g.strokeStyle = css.getPropertyValue('--line');
+    g.beginPath(); g.moveTo(pad, ty); g.lineTo(w - pad, ty); g.stroke();
+    g.fillStyle = colour;
+    g.beginPath(); g.arc(pad + easeAt(kind, u) * (w - pad * 2), ty, 5, 0, Math.PI * 2); g.fill();
+    g.globalAlpha = 0.5;
+    g.beginPath(); g.arc(pad + u * (w - pad * 2), pad + ph - easeAt(kind, u) * ph, 3, 0, Math.PI * 2); g.fill();
+    g.globalAlpha = 1;
+  }
+  requestAnimationFrame(drawEases);
+}
+
+// ---------------------------------------------------------------- sample scenes
+const SAMPLES = [
+  { file: 'canvas-sample.json', title: 'The canvas sample',
+    about: 'The first scene: out of black with the bars in, a caption, marines and zerglings made, a zoom out and in, a transmission, the camera following the charge, and a closer look than a game allows.',
+    uses: ['fade from black', 'bars', 'caption', 'spawn', 'transmission', 'follow', 'zoom 0.7'],
+    map: { push: { tileset: 'badlands', width: 64, height: 64 } }, mapText: 'a pushed 64 by 64 badlands map' },
+  { file: 'theta-9-haunting.json', title: 'Theta-9: the haunting',
+    about: 'Horror on an installation deck: a slow even drift in half dark, failing lights by short fades, a hard cut to what breathes in the dark, a whip pan there and back, a chase followed closer and closer, and the end in silence.',
+    uses: ['fade to an amount', 'flicker', 'hard cut', 'whip pan', 'sound', 'follow push-in', 'kill'],
+    map: { from: '(4)Steal the Beacon.scm', or: { tileset: 'install', width: 96, height: 96 } }, mapText: 'Steal the Beacon\'s terrain, or an installation map of its size' },
+  { file: 'temple-flyover.json', title: 'Temple flyover',
+    about: 'A camera tour of a map\'s terrain and nothing else: from a corner high and wide, across the centre, to the far corner, a pull back over the middle, and down. What an editor shows of a new map.',
+    uses: ['camera only', 'zoom 2.4', 'in_out', 'out', 'caption at top'],
+    map: { from: '(4)Lost Temple.scm', or: { tileset: 'jungle', width: 128, height: 128 } }, mapText: 'Lost Temple\'s terrain, or a jungle map of its size' },
+  { file: 'volcanis-last-stand.json', title: 'Volcanis: the last stand',
+    about: 'A battle staged on a real map: a crane down onto the base, a montage of cuts to the horde gathering, a tracking shot along the line, the flank arriving, and a pull back over the fight.',
+    uses: ['crane', 'montage', 'tracking', 'spawn armies', 'orders'],
+    map: { from: '(2)Volcanis.scm' }, mapText: '(2)Volcanis.scm\'s terrain' },
+  { file: 'tarsonis-starfall.json', title: 'Tarsonis: Operation Starfall',
+    about: 'Fleets in space: an orbit round the flagship built of twelve even glides, dips to black between the two sides, a chase on the flagship, a long pull back and the end in black with a closing line.',
+    uses: ['orbit', 'dip to black', 'follow', 'zoom 2', 'end in black'],
+    map: { from: '(4)Tarsonis Orbital.scm' }, mapText: '(4)Tarsonis Orbital.scm\'s terrain' }
+];
+
+async function sceneOf(file) {
+  const r = await fetch('/cutscenes/' + file);
+  if (!r.ok) throw new Error('the sample is not served: ' + file);
+  return r.json();
+}
+
+function renderSamples() {
+  const list = document.getElementById('samplelist');
+  const out = outFor('samples');
+  const pick = document.getElementById('bsample');
+  for (const s of SAMPLES) {
+    const card = document.createElement('div');
+    card.className = 'sample';
+    card.innerHTML = '<h3></h3><p class="about"></p><div class="tags"></div><p class="map"></p><div class="row"></div>';
+    card.querySelector('h3').textContent = s.title;
+    card.querySelector('.about').textContent = s.about;
+    card.querySelector('.map').textContent = 'Plays on ' + s.mapText + '. File: Data\\tools\\cutscenes\\' + s.file;
+    for (const t of s.uses) {
+      const tag = document.createElement('i');
+      tag.className = 'tag';
+      tag.textContent = t;
+      card.querySelector('.tags').appendChild(tag);
+    }
+    const play = document.createElement('button');
+    play.className = 'primary live';
+    play.textContent = 'Switch and play';
+    play.onclick = () => playSample(s, out);
+    const steps = document.createElement('button');
+    steps.textContent = 'Open in the builder';
+    steps.onclick = async () => {
+      try { setBuilder(await sceneOf(s.file)); location.hash = '#builder'; }
+      catch (e) { note(out, e.message, 'bad'); }
+    };
+    card.querySelector('.row').append(play, steps);
+    list.appendChild(card);
+    const o = document.createElement('option');
+    o.value = s.file;
+    o.textContent = s.title;
+    pick.appendChild(o);
+  }
+}
+
+async function playSample(s, out) {
+  let scene;
+  try { scene = await sceneOf(s.file); } catch (e) { note(out, e.message, 'bad'); return; }
+  const map = scene.map || s.map;
+  let msg;
+  if (map.push) msg = Object.assign({ cmd: 'map_push', ms: 1000 }, map.push);
+  else {
+    let dir = val('mapdir').trim();
+    if (dir && !/[\\/]$/.test(dir)) dir += '\\';
+    msg = { cmd: 'map_push', from: dir + map.from, ms: 1000 };
+  }
+  out.innerHTML = '';
+  let ok = await switchMap(out, msg, true);
+  if (!ok && map.or) {
+    const n = document.createElement('div');
+    n.className = 'answer';
+    n.textContent = 'That map was not found; playing on ' + map.or.tileset + ' ground of its size instead.';
+    out.appendChild(n);
+    ok = await switchMap(out, Object.assign({ cmd: 'map_push', ms: 600 }, map.or), true);
+  }
+  if (!ok) return;
+  try { await Live.call(Object.assign({ cmd: 'cutscene_play' }, scene)); }
+  catch (e) { note(out, e.message, 'bad'); }
+}
+
+// ---------------------------------------------------------------- the builder
+const STEP_FIELDS = {
+  camera: ['x', 'y', 'zoom', 'ms', 'ease'], follow: ['unit', 'zoom', 'ms', 'ease'],
+  fade: ['to', 'ms', 'scale', 'ease'], bars: ['on', 'size', 'hud', 'ms'], hud: ['show', 'ms'],
+  depart: ['ms'], arrive: [], caption: ['text', 'ms', 'at'], text: ['text', 'ms'],
+  transmission: ['unit', 'portrait', 'text', 'sound', 'ms'], sound: ['path'],
+  spawn: ['unit', 'x', 'y', 'player', 'count', 'as', 'attack', 'move'], order: ['units', 'to', 'order'],
+  kill: ['units'], remove: ['units'], wait: ['ms']
+};
+const EASES = ['even', 'ease', 'out', 'in_out'];
+
+function template(kind) {
+  let p = { x: 2048, y: 2048, zoom: 1 };
+  try { needGame(); p = here(); } catch (_) {}
+  switch (kind) {
+    case 'camera': return { do: 'camera', x: p.x, y: p.y, zoom: 1.0, ms: 2000, ease: 'in_out' };
+    case 'follow': return { do: 'follow', unit: 'squad', zoom: 1.2, ms: 800 };
+    case 'fade': return { do: 'fade', to: 'black', ms: 800 };
+    case 'bars': return { do: 'bars', on: true, size: 0.12, ms: 600 };
+    case 'hud': return { do: 'hud', show: false, ms: 600 };
+    case 'depart': return { do: 'depart', ms: 1200 };
+    case 'arrive': return { do: 'arrive' };
+    case 'caption': return { do: 'caption', text: 'Words over the picture', at: 'bottom' };
+    case 'text': return { do: 'text', text: 'A line among the game\'s messages' };
+    case 'transmission': return { do: 'transmission', unit: 'squad', text: 'This is Alpha squad.' };
+    case 'sound': return { do: 'sound', path: 'sound\\Misc\\TPwrDown.wav' };
+    case 'spawn': return { do: 'spawn', unit: 'terran_marine', x: p.x, y: p.y, player: 0, count: 4, as: 'squad' };
+    case 'order': return { do: 'order', units: 'squad', to: [p.x + 400, p.y], order: 'move' };
+    case 'kill': return { do: 'kill', units: 'squad' };
+    case 'remove': return { do: 'remove', units: 'squad' };
+    default: return { do: 'wait', ms: 1000 };
+  }
+}
+
+const bjson = document.getElementById('bjson');
+const BUILDER_KEY = 'hyperion-guide-scene';
+
+function setBuilder(scene) {
+  bjson.value = fmt(scene);
+  saveDraft();
+  check();
+}
+
+function readBuilder() {
+  const text = bjson.value.trim();
+  if (!text) return { steps: [] };
+  const scene = JSON.parse(text);
+  if (Array.isArray(scene)) return { steps: scene };
+  return scene;
+}
+
+function addStep(step) {
+  let scene;
+  try { scene = readBuilder(); } catch (_) { scene = { steps: [] }; }
+  if (!Array.isArray(scene.steps)) scene.steps = [];
+  scene.steps.push(step);
+  setBuilder(scene);
+}
+
+function check() {
+  const box = document.getElementById('bcheck');
+  let scene;
+  try { scene = readBuilder(); } catch (e) {
+    box.className = 'answer bad';
+    box.textContent = 'Not JSON yet: ' + e.message;
+    return null;
+  }
+  const problems = [];
+  if (!Array.isArray(scene.steps)) problems.push('a scene is {"steps": [...]}');
+  else scene.steps.forEach((st, i) => {
+    const n = 'step ' + (i + 1) + ': ';
+    if (!st || typeof st !== 'object') { problems.push(n + 'not an object'); return; }
+    const fields = STEP_FIELDS[st.do];
+    if (!fields) { problems.push(n + '"do" is ' + JSON.stringify(st.do) + ', not a step'); return; }
+    for (const k of Object.keys(st))
+      if (k !== 'do' && k !== 'async' && !fields.includes(k)) problems.push(n + st.do + ' has no field "' + k + '"');
+    if (st.ms !== undefined && !(typeof st.ms === 'number' && st.ms >= 0)) problems.push(n + 'ms is a number of milliseconds');
+    if (st.ease !== undefined && !EASES.includes(st.ease)) problems.push(n + 'ease is one of ' + EASES.join(', '));
+    if (st.zoom !== undefined && !(typeof st.zoom === 'number' && st.zoom >= 0.5)) problems.push(n + 'zoom is 0.5 or more');
+  });
+  let total = 0;
+  if (Array.isArray(scene.steps)) total = scene.steps.length;
+  box.className = 'answer ' + (problems.length ? 'bad' : 'good');
+  box.textContent = problems.length ? problems.join('\n') : total + ' steps, each one Hyperion knows. Hyperion checks again when it plays.';
+  return problems.length ? null : scene;
+}
+
+function saveDraft() { try { localStorage.setItem(BUILDER_KEY, bjson.value); } catch (_) {} }
+
+function renderBuilder() {
+  const pal = document.getElementById('palette');
+  for (const kind of Object.keys(STEP_FIELDS)) {
+    const b = document.createElement('button');
+    b.className = 'small';
+    b.textContent = '+ ' + kind;
+    b.onclick = () => addStep(template(kind));
+    pal.appendChild(b);
+  }
+  let draft = null;
+  try { draft = localStorage.getItem(BUILDER_KEY); } catch (_) {}
+  if (draft) { bjson.value = draft; check(); }
+  else setBuilder({ steps: [
+    { do: 'fade', to: 'black', ms: 0, scale: 1.2 },
+    { do: 'bars', on: true, ms: 0 },
+    { do: 'caption', text: 'A scene of your own', at: 'top', ms: 3000, async: true },
+    { do: 'fade', to: 'clear', scale: 1.0, ms: 1800, ease: 'out' },
+    { do: 'camera', zoom: 1.6, ms: 3000, ease: 'in_out' },
+    { do: 'camera', zoom: 1.0, ms: 2000, ease: 'out' }] });
+  bjson.addEventListener('input', () => { saveDraft(); check(); });
+  document.getElementById('bcheckbtn').onclick = check;
+  document.getElementById('bclear').onclick = () => setBuilder({ steps: [] });
+  document.getElementById('bview').onclick = () => TRY.capture();
+  document.getElementById('bstop').onclick = () => Live.call({ cmd: 'cutscene_stop' }).catch(() => {});
+  document.getElementById('bsample').onchange = async e => {
+    if (!e.target.value) return;
+    try { setBuilder(await sceneOf(e.target.value)); } catch (err) { document.getElementById('bcheck').textContent = err.message; }
+    e.target.value = '';
+  };
+  document.getElementById('bsave').onclick = () => {
+    const blob = new Blob([bjson.value.replace(/\n/g, '\r\n') + '\r\n'], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'scene.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  document.getElementById('bplay').onclick = async () => {
+    const scene = check();
+    if (!scene) return;
+    const box = document.getElementById('bcheck');
+    try {
+      needGame();
+      const a = await Live.call(Object.assign({}, scene, { cmd: 'cutscene_play' }));
+      box.className = 'answer ' + (a.ok ? 'good' : 'bad');
+      box.textContent = a.ok ? 'Playing. Escape in the game, or Stop, ends it.' : a.error;
+    } catch (e) {
+      box.className = 'answer bad';
+      box.textContent = e.message;
+    }
+  };
+  // the step that plays, under the builder
+  setInterval(() => {
+    const c = S.cutscene;
+    const p = document.getElementById('bprogress');
+    p.textContent = c && c.playing ? 'Playing step ' + c.step + ' of ' + c.steps + ': ' + c.do : '';
+  }, 300);
+}
+
+// ---------------------------------------------------------------- the section in view
+function trackNav() {
+  const links = [...document.querySelectorAll('nav a')];
+  const parts = links.map(a => document.querySelector(a.getAttribute('href')));
+  const io = new IntersectionObserver(entries => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      const i = parts.indexOf(e.target);
+      links.forEach((a, j) => a.classList.toggle('here', i === j));
+    }
+  }, { rootMargin: '-60px 0px -70% 0px' });
+  parts.forEach(p => p && io.observe(p));
+}
+
+renderSnippets();
+renderRecipes();
+renderSamples();
+renderBuilder();
+trackNav();
+requestAnimationFrame(drawEases);
+Live.connect();
+</script>
+</body>
+</html>

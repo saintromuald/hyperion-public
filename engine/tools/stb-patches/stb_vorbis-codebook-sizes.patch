@@ -1,0 +1,30 @@
+diff --git a/stb_vorbis.c b/stb_vorbis.c
+index 3e5c250..5e3c9b3 100644
+--- a/stb_vorbis.c
++++ b/stb_vorbis.c
+@@ -949,6 +949,7 @@ static void *make_block_array(void *mem, int count, int size)
+ 
+ static void *setup_malloc(vorb *f, int sz)
+ {
++   if (sz < 0 || sz > 0x7FFFFFF0) return NULL; // Hyperion: no size that wraps below
+    sz = (sz+7) & ~7; // round up to nearest 8 for alignment of future allocs.
+    f->setup_memory_required += sz;
+    if (f->alloc.alloc_buffer) {
+@@ -968,6 +969,7 @@ static void setup_free(vorb *f, void *p)
+ 
+ static void *setup_temp_malloc(vorb *f, int sz)
+ {
++   if (sz < 0 || sz > 0x7FFFFFF0) return NULL; // Hyperion: no size that wraps below
+    sz = (sz+7) & ~7; // round up to nearest 8 for alignment of future allocs.
+    if (f->alloc.alloc_buffer) {
+       if (f->temp_offset - sz < f->setup_offset) return NULL;
+@@ -3735,6 +3737,9 @@ static int start_decoder(vorb *f)
+       c->sparse = ordered ? 0 : get_bits(f,1);
+ 
+       if (c->dimensions == 0 && c->entries != 0)    return error(f, VORBIS_invalid_setup);
++      // Hyperion: entries times dimensions held to 2^24, so the codebook's sizes, computed in
++      // int below, cannot wrap; a file's 2^24 entries of 2^16 dimensions did
++      if ((unsigned long long) c->entries * c->dimensions > (1u << 24)) return error(f, VORBIS_invalid_setup);
+ 
+       if (c->sparse)
+          lengths = (uint8 *) setup_temp_malloc(f, c->entries);

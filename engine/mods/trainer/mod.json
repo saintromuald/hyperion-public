@@ -1,0 +1,16 @@
+{
+  "id": "trainer",
+  "name": "Trainer",
+  "by": "Hyperion",
+  "version": "0.1",
+  "line": "A proof of concept, still a work in progress, for trying out timelines and their paths: a game against computers you can go back in, to any moment, and try again, with the tries worth keeping saved as timelines.",
+  "holds": ["tools"],
+  "rules": "standard",
+  "world": "korhal",
+  "modes": [
+    {
+      "id": "trainer",
+      "button": "Start Training"
+    }
+  ]
+}

@@ -1,0 +1,7467 @@
+{
+  "version": 3,
+  "screen": 1080,
+  "name": "Dark mech, full width",
+  "race": "terran",
+  "package": {
+    "format": 1,
+    "name": "Hyperion",
+    "author": "Hyperion",
+    "made": "2026-10-25",
+    "description": "Dark mech, drawn by the game: four layouts, three materials, any light.",
+    "labels": {
+      "layout": "Layout",
+      "size": "Size",
+      "style": "Material"
+    },
+    "layouts": [
+      {
+        "id": "span",
+        "label": "Full width",
+        "sizes": [
+          {
+            "id": "full",
+            "label": "Full",
+            "line": "Everything at full size.",
+            "file": "mech-span.json"
+          },
+          {
+            "id": "min",
+            "label": "Minimized",
+            "line": "A smaller minimap, portrait and card, and two rows of selection.",
+            "file": "mech-span-min.json"
+          }
+        ]
+      },
+      {
+        "id": "flank",
+        "label": "Left column",
+        "file": "mech-flank.json",
+        "line": "The columns come in one size, everything at full size."
+      },
+      {
+        "id": "flank-right",
+        "label": "Right column",
+        "file": "mech-flank-right.json",
+        "line": "The columns come in one size, everything at full size."
+      },
+      {
+        "id": "pods",
+        "label": "Detached pods",
+        "sizes": [
+          {
+            "id": "full",
+            "label": "Full",
+            "line": "Everything at full size.",
+            "file": "mech-pods.json"
+          },
+          {
+            "id": "min",
+            "label": "Minimized",
+            "line": "A smaller minimap, portrait and card, and two rows of selection.",
+            "file": "mech-pods-min.json"
+          }
+        ]
+      }
+    ],
+    "styles": [
+      {
+        "id": "mech-gunmetal",
+        "label": "Gunmetal",
+        "line": "Blued, machined, armour plated",
+        "file": "styles/mech-gunmetal.json"
+      },
+      {
+        "id": "mech-graphite",
+        "label": "Graphite",
+        "line": "Matte cerakote, hex bolts",
+        "file": "styles/mech-graphite.json"
+      },
+      {
+        "id": "mech-blackout",
+        "label": "Blackout",
+        "line": "Near-black gloss, forged carbon",
+        "file": "styles/mech-blackout.json"
+      }
+    ],
+    "default": {
+      "layout": "span",
+      "size": "full",
+      "style": "mech-gunmetal"
+    }
+  },
+  "replay": "mech-span-replay.json",
+  "note": "Round 11: one console the width of the screen. The minimap block (the idle and army tab on its top edge, Diplomacy or Terrain, Messaging and APM in a bar, the minimap, a side module with the clock) and the command block (the Game Menu over the portrait, level with the groups, the portrait on the card's foot, the card in nine wells) stand on a plated deck that lengthens between them, with the ten groups in a tab at its left end, a light along its top and Hyperion's selection in a window as long as the deck. The resources hang from the top, right of centre or at the right edge as the player picks, on a plate or none. At Width 16:9 the console keeps to a 16:9 screen's width in the middle of a wider one, and the deck runs on past the blocks to the screen's edges. Built by huds/kits/build-mech.mjs from the parts in mech-parts.mjs. Hyperion's copy: no game timer in the skin; the time slot and its cell are left out. No flash on a new selection. Hyperion's copy: the selection's grid shows at most 8 columns, 24 units a page as StarCraft II's (the user, 2026-10-23).",
+  "options": [
+    {
+      "id": "width",
+      "label": "Width",
+      "default": "full",
+      "help": "16:9 keeps the console as wide as a 16:9 screen's, in the middle of a wider one, so the minimap and the command card stay where your hands know them; past it the console's deck runs on to the edges. On a 16:9 screen or a narrower one the two are the same.",
+      "values": [
+        {
+          "id": "full",
+          "label": "Full screen",
+          "help": "The HUD runs the width of the screen."
+        },
+        {
+          "id": "band",
+          "label": "16:9",
+          "band": 1920,
+          "help": "The HUD keeps to the middle of a wider screen, as wide as a 16:9 screen's."
+        }
+      ]
+    },
+    {
+      "id": "resources",
+      "label": "Resources",
+      "default": "centre",
+      "help": "Right of centre is where classic StarCraft has them, the top right of the screen's middle 4:3, so on a wide screen they stay near the middle. Right edge puts them in the top right corner, however wide the screen.",
+      "values": [
+        {
+          "id": "centre",
+          "label": "Right of centre",
+          "set": {
+            "resources": {
+              "ax": "center",
+              "x": 495,
+              "y": 0
+            },
+            "resources.resBody": {
+              "visible": true
+            },
+            "resources.resTrim": {
+              "visible": true
+            },
+            "resources.resBodyEdge": {
+              "visible": false
+            },
+            "resources.resTrimEdge": {
+              "visible": false
+            }
+          }
+        },
+        {
+          "id": "edge",
+          "label": "Right edge",
+          "set": {
+            "resources": {
+              "ax": "right",
+              "x": 0,
+              "y": 0
+            },
+            "resources.resBody": {
+              "visible": false
+            },
+            "resources.resTrim": {
+              "visible": false
+            },
+            "resources.resBodyEdge": {
+              "visible": true
+            },
+            "resources.resTrimEdge": {
+              "visible": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "resourcesBacking",
+      "label": "Resources backing",
+      "default": "on",
+      "help": "The plate behind minerals, gas and supply, with its cells and lights. With none, the icons and figures stand on the map, as they do in classic StarCraft.",
+      "values": [
+        {
+          "id": "on",
+          "label": "Plate"
+        },
+        {
+          "id": "off",
+          "label": "None",
+          "set": {
+            "resources.resBody": {
+              "visible": false
+            },
+            "resources.resTrim": {
+              "visible": false
+            },
+            "resources.resBodyEdge": {
+              "visible": false
+            },
+            "resources.resTrimEdge": {
+              "visible": false
+            },
+            "resources.rpip1": {
+              "visible": false
+            },
+            "resources.rpip2": {
+              "visible": false
+            },
+            "resources.rpip3": {
+              "visible": false
+            },
+            "resources.res1": {
+              "visible": false
+            },
+            "resources.res2": {
+              "visible": false
+            },
+            "resources.res3": {
+              "visible": false
+            },
+            "resources.resEdge": {
+              "visible": false
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "assets": {},
+  "panels": [
+    {
+      "id": "alerts",
+      "ax": "left",
+      "ay": "bottom",
+      "x": 16,
+      "y": 452,
+      "w": 560,
+      "h": 110,
+      "layers": [
+        {
+          "id": "alerts",
+          "slot": "alerts"
+        }
+      ]
+    },
+    {
+      "id": "chat",
+      "ax": "left",
+      "ay": "bottom",
+      "x": 16,
+      "y": 572,
+      "w": 560,
+      "h": 140,
+      "layers": [
+        {
+          "id": "chat",
+          "slot": "chat"
+        }
+      ]
+    },
+    {
+      "id": "minimap",
+      "w": 406,
+      "h": 412,
+      "layers": [
+        {
+          "id": "tab",
+          "x": 10,
+          "y": 0,
+          "w": 190,
+          "h": 46,
+          "shape": true,
+          "look": "hull.side",
+          "corners": [
+            0,
+            10,
+            0,
+            0
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "tabTrim",
+          "x": 10,
+          "y": 0,
+          "w": 190,
+          "h": 11.77,
+          "shape": true,
+          "look": "trim",
+          "path": "M 0 0 L 180 0 L 190 10 L 188.23 11.77 L 178.96 2.5 L 0 2.5 Z",
+          "pathSize": [
+            190,
+            11.77
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "hull",
+          "x": 0,
+          "y": 36,
+          "w": 406,
+          "h": 376,
+          "shape": true,
+          "look": "hull",
+          "corners": [
+            0,
+            40,
+            0,
+            0
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "hullLip",
+          "x": 0,
+          "y": 36,
+          "w": 406,
+          "h": 90,
+          "shape": true,
+          "look": "lip",
+          "path": "M 0 0 L 366 0 L 406 40 L 406 90 L 398 90 L 398 43.31 L 362.69 8 L 0 8 Z",
+          "pathSize": [
+            406,
+            90
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "hullLipBolt1",
+          "x": 6.6,
+          "y": 37.6,
+          "w": 4.8,
+          "h": 4.8,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.4
+        },
+        {
+          "id": "hullLipBolt2",
+          "x": 399.6,
+          "y": 114.6,
+          "w": 4.8,
+          "h": 4.8,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.4
+        },
+        {
+          "id": "shoulder",
+          "x": 286,
+          "y": 30,
+          "w": 126,
+          "h": 126,
+          "shape": true,
+          "look": "armor",
+          "path": "M 0 0 L 82.49 0 L 126 43.51 L 126 126 L 112 126 L 112 49.31 L 76.69 14 L 0 14 Z",
+          "pathSize": [
+            126,
+            126
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "shoulderBolt1",
+          "x": 293.4,
+          "y": 34.4,
+          "w": 5.2,
+          "h": 5.2,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.6
+        },
+        {
+          "id": "shoulderBolt2",
+          "x": 402.4,
+          "y": 143.4,
+          "w": 5.2,
+          "h": 5.2,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.6
+        },
+        {
+          "id": "btnWell1",
+          "x": 16,
+          "y": 2,
+          "w": 178,
+          "h": 38,
+          "shape": true,
+          "look": "recess",
+          "corners": [
+            2,
+            6,
+            2,
+            6
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "btnIdle",
+          "x": 20,
+          "y": 6,
+          "w": 82,
+          "h": 30,
+          "shape": true,
+          "look": "btn",
+          "corners": [
+            1.5,
+            5,
+            1.5,
+            5
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "btnIdleLit",
+          "x": 30,
+          "y": 7.5,
+          "w": 62,
+          "h": 2,
+          "shape": true,
+          "look": "lamp",
+          "corners": 0,
+          "cornerStyle": "chamfer",
+          "visible": "{idle.count > 0}"
+        },
+        {
+          "id": "btnArmy",
+          "x": 108,
+          "y": 6,
+          "w": 82,
+          "h": 30,
+          "shape": true,
+          "look": "btn",
+          "corners": [
+            1.5,
+            5,
+            1.5,
+            5
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "btnArmyLit",
+          "x": 118,
+          "y": 7.5,
+          "w": 62,
+          "h": 2,
+          "shape": true,
+          "look": "lamp",
+          "corners": 0,
+          "cornerStyle": "chamfer",
+          "visible": "{army.count > 0}"
+        },
+        {
+          "id": "btnWell2",
+          "x": 23,
+          "y": 44,
+          "w": 353,
+          "h": 40,
+          "shape": true,
+          "look": "recess",
+          "corners": [
+            2,
+            6,
+            2,
+            6
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "btnDip",
+          "x": 27,
+          "y": 48,
+          "w": 80,
+          "h": 32,
+          "shape": true,
+          "look": "btn",
+          "corners": [
+            1.5,
+            5,
+            1.5,
+            5
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "btnMsg",
+          "x": 113,
+          "y": 48,
+          "w": 80,
+          "h": 32,
+          "shape": true,
+          "look": "btn",
+          "corners": [
+            1.5,
+            5,
+            1.5,
+            5
+          ],
+          "cornerStyle": "chamfer",
+          "tint": "{(game.multiplayer) ? '#ffffff' : '#4a5560'}"
+        },
+        {
+          "id": "apmCell",
+          "x": 199,
+          "y": 48,
+          "w": 173,
+          "h": 32,
+          "shape": true,
+          "look": "cell.lit",
+          "corners": [
+            1.5,
+            5,
+            1.5,
+            5
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "mmBezel",
+          "x": 18,
+          "y": 90,
+          "w": 310,
+          "h": 310,
+          "shape": true,
+          "look": "bezel",
+          "path": "M 12 0 L 307 0 L 310 3 L 310 298 L 298 310 L 3 310 L 0 307 L 0 12 Z M 11 9 L 299 9 L 301 11 L 301 299 L 299 301 L 11 301 L 9 299 L 9 11 Z",
+          "pathSize": [
+            310,
+            310
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "mmGlass",
+          "x": 27,
+          "y": 99,
+          "w": 292,
+          "h": 292,
+          "shape": true,
+          "look": "screen",
+          "corners": 2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "mmBr",
+          "x": 23,
+          "y": 95,
+          "w": 300,
+          "h": 300,
+          "shape": true,
+          "look": "bracket",
+          "path": "M 0 0 L 16 0 L 16 1.6 L 1.6 1.6 L 1.6 16 L 0 16 Z M 0 300 L 0 284 L 1.6 284 L 1.6 298.4 L 16 298.4 L 16 300 Z M 300 0 L 300 16 L 298.4 16 L 298.4 1.6 L 284 1.6 L 284 0 Z M 300 300 L 284 300 L 284 298.4 L 298.4 298.4 L 298.4 284 L 300 284 Z",
+          "pathSize": [
+            300,
+            300
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "side",
+          "x": 336,
+          "y": 90,
+          "w": 62,
+          "h": 312,
+          "shape": true,
+          "look": "hull.side",
+          "corners": [
+            6,
+            0,
+            0,
+            6
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pip1",
+          "x": 358,
+          "y": 136,
+          "w": 18,
+          "h": 4,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pip2",
+          "x": 358,
+          "y": 145,
+          "w": 18,
+          "h": 4,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pip3",
+          "x": 358,
+          "y": 154,
+          "w": 18,
+          "h": 4,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pip4",
+          "x": 358,
+          "y": 163,
+          "w": 18,
+          "h": 4,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pip5",
+          "x": 358,
+          "y": 172,
+          "w": 18,
+          "h": 4,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "pip6",
+          "x": 358,
+          "y": 181,
+          "w": 18,
+          "h": 4,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "vent",
+          "x": 344,
+          "y": 200,
+          "w": 46,
+          "h": 172,
+          "shape": true,
+          "look": "vent",
+          "corners": 2.5,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "navLbl",
+          "text": "NAV 01",
+          "look": "stencil",
+          "x": 336,
+          "y": 380,
+          "w": 62,
+          "h": 10,
+          "align": "center"
+        },
+        {
+          "id": "mmEdge",
+          "x": 26,
+          "y": 98,
+          "w": 294,
+          "h": 294,
+          "shape": true,
+          "look": "edge",
+          "corners": 3,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "idle",
+          "slot": "idle",
+          "x": 22,
+          "y": 8,
+          "w": 78,
+          "h": 26
+        },
+        {
+          "id": "army",
+          "slot": "army",
+          "x": 110,
+          "y": 8,
+          "w": 78,
+          "h": 26
+        },
+        {
+          "id": "terrain",
+          "slot": "terrain",
+          "x": 29,
+          "y": 50,
+          "w": 76,
+          "h": 28
+        },
+        {
+          "id": "diplomacy",
+          "slot": "diplomacy",
+          "x": 29,
+          "y": 50,
+          "w": 76,
+          "h": 28
+        },
+        {
+          "id": "messaging",
+          "slot": "messaging",
+          "x": 115,
+          "y": 50,
+          "w": 76,
+          "h": 28
+        },
+        {
+          "id": "apm",
+          "slot": "apm",
+          "x": 202,
+          "y": 50,
+          "w": 167,
+          "h": 28
+        },
+        {
+          "id": "minimap",
+          "slot": "minimap",
+          "x": 29,
+          "y": 101,
+          "w": 288,
+          "h": 288
+        }
+      ],
+      "ax": "left",
+      "x": 0,
+      "ay": "bottom",
+      "y": 0,
+      "hover": true
+    },
+    {
+      "id": "command",
+      "w": 572,
+      "h": 356,
+      "layers": [
+        {
+          "id": "hull",
+          "x": 0,
+          "y": 40,
+          "w": 572,
+          "h": 316,
+          "shape": true,
+          "look": "hull",
+          "path": "M 0 60 L 12 48 L 175 48 L 223 0 L 542 0 L 572 30 L 572 316 L 0 316 Z",
+          "pathSize": [
+            572,
+            316
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "hullLip",
+          "x": 0,
+          "y": 40,
+          "w": 572,
+          "h": 65.66,
+          "shape": true,
+          "look": "lip",
+          "path": "M 0 60 L 12 48 L 175 48 L 223 0 L 542 0 L 572 30 L 566.34 35.66 L 538.69 8 L 226.31 8 L 178.31 56 L 15.31 56 L 5.66 65.66 Z",
+          "pathSize": [
+            572,
+            65.66
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "hullLipBolt1",
+          "x": 6.79,
+          "y": 94.06,
+          "w": 4.8,
+          "h": 4.8,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.4
+        },
+        {
+          "id": "hullLipBolt2",
+          "x": 560.41,
+          "y": 64.06,
+          "w": 4.8,
+          "h": 4.8,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.4
+        },
+        {
+          "id": "shoulder",
+          "x": -6,
+          "y": 82,
+          "w": 96,
+          "h": 96,
+          "shape": true,
+          "look": "armor",
+          "path": "M 0 96 L 0 15.51 L 15.51 0 L 96 0 L 96 14 L 21.31 14 L 14 21.31 L 14 96 Z",
+          "pathSize": [
+            96,
+            96
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "shoulderBolt1",
+          "x": -1.6,
+          "y": 165.4,
+          "w": 5.2,
+          "h": 5.2,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.6
+        },
+        {
+          "id": "shoulderBolt2",
+          "x": 77.4,
+          "y": 86.4,
+          "w": 5.2,
+          "h": 5.2,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.6
+        },
+        {
+          "id": "btnWell1",
+          "x": 14,
+          "y": 102,
+          "w": 206,
+          "h": 36,
+          "shape": true,
+          "look": "recess",
+          "corners": [
+            2,
+            6,
+            2,
+            6
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "menuFace",
+          "x": 18,
+          "y": 106,
+          "w": 198,
+          "h": 28,
+          "shape": true,
+          "look": "btn",
+          "corners": [
+            1.5,
+            5,
+            1.5,
+            5
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "menuLamp1",
+          "x": 27,
+          "y": 114.12,
+          "w": 10.38,
+          "h": 11.76,
+          "shape": true,
+          "look": "lamp",
+          "path": "M 0 0 L 4.5 0 L 10.38 5.88 L 4.5 11.76 L 0 11.76 L 5.88 5.88 Z",
+          "pathSize": [
+            10.38,
+            11.76
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "menuLamp2",
+          "x": 36,
+          "y": 114.12,
+          "w": 10.38,
+          "h": 11.76,
+          "shape": true,
+          "look": "lamp",
+          "path": "M 0 0 L 4.5 0 L 10.38 5.88 L 4.5 11.76 L 0 11.76 L 5.88 5.88 Z",
+          "pathSize": [
+            10.38,
+            11.76
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "menuLamp3",
+          "x": 45,
+          "y": 114.12,
+          "w": 10.38,
+          "h": 11.76,
+          "shape": true,
+          "look": "lamp",
+          "path": "M 0 0 L 4.5 0 L 10.38 5.88 L 4.5 11.76 L 0 11.76 L 5.88 5.88 Z",
+          "pathSize": [
+            10.38,
+            11.76
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "portBezel",
+          "x": 18,
+          "y": 156,
+          "w": 198,
+          "h": 186,
+          "shape": true,
+          "look": "bezel",
+          "path": "M 12 0 L 195 0 L 198 3 L 198 174 L 186 186 L 3 186 L 0 183 L 0 12 Z M 11 9 L 187 9 L 189 11 L 189 175 L 187 177 L 11 177 L 9 175 L 9 11 Z",
+          "pathSize": [
+            198,
+            186
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "portGlass",
+          "x": 27,
+          "y": 165,
+          "w": 180,
+          "h": 168,
+          "shape": true,
+          "look": "screen",
+          "corners": 2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "portBr",
+          "x": 23,
+          "y": 161,
+          "w": 188,
+          "h": 176,
+          "shape": true,
+          "look": "bracket",
+          "path": "M 0 0 L 16 0 L 16 1.6 L 1.6 1.6 L 1.6 16 L 0 16 Z M 0 176 L 0 160 L 1.6 160 L 1.6 174.4 L 16 174.4 L 16 176 Z M 188 0 L 188 16 L 186.4 16 L 186.4 1.6 L 172 1.6 L 172 0 Z M 188 176 L 172 176 L 172 174.4 L 186.4 174.4 L 186.4 160 L 188 160 Z",
+          "pathSize": [
+            188,
+            176
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "cardBezel",
+          "x": 230,
+          "y": 54,
+          "w": 324,
+          "h": 288,
+          "shape": true,
+          "look": "bezel",
+          "path": "M 12 0 L 321 0 L 324 3 L 324 276 L 312 288 L 3 288 L 0 285 L 0 12 Z M 11 9 L 313 9 L 315 11 L 315 277 L 313 279 L 11 279 L 9 277 L 9 11 Z",
+          "pathSize": [
+            324,
+            288
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "cardGlass",
+          "x": 239,
+          "y": 63,
+          "w": 306,
+          "h": 270,
+          "shape": true,
+          "look": "screen",
+          "corners": 2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "cardBr",
+          "x": 235,
+          "y": 59,
+          "w": 314,
+          "h": 278,
+          "shape": true,
+          "look": "bracket",
+          "path": "M 0 0 L 16 0 L 16 1.6 L 1.6 1.6 L 1.6 16 L 0 16 Z M 0 278 L 0 262 L 1.6 262 L 1.6 276.4 L 16 276.4 L 16 278 Z M 314 0 L 314 16 L 312.4 16 L 312.4 1.6 L 298 1.6 L 298 0 Z M 314 278 L 298 278 L 298 276.4 L 312.4 276.4 L 312.4 262 L 314 262 Z",
+          "pathSize": [
+            314,
+            278
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "cardW0",
+          "x": 245,
+          "y": 69,
+          "w": 94,
+          "h": 82,
+          "shape": true,
+          "look": "well",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "cardW1",
+          "x": 345,
+          "y": 69,
+          "w": 94,
+          "h": 82,
+          "shape": true,
+          "look": "well",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "cardW2",
+          "x": 445,
+          "y": 69,
+          "w": 94,
+          "h": 82,
+          "shape": true,
+          "look": "well",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "cardW3",
+          "x": 245,
+          "y": 157,
+          "w": 94,
+          "h": 82,
+          "shape": true,
+          "look": "well",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "cardW4",
+          "x": 345,
+          "y": 157,
+          "w": 94,
+          "h": 82,
+          "shape": true,
+          "look": "well",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "cardW5",
+          "x": 445,
+          "y": 157,
+          "w": 94,
+          "h": 82,
+          "shape": true,
+          "look": "well",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "cardW6",
+          "x": 245,
+          "y": 245,
+          "w": 94,
+          "h": 82,
+          "shape": true,
+          "look": "well",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "cardW7",
+          "x": 345,
+          "y": 245,
+          "w": 94,
+          "h": 82,
+          "shape": true,
+          "look": "well",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "cardW8",
+          "x": 445,
+          "y": 245,
+          "w": 94,
+          "h": 82,
+          "shape": true,
+          "look": "well",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "portEdge",
+          "x": 26,
+          "y": 164,
+          "w": 182,
+          "h": 170,
+          "shape": true,
+          "look": "edge",
+          "corners": 3,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "cardEdge",
+          "x": 238,
+          "y": 62,
+          "w": 308,
+          "h": 272,
+          "shape": true,
+          "look": "edge",
+          "corners": 3,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "menu",
+          "slot": "menu",
+          "x": 20,
+          "y": 108,
+          "w": 192,
+          "h": 24,
+          "align": "right"
+        },
+        {
+          "id": "portrait",
+          "slot": "portrait",
+          "x": 29,
+          "y": 167,
+          "w": 176,
+          "h": 164
+        },
+        {
+          "id": "card",
+          "slot": "card",
+          "x": 245,
+          "y": 69,
+          "w": 294,
+          "h": 258,
+          "places": [
+            [
+              0,
+              0,
+              94,
+              82
+            ],
+            [
+              100,
+              0,
+              94,
+              82
+            ],
+            [
+              200,
+              0,
+              94,
+              82
+            ],
+            [
+              0,
+              88,
+              94,
+              82
+            ],
+            [
+              100,
+              88,
+              94,
+              82
+            ],
+            [
+              200,
+              88,
+              94,
+              82
+            ],
+            [
+              0,
+              176,
+              94,
+              82
+            ],
+            [
+              100,
+              176,
+              94,
+              82
+            ],
+            [
+              200,
+              176,
+              94,
+              82
+            ]
+          ]
+        }
+      ],
+      "ax": "right",
+      "x": 0,
+      "ay": "bottom",
+      "y": 0,
+      "hover": true
+    },
+    {
+      "id": "info",
+      "ay": "bottom",
+      "y": 0,
+      "h": 260,
+      "between": [
+        "minimap",
+        "command"
+      ],
+      "overlap": [
+        24,
+        24
+      ],
+      "z": -1,
+      "layers": [
+        {
+          "id": "grpTab",
+          "x": 34,
+          "y": 0,
+          "w": 454,
+          "h": 54,
+          "shape": true,
+          "look": "hull.side",
+          "corners": [
+            10,
+            10,
+            0,
+            0
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "grpTabTrim",
+          "x": 34,
+          "y": 0,
+          "w": 454,
+          "h": 11.77,
+          "shape": true,
+          "look": "trim",
+          "path": "M 0 10 L 10 0 L 444 0 L 454 10 L 452.23 11.77 L 442.96 2.5 L 11.04 2.5 L 1.77 11.77 Z",
+          "pathSize": [
+            454,
+            11.77
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "deck",
+          "inset": [
+            0,
+            44,
+            0,
+            0
+          ],
+          "shape": true,
+          "look": "hull.back",
+          "corners": 0,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "deckLip",
+          "inset": [
+            0,
+            44,
+            0,
+            209
+          ],
+          "shape": true,
+          "look": "lip",
+          "corners": 0,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "grpWell",
+          "x": 43,
+          "y": 3,
+          "w": 436,
+          "h": 42,
+          "shape": true,
+          "look": "recess",
+          "corners": [
+            2,
+            6,
+            2,
+            6
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "grp1",
+          "x": 48,
+          "y": 8,
+          "w": 39,
+          "h": 32,
+          "shape": true,
+          "look": "cell",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "grp2",
+          "x": 91,
+          "y": 8,
+          "w": 39,
+          "h": 32,
+          "shape": true,
+          "look": "cell",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "grp3",
+          "x": 134,
+          "y": 8,
+          "w": 39,
+          "h": 32,
+          "shape": true,
+          "look": "cell",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "grp4",
+          "x": 177,
+          "y": 8,
+          "w": 39,
+          "h": 32,
+          "shape": true,
+          "look": "cell",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "grp5",
+          "x": 220,
+          "y": 8,
+          "w": 39,
+          "h": 32,
+          "shape": true,
+          "look": "cell",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "grp6",
+          "x": 263,
+          "y": 8,
+          "w": 39,
+          "h": 32,
+          "shape": true,
+          "look": "cell",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "grp7",
+          "x": 306,
+          "y": 8,
+          "w": 39,
+          "h": 32,
+          "shape": true,
+          "look": "cell",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "grp8",
+          "x": 349,
+          "y": 8,
+          "w": 39,
+          "h": 32,
+          "shape": true,
+          "look": "cell",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "grp9",
+          "x": 392,
+          "y": 8,
+          "w": 39,
+          "h": 32,
+          "shape": true,
+          "look": "cell",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "grp0",
+          "x": 435,
+          "y": 8,
+          "w": 39,
+          "h": 32,
+          "shape": true,
+          "look": "cell",
+          "corners": [
+            1.5,
+            4,
+            1.5,
+            4
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "deckLampWell",
+          "inset": [
+            502,
+            53,
+            62,
+            201.5
+          ],
+          "shape": true,
+          "look": "lamp.well",
+          "corners": 1,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "deckLamp",
+          "inset": [
+            503.5,
+            54.5,
+            63.5,
+            203
+          ],
+          "shape": true,
+          "look": "lamp",
+          "corners": 0,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "deckHazard",
+          "inset": [
+            null,
+            52,
+            30,
+            201.5
+          ],
+          "shape": true,
+          "look": "hazard",
+          "corners": [
+            0,
+            2,
+            0,
+            2
+          ],
+          "cornerStyle": "chamfer",
+          "w": 22
+        },
+        {
+          "id": "selBezel",
+          "inset": [
+            30,
+            62,
+            30,
+            12
+          ],
+          "shape": true,
+          "look": "bezel",
+          "corners": [
+            10,
+            3,
+            10,
+            3
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "selGlass",
+          "inset": [
+            39,
+            71,
+            39,
+            21
+          ],
+          "shape": true,
+          "look": "screen",
+          "corners": 2,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "selBrL",
+          "x": 35,
+          "y": 67,
+          "w": 16,
+          "h": 176,
+          "shape": true,
+          "look": "bracket",
+          "path": "M 0 0 L 16 0 L 16 1.6 L 1.6 1.6 L 1.6 16 L 0 16 Z M 0 176 L 0 160 L 1.6 160 L 1.6 174.4 L 16 174.4 L 16 176 Z",
+          "pathSize": [
+            16,
+            176
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "selBrR",
+          "w": 16,
+          "h": 176,
+          "shape": true,
+          "look": "bracket",
+          "path": "M 16 0 L 16 16 L 14.4 16 L 14.4 1.6 L 0 1.6 L 0 0 Z M 16 176 L 0 176 L 0 174.4 L 14.4 174.4 L 14.4 160 L 16 160 Z",
+          "pathSize": [
+            16,
+            176
+          ],
+          "pathFit": "stretch",
+          "inset": [
+            null,
+            67,
+            35,
+            17
+          ]
+        },
+        {
+          "id": "selEdge",
+          "inset": [
+            38,
+            70,
+            38,
+            20
+          ],
+          "shape": true,
+          "look": "edge",
+          "corners": 3,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "groups",
+          "slot": "groups",
+          "x": 48,
+          "y": 8,
+          "w": 426,
+          "h": 32,
+          "places": [
+            [
+              0,
+              0,
+              39,
+              32
+            ],
+            [
+              43,
+              0,
+              39,
+              32
+            ],
+            [
+              86,
+              0,
+              39,
+              32
+            ],
+            [
+              129,
+              0,
+              39,
+              32
+            ],
+            [
+              172,
+              0,
+              39,
+              32
+            ],
+            [
+              215,
+              0,
+              39,
+              32
+            ],
+            [
+              258,
+              0,
+              39,
+              32
+            ],
+            [
+              301,
+              0,
+              39,
+              32
+            ],
+            [
+              344,
+              0,
+              39,
+              32
+            ],
+            [
+              387,
+              0,
+              39,
+              32
+            ]
+          ]
+        },
+        {
+          "id": "selection",
+          "slot": "selection",
+          "inset": [
+            41,
+            73,
+            41,
+            23
+          ],
+          "grid": {
+            "cell": [
+              60,
+              54
+            ],
+            "rows": 3,
+            "cols": [
+              4,
+              8
+            ],
+            "tabs": "left",
+            "tabW": 24
+          }
+        }
+      ]
+    },
+    {
+      "id": "fillerLeft",
+      "outside": "left",
+      "ay": "bottom",
+      "y": 0,
+      "h": 216,
+      "overlap": [
+        0,
+        24
+      ],
+      "z": -1,
+      "layers": [
+        {
+          "id": "deck",
+          "inset": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "shape": true,
+          "look": "hull.back",
+          "corners": 0,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "deckLip",
+          "inset": [
+            0,
+            0,
+            0,
+            209
+          ],
+          "shape": true,
+          "look": "lip",
+          "corners": 0,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "lampWell",
+          "inset": [
+            34,
+            9,
+            64,
+            201.5
+          ],
+          "shape": true,
+          "look": "lamp.well",
+          "corners": 1,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "lamp",
+          "inset": [
+            35.5,
+            10.5,
+            65.5,
+            203
+          ],
+          "shape": true,
+          "look": "lamp",
+          "corners": 0,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "strap",
+          "x": 34,
+          "y": 17,
+          "w": 18,
+          "h": 199,
+          "shape": true,
+          "look": "hull.side",
+          "corners": [
+            2,
+            2,
+            0,
+            0
+          ],
+          "cornerStyle": "chamfer",
+          "tileEnd": 64,
+          "tileEvery": 240,
+          "tileFit": "center"
+        },
+        {
+          "id": "strapBolt1",
+          "x": 40.4,
+          "y": 28.4,
+          "w": 5.2,
+          "h": 5.2,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.6,
+          "tileEnd": 70.4,
+          "tileEvery": 240,
+          "tileFit": "center"
+        },
+        {
+          "id": "strapBolt2",
+          "x": 40.4,
+          "y": 197.4,
+          "w": 5.2,
+          "h": 5.2,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.6,
+          "tileEnd": 70.4,
+          "tileEvery": 240,
+          "tileFit": "center"
+        }
+      ]
+    },
+    {
+      "id": "fillerRight",
+      "outside": "right",
+      "ay": "bottom",
+      "y": 0,
+      "h": 216,
+      "overlap": [
+        24,
+        0
+      ],
+      "z": -1,
+      "layers": [
+        {
+          "id": "deck",
+          "inset": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "shape": true,
+          "look": "hull.back",
+          "corners": 0,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "deckLip",
+          "inset": [
+            0,
+            0,
+            0,
+            209
+          ],
+          "shape": true,
+          "look": "lip",
+          "corners": 0,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "lampWell",
+          "inset": [
+            64,
+            9,
+            34,
+            201.5
+          ],
+          "shape": true,
+          "look": "lamp.well",
+          "corners": 1,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "lamp",
+          "inset": [
+            65.5,
+            10.5,
+            35.5,
+            203
+          ],
+          "shape": true,
+          "look": "lamp",
+          "corners": 0,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "strap",
+          "x": 64,
+          "y": 17,
+          "w": 18,
+          "h": 199,
+          "shape": true,
+          "look": "hull.side",
+          "corners": [
+            2,
+            2,
+            0,
+            0
+          ],
+          "cornerStyle": "chamfer",
+          "tileEnd": 34,
+          "tileEvery": 240,
+          "tileFit": "center"
+        },
+        {
+          "id": "strapBolt1",
+          "x": 70.4,
+          "y": 28.4,
+          "w": 5.2,
+          "h": 5.2,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.6,
+          "tileEnd": 40.4,
+          "tileEvery": 240,
+          "tileFit": "center"
+        },
+        {
+          "id": "strapBolt2",
+          "x": 70.4,
+          "y": 197.4,
+          "w": 5.2,
+          "h": 5.2,
+          "shape": true,
+          "look": "bolt",
+          "corners": 2.6,
+          "tileEnd": 40.4,
+          "tileEvery": 240,
+          "tileFit": "center"
+        }
+      ]
+    },
+    {
+      "id": "resources",
+      "w": 450,
+      "h": 60,
+      "layers": [
+        {
+          "id": "resBody",
+          "x": 0,
+          "y": 0,
+          "w": 450,
+          "h": 60,
+          "shape": true,
+          "look": "hull",
+          "path": "M 0 0 L 450 0 L 450 34 L 424 60 L 26 60 L 0 34 Z",
+          "pathSize": [
+            450,
+            60
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "resTrim",
+          "x": 0,
+          "y": 32.23,
+          "w": 450,
+          "h": 27.77,
+          "shape": true,
+          "look": "trim",
+          "path": "M 450 1.77 L 424 27.77 L 26 27.77 L 0 1.77 L 1.77 0 L 27.04 25.27 L 422.96 25.27 L 448.23 0 Z",
+          "pathSize": [
+            450,
+            27.77
+          ],
+          "pathFit": "stretch"
+        },
+        {
+          "id": "resBodyEdge",
+          "x": 0,
+          "y": 0,
+          "w": 450,
+          "h": 60,
+          "shape": true,
+          "look": "hull",
+          "path": "M 0 0 L 450 0 L 450 60 L 26 60 L 0 34 Z",
+          "pathSize": [
+            450,
+            60
+          ],
+          "pathFit": "stretch",
+          "visible": false
+        },
+        {
+          "id": "resTrimEdge",
+          "x": 0,
+          "y": 32.23,
+          "w": 450,
+          "h": 27.77,
+          "shape": true,
+          "look": "trim",
+          "path": "M 450 27.77 L 26 27.77 L 0 1.77 L 1.77 0 L 27.04 25.27 L 450 25.27 Z",
+          "pathSize": [
+            450,
+            27.77
+          ],
+          "pathFit": "stretch",
+          "visible": false
+        },
+        {
+          "id": "rpip1",
+          "x": 10,
+          "y": 14,
+          "w": 5,
+          "h": 5,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.5,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "rpip2",
+          "x": 10,
+          "y": 23,
+          "w": 5,
+          "h": 5,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.5,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "rpip3",
+          "x": 10,
+          "y": 32,
+          "w": 5,
+          "h": 5,
+          "shape": true,
+          "look": "pip",
+          "corners": 1.5,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "res1",
+          "x": 24,
+          "y": 11,
+          "w": 124,
+          "h": 38,
+          "shape": true,
+          "look": "cell",
+          "corners": [
+            1.5,
+            5,
+            1.5,
+            5
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "res2",
+          "x": 154,
+          "y": 11,
+          "w": 124,
+          "h": 38,
+          "shape": true,
+          "look": "cell",
+          "corners": [
+            1.5,
+            5,
+            1.5,
+            5
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "res3",
+          "x": 284,
+          "y": 11,
+          "w": 150,
+          "h": 38,
+          "shape": true,
+          "look": "cell.lit",
+          "corners": [
+            1.5,
+            5,
+            1.5,
+            5
+          ],
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "resEdge",
+          "x": 283,
+          "y": 10,
+          "w": 152,
+          "h": 40,
+          "shape": true,
+          "look": "edge",
+          "corners": 3,
+          "cornerStyle": "chamfer"
+        },
+        {
+          "id": "resources",
+          "slot": "resources",
+          "x": 24,
+          "y": 11,
+          "w": 410,
+          "h": 38,
+          "places": [
+            [
+              0,
+              0,
+              124,
+              38
+            ],
+            [
+              130,
+              0,
+              124,
+              38
+            ],
+            [
+              260,
+              0,
+              150,
+              38
+            ]
+          ]
+        }
+      ],
+      "ay": "top",
+      "ax": "center",
+      "x": 495,
+      "y": 0
+    }
+  ],
+  "timelines": [
+    {
+      "id": "intro",
+      "on": "game.start",
+      "stops": [
+        "consoleOut"
+      ],
+      "tracks": [
+        {
+          "target": "info",
+          "prop": "y",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              300
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "minimap",
+          "prop": "y",
+          "delay": 60,
+          "keys": [
+            [
+              0,
+              452
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "command",
+          "prop": "y",
+          "delay": 60,
+          "keys": [
+            [
+              0,
+              396
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "resources",
+          "prop": "y",
+          "delay": 320,
+          "keys": [
+            [
+              0,
+              -90
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip1",
+          "prop": "tint",
+          "delay": 700,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip2",
+          "prop": "tint",
+          "delay": 758,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip3",
+          "prop": "tint",
+          "delay": 817,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip4",
+          "prop": "tint",
+          "delay": 875,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip5",
+          "prop": "tint",
+          "delay": 933,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip6",
+          "prop": "tint",
+          "delay": 992,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "resources.rpip1",
+          "prop": "tint",
+          "delay": 1050,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "resources.rpip2",
+          "prop": "tint",
+          "delay": 1108,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "resources.rpip3",
+          "prop": "tint",
+          "delay": 1167,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "info.deckLamp",
+          "prop": "tint",
+          "delay": 1225,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp1",
+          "prop": "tint",
+          "delay": 1283,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp2",
+          "prop": "tint",
+          "delay": 1342,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp3",
+          "prop": "tint",
+          "delay": 1400,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmGlass",
+          "prop": "add",
+          "delay": 640,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmGlass",
+          "prop": "scan",
+          "delay": 700,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "add",
+          "delay": 730,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "scan",
+          "delay": 790,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "command.portGlass",
+          "prop": "add",
+          "delay": 820,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.portGlass",
+          "prop": "scan",
+          "delay": 880,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "command.cardGlass",
+          "prop": "add",
+          "delay": 910,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.cardGlass",
+          "prop": "scan",
+          "delay": 970,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$accent"
+            ]
+          ],
+          "delay": 520
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              180,
+              0.8,
+              "out"
+            ],
+            [
+              900,
+              0,
+              "in"
+            ]
+          ],
+          "delay": 520
+        },
+        {
+          "target": "info.grp1",
+          "prop": "add",
+          "delay": 900,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp2",
+          "prop": "add",
+          "delay": 940,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp3",
+          "prop": "add",
+          "delay": 980,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp4",
+          "prop": "add",
+          "delay": 1020,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp5",
+          "prop": "add",
+          "delay": 1060,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp6",
+          "prop": "add",
+          "delay": 1100,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp7",
+          "prop": "add",
+          "delay": 1140,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp8",
+          "prop": "add",
+          "delay": 1180,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp9",
+          "prop": "add",
+          "delay": 1220,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp0",
+          "prop": "add",
+          "delay": 1260,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "fillerLeft",
+          "prop": "y",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              300
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "fillerRight",
+          "prop": "y",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              300
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "fillerLeft.lamp",
+          "prop": "tint",
+          "delay": 1225,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "fillerRight.lamp",
+          "prop": "tint",
+          "delay": 1225,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$deploy",
+          0.7
+        ],
+        [
+          560,
+          "$boot",
+          0.6
+        ],
+        [
+          760,
+          "$scan",
+          0.4
+        ]
+      ]
+    },
+    {
+      "id": "consoleIn",
+      "on": "console.in",
+      "stops": [
+        "consoleOut"
+      ],
+      "tracks": [
+        {
+          "target": "info",
+          "prop": "y",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              300
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "minimap",
+          "prop": "y",
+          "delay": 60,
+          "keys": [
+            [
+              0,
+              452
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "command",
+          "prop": "y",
+          "delay": 60,
+          "keys": [
+            [
+              0,
+              396
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "resources",
+          "prop": "y",
+          "delay": 320,
+          "keys": [
+            [
+              0,
+              -90
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip1",
+          "prop": "tint",
+          "delay": 700,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip2",
+          "prop": "tint",
+          "delay": 758,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip3",
+          "prop": "tint",
+          "delay": 817,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip4",
+          "prop": "tint",
+          "delay": 875,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip5",
+          "prop": "tint",
+          "delay": 933,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip6",
+          "prop": "tint",
+          "delay": 992,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "resources.rpip1",
+          "prop": "tint",
+          "delay": 1050,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "resources.rpip2",
+          "prop": "tint",
+          "delay": 1108,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "resources.rpip3",
+          "prop": "tint",
+          "delay": 1167,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              120,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "info.deckLamp",
+          "prop": "tint",
+          "delay": 1225,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp1",
+          "prop": "tint",
+          "delay": 1283,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp2",
+          "prop": "tint",
+          "delay": 1342,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp3",
+          "prop": "tint",
+          "delay": 1400,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmGlass",
+          "prop": "add",
+          "delay": 640,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmGlass",
+          "prop": "scan",
+          "delay": 700,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "add",
+          "delay": 730,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "scan",
+          "delay": 790,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "command.portGlass",
+          "prop": "add",
+          "delay": 820,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.portGlass",
+          "prop": "scan",
+          "delay": 880,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "command.cardGlass",
+          "prop": "add",
+          "delay": 910,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              70,
+              0.25,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.cardGlass",
+          "prop": "scan",
+          "delay": 970,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              700,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$accent"
+            ]
+          ],
+          "delay": 520
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              180,
+              0.8,
+              "out"
+            ],
+            [
+              900,
+              0,
+              "in"
+            ]
+          ],
+          "delay": 520
+        },
+        {
+          "target": "info.grp1",
+          "prop": "add",
+          "delay": 900,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp2",
+          "prop": "add",
+          "delay": 940,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp3",
+          "prop": "add",
+          "delay": 980,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp4",
+          "prop": "add",
+          "delay": 1020,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp5",
+          "prop": "add",
+          "delay": 1060,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp6",
+          "prop": "add",
+          "delay": 1100,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp7",
+          "prop": "add",
+          "delay": 1140,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp8",
+          "prop": "add",
+          "delay": 1180,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp9",
+          "prop": "add",
+          "delay": 1220,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp0",
+          "prop": "add",
+          "delay": 1260,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.3,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "fillerLeft",
+          "prop": "y",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              300
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "fillerRight",
+          "prop": "y",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              300
+            ],
+            [
+              560,
+              0,
+              "$arrive"
+            ]
+          ]
+        },
+        {
+          "target": "fillerLeft.lamp",
+          "prop": "tint",
+          "delay": 1225,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "fillerRight.lamp",
+          "prop": "tint",
+          "delay": 1225,
+          "keys": [
+            [
+              0,
+              "#161c22"
+            ],
+            [
+              60,
+              "#ffffff"
+            ],
+            [
+              110,
+              "#5a6a78"
+            ],
+            [
+              190,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$deploy",
+          0.7
+        ],
+        [
+          560,
+          "$boot",
+          0.6
+        ]
+      ]
+    },
+    {
+      "id": "consoleOut",
+      "on": "console.out",
+      "end": "hold",
+      "tracks": [
+        {
+          "target": "minimap.pip1",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip2",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip3",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip4",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip5",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip6",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "resources.rpip1",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "resources.rpip2",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "resources.rpip3",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "info.deckLamp",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp1",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp2",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp3",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "info",
+          "prop": "y",
+          "delay": 100,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              420,
+              300,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap",
+          "prop": "y",
+          "delay": 130,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              420,
+              452,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command",
+          "prop": "y",
+          "delay": 130,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              420,
+              396,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "resources",
+          "prop": "y",
+          "delay": 260,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              420,
+              -90,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "fillerLeft",
+          "prop": "y",
+          "delay": 100,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              420,
+              300,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "fillerRight",
+          "prop": "y",
+          "delay": 100,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              420,
+              300,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "fillerLeft.lamp",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "fillerRight.lamp",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              140,
+              "#161c22",
+              "out"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$deploy",
+          0.6
+        ]
+      ]
+    },
+    {
+      "id": "page",
+      "on": "selection.page",
+      "tracks": [
+        {
+          "target": "info.selection",
+          "prop": "wipe",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              260,
+              1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "scan",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              380,
+              1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0.2
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              92,
+              0.7,
+              "out"
+            ],
+            [
+              460,
+              0,
+              "in"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$scan",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "subgroup",
+      "on": "selection.subgroup",
+      "tracks": [
+        {
+          "target": "info.selEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$lamp"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              72,
+              0.5,
+              "out"
+            ],
+            [
+              360,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0.12
+            ],
+            [
+              240,
+              0,
+              "in"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "recall0",
+      "on": "group.recall",
+      "group": 0,
+      "tracks": [
+        {
+          "target": "info.grp0",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp0",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp0",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1,
+              "out"
+            ],
+            [
+              600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp0",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "set0",
+      "on": "group.set",
+      "group": 0,
+      "tracks": [
+        {
+          "target": "info.grp0",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp0",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp0",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1.3,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp0",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.35
+        ]
+      ]
+    },
+    {
+      "id": "recall1",
+      "on": "group.recall",
+      "group": 1,
+      "tracks": [
+        {
+          "target": "info.grp1",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp1",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp1",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1,
+              "out"
+            ],
+            [
+              600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp1",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "set1",
+      "on": "group.set",
+      "group": 1,
+      "tracks": [
+        {
+          "target": "info.grp1",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp1",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp1",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1.3,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp1",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.35
+        ]
+      ]
+    },
+    {
+      "id": "recall2",
+      "on": "group.recall",
+      "group": 2,
+      "tracks": [
+        {
+          "target": "info.grp2",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp2",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp2",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1,
+              "out"
+            ],
+            [
+              600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp2",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "set2",
+      "on": "group.set",
+      "group": 2,
+      "tracks": [
+        {
+          "target": "info.grp2",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp2",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp2",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1.3,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp2",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.35
+        ]
+      ]
+    },
+    {
+      "id": "recall3",
+      "on": "group.recall",
+      "group": 3,
+      "tracks": [
+        {
+          "target": "info.grp3",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp3",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp3",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1,
+              "out"
+            ],
+            [
+              600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp3",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "set3",
+      "on": "group.set",
+      "group": 3,
+      "tracks": [
+        {
+          "target": "info.grp3",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp3",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp3",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1.3,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp3",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.35
+        ]
+      ]
+    },
+    {
+      "id": "recall4",
+      "on": "group.recall",
+      "group": 4,
+      "tracks": [
+        {
+          "target": "info.grp4",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp4",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp4",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1,
+              "out"
+            ],
+            [
+              600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp4",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "set4",
+      "on": "group.set",
+      "group": 4,
+      "tracks": [
+        {
+          "target": "info.grp4",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp4",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp4",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1.3,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp4",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.35
+        ]
+      ]
+    },
+    {
+      "id": "recall5",
+      "on": "group.recall",
+      "group": 5,
+      "tracks": [
+        {
+          "target": "info.grp5",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp5",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp5",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1,
+              "out"
+            ],
+            [
+              600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp5",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "set5",
+      "on": "group.set",
+      "group": 5,
+      "tracks": [
+        {
+          "target": "info.grp5",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp5",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp5",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1.3,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp5",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.35
+        ]
+      ]
+    },
+    {
+      "id": "recall6",
+      "on": "group.recall",
+      "group": 6,
+      "tracks": [
+        {
+          "target": "info.grp6",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp6",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp6",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1,
+              "out"
+            ],
+            [
+              600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp6",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "set6",
+      "on": "group.set",
+      "group": 6,
+      "tracks": [
+        {
+          "target": "info.grp6",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp6",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp6",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1.3,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp6",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.35
+        ]
+      ]
+    },
+    {
+      "id": "recall7",
+      "on": "group.recall",
+      "group": 7,
+      "tracks": [
+        {
+          "target": "info.grp7",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp7",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp7",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1,
+              "out"
+            ],
+            [
+              600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp7",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "set7",
+      "on": "group.set",
+      "group": 7,
+      "tracks": [
+        {
+          "target": "info.grp7",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp7",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp7",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1.3,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp7",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.35
+        ]
+      ]
+    },
+    {
+      "id": "recall8",
+      "on": "group.recall",
+      "group": 8,
+      "tracks": [
+        {
+          "target": "info.grp8",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp8",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp8",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1,
+              "out"
+            ],
+            [
+              600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp8",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "set8",
+      "on": "group.set",
+      "group": 8,
+      "tracks": [
+        {
+          "target": "info.grp8",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp8",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp8",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1.3,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp8",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.35
+        ]
+      ]
+    },
+    {
+      "id": "recall9",
+      "on": "group.recall",
+      "group": 9,
+      "tracks": [
+        {
+          "target": "info.grp9",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.55,
+              "out"
+            ],
+            [
+              520,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp9",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp9",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1,
+              "out"
+            ],
+            [
+              600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp9",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "set9",
+      "on": "group.set",
+      "group": 9,
+      "tracks": [
+        {
+          "target": "info.grp9",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp9",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp9",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              1.3,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.grp9",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.35
+        ]
+      ]
+    },
+    {
+      "id": "attack",
+      "on": "alert.attack",
+      "tracks": [
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$alert"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              90,
+              1,
+              "out"
+            ],
+            [
+              300,
+              0.2
+            ],
+            [
+              420,
+              1,
+              "out"
+            ],
+            [
+              640,
+              0.2
+            ],
+            [
+              760,
+              1,
+              "out"
+            ],
+            [
+              1300,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip1",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ff4030"
+            ],
+            [
+              160,
+              "#ffffff"
+            ],
+            [
+              320,
+              "#ff4030"
+            ],
+            [
+              700,
+              "#ffffff"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip2",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ff4030"
+            ],
+            [
+              160,
+              "#ffffff"
+            ],
+            [
+              320,
+              "#ff4030"
+            ],
+            [
+              700,
+              "#ffffff"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip3",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ff4030"
+            ],
+            [
+              160,
+              "#ffffff"
+            ],
+            [
+              320,
+              "#ff4030"
+            ],
+            [
+              700,
+              "#ffffff"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip4",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ff4030"
+            ],
+            [
+              160,
+              "#ffffff"
+            ],
+            [
+              320,
+              "#ff4030"
+            ],
+            [
+              700,
+              "#ffffff"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip5",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ff4030"
+            ],
+            [
+              160,
+              "#ffffff"
+            ],
+            [
+              320,
+              "#ff4030"
+            ],
+            [
+              700,
+              "#ffffff"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip6",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ff4030"
+            ],
+            [
+              160,
+              "#ffffff"
+            ],
+            [
+              320,
+              "#ff4030"
+            ],
+            [
+              700,
+              "#ffffff"
+            ]
+          ]
+        },
+        {
+          "target": "alerts",
+          "prop": "opacity",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              160,
+              1,
+              "out"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$alert",
+          0.8
+        ]
+      ]
+    },
+    {
+      "id": "minerals",
+      "on": "alert.minerals",
+      "tracks": [
+        {
+          "target": "resources.res1",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              0.5,
+              "out"
+            ],
+            [
+              600,
+              0
+            ]
+          ]
+        },
+        {
+          "target": "resources.res1",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$short"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$denied",
+          0.7
+        ]
+      ]
+    },
+    {
+      "id": "gas",
+      "on": "alert.gas",
+      "tracks": [
+        {
+          "target": "resources.res2",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              0.5,
+              "out"
+            ],
+            [
+              600,
+              0
+            ]
+          ]
+        },
+        {
+          "target": "resources.res2",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$ok"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$denied",
+          0.7
+        ]
+      ]
+    },
+    {
+      "id": "supply",
+      "on": "alert.supply",
+      "tracks": [
+        {
+          "target": "resources.res3",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              80,
+              0.5,
+              "out"
+            ],
+            [
+              600,
+              0
+            ]
+          ]
+        },
+        {
+          "target": "resources.res3",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$short"
+            ]
+          ]
+        },
+        {
+          "target": "resources.resEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$short"
+            ]
+          ]
+        },
+        {
+          "target": "resources.resEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              140,
+              1,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$denied",
+          0.7
+        ]
+      ]
+    },
+    {
+      "id": "research",
+      "on": "research.done",
+      "tracks": [
+        {
+          "target": "command.cardGlass",
+          "prop": "scan",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              600,
+              1,
+              "inOut"
+            ]
+          ]
+        },
+        {
+          "target": "command.cardEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        },
+        {
+          "target": "command.cardEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              160,
+              0.9,
+              "out"
+            ],
+            [
+              800,
+              0,
+              "in"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.7
+        ]
+      ]
+    },
+    {
+      "id": "unitDone",
+      "on": "unit.done",
+      "tracks": [
+        {
+          "target": "command.portGlass",
+          "prop": "scan",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              500,
+              1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.portEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$ok"
+            ]
+          ]
+        },
+        {
+          "target": "command.portEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              140,
+              0.9,
+              "out"
+            ],
+            [
+              700,
+              0,
+              "in"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.45
+        ]
+      ]
+    },
+    {
+      "id": "victory",
+      "on": "game.victory",
+      "end": "hold",
+      "tracks": [
+        {
+          "target": "info.deckLamp",
+          "prop": "tint",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              200,
+              "#e8f4ff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp1",
+          "prop": "tint",
+          "delay": 30,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              200,
+              "#e8f4ff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp2",
+          "prop": "tint",
+          "delay": 60,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              200,
+              "#e8f4ff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp3",
+          "prop": "tint",
+          "delay": 90,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              200,
+              "#e8f4ff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "info.deckLamp",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              600,
+              1.1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp1",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              600,
+              1.1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp2",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              600,
+              1.1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp3",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              600,
+              1.1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "info.deckLamp",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp1",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp2",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp3",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$victory"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energy",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              500,
+              0.6,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$victory"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energy",
+          "delay": 120,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              500,
+              0.6,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.portEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$victory"
+            ]
+          ]
+        },
+        {
+          "target": "command.portEdge",
+          "prop": "energy",
+          "delay": 240,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              500,
+              0.6,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.cardEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$victory"
+            ]
+          ]
+        },
+        {
+          "target": "command.cardEdge",
+          "prop": "energy",
+          "delay": 360,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              500,
+              0.6,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "fillerLeft.lamp",
+          "prop": "tint",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              200,
+              "#e8f4ff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "fillerRight.lamp",
+          "prop": "tint",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              200,
+              "#e8f4ff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "fillerLeft.lamp",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              600,
+              1.1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "fillerRight.lamp",
+          "prop": "glow",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              600,
+              1.1,
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "fillerLeft.lamp",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        },
+        {
+          "target": "fillerRight.lamp",
+          "prop": "glowColor",
+          "keys": [
+            [
+              0,
+              "$lampGlow"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.9
+        ],
+        [
+          300,
+          "$boot",
+          0.5
+        ]
+      ]
+    },
+    {
+      "id": "defeat",
+      "on": "game.defeat",
+      "end": "hold",
+      "tracks": [
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$alert"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              160,
+              0.8,
+              "out"
+            ],
+            [
+              1600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$alert"
+            ]
+          ]
+        },
+        {
+          "target": "info.selEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              160,
+              0.8,
+              "out"
+            ],
+            [
+              1600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.portEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$alert"
+            ]
+          ]
+        },
+        {
+          "target": "command.portEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              160,
+              0.8,
+              "out"
+            ],
+            [
+              1600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.cardEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$alert"
+            ]
+          ]
+        },
+        {
+          "target": "command.cardEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              160,
+              0.8,
+              "out"
+            ],
+            [
+              1600,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip1",
+          "prop": "tint",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip2",
+          "prop": "tint",
+          "delay": 30,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip3",
+          "prop": "tint",
+          "delay": 60,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip4",
+          "prop": "tint",
+          "delay": 90,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip5",
+          "prop": "tint",
+          "delay": 120,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.pip6",
+          "prop": "tint",
+          "delay": 150,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "resources.rpip1",
+          "prop": "tint",
+          "delay": 180,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "resources.rpip2",
+          "prop": "tint",
+          "delay": 210,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "resources.rpip3",
+          "prop": "tint",
+          "delay": 240,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.deckLamp",
+          "prop": "tint",
+          "delay": 270,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp1",
+          "prop": "tint",
+          "delay": 300,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp2",
+          "prop": "tint",
+          "delay": 330,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp3",
+          "prop": "tint",
+          "delay": 360,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmGlass",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              900,
+              "#ff8070",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "info.selGlass",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              900,
+              "#ff8070",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.portGlass",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              900,
+              "#ff8070",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.cardGlass",
+          "prop": "tint",
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              900,
+              "#ff8070",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "fillerLeft.lamp",
+          "prop": "tint",
+          "delay": 270,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "fillerRight.lamp",
+          "prop": "tint",
+          "delay": 270,
+          "keys": [
+            [
+              0,
+              "#ffffff"
+            ],
+            [
+              120,
+              "#ff5a40"
+            ],
+            [
+              600,
+              "#161c22",
+              "in"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$denied",
+          0.9
+        ]
+      ]
+    },
+    {
+      "id": "minimapHover",
+      "on": "panel.hover",
+      "panel": "minimap",
+      "end": "hold",
+      "tracks": [
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$accent"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              200,
+              0.35,
+              "out"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "minimapLeave",
+      "on": "panel.leave",
+      "panel": "minimap",
+      "end": "hold",
+      "tracks": [
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$accent"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.mmEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0.35
+            ],
+            [
+              200,
+              0,
+              "out"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "commandHover",
+      "on": "panel.hover",
+      "panel": "command",
+      "end": "hold",
+      "tracks": [
+        {
+          "target": "command.cardEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$accent"
+            ]
+          ]
+        },
+        {
+          "target": "command.cardEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              200,
+              0.35,
+              "out"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "commandLeave",
+      "on": "panel.leave",
+      "panel": "command",
+      "end": "hold",
+      "tracks": [
+        {
+          "target": "command.cardEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$accent"
+            ]
+          ]
+        },
+        {
+          "target": "command.cardEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0.35
+            ],
+            [
+              200,
+              0,
+              "out"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cardPress",
+      "on": "panel.press",
+      "panel": "command",
+      "slot": "card",
+      "tracks": [
+        {
+          "target": "command.cardEdge",
+          "prop": "energyColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        },
+        {
+          "target": "command.cardEdge",
+          "prop": "energy",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.8,
+              "out"
+            ],
+            [
+              300,
+              0,
+              "in"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "idlePress",
+      "on": "panel.press",
+      "panel": "minimap",
+      "slot": "idle",
+      "tracks": [
+        {
+          "target": "minimap.btnIdle",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              420,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.btnIdle",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "armyPress",
+      "on": "panel.press",
+      "panel": "minimap",
+      "slot": "army",
+      "tracks": [
+        {
+          "target": "minimap.btnArmy",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.5,
+              "out"
+            ],
+            [
+              420,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.btnArmy",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$lampHot"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "terrainPress",
+      "on": "panel.press",
+      "panel": "minimap",
+      "slot": "terrain",
+      "tracks": [
+        {
+          "target": "minimap.btnDip",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.45,
+              "out"
+            ],
+            [
+              420,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.btnDip",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "diplomacyPress",
+      "on": "panel.press",
+      "panel": "minimap",
+      "slot": "diplomacy",
+      "tracks": [
+        {
+          "target": "minimap.btnDip",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.45,
+              "out"
+            ],
+            [
+              420,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.btnDip",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "messagingPress",
+      "on": "panel.press",
+      "panel": "minimap",
+      "slot": "messaging",
+      "tracks": [
+        {
+          "target": "minimap.btnMsg",
+          "prop": "add",
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              0.45,
+              "out"
+            ],
+            [
+              420,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "minimap.btnMsg",
+          "prop": "addColor",
+          "keys": [
+            [
+              0,
+              "$info"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    },
+    {
+      "id": "menuPress",
+      "on": "panel.press",
+      "panel": "command",
+      "slot": "menu",
+      "tracks": [
+        {
+          "target": "command.menuLamp1",
+          "prop": "tint",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              "#e8f4ff"
+            ],
+            [
+              260,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp2",
+          "prop": "tint",
+          "delay": 40,
+          "keys": [
+            [
+              0,
+              "#e8f4ff"
+            ],
+            [
+              260,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp3",
+          "prop": "tint",
+          "delay": 80,
+          "keys": [
+            [
+              0,
+              "#e8f4ff"
+            ],
+            [
+              260,
+              "#ffffff",
+              "out"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp1",
+          "prop": "glow",
+          "delay": 0,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              1,
+              "out"
+            ],
+            [
+              360,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp2",
+          "prop": "glow",
+          "delay": 40,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              1,
+              "out"
+            ],
+            [
+              360,
+              0,
+              "in"
+            ]
+          ]
+        },
+        {
+          "target": "command.menuLamp3",
+          "prop": "glow",
+          "delay": 80,
+          "keys": [
+            [
+              0,
+              0
+            ],
+            [
+              60,
+              1,
+              "out"
+            ],
+            [
+              360,
+              0,
+              "in"
+            ]
+          ]
+        }
+      ],
+      "cues": [
+        [
+          0,
+          "$confirm",
+          0.25
+        ]
+      ]
+    }
+  ]
+}

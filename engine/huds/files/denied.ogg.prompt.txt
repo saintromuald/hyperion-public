@@ -1,0 +1,10 @@
+short error buzz for a game interface, low electric denied tone, one blip, dry, no reverb
+
+---
+file: denied.ogg
+model: eleven_text_to_sound_v2
+settings: {"duration_seconds":0.6,"prompt_influence":0.5,"output_format":"mp3_44100_128"}
+id: sound-1790999499447
+created: 2026-10-03T03:51:39.447Z
+tool: media-mcp generate_sound_effect
+derived: from denied.mp3 — ffmpeg -i denied.mp3 -vn -c:a libvorbis -q:a 5 -af loudnorm=I=-16:TP=-1.5:LRA=11 -ar 48000 denied.ogg

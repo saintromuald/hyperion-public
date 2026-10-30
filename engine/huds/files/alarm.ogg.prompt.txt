@@ -1,0 +1,10 @@
+military sci-fi alert, two short urgent warning beeps with a low electronic pulse under them, game UI alarm, dry
+
+---
+file: alarm.ogg
+model: eleven_text_to_sound_v2
+settings: {"duration_seconds":1.2,"prompt_influence":0.5,"output_format":"mp3_44100_128"}
+id: sound-1790999497207
+created: 2026-10-03T03:51:37.207Z
+tool: media-mcp generate_sound_effect
+derived: from alarm.mp3 — ffmpeg -i alarm.mp3 -vn -c:a libvorbis -q:a 5 -af loudnorm=I=-16:TP=-1.5:LRA=11 -ar 48000 alarm.ogg

@@ -1,0 +1,10 @@
+holographic scanner sweep, a bright electronic shimmer gliding from low to high, soft digital sparkle, UI sound, clean
+
+---
+file: scan.ogg
+model: eleven_text_to_sound_v2
+settings: {"duration_seconds":1.2,"prompt_influence":0.5,"output_format":"mp3_44100_128"}
+id: sound-1790999495140
+created: 2026-10-03T03:51:35.140Z
+tool: media-mcp generate_sound_effect
+derived: from scan.mp3 — ffmpeg -i scan.mp3 -vn -c:a libvorbis -q:a 5 -af loudnorm=I=-16:TP=-1.5:LRA=11 -ar 48000 scan.ogg

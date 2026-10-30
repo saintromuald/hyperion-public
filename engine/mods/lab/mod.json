@@ -1,0 +1,17 @@
+{
+  "id": "lab",
+  "name": "AI Lab",
+  "by": "Hyperion",
+  "version": "0.1",
+  "line": "A mod for making computer players: games of computers played in the background by the thousand, shown as a wall of maps with their units moving, any one of them a click from being watched.",
+  "holds": ["tools"],
+  "rules": "standard",
+  "world": "korhal",
+  "channel": true,
+  "modes": [
+    {
+      "id": "lab",
+      "button": "Open the Lab"
+    }
+  ]
+}

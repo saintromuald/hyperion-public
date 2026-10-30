@@ -1,0 +1,60 @@
+# Builds a release's Mac package on GitHub's Apple silicon runner and attaches it to the
+# release. The release's maintainer starts it once the release exists as a draft with
+# mac-inputs.tar.gz attached: what a checkout lacks (the shaders the Windows build compiles,
+# the browser build, the test maps, the third-party sources and the build's origin), written
+# by engine/tools/mac_sync.py --out <file> --extras --third. The inputs are removed after.
+name: Mac release package
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "the release's tag, for example v0.7.0-beta"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    runs-on: macos-15
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Tools
+        run: brew install ninja cmake || brew upgrade cmake ninja || true
+
+      - name: Inputs
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern mac-inputs.tar.gz --dir "$RUNNER_TEMP"
+          tar xzf "$RUNNER_TEMP/mac-inputs.tar.gz"
+
+      - name: Build
+        working-directory: engine
+        run: python3 tools/build_engine_linux.py
+
+      - name: Package
+        working-directory: engine
+        run: python3 tools/package.py --mac --out "$RUNNER_TEMP/out"
+
+      - name: Starts
+        run: |
+          app=$(find "$RUNNER_TEMP/out" -name Hyperion.app -maxdepth 3 -type d | head -1)
+          if [ -n "$app" ]; then
+            codesign --verify --deep --strict "$app"
+            otool -L "$app/Contents/MacOS/"Hyperion* | head -20
+          fi
+
+      - name: Attach
+        run: |
+          zip=$(find "$RUNNER_TEMP/out" -name "Hyperion-*-mac-arm64.zip" | head -1)
+          test -n "$zip"
+          shasum -a 256 "$zip"
+          gh release upload "$TAG" "$zip" --repo "$GITHUB_REPOSITORY" --clobber
+          gh release delete-asset "$TAG" mac-inputs.tar.gz --repo "$GITHUB_REPOSITORY" --yes

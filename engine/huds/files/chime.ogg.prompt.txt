@@ -1,0 +1,10 @@
+positive sci-fi interface confirmation chime, two quick rising glassy tones, clean, game UI
+
+---
+file: chime.ogg
+model: eleven_text_to_sound_v2
+settings: {"duration_seconds":0.8,"prompt_influence":0.5,"output_format":"mp3_44100_128"}
+id: sound-1790999501745
+created: 2026-10-03T03:51:41.745Z
+tool: media-mcp generate_sound_effect
+derived: from chime.mp3 — ffmpeg -i chime.mp3 -vn -c:a libvorbis -q:a 5 -af loudnorm=I=-16:TP=-1.5:LRA=11 -ar 48000 chime.ogg

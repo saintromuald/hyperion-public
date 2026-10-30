@@ -1,0 +1,3 @@
+LIBRARY rt_observer
+EXPORTS
+    rt_init

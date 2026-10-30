@@ -1,0 +1,925 @@
+{
+  "kind": "hud-style",
+  "version": 1,
+  "id": "terran-r8",
+  "name": "Terran, the user's console",
+  "race": "terran",
+  "note": "Round 8: the materials of the user's own console image. Cool blue gunmetal plates under a light from the top left, bright steel bevels and columns, dark glass windows with a thin light line, cyan-outlined LCD cells for the control groups, blue triple-chevron lamps and blue light strips. Each colour is read from the image at the piece it fills. The kit's looks stay for the menu tabs. Round 9 adds res.btn, the face of a button the game draws in a bar cell (Diplomacy, Messaging, idle, army): dark blue glass, faintly lit. Hyperion's copy: the tooltip shows and goes at once, as the original's does, so its tip.show and tip.hide timelines are left out (the user, 2026-10-23).",
+  "palette": {
+    "lamp": "#6cc8ff",
+    "lampHot": "#e2fbff",
+    "lampGlow": "#2a8cff70",
+    "lampOff": "#1a2733",
+    "rim": "#c8dcec",
+    "edge": "#9fc4dc",
+    "accent": "#5fd0ff",
+    "alert": "#ff3a2a",
+    "ok": "#3fd07a",
+    "warn": "#ffc24a",
+    "info": "#9fe8ff",
+    "short": "#ff7a6a",
+    "text": "#e6f2f8",
+    "figure": "#f2f8ff",
+    "label": "#9fb4c2",
+    "white": "#ffffff",
+    "victory": "#9fe8ff",
+    "defeat": "#ff6a5a",
+    "bootText": "SYSTEMS ONLINE",
+    "winText": "MISSION COMPLETE",
+    "loseText": "MISSION FAILED",
+    "titleText": "TERRAN COMMAND",
+    "tipAccent": "#6cc8ff",
+    "tipAccentHot": "#e2fbff",
+    "tipAccentGlow": "#2a8cff70"
+  },
+  "easings": {
+    "arrive": "out"
+  },
+  "sounds": {
+    "boot": "hum",
+    "deploy": "servo",
+    "scan": "scan",
+    "alert": "alarm",
+    "denied": "denied",
+    "confirm": "chime"
+  },
+  "assets": {
+    "hum": {
+      "audio": "hum.ogg"
+    },
+    "servo": {
+      "audio": "servo.ogg"
+    },
+    "scan": {
+      "audio": "scan.ogg"
+    },
+    "alarm": {
+      "audio": "alarm.ogg"
+    },
+    "denied": {
+      "audio": "denied.ogg"
+    },
+    "chime": {
+      "audio": "chime.ogg"
+    }
+  },
+  "shape": {
+    "light": 225,
+    "highlight": "#e8f4ff",
+    "fill": "#ffffff"
+  },
+  "looks": {
+    "plate": {
+      "surface": "gunmetal",
+      "surfaceA": "#39434c",
+      "surfaceB": "#171c21",
+      "gloss": 0.4,
+      "detail": 1.2,
+      "surfaceScale": 0.5,
+      "bevel": 1.6,
+      "bevelStrength": 0.9,
+      "profile": "chamfer",
+      "rim": 1,
+      "rimWidth": 0.32,
+      "rimColor": "$rim",
+      "scratches": 0.15,
+      "scratchScale": 2.2,
+      "scratchAngle": -20,
+      "stroke": "#06080aff",
+      "line": 0.9,
+      "relief": 1.76,
+      "crest": 0.72,
+      "scratchWander": 10
+    },
+    "plate.light": {
+      "surface": "gunmetal",
+      "surfaceA": "#606266",
+      "surfaceB": "#303235",
+      "gloss": 0.3,
+      "detail": 1.4,
+      "surfaceScale": 0.5,
+      "bevel": 1.4,
+      "bevelStrength": 0.9,
+      "profile": "chamfer",
+      "rim": 1,
+      "rimWidth": 0.45,
+      "rimColor": "$rim",
+      "scratches": 0.4,
+      "scratchScale": 2.2,
+      "scratchAngle": -30,
+      "scratchWander": 10,
+      "castShadow": 0.55,
+      "elevation": 0.9,
+      "shadowSoft": 0.7,
+      "relief": 1.6,
+      "crest": 0.72
+    },
+    "trim": {
+      "surface": "gunmetal",
+      "surfaceA": "#283036",
+      "surfaceB": "#13171b",
+      "gloss": 0.45,
+      "detail": 1.1,
+      "surfaceScale": 0.5,
+      "bevel": 1.2,
+      "bevelStrength": 1,
+      "profile": "chamfer",
+      "rim": 1.3,
+      "rimWidth": 0.32,
+      "rimColor": "$edge",
+      "castShadow": 0.6,
+      "elevation": 0.8,
+      "shadowSoft": 0.6,
+      "scratches": 0.15,
+      "scratchScale": 2.2,
+      "relief": 1.92,
+      "crest": 0.7,
+      "scratchWander": 10
+    },
+    "recess": {
+      "surfaceA": "#1f2429",
+      "surfaceB": "#0f1115",
+      "gloss": 0.25,
+      "detail": 0.6,
+      "surfaceScale": 0.6,
+      "innerShadow": 1,
+      "innerShadowStrength": 0.6,
+      "bevel": 1,
+      "bevelStrength": 0.6,
+      "profile": "lip",
+      "rim": 0,
+      "rimWidth": 0.25,
+      "rimColor": "$edge",
+      "relief": 1.44,
+      "crest": 0.48,
+      "fill": [
+        "#101820",
+        "#0d141a"
+      ]
+    },
+    "bezel": {
+      "surface": "gunmetal",
+      "surfaceA": "#2f383f",
+      "surfaceB": "#171b20",
+      "gloss": 0.4,
+      "detail": 0.7,
+      "surfaceScale": 0.6,
+      "bevel": 2,
+      "bevelStrength": 0.9,
+      "profile": "step",
+      "profileSteps": 2,
+      "rim": 1.2,
+      "rimWidth": 0.45,
+      "rimColor": "$rim",
+      "castShadow": 0.5,
+      "elevation": 1,
+      "shadowSoft": 0.8,
+      "relief": 1.76,
+      "crest": 0.84
+    },
+    "screen": {
+      "fill": [
+        "#0c1618",
+        "#111c1e"
+      ],
+      "innerShadow": 2.4,
+      "innerShadowStrength": 0.85,
+      "rim": 0.25,
+      "rimWidth": 0.4,
+      "rimColor": "$accent"
+    },
+    "lamp": {
+      "fill": [
+        "#e6fcff",
+        "#bdeefc"
+      ],
+      "fillAngle": 60,
+      "innerGlow": "#ffffff50",
+      "innerGlowSize": 0.8,
+      "outerGlow": "#1f86e0c8",
+      "outerGlowSize": 3.2
+    },
+    "lamp.housing": {
+      "fill": [
+        "#0c0907",
+        "#16110b"
+      ],
+      "innerShadow": 0.8,
+      "innerShadowStrength": 0.8,
+      "outerGlow": "#ff9a2a00",
+      "outerGlowSize": 4
+    },
+    "bolt": {
+      "surface": "brushed",
+      "surfaceA": "#8a96a4",
+      "surfaceB": "#262c34",
+      "gloss": 0.7,
+      "detail": 0.4,
+      "bevel": 1.6,
+      "bevelStrength": 1.2,
+      "profile": "chamfer",
+      "rim": 0.6,
+      "rimWidth": 0.25,
+      "rimColor": "$rim",
+      "castShadow": 0.6,
+      "elevation": 0.6,
+      "shadowSoft": 0.5,
+      "relief": 2.08,
+      "crest": 0.6
+    },
+    "paint.red": {
+      "surface": "painted",
+      "surfaceA": "#4c1b1b",
+      "surfaceB": "#5e3a3a",
+      "gloss": 0.45,
+      "wear": 0.06,
+      "detail": 1,
+      "bevel": 1,
+      "bevelStrength": 0.9,
+      "rim": 0.6,
+      "rimWidth": 0.25,
+      "rimColor": "#ffd0c8",
+      "relief": 1.6,
+      "crest": 0.48
+    },
+    "paint.yellow": {
+      "surface": "painted",
+      "surfaceA": "#684c18",
+      "surfaceB": "#6e6040",
+      "gloss": 0.5,
+      "wear": 0.06,
+      "detail": 1,
+      "bevel": 1.2,
+      "bevelStrength": 0.9,
+      "profile": "double",
+      "rim": 0.9,
+      "rimWidth": 0.3,
+      "rimColor": "#fff0c0",
+      "scratches": 0.4,
+      "scratchScale": 8,
+      "relief": 1.6,
+      "crest": 0.6
+    },
+    "grille": {
+      "fill": "#64625f",
+      "pattern": "honeycomb",
+      "patternScale": 10.5,
+      "patternDepth": 0.95,
+      "patternWall": 0.11,
+      "bevel": 1,
+      "bevelStrength": 0.8,
+      "highlight": "#ffffff",
+      "relief": 1.6
+    },
+    "vent": {
+      "surface": "gunmetal",
+      "surfaceA": "#2e3b3c",
+      "surfaceB": "#141b1c",
+      "gloss": 0.5,
+      "detail": 0.4,
+      "pattern": "slats",
+      "patternScale": 10.5,
+      "patternDepth": 0.95,
+      "patternWall": 0.38,
+      "bevel": 0.6,
+      "bevelStrength": 0.6,
+      "relief": 2.2,
+      "crest": 0.3
+    },
+    "cable": {
+      "surface": "brushed",
+      "surfaceA": "#3c5a5c",
+      "surfaceB": "#142224",
+      "gloss": 0.6,
+      "detail": 0.5,
+      "bevel": 3,
+      "bevelStrength": 1.3,
+      "profile": "slope",
+      "rim": 0.4,
+      "rimWidth": 0.4,
+      "rimColor": "#bfeaf0",
+      "castShadow": 0.6,
+      "elevation": 1.2,
+      "shadowSoft": 1,
+      "relief": 1.76,
+      "crest": 0.36
+    },
+    "glass": {
+      "fill": [
+        "#152427",
+        "#090f10"
+      ],
+      "fillAngle": 120,
+      "glassStreak": 0.25,
+      "bevel": 0.8,
+      "bevelStrength": 0.5,
+      "innerShadow": 0.8,
+      "innerShadowStrength": 0.6,
+      "rim": 0.4,
+      "rimWidth": 0.3,
+      "rimColor": "$edge"
+    },
+    "button": {
+      "fill": [
+        "#14272a",
+        "#0a1416"
+      ],
+      "innerShadow": 0.8,
+      "innerShadowStrength": 0.6,
+      "bevel": 0.6,
+      "bevelStrength": 0.6,
+      "rim": 0.4,
+      "rimWidth": 0.3,
+      "rimColor": "$edge"
+    },
+    "button.lit": {
+      "fill": [
+        "#3fb8d8",
+        "#0f5a78"
+      ],
+      "innerGlow": "#a8eeff80",
+      "innerGlowSize": 2,
+      "outerGlow": "#2fb0ff90",
+      "outerGlowSize": 3,
+      "bevel": 0.6,
+      "bevelStrength": 0.5
+    },
+    "readout": {
+      "font": "eurostile",
+      "color": "$text",
+      "size": 15,
+      "shadow": "#000000c0"
+    },
+    "label": {
+      "font": "eurostile",
+      "color": "$label",
+      "size": 12,
+      "shadow": "#000000c0"
+    },
+    "figure": {
+      "font": "eurostile",
+      "color": "$figure",
+      "size": 17,
+      "shadow": "#000000c0"
+    },
+    "title": {
+      "font": "eurostile-ext",
+      "color": "$lamp",
+      "size": 22,
+      "shadow": "#000000c0"
+    },
+    "banner": {
+      "font": "eurostile-ext",
+      "color": "$lamp",
+      "size": 36,
+      "outline": "#1a0c00",
+      "outlineWidth": 2
+    },
+    "plate.deep": {
+      "surface": "gunmetal",
+      "surfaceA": "#2c343b",
+      "surfaceB": "#111519",
+      "gloss": 0.35,
+      "detail": 1.1,
+      "surfaceScale": 0.5,
+      "bevel": 2,
+      "bevelStrength": 0.9,
+      "profile": "chamfer",
+      "rim": 0.8,
+      "rimWidth": 0.3,
+      "rimColor": "$rim",
+      "seams": 172,
+      "seamWidth": 2.4,
+      "seamStrength": 0.9,
+      "bolts": 3.2,
+      "boltInset": 10,
+      "boltSpacing": 86,
+      "boltColor": "#7d858c",
+      "scratches": 0.12,
+      "scratchScale": 2.2,
+      "scratchAngle": -20,
+      "scratchWander": 10,
+      "relief": 1.7,
+      "crest": 0.6
+    },
+    "glass.screen": {
+      "fill": [
+        "#0b1517dc",
+        "#04080aec"
+      ],
+      "fillAngle": 100,
+      "glass": 1,
+      "glassTint": "#03080ab0",
+      "glassBlur": 4,
+      "glassNoise": 0.02,
+      "glassStreak": 0.07,
+      "lines": 0.08,
+      "lineSpacing": 3,
+      "innerShadow": 2.4,
+      "innerShadowStrength": 0.85,
+      "rim": 0.3,
+      "rimWidth": 0.4,
+      "rimColor": "$accent"
+    },
+    "lcd.strip": {
+      "fill": [
+        "#0a1a1c99",
+        "#03090bb8"
+      ],
+      "fillAngle": 100,
+      "glass": 0.6,
+      "glassTint": "#04100f90",
+      "glassBlur": 4,
+      "glassNoise": 0.02,
+      "glassStreak": 0.12,
+      "innerShadow": 1.6,
+      "innerShadowStrength": 0.8,
+      "rim": 0.5,
+      "rimWidth": 0.3,
+      "rimColor": "$edge",
+      "stroke": "#020304ff",
+      "line": 0.8
+    },
+    "lcd": {
+      "fill": [
+        "#1d4a4466",
+        "#0c262470"
+      ],
+      "fillAngle": 90,
+      "glass": 0.5,
+      "glassTint": "#06201c80",
+      "glassNoise": 0.03,
+      "lines": 0.18,
+      "lineSpacing": 2,
+      "innerShadow": 0.8,
+      "innerShadowStrength": 0.6,
+      "innerGlow": "#7fe8c818",
+      "innerGlowSize": 6,
+      "rim": 0.35,
+      "rimWidth": 0.3,
+      "rimColor": "#9ff0d8",
+      "stroke": "#01060599",
+      "line": 0.6
+    },
+    "edge": {
+      "fill": "#00000000",
+      "energyColor": "$accent",
+      "energyWidth": 4
+    },
+    "steel": {
+      "fill": [
+        "#3a4859",
+        "#26303d"
+      ],
+      "rimColor": "#b8d0e8",
+      "rimWidth": 0.35
+    },
+    "steel.lite": {
+      "surface": "gunmetal",
+      "surfaceA": "#a9bfd4",
+      "surfaceB": "#5f7590",
+      "gloss": 0.55,
+      "detail": 0.8,
+      "surfaceScale": 0.5,
+      "bevel": 1,
+      "bevelStrength": 0.9,
+      "profile": "chamfer",
+      "rim": 1.1,
+      "rimWidth": 0.35,
+      "rimColor": "#eef8ff",
+      "scratches": 0.25,
+      "scratchScale": 2.2,
+      "scratchAngle": -30,
+      "scratchWander": 10,
+      "relief": 1.5,
+      "crest": 0.7
+    },
+    "hi": {
+      "fill": [
+        "#d2e4f2",
+        "#8ea7bf"
+      ]
+    },
+    "dark": {
+      "fill": "#06090d"
+    },
+    "line": {
+      "fill": "#71899a"
+    },
+    "glass.win": {
+      "fill": [
+        "#0c151bf2",
+        "#0a1217f4"
+      ],
+      "fillAngle": 90,
+      "glass": 1,
+      "glassTint": "#05090cc0",
+      "glassBlur": 4,
+      "glassNoise": 0.012,
+      "glassStreak": 0.03,
+      "lines": 0.03,
+      "lineSpacing": 3,
+      "innerShadow": 1.2,
+      "innerShadowStrength": 0.6
+    },
+    "lamp.well": {
+      "fill": [
+        "#0a1018",
+        "#070b12"
+      ],
+      "innerShadow": 0.8,
+      "innerShadowStrength": 0.7,
+      "outerGlow": "#1f86e000",
+      "outerGlowSize": 4
+    },
+    "strip": {
+      "fill": "#e8feff",
+      "innerGlow": "#ffffff60",
+      "innerGlowSize": 0.6,
+      "outerGlow": "#1a7ce0d0",
+      "outerGlowSize": 2.6
+    },
+    "strip.housing": {
+      "fill": [
+        "#16273a",
+        "#0f1d2c"
+      ],
+      "innerShadow": 0.8,
+      "innerShadowStrength": 0.6,
+      "rim": 0.4,
+      "rimWidth": 0.3,
+      "rimColor": "#4a7ab0"
+    },
+    "res.bracket": {
+      "fill": "#7f9ca8"
+    },
+    "res.lit": {
+      "fill": [
+        "#132840",
+        "#0f1f33"
+      ],
+      "innerGlow": "#2a7cd040",
+      "innerGlowSize": 4,
+      "innerShadow": 0.6,
+      "innerShadowStrength": 0.5
+    },
+    "res.glowline": {
+      "fill": "#7fd0ff",
+      "outerGlow": "#2a8cffa0",
+      "outerGlowSize": 2.5
+    },
+    "res.litBracket": {
+      "fill": "#bdf2ff",
+      "outerGlow": "#3aa0ffb0",
+      "outerGlowSize": 2.5
+    },
+    "res.pane": {
+      "fill": "#0a1016e8",
+      "stroke": "#5a7a9070",
+      "line": 0.6
+    },
+    "res.cell": {
+      "fill": "#101a22",
+      "innerShadow": 0.5,
+      "innerShadowStrength": 0.35
+    },
+    "res.litCell": {
+      "fill": [
+        "#132840",
+        "#0f1f33"
+      ],
+      "innerGlow": "#2a7cd030",
+      "innerGlowSize": 3,
+      "stroke": "#5ab4ff90",
+      "line": 0.6
+    },
+    "res.btn": {
+      "fill": [
+        "#14263a",
+        "#0d1a28"
+      ],
+      "fillAngle": 90,
+      "innerGlow": "#2a7cd026",
+      "innerGlowSize": 3,
+      "innerShadow": 0.6,
+      "innerShadowStrength": 0.5,
+      "stroke": "#3a6a8c80",
+      "line": 0.6
+    },
+    "grp.well": {
+      "fill": [
+        "#0b1820",
+        "#13262e",
+        "#16303a"
+      ],
+      "fillAngle": 90,
+      "innerShadow": 1.2,
+      "innerShadowStrength": 0.7
+    },
+    "grp.edge": {
+      "fill": "#a8eeff",
+      "outerGlow": "#2aa8f0c0",
+      "outerGlowSize": 3.5
+    },
+    "grp.glow": {
+      "fill": [
+        "#00000000",
+        "#1f5f7a90",
+        "#00000000"
+      ],
+      "fillAngle": 90
+    },
+    "grp.cell": {
+      "fill": [
+        "#1d3b43e0",
+        "#1a343be0"
+      ],
+      "fillAngle": 90,
+      "stroke": "#3f8ea0b0",
+      "line": 0.6,
+      "innerGlow": "#5fd0ff14",
+      "innerGlowSize": 6
+    },
+    "grp.bracket": {
+      "fill": "#8ee6f8",
+      "outerGlow": "#2aa8e090",
+      "outerGlowSize": 1.6
+    },
+    "grp.glint": {
+      "fill": [
+        "#00000000",
+        "#5fd0ffc0",
+        "#00000000"
+      ],
+      "fillAngle": 0,
+      "outerGlow": "#2a9cf080",
+      "outerGlowSize": 2
+    },
+    "steel.mid": {
+      "fill": [
+        "#5a6b80",
+        "#3c4a5c"
+      ],
+      "fillAngle": 120,
+      "bevel": 1.2,
+      "bevelStrength": 0.9,
+      "rim": 1.3,
+      "rimWidth": 0.35,
+      "rimColor": "#dcecf8"
+    },
+    "tip": {
+      "surface": "gunmetal",
+      "surfaceA": "#2f383f",
+      "surfaceB": "#171b20",
+      "gloss": 0.4,
+      "detail": 0.7,
+      "surfaceScale": 0.6,
+      "bevel": 2,
+      "bevelStrength": 0.9,
+      "profile": "chamfer",
+      "rim": 1,
+      "rimWidth": 0.4,
+      "rimColor": "$rim",
+      "relief": 1.6,
+      "crest": 0.7,
+      "stroke": "#06080aff",
+      "line": 0.9,
+      "outerGlow": "#000000b0",
+      "outerGlowSize": 8
+    },
+    "tip.pane": {
+      "fill": [
+        "#0c1719",
+        "#05090b"
+      ],
+      "fillAngle": 100,
+      "innerShadow": 1.6,
+      "innerShadowStrength": 0.8,
+      "rim": 0.35,
+      "rimWidth": 0.3,
+      "rimColor": "$accent",
+      "stroke": "#020304ff",
+      "line": 0.8
+    },
+    "tip.strip": {
+      "fill": [
+        "$tipAccentHot",
+        "$tipAccent"
+      ],
+      "fillAngle": 0,
+      "innerGlow": "#ffffff60",
+      "innerGlowSize": 0.6,
+      "outerGlow": "$tipAccentGlow",
+      "outerGlowSize": 2.6,
+      "wipeAngle": 90
+    },
+    "tip.rule": {
+      "fill": "#5a7a9050"
+    },
+    "tip.title": {
+      "font": "chakra-petch",
+      "weight": 600,
+      "size": 16,
+      "color": "$text",
+      "tracking": 0.4
+    },
+    "tip.key": {
+      "fill": [
+        "#132840",
+        "#0f1f33"
+      ],
+      "fillAngle": 90,
+      "innerGlow": "#2a7cd030",
+      "innerGlowSize": 3,
+      "stroke": "#5ab4ff90",
+      "line": 0.6,
+      "corners": 3,
+      "cornerStyle": "chamfer"
+    },
+    "tip.keyText": {
+      "font": "chakra-petch",
+      "weight": 600,
+      "size": 12,
+      "color": "$info",
+      "tracking": 0.5
+    },
+    "tip.cost": {
+      "font": "chakra-petch",
+      "weight": 500,
+      "size": 14,
+      "color": "$figure"
+    },
+    "tip.line": {
+      "font": "chakra-petch",
+      "weight": 400,
+      "size": 13,
+      "color": "$label",
+      "lineHeight": 1.3
+    }
+  },
+  "tooltip": {
+    "note": "Round 12: a plate in the console's gunmetal with its bright rim, a 10-unit chamfer as its cut corners have, and a lamp strip down the left as its lamp housings stand.",
+    "pad": [
+      17,
+      9,
+      12,
+      10
+    ],
+    "frame": 5,
+    "gap": 6,
+    "maxWidth": 340,
+    "corner": 10,
+    "cornerStyle": "chamfer",
+    "tab": 7,
+    "tabWidth": 22,
+    "strip": "left",
+    "stripSize": 3,
+    "stripInset": 8,
+    "rule": true,
+    "keyPad": [
+      6,
+      2
+    ],
+    "keyGap": 16,
+    "icon": 15,
+    "iconGap": 5,
+    "costGap": 14,
+    "mark": "$tipAccent",
+    "markLine": 1.5,
+    "short": "$short",
+    "offset": 6,
+    "margin": 8
+  },
+  "musicPlayer": {
+    "version": 1,
+    "note": "The player in round 8's materials: gunmetal plates with their bright rim round it, the title along a darker trim, the console's dark teal buttons, lit as its lit buttons are, a shade deeper so their legends read; the LCD in the teal of the console's LCD cells, the rest in its blue light.",
+    "colors": {
+      "faceTop": "#1a2127",
+      "faceBottom": "#0b0e11",
+      "rim": "$edge",
+      "rimGlow": "#00000000",
+      "bevel": "#00000060",
+      "titleGlow": "#2a8cff26",
+      "titleInk": "$text",
+      "titleInkOff": "$label",
+      "titleRule": "$accent",
+      "mark": "$lamp",
+      "glow": "$lampGlow",
+      "lcd": "#0a1e1c",
+      "lcdRim": "#2f6a60",
+      "lcdGlow": "#7fe8c818",
+      "lcdEdge": "#ffffff0a",
+      "well": "#0b1517",
+      "segment": "#9ff0d8",
+      "segmentOff": "#9ff0d812",
+      "segmentGlow": "#7fe8c880",
+      "led": "$lamp",
+      "ledOff": "$lampOff",
+      "ink": "$label",
+      "inkHi": "$text",
+      "inkDim": "#6f8794",
+      "inkOff": "#2c3d48",
+      "rule": "#5a7a9050",
+      "buttonTop": "#14272a",
+      "buttonBottom": "#0a1416",
+      "buttonRim": "#3a6a8c",
+      "buttonRimHi": "$edge",
+      "buttonLip": "#00000080",
+      "buttonLipHi": "#5ab4ff90",
+      "buttonInk": "$label",
+      "transportInk": "$info",
+      "accent": "$lamp",
+      "track": "#06090d",
+      "trackGlow": "#00000000",
+      "fill": "$accent",
+      "fillGlow": "$lampGlow",
+      "knob": "#a9bfd4",
+      "knobRim": "#5f7590",
+      "knobHi": "#eef8ff",
+      "knobRimHi": "$lamp",
+      "knobGlow": "$lampGlow",
+      "visLow": "#1f86e0",
+      "visHigh": "$lamp",
+      "visPeak": "$lampHot",
+      "select": "#132840",
+      "selectLine": "$lamp",
+      "current": "$figure",
+      "hover": "#ffffff0a",
+      "scroll": "#3a6a8c",
+      "art": "#0f1f33",
+      "menu": "#0c1719",
+      "menuRim": "#3a6a8c",
+      "menuInk": "$label",
+      "note": "#0f1f33",
+      "noteRim": "#5ab4ff90"
+    },
+    "materials": {
+      "frame": {
+        "look": "plate",
+        "set": {
+          "corners": 7,
+          "cornerStyle": "chamfer"
+        }
+      },
+      "title": {
+        "look": "trim",
+        "set": {
+          "castShadow": 0,
+          "corners": [
+            6,
+            6,
+            0,
+            0
+          ],
+          "cornerStyle": "chamfer"
+        }
+      },
+      "button": {
+        "look": "button",
+        "set": {
+          "corners": 2.5,
+          "cornerStyle": "chamfer"
+        }
+      },
+      "lit": {
+        "look": "button.lit",
+        "set": {
+          "fill": [
+            "#1f7f9e",
+            "#0b3a4e"
+          ],
+          "innerGlow": "#a8eeff50",
+          "outerGlowSize": 2,
+          "corners": 2.5,
+          "cornerStyle": "chamfer"
+        }
+      },
+      "menu": {
+        "look": "tip",
+        "set": {
+          "corners": 6,
+          "cornerStyle": "chamfer"
+        }
+      },
+      "shade": {
+        "look": "trim",
+        "set": {
+          "castShadow": 0,
+          "corners": 6,
+          "cornerStyle": "chamfer"
+        }
+      }
+    },
+    "fonts": {
+      "lcd": "readout",
+      "text": "label",
+      "title": "title"
+    },
+    "sounds": {
+      "open": "$deploy",
+      "close": "$deploy",
+      "shade": "$scan",
+      "denied": "$denied"
+    }
+  }
+}

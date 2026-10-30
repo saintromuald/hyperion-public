@@ -1,0 +1,18 @@
+{
+  "id": "debug",
+  "name": "Debug Tools",
+  "by": "Hyperion",
+  "version": "0.1",
+  "line": "A canvas to try new work in the game itself: a map made on the spot, to place units on.",
+  "holds": ["tools", "maps"],
+  "rules": "standard",
+  "world": "braxis",
+  "channel": true,
+  "modes": [
+    {
+      "id": "canvas",
+      "button": "Start canvas",
+      "tileset": "jungle"
+    }
+  ]
+}

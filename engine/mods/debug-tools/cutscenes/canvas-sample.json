@@ -1,0 +1,104 @@
+{
+  "title": "The canvas sample",
+  "map": {"push": {"tileset": "badlands", "width": 64, "height": 64}},
+  "steps": [
+    {
+      "do": "fade",
+      "to": "black",
+      "ms": 0,
+      "scale": 0.86
+    },
+    {
+      "do": "bars",
+      "on": true,
+      "ms": 0
+    },
+    {
+      "do": "spawn",
+      "unit": "terran_marine",
+      "x": 700,
+      "y": 1024,
+      "player": 0,
+      "count": 6,
+      "as": "marines"
+    },
+    {
+      "do": "spawn",
+      "unit": "zerg_zergling",
+      "x": 1450,
+      "y": 1024,
+      "player": 1,
+      "count": 12,
+      "as": "lings"
+    },
+    {
+      "do": "camera",
+      "x": 700,
+      "y": 1024,
+      "zoom": 1.0,
+      "ms": 0
+    },
+    {
+      "do": "caption",
+      "text": "Somewhere on the rim of the Koprulu sector",
+      "ms": 2600,
+      "async": true
+    },
+    {
+      "do": "fade",
+      "to": "clear",
+      "ms": 1400,
+      "scale": 1.0
+    },
+    {
+      "do": "camera",
+      "x": 1100,
+      "y": 1024,
+      "zoom": 1.5,
+      "ms": 2400
+    },
+    {
+      "do": "transmission",
+      "unit": "marines",
+      "text": "Movement on the ridge. Hold the line!",
+      "ms": 2400
+    },
+    {
+      "do": "order",
+      "units": "lings",
+      "to": [
+        700,
+        1024
+      ],
+      "order": "attack"
+    },
+    {
+      "do": "follow",
+      "unit": "lings",
+      "ms": 900,
+      "zoom": 1.0
+    },
+    {
+      "do": "wait",
+      "ms": 2500
+    },
+    {
+      "do": "camera",
+      "x": 820,
+      "y": 1024,
+      "zoom": 0.7,
+      "ms": 1500
+    },
+    {
+      "do": "caption",
+      "text": "A closer look than a game allows",
+      "ms": 2000
+    },
+    {
+      "do": "fade",
+      "to": "black",
+      "ms": 1000,
+      "scale": 0.92
+    }
+  ]
+}

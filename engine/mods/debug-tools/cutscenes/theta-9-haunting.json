@@ -1,0 +1,297 @@
+{
+  "title": "Theta-9: the haunting",
+  "map": {"from": "(4)Steal the Beacon.scm", "or": {"tileset": "install", "width": 96, "height": 96}},
+  "steps": [
+    {
+      "do": "fade",
+      "to": "black",
+      "ms": 0,
+      "scale": 0.9
+    },
+    {
+      "do": "bars",
+      "on": true,
+      "size": 0.14,
+      "ms": 0
+    },
+    {
+      "do": "spawn",
+      "unit": "terran_civilian",
+      "x": 1180,
+      "y": 1460,
+      "player": 0,
+      "as": "survivor"
+    },
+    {
+      "do": "spawn",
+      "unit": "protoss_dark_templar",
+      "x": 1900,
+      "y": 1460,
+      "player": 1,
+      "as": "it"
+    },
+    {
+      "do": "camera",
+      "x": 1750,
+      "y": 1460,
+      "zoom": 1.1,
+      "ms": 0
+    },
+    {
+      "do": "sound",
+      "path": "sound\\Misc\\TPwrDown.wav"
+    },
+    {
+      "do": "caption",
+      "text": "Installation Theta-9, deck four. 03:12 hours.",
+      "at": "top",
+      "ms": 4200,
+      "async": true
+    },
+    {
+      "do": "fade",
+      "to": 0.35,
+      "scale": 1.0,
+      "ms": 2600,
+      "async": true
+    },
+    {
+      "do": "camera",
+      "x": 1180,
+      "y": 1460,
+      "zoom": 0.8,
+      "ms": 5000,
+      "ease": "even"
+    },
+    {
+      "do": "transmission",
+      "unit": "survivor",
+      "text": "The power's gone... Hello? Is anyone still on this deck?",
+      "sound": "sound\\Terran\\CIVILIAN\\TCvWht00.WAV",
+      "ms": 3200
+    },
+    {
+      "do": "sound",
+      "path": "sound\\Protoss\\DARKTEMPLAR\\PDTWht00.WAV"
+    },
+    {
+      "do": "fade",
+      "to": 0.95,
+      "ms": 60
+    },
+    {
+      "do": "wait",
+      "ms": 90
+    },
+    {
+      "do": "fade",
+      "to": 0.2,
+      "ms": 60
+    },
+    {
+      "do": "wait",
+      "ms": 140
+    },
+    {
+      "do": "fade",
+      "to": 0.9,
+      "ms": 50
+    },
+    {
+      "do": "wait",
+      "ms": 250
+    },
+    {
+      "do": "fade",
+      "to": 0.35,
+      "ms": 300
+    },
+    {
+      "do": "camera",
+      "x": 1900,
+      "y": 1460,
+      "zoom": 0.7,
+      "ms": 0
+    },
+    {
+      "do": "caption",
+      "text": "Something is breathing in the dark.",
+      "ms": 2400
+    },
+    {
+      "do": "camera",
+      "x": 1180,
+      "y": 1460,
+      "zoom": 0.8,
+      "ms": 0
+    },
+    {
+      "do": "order",
+      "units": "it",
+      "to": [
+        1420,
+        1650
+      ],
+      "order": "move"
+    },
+    {
+      "do": "sound",
+      "path": "sound\\Misc\\Door\\Door2Opn.wav"
+    },
+    {
+      "do": "transmission",
+      "unit": "survivor",
+      "text": "Who's there?! ...I can hear you.",
+      "sound": "sound\\Terran\\CIVILIAN\\TCvPss00.WAV",
+      "ms": 2600
+    },
+    {
+      "do": "sound",
+      "path": "sound\\Protoss\\DARKTEMPLAR\\PDTWht02.WAV"
+    },
+    {
+      "do": "camera",
+      "x": 1460,
+      "y": 1600,
+      "zoom": 0.8,
+      "ms": 350,
+      "ease": "in_out"
+    },
+    {
+      "do": "wait",
+      "ms": 500
+    },
+    {
+      "do": "camera",
+      "x": 1180,
+      "y": 1460,
+      "zoom": 0.8,
+      "ms": 350,
+      "ease": "in_out"
+    },
+    {
+      "do": "transmission",
+      "unit": "survivor",
+      "text": "Run. RUN!",
+      "ms": 1400
+    },
+    {
+      "do": "order",
+      "units": "survivor",
+      "to": [
+        1700,
+        1000
+      ],
+      "order": "move"
+    },
+    {
+      "do": "order",
+      "units": "it",
+      "to": [
+        1700,
+        1000
+      ],
+      "order": "attack"
+    },
+    {
+      "do": "follow",
+      "unit": "survivor",
+      "zoom": 1.0,
+      "ms": 900,
+      "ease": "out"
+    },
+    {
+      "do": "caption",
+      "text": "Don't look back.",
+      "ms": 2000,
+      "async": true
+    },
+    {
+      "do": "wait",
+      "ms": 1500
+    },
+    {
+      "do": "fade",
+      "to": 0.9,
+      "ms": 50
+    },
+    {
+      "do": "wait",
+      "ms": 80
+    },
+    {
+      "do": "fade",
+      "to": 0.3,
+      "ms": 140
+    },
+    {
+      "do": "sound",
+      "path": "sound\\Protoss\\DARKTEMPLAR\\PDTWht01.WAV"
+    },
+    {
+      "do": "wait",
+      "ms": 1800
+    },
+    {
+      "do": "follow",
+      "unit": "survivor",
+      "zoom": 0.6,
+      "ms": 2600,
+      "ease": "in_out",
+      "async": true
+    },
+    {
+      "do": "transmission",
+      "unit": "survivor",
+      "text": "It's right behind me...",
+      "ms": 2000
+    },
+    {
+      "do": "wait",
+      "ms": 700
+    },
+    {
+      "do": "fade",
+      "to": "black",
+      "ms": 120
+    },
+    {
+      "do": "kill",
+      "units": "survivor"
+    },
+    {
+      "do": "wait",
+      "ms": 1500
+    },
+    {
+      "do": "fade",
+      "to": 0.75,
+      "ms": 1500,
+      "async": true
+    },
+    {
+      "do": "camera",
+      "zoom": 1.6,
+      "ms": 4500,
+      "ease": "out",
+      "async": true
+    },
+    {
+      "do": "caption",
+      "text": "Installation Theta-9 went silent at 03:14.",
+      "at": "middle",
+      "ms": 3200
+    },
+    {
+      "do": "caption",
+      "text": "Nothing was ever found.",
+      "at": "middle",
+      "ms": 2600
+    },
+    {
+      "do": "fade",
+      "to": "black",
+      "ms": 800
+    }
+  ]
+}

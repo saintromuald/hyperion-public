@@ -1,0 +1,796 @@
+{
+  "kind": "hud-style",
+  "version": 1,
+  "id": "mech-gunmetal",
+  "name": "Dark mech, gunmetal",
+  "race": "terran",
+  "note": "Round 11: blued gunmetal. Machined faces with a fine tool grain and a studio's reflection, worn bright at their chamfers, socket screws along a groove; the deck and spines plated in armour; bare steel trim along every top edge; smoked glass; ice-cyan light, used sparingly. Hyperion's copy: the tooltip shows and goes at once, as the original's does, so its tip.show and tip.hide timelines are left out (the user, 2026-10-23).",
+  "palette": {
+    "lampOff": "#161c22",
+    "alert": "#ff3a2a",
+    "ok": "#3fd07a",
+    "warn": "#ffc24a",
+    "short": "#ff7a6a",
+    "white": "#ffffff",
+    "defeat": "#ff6a5a",
+    "bootText": "SYSTEMS ONLINE",
+    "titleText": "TERRAN COMMAND",
+    "lamp": "#8fe3ff",
+    "lampHot": "#e6fbff",
+    "lampGlow": "#1f9cff9a",
+    "accent": "#7fdcff",
+    "rim": "#c4d6e6",
+    "edge": "#7fa9c4",
+    "info": "#a6ecff",
+    "text": "#e4eef6",
+    "figure": "#f2f8ff",
+    "label": "#8fa3b4",
+    "victory": "#a6ecff",
+    "lcd": "#c4f0ff",
+    "lcdOff": "#9fd2e6",
+    "bracket": "#9fe6ffa8",
+    "bracketGlow": "#2aa8ff40",
+    "wellLine": "#5fd0ff26",
+    "cellLit": "#10283a",
+    "cellLitDeep": "#0b1b28",
+    "cellGlow": "#2a9cff30",
+    "cellLitLine": "#6cc8ffa0",
+    "btnGlow": "#2a8cff16",
+    "pipGlow": "#2aa8ff70",
+    "tipAccent": "#8fe3ff",
+    "tipAccentHot": "#e6fbff",
+    "tipAccentGlow": "#1f9cff70",
+    "buttonText": "#e4eef6c7"
+  },
+  "lights": [
+    "lamp",
+    "lampHot",
+    "lampGlow",
+    "accent",
+    "info",
+    "victory",
+    "lcd",
+    "lcdOff",
+    "bracket",
+    "bracketGlow",
+    "wellLine",
+    "cellLit",
+    "cellLitDeep",
+    "cellGlow",
+    "cellLitLine",
+    "btnGlow",
+    "pipGlow",
+    "tipAccent",
+    "tipAccentHot",
+    "tipAccentGlow"
+  ],
+  "easings": {
+    "arrive": "out"
+  },
+  "sounds": {
+    "boot": "hum",
+    "deploy": "servo",
+    "scan": "scan",
+    "alert": "alarm",
+    "denied": "denied",
+    "confirm": "chime"
+  },
+  "assets": {
+    "hum": {
+      "audio": "hum.ogg"
+    },
+    "servo": {
+      "audio": "servo.ogg"
+    },
+    "scan": {
+      "audio": "scan.ogg"
+    },
+    "alarm": {
+      "audio": "alarm.ogg"
+    },
+    "denied": {
+      "audio": "denied.ogg"
+    },
+    "chime": {
+      "audio": "chime.ogg"
+    }
+  },
+  "shape": {
+    "light": 225,
+    "highlight": "#e8f2fc",
+    "fill": "#ffffff"
+  },
+  "looks": {
+    "hull": {
+      "surface": "machined",
+      "surfaceA": "#30363e",
+      "surfaceB": "#15181c",
+      "surfaceC": "#06080a",
+      "surfaceScale": 1,
+      "gloss": 0.5,
+      "detail": 1,
+      "sheen": 0.55,
+      "sheenColor": "#b4c8dc",
+      "edgeWear": 0.28,
+      "edgeWearWidth": 1.2,
+      "edgeWearColor": "#93a0ad",
+      "bevel": 3.5,
+      "bevelStrength": 1,
+      "profile": "chamfer",
+      "rim": 0.3,
+      "rimWidth": 0.35,
+      "rimColor": "$rim",
+      "relief": 1.5,
+      "crest": 0.45,
+      "panelLines": 1,
+      "panelLineInset": 14,
+      "panelLineGap": 4,
+      "panelLineWidth": 1,
+      "stroke": "#030405",
+      "line": 0.8,
+      "seams": 150,
+      "seamWidth": 1.4,
+      "seamStrength": 0.7,
+      "bolts": 2.4,
+      "boltStyle": "socket",
+      "boltInset": 19,
+      "boltSpacing": 110,
+      "boltColor": "#8e9aa6",
+      "castShadow": 0.6,
+      "elevation": 3,
+      "shadowSoft": 2.5
+    },
+    "armor": {
+      "surface": "armor",
+      "surfaceA": "#2c3138",
+      "surfaceB": "#1e2227",
+      "surfaceC": "#050607",
+      "surfaceScale": 1,
+      "gloss": 0.4,
+      "detail": 1,
+      "sheen": 0.35,
+      "sheenColor": "#b4c8dc",
+      "edgeWear": 0.3,
+      "edgeWearWidth": 1.2,
+      "edgeWearColor": "#93a0ad",
+      "bevel": 3.5,
+      "bevelStrength": 1.15,
+      "profile": "double",
+      "rim": 0.25,
+      "rimWidth": 0.3,
+      "rimColor": "$rim",
+      "relief": 1.7,
+      "crest": 0.8,
+      "stroke": "#010203",
+      "line": 0.9,
+      "castShadow": 0.85,
+      "elevation": 4,
+      "shadowSoft": 2.2
+    },
+    "lip": {
+      "surface": "cerakote",
+      "surfaceA": "#31363d",
+      "surfaceB": "#22262c",
+      "surfaceC": "#06080a",
+      "surfaceScale": 1,
+      "gloss": 0.2,
+      "detail": 1,
+      "sheen": 0.25,
+      "sheenColor": "#b4c8dc",
+      "edgeWear": 0.44999999999999996,
+      "edgeWearWidth": 1.2,
+      "edgeWearColor": "#93a0ad",
+      "bevel": 2.6,
+      "bevelStrength": 1.15,
+      "profile": "chamfer",
+      "rim": 0.2,
+      "rimWidth": 0.3,
+      "rimColor": "$rim",
+      "relief": 1.7,
+      "crest": 0.85,
+      "stroke": "#020304",
+      "line": 0.7,
+      "castShadow": 0.75,
+      "elevation": 2.5,
+      "shadowSoft": 1.6
+    },
+    "hull.back": {
+      "surface": "armor",
+      "surfaceA": "#2c3138",
+      "surfaceB": "#1e2227",
+      "surfaceC": "#050607",
+      "surfaceScale": 1,
+      "gloss": 0.4,
+      "detail": 1,
+      "sheen": 0.35,
+      "sheenColor": "#b4c8dc",
+      "edgeWear": 0.15,
+      "edgeWearWidth": 1.2,
+      "edgeWearColor": "#93a0ad",
+      "bevel": 2,
+      "bevelStrength": 0.9,
+      "profile": "chamfer",
+      "rim": 0.25,
+      "rimWidth": 0.3,
+      "rimColor": "$rim",
+      "relief": 1.3,
+      "crest": 0.4,
+      "stroke": "#020304",
+      "line": 0.8
+    },
+    "hull.side": {
+      "surface": "cerakote",
+      "surfaceA": "#31363d",
+      "surfaceB": "#22262c",
+      "surfaceC": "#06080a",
+      "surfaceScale": 1,
+      "gloss": 0.2,
+      "detail": 1,
+      "sheen": 0.25,
+      "sheenColor": "#b4c8dc",
+      "edgeWear": 0.3,
+      "edgeWearWidth": 1.2,
+      "edgeWearColor": "#93a0ad",
+      "bevel": 2.5,
+      "bevelStrength": 1,
+      "profile": "double",
+      "rim": 0.25,
+      "rimWidth": 0.3,
+      "rimColor": "$rim",
+      "relief": 1.4,
+      "crest": 0.5,
+      "stroke": "#030405",
+      "line": 0.7,
+      "castShadow": 0.5,
+      "elevation": 1.5,
+      "shadowSoft": 1.5
+    },
+    "trim": {
+      "surface": "brushed",
+      "surfaceA": "#a3b4c6",
+      "surfaceB": "#46525f",
+      "gloss": 0.7,
+      "detail": 0.6,
+      "sheen": 0.3,
+      "sheenColor": "#b4c8dc",
+      "bevel": 1,
+      "bevelStrength": 1.2,
+      "profile": "chamfer",
+      "relief": 1.5,
+      "crest": 0.6,
+      "rim": 0.25,
+      "rimWidth": 0.3,
+      "rimColor": "$rim"
+    },
+    "bezel": {
+      "surface": "machined",
+      "surfaceA": "#2a3038",
+      "surfaceB": "#13161a",
+      "surfaceC": "#06080a",
+      "surfaceScale": 1,
+      "gloss": 0.55,
+      "detail": 1,
+      "sheen": 0.45,
+      "sheenColor": "#b4c8dc",
+      "edgeWear": 0.2,
+      "edgeWearWidth": 1.2,
+      "edgeWearColor": "#93a0ad",
+      "bevel": 4,
+      "bevelStrength": 1.1,
+      "profile": "step",
+      "profileSteps": 2,
+      "rim": 0.35,
+      "rimWidth": 0.4,
+      "rimColor": "$rim",
+      "relief": 1.7,
+      "crest": 0.6,
+      "castShadow": 0.55,
+      "elevation": 1.6,
+      "shadowSoft": 1.2
+    },
+    "screen": {
+      "fill": [
+        "#0a1016e2",
+        "#04070aee"
+      ],
+      "fillAngle": 100,
+      "glass": 1,
+      "glassTint": "#02060ac0",
+      "glassBlur": 4,
+      "glassNoise": 0.014,
+      "glassStreak": 0.05,
+      "lines": 0.05,
+      "lineSpacing": 3,
+      "innerShadow": 2.2,
+      "innerShadowStrength": 0.85,
+      "rim": 0.3,
+      "rimWidth": 0.4,
+      "rimColor": "$edge"
+    },
+    "bracket": {
+      "fill": "$bracket",
+      "outerGlow": "$bracketGlow",
+      "outerGlowSize": 1.4
+    },
+    "well": {
+      "fill": [
+        "#00000000",
+        "#00000030"
+      ],
+      "fillAngle": 90,
+      "stroke": "$wellLine",
+      "line": 0.6,
+      "innerShadow": 0.4,
+      "innerShadowStrength": 0.4
+    },
+    "recess": {
+      "fill": [
+        "#05070a",
+        "#090c10"
+      ],
+      "fillAngle": 90,
+      "innerShadow": 1.2,
+      "innerShadowStrength": 0.75,
+      "bevel": 1,
+      "bevelStrength": 0.6,
+      "profile": "lip",
+      "rim": 0.4,
+      "rimWidth": 0.3,
+      "rimColor": "$edge",
+      "relief": 1.3
+    },
+    "cell": {
+      "fill": [
+        "#0f151c",
+        "#0a0f14"
+      ],
+      "fillAngle": 90,
+      "innerShadow": 0.6,
+      "innerShadowStrength": 0.5,
+      "stroke": "#2b3a48",
+      "line": 0.6
+    },
+    "cell.lit": {
+      "fill": [
+        "$cellLit",
+        "$cellLitDeep"
+      ],
+      "fillAngle": 90,
+      "innerGlow": "$cellGlow",
+      "innerGlowSize": 4,
+      "innerShadow": 0.5,
+      "innerShadowStrength": 0.4,
+      "stroke": "$cellLitLine",
+      "line": 0.7
+    },
+    "btn": {
+      "fill": [
+        "#121a23",
+        "#0c1218"
+      ],
+      "fillAngle": 90,
+      "innerGlow": "$btnGlow",
+      "innerGlowSize": 3,
+      "innerShadow": 0.5,
+      "innerShadowStrength": 0.45,
+      "stroke": "#2b3a48",
+      "line": 0.6
+    },
+    "lamp": {
+      "fill": [
+        "$lampHot",
+        "$lamp"
+      ],
+      "fillAngle": 90,
+      "innerGlow": "#ffffff40",
+      "innerGlowSize": 0.6,
+      "outerGlow": "$lampGlow",
+      "outerGlowSize": 2.6
+    },
+    "lamp.well": {
+      "fill": [
+        "#030405",
+        "#07090c"
+      ],
+      "innerShadow": 0.8,
+      "innerShadowStrength": 0.8
+    },
+    "knob": {
+      "surface": "brushed",
+      "surfaceA": "#a3b4c6",
+      "surfaceB": "#46525f",
+      "gloss": 0.8,
+      "detail": 0.5,
+      "bevel": 1.6,
+      "bevelStrength": 1.3,
+      "profile": "chamfer",
+      "relief": 1.6,
+      "crest": 0.7,
+      "rim": 0.3,
+      "rimWidth": 0.35,
+      "rimColor": "$rim",
+      "stroke": "#020304",
+      "line": 0.7,
+      "castShadow": 0.7,
+      "elevation": 2,
+      "shadowSoft": 1.4
+    },
+    "pip": {
+      "fill": "$lamp",
+      "innerGlow": "#ffffff30",
+      "innerGlowSize": 0.5,
+      "outerGlow": "$pipGlow",
+      "outerGlowSize": 1.8
+    },
+    "vent": {
+      "surface": "machined",
+      "surfaceA": "#2a3038",
+      "surfaceB": "#13161a",
+      "surfaceC": "#06080a",
+      "surfaceScale": 1,
+      "gloss": 0.55,
+      "detail": 1,
+      "sheen": 0,
+      "sheenColor": "#b4c8dc",
+      "edgeWear": 0,
+      "edgeWearWidth": 1.2,
+      "edgeWearColor": "#93a0ad",
+      "pattern": "slats",
+      "patternScale": 4.2,
+      "patternDepth": 0.95,
+      "patternWall": 0.42,
+      "patternInset": 2,
+      "bevel": 1,
+      "bevelStrength": 0.7,
+      "relief": 2,
+      "crest": 0.3,
+      "innerShadow": 0.6,
+      "innerShadowStrength": 0.6
+    },
+    "bolt": {
+      "surface": "brushed",
+      "surfaceA": "#a3b4c6",
+      "surfaceB": "#22272d",
+      "gloss": 0.7,
+      "detail": 0.4,
+      "bevel": 1.4,
+      "bevelStrength": 1.2,
+      "profile": "chamfer",
+      "castShadow": 0.6,
+      "elevation": 0.6,
+      "shadowSoft": 0.5,
+      "relief": 1.6
+    },
+    "hazard": {
+      "surface": "hazard",
+      "surfaceA": "#a8913e",
+      "surfaceB": "#5a6068",
+      "surfaceC": "#111315",
+      "surfaceScale": 0.45,
+      "wear": 0.3,
+      "gloss": 0.3,
+      "bevel": 1,
+      "bevelStrength": 0.8,
+      "relief": 1.4,
+      "stroke": "#030405",
+      "line": 0.6
+    },
+    "edge": {
+      "fill": "#00000000",
+      "energyColor": "$accent",
+      "energyWidth": 4
+    },
+    "stencil": {
+      "font": "eurostile-ext",
+      "size": 8.5,
+      "color": "#7d8c9a",
+      "tracking": 1.6
+    },
+    "readout": {
+      "font": "chakra-petch",
+      "weight": 600,
+      "size": 18,
+      "color": "$lcd",
+      "tracking": 0.6
+    },
+    "readout.dim": {
+      "font": "chakra-petch",
+      "weight": 500,
+      "size": 16,
+      "color": "$lcdOff",
+      "tracking": 0.4
+    },
+    "readout.label": {
+      "font": "chakra-petch",
+      "weight": 600,
+      "size": 11,
+      "color": "$label",
+      "tracking": 1.6
+    },
+    "tip": {
+      "surface": "machined",
+      "surfaceA": "#30363e",
+      "surfaceB": "#15181c",
+      "surfaceC": "#06080a",
+      "surfaceScale": 1,
+      "gloss": 0.5,
+      "detail": 1,
+      "sheen": 0.55,
+      "sheenColor": "#b4c8dc",
+      "edgeWear": 0.28,
+      "edgeWearWidth": 1.2,
+      "edgeWearColor": "#93a0ad",
+      "bevel": 3,
+      "bevelStrength": 1.1,
+      "profile": "chamfer",
+      "rim": 0.35,
+      "rimWidth": 0.35,
+      "rimColor": "$rim",
+      "relief": 1.6,
+      "crest": 0.7,
+      "stroke": "#020304",
+      "line": 0.8,
+      "outerGlow": "#000000b0",
+      "outerGlowSize": 8
+    },
+    "tip.pane": {
+      "fill": [
+        "#0f151c",
+        "#0a0f14"
+      ],
+      "fillAngle": 90,
+      "innerShadow": 1.4,
+      "innerShadowStrength": 0.75,
+      "stroke": "#020304",
+      "line": 0.7
+    },
+    "tip.strip": {
+      "fill": [
+        "$tipAccentHot",
+        "$tipAccent"
+      ],
+      "fillAngle": 90,
+      "outerGlow": "$tipAccentGlow",
+      "outerGlowSize": 2.2
+    },
+    "tip.rule": {
+      "fill": "$wellLine"
+    },
+    "tip.title": {
+      "font": "chakra-petch",
+      "weight": 600,
+      "size": 16,
+      "color": "$text",
+      "tracking": 0.2
+    },
+    "tip.key": {
+      "fill": [
+        "$cellLit",
+        "$cellLitDeep"
+      ],
+      "fillAngle": 90,
+      "innerGlow": "$cellGlow",
+      "innerGlowSize": 3,
+      "stroke": "$cellLitLine",
+      "line": 0.7,
+      "corners": 2.5,
+      "cornerStyle": "chamfer"
+    },
+    "tip.keyText": {
+      "font": "chakra-petch",
+      "weight": 600,
+      "size": 12,
+      "color": "$lcd",
+      "tracking": 0.5
+    },
+    "tip.cost": {
+      "font": "chakra-petch",
+      "weight": 500,
+      "size": 14,
+      "color": "$figure"
+    },
+    "tip.line": {
+      "font": "chakra-petch",
+      "weight": 400,
+      "size": 13,
+      "color": "$label",
+      "lineHeight": 1.3
+    }
+  },
+  "tooltip": {
+    "pad": [
+      12,
+      9,
+      12,
+      10
+    ],
+    "frame": 6,
+    "gap": 6,
+    "maxWidth": 340,
+    "corner": 8,
+    "cornerStyle": "chamfer",
+    "tab": 6,
+    "tabWidth": 20,
+    "strip": "top",
+    "stripSize": 2,
+    "stripInset": 12,
+    "rule": true,
+    "keyPad": [
+      6,
+      2
+    ],
+    "keyGap": 16,
+    "icon": 15,
+    "iconGap": 5,
+    "costGap": 14,
+    "mark": "$tipAccent",
+    "markLine": 1.5,
+    "short": "$short",
+    "offset": 6,
+    "margin": 8
+  },
+  "slots": {
+    "button": {
+      "size": 0.4,
+      "weight": 600,
+      "tracking": 0.05,
+      "case": "upper",
+      "color": "$buttonText"
+    },
+    "clock": {
+      "size": 0.82,
+      "tracking": 0.04,
+      "color": "$text"
+    },
+    "figure": {
+      "color": "$figure"
+    },
+    "label": {
+      "color": "$label"
+    },
+    "name": {
+      "weight": 600,
+      "tracking": 0.04,
+      "color": "$figure"
+    },
+    "title": {
+      "weight": 700,
+      "tracking": 0.18,
+      "case": "upper",
+      "color": "$figure"
+    }
+  },
+  "musicPlayer": {
+    "version": 1,
+    "colors": {
+      "faceTop": "#0f151c",
+      "faceBottom": "#05070a",
+      "rim": "$edge",
+      "rimGlow": "#00000000",
+      "bevel": "#00000060",
+      "titleGlow": "$cellGlow",
+      "titleInk": "$text",
+      "titleInkOff": "$label",
+      "titleRule": "$accent",
+      "mark": "$lamp",
+      "glow": "$lampGlow",
+      "lcd": "#030405",
+      "lcdRim": "#2b3a48",
+      "lcdGlow": "$cellGlow",
+      "lcdEdge": "#ffffff0a",
+      "well": "#05070a",
+      "segment": "$lcd",
+      "segmentOff": "$wellLine",
+      "segmentGlow": "$lampGlow",
+      "led": "$lamp",
+      "ledOff": "$lampOff",
+      "ink": "$label",
+      "inkHi": "$text",
+      "inkDim": "#7d8c9a",
+      "inkOff": "#2b3a48",
+      "rule": "#2b3a48",
+      "buttonTop": "#121a23",
+      "buttonBottom": "#0c1218",
+      "buttonRim": "#2b3a48",
+      "buttonRimHi": "$edge",
+      "buttonLip": "#00000080",
+      "buttonLipHi": "$cellLitLine",
+      "buttonInk": "$label",
+      "transportInk": "$lcd",
+      "accent": "$lamp",
+      "track": "#030405",
+      "trackGlow": "#00000000",
+      "fill": "$accent",
+      "fillGlow": "$lampGlow",
+      "knob": "#a3b4c6",
+      "knobRim": "#46525f",
+      "knobHi": "$lampHot",
+      "knobRimHi": "$lamp",
+      "knobGlow": "$pipGlow",
+      "visLow": "$cellLitLine",
+      "visHigh": "$lamp",
+      "visPeak": "$lampHot",
+      "select": "$cellLit",
+      "selectLine": "$lamp",
+      "current": "$figure",
+      "hover": "#ffffff0a",
+      "scroll": "#2b3a48",
+      "art": "$cellLitDeep",
+      "menu": "#0a0f14",
+      "menuRim": "#2b3a48",
+      "menuInk": "$label",
+      "note": "$cellLitDeep",
+      "noteRim": "$cellLitLine"
+    },
+    "materials": {
+      "frame": {
+        "look": "hull",
+        "set": {
+          "panelLines": 0,
+          "seams": 0,
+          "bolts": 1.44,
+          "boltInset": 5.5,
+          "boltSpacing": 96,
+          "castShadow": 0,
+          "corners": 7,
+          "cornerStyle": "chamfer"
+        }
+      },
+      "title": {
+        "look": "bezel",
+        "set": {
+          "bevel": 2.5,
+          "castShadow": 0,
+          "corners": [
+            6,
+            6,
+            0,
+            0
+          ],
+          "cornerStyle": "chamfer"
+        }
+      },
+      "button": {
+        "look": "btn",
+        "set": {
+          "corners": 2.5,
+          "cornerStyle": "chamfer"
+        }
+      },
+      "lit": {
+        "look": "cell.lit",
+        "set": {
+          "corners": 2.5,
+          "cornerStyle": "chamfer"
+        }
+      },
+      "menu": {
+        "look": "tip",
+        "set": {
+          "corners": 6,
+          "cornerStyle": "chamfer"
+        }
+      },
+      "shade": {
+        "look": "bezel",
+        "set": {
+          "bevel": 2.5,
+          "castShadow": 0,
+          "corners": 6,
+          "cornerStyle": "chamfer"
+        }
+      }
+    },
+    "fonts": {
+      "lcd": "readout",
+      "text": "tip.line",
+      "title": "stencil"
+    },
+    "sounds": {
+      "open": "$deploy",
+      "close": "$deploy",
+      "shade": "$scan",
+      "denied": "$denied"
+    }
+  }
+}

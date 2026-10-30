@@ -1,0 +1,67 @@
+{
+  "title": "Temple flyover",
+  "map": {"from": "(4)Lost Temple.scm", "or": {"tileset": "jungle", "width": 128, "height": 128}},
+  "steps": [
+    {
+      "do": "bars",
+      "on": true,
+      "ms": 0
+    },
+    {
+      "do": "camera",
+      "x": 600,
+      "y": 3500,
+      "zoom": 2.0,
+      "ms": 0
+    },
+    {
+      "do": "caption",
+      "text": "The jungle ruins of the old temple",
+      "at": "top",
+      "ms": 3500,
+      "async": true
+    },
+    {
+      "do": "camera",
+      "x": 2048,
+      "y": 2048,
+      "zoom": 1.6,
+      "ms": 6000,
+      "ease": "in_out"
+    },
+    {
+      "do": "camera",
+      "x": 3400,
+      "y": 700,
+      "zoom": 1.0,
+      "ms": 5000,
+      "ease": "in_out"
+    },
+    {
+      "do": "caption",
+      "text": "Every path leads to the centre",
+      "ms": 2500,
+      "async": true
+    },
+    {
+      "do": "camera",
+      "x": 2048,
+      "y": 2048,
+      "zoom": 2.4,
+      "ms": 4500,
+      "ease": "out"
+    },
+    {
+      "do": "wait",
+      "ms": 800
+    },
+    {
+      "do": "camera",
+      "x": 2048,
+      "y": 2048,
+      "zoom": 1.0,
+      "ms": 2500,
+      "ease": "in_out"
+    }
+  ]
+}

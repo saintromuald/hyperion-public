@@ -1,0 +1,35 @@
+# build output
+build/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.exe
+*.dll
+__pycache__/
+
+# the game's files never go in git
+*.mpq
+*.MPQ
+*.snp
+*.grp
+*.pcx
+*.wav
+*.smk
+
+# libraries the build fetches (engine/tools/fetch_*.py)
+engine/third_party/
+
+# local test runs and the install folder a Windows build copies into (engine/tools/package.py)
+engine/testrun/
+engine/oracle/
+engine/install_to.txt
+
+# local output
+*.log
+crashdumps/
+.env
+
+# a mod's art is the player's own (docs/mod-data.md); only its data is committed
+engine/mods/**/art/
