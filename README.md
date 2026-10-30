@@ -82,6 +82,13 @@ you'd like to see.
 - Heinermann and Starsurgical's [StarSource](https://github.com/Starsurgical/StarSource), whose
   reverse engineering databases, guidance and names Hyperion's work drew on. No StarSource code
   is used in Hyperion.
+- The BWAPI community, for offsets, function names and years of shared knowledge.
+- [AbyssEngine](https://github.com/AbyssEngine/AbyssEngine) and
+  [OpenDiablo2](https://github.com/OpenDiablo2/OpenDiablo2), an architectural reference for
+  rebuilding Blizzard-era engines.
+- Daniel Roster (Nathan Baggs' Gaff Discord), who pointed us at both engines.
+- The decompilation community at large, whose methods (from the Super Mario 64 and Ocarina of
+  Time projects on) this work follows.
 - The authors of the libraries and fonts in `THIRD-PARTY.md`.
 
 ## License
