@@ -79,9 +79,8 @@ you'd like to see.
 
 ## Acknowledgments and special thanks
 
-- Heinermann and Starsurgical's [StarSource](https://github.com/Starsurgical/StarSource), whose
-  reverse engineering databases, guidance and names Hyperion's work drew on. No StarSource code
-  is used in Hyperion.
+- Heinermann and Starsurgical, for reverse engineering guidance and for sharing the names they
+  gave in their own work for us to consider.
 - The BWAPI community, for offsets, function names and years of shared knowledge.
 - [AbyssEngine](https://github.com/AbyssEngine/AbyssEngine) and
   [OpenDiablo2](https://github.com/OpenDiablo2/OpenDiablo2), an architectural reference for
