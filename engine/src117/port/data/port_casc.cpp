@@ -361,7 +361,11 @@ static const char *const kPaidKinds[] = {".anim", ".dds.grp", ".dds.vr4", ".tmsk
 
 bool PortRemasteredOwned(void)
 {
-  return false;  // held: the user, 2026-10-21 (PRD)
+  // This fork enables Remastered's content: its players run their own StarCraft:
+  // Remastered install, whose purchase unlocks Blizzard's HD art, so the classic game
+  // drawn in place of it is the only thing the hold above gained. Nothing is read
+  // without a Battle.net install (PortCascRead's callers).
+  return true;
 }
 
 bool PortCascPaid(const char *pszName)

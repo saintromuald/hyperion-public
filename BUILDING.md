@@ -43,6 +43,30 @@ then from `engine/`:
 It writes `engine/src117/build/linux-x64/Hyperion.x86_64` (or `linux-arm64/Hyperion.aarch64`)
 with `libSDL3.so.0` beside it. `python tools/package.py --linux x64` makes the `.tar.gz`.
 
+### On Linux without a Windows build
+
+This fork can build for Linux with no Windows machine:
+
+1. `python tools/get_libraries.py` (skip `fetch_spirv_cross.py` if it fails: its MSVC
+   build is only for the Mac's MSL shaders).
+2. The SDL3 source with the port's patches, which the Windows build would make:
+
+       python -c "import sys; sys.path.insert(0, 'tools'); import build_sdl3; \
+                  build_sdl3.fetch_source(); build_sdl3.apply_patches()"
+
+3. The shaders, with dxc under Wine (needs wine installed):
+
+       python tools/build_shaders_linux.py
+
+4. Then `python tools/build_engine_linux.py` as above.
+
+### This fork's change: Remastered's HD
+
+Upstream holds Remastered's paid content off (`PortRemasteredOwned` returns false in
+`src117/port/data/port_casc.cpp`), so its builds draw the classic art. This fork returns
+true: running on the player's own StarCraft: Remastered install, the HD art, HD console,
+portraits and Remastered's recordings are read, and Settings' Art (or F5) switches HD.
+
 ## Mac (Apple silicon)
 
 You need Xcode's command line tools (`xcode-select --install`) and CMake and Ninja
