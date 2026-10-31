@@ -19,7 +19,7 @@
 #include "../h/CSprite.h"
 #include "../h/img.h"
 #include "../h/dlg_dlgdraw.h"
-#include "../h/storm.h"
+#include "../h/Storm.h"
 #include "../h/mask.h"
 #include "../h/gds_vidblit.h"
 #include "../h/minimap.h"

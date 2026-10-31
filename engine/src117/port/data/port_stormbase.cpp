@@ -13,6 +13,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(__linux__) && !defined(__EMSCRIPTEN__)
+#include <sys/mman.h>  // mincore, for MemHeaderOf's guarded read
+#endif
 #if defined(__APPLE__)
 #include <malloc/malloc.h>  // malloc_size
 #endif
@@ -66,6 +69,18 @@ static MemHeader *MemHeaderOf(const void *pv)
 #if defined(__APPLE__)
   if (!MemGuard() && malloc_size(pv) < sizeof(MemHeader))
     return NULL;  // not the start of one of malloc's blocks
+#endif
+#if defined(__linux__) && !defined(__EMSCRIPTEN__)
+  // Windows reads the header under SEH and takes an unreadable block for not its own
+  // (SMemFree then answers FALSE); the same read faults on Linux. mincore touches no
+  // memory: it says whether the page the header starts in is mapped at all. Its address
+  // must be page-aligned (EINVAL otherwise), so align down to the header's page, which
+  // holds the bytes read below.
+  unsigned char c;
+  const ULONG_PTR pPage = (reinterpret_cast<ULONG_PTR>(pv) - sizeof(MemHeader)) &
+                          ~static_cast<ULONG_PTR>(0xFFF);
+  if (mincore(reinterpret_cast<void *>(pPage), 1, &c) != 0)
+    return NULL;
 #endif
   MemHeader *pHeader = MemHeaderAt(pv);
   bool bOurs = false;

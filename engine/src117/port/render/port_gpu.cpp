@@ -567,11 +567,17 @@ bool PortGpuInit(SDL_Window *pWindow, const char *pszDriver, bool bPresent)
   SDL_GPUShader *pScale;
 
   // the art Settings keeps (Art; the hotkey), shown from the first frame without a blend, while
-  // there is HD art to draw (held for now, port_gpu_hd.cpp's GpuHdAllowed)
-  double dArt = 0.0;
-  g_fHdOn = PortSettingNumber("hyperion", "art", &dArt) && dArt != 0.0 && PortHdAvailable() ? 1.0f : 0.0f;
-  double dLit = 0.0;
-  g_fHdLighting = PortSettingNumber("hyperion", "hdLighting", &dLit) && dLit != 0.0 ? 1.0f : 0.0f;
+  // there is HD art to draw. This fork starts in Remastered HD: the stored setting (0 for
+  // Classic) still switches it off.
+  double dArt = 1.0;
+  g_fHdOn = dArt != 0.0 && PortHdAvailable() ? 1.0f : 0.0f;
+  if (PortSettingNumber("hyperion", "art", &dArt))
+    g_fHdOn = dArt != 0.0 && PortHdAvailable() ? 1.0f : 0.0f;
+  // this fork: Remastered's lighting on too (its own default), the stored setting overrides
+  double dLit = 1.0;
+  g_fHdLighting = dLit != 0.0 ? 1.0f : 0.0f;
+  if (PortSettingNumber("hyperion", "hdLighting", &dLit))
+    g_fHdLighting = dLit != 0.0 ? 1.0f : 0.0f;
   g_fHdMix = g_fHdOn;
   if (pszDebug != NULL && pszDebug[0] == '1') {
     DeleteFileA(PortLogFile("hyperion_gpu_debug.log"));

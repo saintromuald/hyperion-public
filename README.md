@@ -8,6 +8,15 @@ multiplayer matches.
 
 Hyperion is an early beta. Builds are on the [Releases](../../releases) page.
 
+## This fork
+
+This fork (saintromuald) plays with **StarCraft: Remastered's graphics**: running on the
+player's own Remastered install, the HD art, HD console, portraits and Remastered's
+recordings are read, and Remastered HD is the default art (Settings' Art, or F5, switches
+back to Classic). Upstream holds that content off (`PortRemasteredOwned`,
+`engine/src117/port/data/port_casc.cpp`). It also builds for Linux with no Windows machine
+(`BUILDING.md`, "On Linux without a Windows build").
+
 ## What it adds
 
 - **Bigger games.** Maps up to 512 × 512 tiles and up to 32 players. Support for map editors
