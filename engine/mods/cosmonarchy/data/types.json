@@ -70,7 +70,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Maverick"
+   "name": "Terran Maverick",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "terran_eidolon": {
    "edit": 1,
@@ -143,7 +148,12 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Eidolon"
+   "name": "Terran Eidolon",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "terran_vulture": {
    "edit": 2,
@@ -215,7 +225,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Vulture"
+   "name": "Terran Vulture",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "terran_goliath": {
    "edit": 3,
@@ -288,7 +303,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Goliath"
+   "name": "Terran Goliath",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "goliath_turret": {
    "edit": 4,
@@ -433,7 +453,12 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Phalanx (Tank Mode)"
+   "name": "Terran Phalanx (Tank Mode)",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "phalanx_turret_tank_mode": {
    "edit": 6,
@@ -578,7 +603,20 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Mason"
+   "name": "Terran Mason",
+   "requires": [
+    [
+     {
+      "at": 106
+     },
+     {
+      "at": 215
+     },
+     {
+      "at": "omnivale"
+     }
+    ]
+   ]
   },
   "terran_wraith": {
    "edit": 8,
@@ -653,7 +691,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Wraith"
+   "name": "Terran Wraith",
+   "requires": [
+    {
+     "at": "terran_starpad"
+    }
+   ]
   },
   "terran_seraph": {
    "edit": 9,
@@ -730,7 +773,12 @@
    "destroy_score": 1250,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Seraph"
+   "name": "Terran Seraph",
+   "requires": [
+    {
+     "at": 114
+    }
+   ]
   },
   "terran_apostle": {
    "edit": 10,
@@ -804,7 +852,12 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Apostle"
+   "name": "Terran Apostle",
+   "requires": [
+    {
+     "at": 199
+    }
+   ]
   },
   "terran_trojan": {
    "edit": 11,
@@ -878,7 +931,12 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Trojan"
+   "name": "Terran Trojan",
+   "requires": [
+    {
+     "at": "terran_starpad"
+    }
+   ]
   },
   "terran_minotaur": {
    "edit": 12,
@@ -952,7 +1010,12 @@
    "destroy_score": 2400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Minotaur"
+   "name": "Terran Minotaur",
+   "requires": [
+    {
+     "at": "terran_nanite_assembly"
+    }
+   ]
   },
   "spider_mine": {
    "edit": 13,
@@ -1096,7 +1159,12 @@
    "destroy_score": 0,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Morningstar"
+   "name": "Terran Morningstar",
+   "requires": [
+    {
+     "at": 108
+    }
+   ]
   },
   "terran_shaman_support_mode": {
    "edit": 15,
@@ -1169,7 +1237,13 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 1,
-   "name": "Terran Shaman (Support Mode)"
+   "name": "Terran Shaman (Support Mode)",
+   "requires": [
+    {
+     "at": 111
+    },
+    119
+   ]
   },
   "protoss_manifold": {
    "edit": 16,
@@ -1242,7 +1316,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Manifold"
+   "name": "Protoss Manifold",
+   "requires": [
+    {
+     "at": 155
+    }
+   ]
   },
   "protoss_architect": {
    "edit": 17,
@@ -1316,7 +1395,12 @@
    "destroy_score": 1250,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Architect"
+   "name": "Protoss Architect",
+   "requires": [
+    {
+     "at": "protoss_unitary_union"
+    }
+   ]
   },
   "terran_madcap": {
    "edit": 18,
@@ -1388,7 +1472,12 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Madcap"
+   "name": "Terran Madcap",
+   "requires": [
+    {
+     "at": 199
+    }
+   ]
   },
   "terran_cuirass_tank_mode": {
    "edit": 19,
@@ -1461,7 +1550,12 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Cuirass (Tank Mode)"
+   "name": "Terran Cuirass (Tank Mode)",
+   "requires": [
+    {
+     "at": 198
+    }
+   ]
   },
   "terran_talos": {
    "edit": 20,
@@ -1535,7 +1629,18 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Talos"
+   "name": "Terran Talos",
+   "requires": [
+    [
+     {
+      "at": 106
+     },
+     {
+      "at": 215
+     }
+    ],
+    174
+   ]
   },
   "protoss_star_sovereign": {
    "edit": 21,
@@ -1609,7 +1714,12 @@
    "destroy_score": 5000,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Star Sovereign"
+   "name": "Protoss Star Sovereign",
+   "requires": [
+    {
+     "at": 223
+    }
+   ]
   },
   "terran_salamander": {
    "edit": 22,
@@ -1683,7 +1793,12 @@
    "destroy_score": 1200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Salamander"
+   "name": "Terran Salamander",
+   "requires": [
+    {
+     "at": 114
+    }
+   ]
   },
   "terran_gorgon": {
    "edit": 23,
@@ -1757,7 +1872,12 @@
    "destroy_score": 1100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Gorgon"
+   "name": "Terran Gorgon",
+   "requires": [
+    {
+     "at": 114
+    }
+   ]
   },
   "terran_phobos": {
    "edit": 24,
@@ -1832,7 +1952,12 @@
    "destroy_score": 4000,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Phobos"
+   "name": "Terran Phobos",
+   "requires": [
+    {
+     "at": "terran_nanite_assembly"
+    }
+   ]
   },
   "protoss_gladius": {
    "edit": 25,
@@ -1906,7 +2031,12 @@
    "destroy_score": 1300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Gladius"
+   "name": "Protoss Gladius",
+   "requires": [
+    {
+     "at": 167
+    }
+   ]
   },
   "protoss_magister": {
    "edit": 26,
@@ -1980,7 +2110,12 @@
    "destroy_score": 1300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Magister"
+   "name": "Protoss Magister",
+   "requires": [
+    {
+     "at": 168
+    }
+   ]
   },
   "terran_madrigal_imperioso_mode": {
    "edit": 27,
@@ -2053,7 +2188,12 @@
    "destroy_score": 450,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Madrigal (Imperioso Mode)"
+   "name": "Terran Madrigal (Imperioso Mode)",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "terran_centaur": {
    "edit": 28,
@@ -2127,7 +2267,12 @@
    "destroy_score": 1600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Centaur"
+   "name": "Terran Centaur",
+   "requires": [
+    {
+     "at": "terran_nanite_assembly"
+    }
+   ]
   },
   "zerg_almaksalisk": {
    "edit": 29,
@@ -2202,7 +2347,16 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Almaksalisk"
+   "name": "Zerg Almaksalisk",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     170,
+     "zerg_chokral_chazsal"
+    ]
+   ]
   },
   "terran_phalanx_siege_mode": {
    "edit": 30,
@@ -2417,7 +2571,12 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Harakan"
+   "name": "Terran Harakan",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "scanner_sweep": {
    "edit": 33,
@@ -2562,7 +2721,13 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 1,
-   "name": "Terran Cleric"
+   "name": "Terran Cleric",
+   "requires": [
+    {
+     "at": 111
+    },
+    119
+   ]
   },
   "zerg_larva": {
    "edit": 35,
@@ -2780,7 +2945,17 @@
    "destroy_score": 50,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Zethrokor"
+   "name": "Zerg Zethrokor",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     142,
+     "zerg_vornath_pond",
+     "zerg_kalkiir_lake_2"
+    ]
+   ]
   },
   "zerg_hydralisk": {
    "edit": 38,
@@ -2854,7 +3029,17 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Hydralisk"
+   "name": "Zerg Hydralisk",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     135,
+     "zerg_skibact_scab",
+     153
+    ]
+   ]
   },
   "zerg_ultrokor": {
    "edit": 39,
@@ -2929,7 +3114,21 @@
    "destroy_score": 1300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Ultrokor"
+   "name": "Zerg Ultrokor",
+   "requires": [
+    [
+     {
+      "at": 97
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    [
+     140,
+     "zerg_zozarc_gorge"
+    ]
+   ]
   },
   "zerg_rilirokor": {
    "edit": 40,
@@ -3003,7 +3202,12 @@
    "destroy_score": 25,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Rilirokor"
+   "name": "Zerg Rilirokor",
+   "requires": [
+    {
+     "at": 35
+    }
+   ]
   },
   "zerg_droleth": {
    "edit": 41,
@@ -3078,7 +3282,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Droleth"
+   "name": "Zerg Droleth",
+   "requires": [
+    {
+     "at": 35
+    }
+   ]
   },
   "zerg_ovileth": {
    "edit": 42,
@@ -3154,7 +3363,12 @@
    "destroy_score": 250,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Ovileth"
+   "name": "Zerg Ovileth",
+   "requires": [
+    {
+     "at": 35
+    }
+   ]
   },
   "zerg_mutalisk": {
    "edit": 43,
@@ -3230,7 +3444,16 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Mutalisk"
+   "name": "Zerg Mutalisk",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     141,
+     197
+    ]
+   ]
   },
   "zerg_geszithalor": {
    "edit": 44,
@@ -3305,7 +3528,16 @@
    "destroy_score": 1100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Geszithalor"
+   "name": "Zerg Geszithalor",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     219,
+     "zerg_kethraj_keep"
+    ]
+   ]
   },
   "zerg_matraleth": {
    "edit": 45,
@@ -3381,7 +3613,16 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Matraleth"
+   "name": "Zerg Matraleth",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     138,
+     139
+    ]
+   ]
   },
   "zerg_isthrathaleth": {
    "edit": 46,
@@ -3457,7 +3698,18 @@
    "destroy_score": 450,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Isthrathaleth"
+   "name": "Zerg Isthrathaleth",
+   "requires": [
+    [
+     {
+      "at": "zerg_vilgorokor"
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    139
+   ]
   },
   "zerg_gosvileth": {
    "edit": 47,
@@ -3532,7 +3784,21 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Gosvileth"
+   "name": "Zerg Gosvileth",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    [
+     224,
+     152
+    ]
+   ]
   },
   "zerg_alkajelisk": {
    "edit": 48,
@@ -3607,7 +3873,18 @@
    "destroy_score": 1600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Alkajelisk"
+   "name": "Zerg Alkajelisk",
+   "requires": [
+    [
+     {
+      "at": 44
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    "zerg_kethraj_keep"
+   ]
   },
   "terran_pazuzu": {
    "edit": 49,
@@ -3680,7 +3957,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Pazuzu"
+   "name": "Terran Pazuzu",
+   "requires": [
+    {
+     "at": 198
+    }
+   ]
   },
   "terran_cohort": {
    "edit": 50,
@@ -3753,7 +4035,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Cohort"
+   "name": "Terran Cohort",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "zerg_kalkalisk": {
    "edit": 51,
@@ -3828,7 +4115,21 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Kalkalisk"
+   "name": "Zerg Kalkalisk",
+   "requires": [
+    [
+     {
+      "at": 54
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     },
+     {
+      "at": "protoss_extatus"
+     }
+    ],
+    "zerg_kalkiir_lake_2"
+   ]
   },
   "zerg_evigrilisk": {
    "edit": 52,
@@ -3902,7 +4203,16 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Evigrilisk"
+   "name": "Zerg Evigrilisk",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     170,
+     "zerg_chokral_chazsal"
+    ]
+   ]
   },
   "terran_penumbra": {
    "edit": 53,
@@ -3975,7 +4285,12 @@
    "destroy_score": 4000,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Penumbra"
+   "name": "Terran Penumbra",
+   "requires": [
+    {
+     "at": 198
+    }
+   ]
   },
   "zerg_nathrokor": {
    "edit": 54,
@@ -4050,7 +4365,16 @@
    "destroy_score": 50,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Nathrokor"
+   "name": "Zerg Nathrokor",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     "zerg_vornath_pond",
+     "zerg_kalkiir_lake_2"
+    ]
+   ]
   },
   "terran_cyclops": {
    "edit": 55,
@@ -4122,7 +4446,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Cyclops"
+   "name": "Terran Cyclops",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "zerg_gorgrokor": {
    "edit": 56,
@@ -4198,7 +4527,16 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Gorgrokor"
+   "name": "Zerg Gorgrokor",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     140,
+     "zerg_zozarc_gorge"
+    ]
+   ]
   },
   "zerg_othstoleth": {
    "edit": 57,
@@ -4273,7 +4611,13 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Othstoleth"
+   "name": "Zerg Othstoleth",
+   "requires": [
+    {
+     "at": 35
+    },
+    152
+   ]
   },
   "terran_valkyrie": {
    "edit": 58,
@@ -4347,7 +4691,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 1,
-   "name": "Terran Valkyrie"
+   "name": "Terran Valkyrie",
+   "requires": [
+    {
+     "at": "terran_starpad"
+    }
+   ]
   },
   "zerg_cocoon": {
    "edit": 59,
@@ -4492,7 +4841,12 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 1,
-   "name": "Protoss Lanifect"
+   "name": "Protoss Lanifect",
+   "requires": [
+    {
+     "at": 167
+    }
+   ]
   },
   "protoss_cabalist": {
    "edit": 61,
@@ -4565,7 +4919,12 @@
    "destroy_score": 650,
    "map_string": 0,
    "broodwar": 1,
-   "name": "Protoss Cabalist"
+   "name": "Protoss Cabalist",
+   "requires": [
+    {
+     "at": 161
+    }
+   ]
   },
   "zerg_vithrilisk": {
    "edit": 62,
@@ -4641,7 +5000,18 @@
    "destroy_score": 1100,
    "map_string": 0,
    "broodwar": 1,
-   "name": "Zerg Vithrilisk"
+   "name": "Zerg Vithrilisk",
+   "requires": [
+    [
+     {
+      "at": 185
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    153
+   ]
   },
   "protoss_mind_tyrant": {
    "edit": 63,
@@ -4715,7 +5085,12 @@
    "destroy_score": 1300,
    "map_string": 0,
    "broodwar": 1,
-   "name": "Protoss Mind Tyrant"
+   "name": "Protoss Mind Tyrant",
+   "requires": [
+    {
+     "at": 159
+    }
+   ]
   },
   "protoss_scribe": {
    "edit": 64,
@@ -4789,7 +5164,20 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Scribe"
+   "name": "Protoss Scribe",
+   "requires": [
+    [
+     {
+      "at": 154
+     },
+     {
+      "at": 166
+     },
+     {
+      "at": "omnivale"
+     }
+    ]
+   ]
   },
   "protoss_zealot": {
    "edit": 65,
@@ -4861,7 +5249,12 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Zealot"
+   "name": "Protoss Zealot",
+   "requires": [
+    {
+     "at": 160
+    }
+   ]
   },
   "protoss_dracadin": {
    "edit": 66,
@@ -4934,7 +5327,12 @@
    "destroy_score": 500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Dracadin"
+   "name": "Protoss Dracadin",
+   "requires": [
+    {
+     "at": 160
+    }
+   ]
   },
   "protoss_cantavis": {
    "edit": 67,
@@ -5007,7 +5405,12 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Cantavis"
+   "name": "Protoss Cantavis",
+   "requires": [
+    {
+     "at": 226
+    }
+   ]
   },
   "protoss_archon": {
    "edit": 68,
@@ -5080,7 +5483,12 @@
    "destroy_score": 1400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Archon"
+   "name": "Protoss Archon",
+   "requires": [
+    {
+     "at": 165
+    }
+   ]
   },
   "protoss_envoy": {
    "edit": 69,
@@ -5155,7 +5563,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Envoy"
+   "name": "Protoss Envoy",
+   "requires": [
+    {
+     "at": 166
+    }
+   ]
   },
   "protoss_panoptus": {
    "edit": 70,
@@ -5229,7 +5642,12 @@
    "destroy_score": 1300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Panoptus"
+   "name": "Protoss Panoptus",
+   "requires": [
+    {
+     "at": 167
+    }
+   ]
   },
   "protoss_didact": {
    "edit": 71,
@@ -5304,7 +5722,12 @@
    "destroy_score": 2050,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Didact"
+   "name": "Protoss Didact",
+   "requires": [
+    {
+     "at": 168
+    }
+   ]
   },
   "protoss_solarion": {
    "edit": 72,
@@ -5378,7 +5801,12 @@
    "destroy_score": 1900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Solarion"
+   "name": "Protoss Solarion",
+   "requires": [
+    {
+     "at": 168
+    }
+   ]
   },
   "protoss_steward": {
    "edit": 73,
@@ -5451,7 +5879,12 @@
    "destroy_score": 60,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Steward"
+   "name": "Protoss Steward",
+   "requires": [
+    {
+     "at": 72
+    }
+   ]
   },
   "protoss_legionnaire": {
    "edit": 74,
@@ -5523,7 +5956,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Legionnaire"
+   "name": "Protoss Legionnaire",
+   "requires": [
+    {
+     "at": 160
+    }
+   ]
   },
   "protoss_amaranth": {
    "edit": 75,
@@ -5595,7 +6033,12 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Amaranth"
+   "name": "Protoss Amaranth",
+   "requires": [
+    {
+     "at": 226
+    }
+   ]
   },
   "protoss_hierophant": {
    "edit": 76,
@@ -5668,7 +6111,12 @@
    "destroy_score": 850,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Hierophant"
+   "name": "Protoss Hierophant",
+   "requires": [
+    {
+     "at": 160
+    }
+   ]
   },
   "terran_heracles": {
    "edit": 77,
@@ -5742,7 +6190,12 @@
    "destroy_score": 450,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Heracles"
+   "name": "Terran Heracles",
+   "requires": [
+    {
+     "at": 199
+    }
+   ]
   },
   "protoss_atreus": {
    "edit": 78,
@@ -5815,7 +6268,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Atreus"
+   "name": "Protoss Atreus",
+   "requires": [
+    {
+     "at": 226
+    }
+   ]
   },
   "protoss_ecclesiast": {
    "edit": 79,
@@ -5887,7 +6345,12 @@
    "destroy_score": 1400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Ecclesiast"
+   "name": "Protoss Ecclesiast",
+   "requires": [
+    {
+     "at": 160
+    }
+   ]
   },
   "protoss_aurora": {
    "edit": 80,
@@ -5961,7 +6424,12 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Aurora"
+   "name": "Protoss Aurora",
+   "requires": [
+    {
+     "at": 167
+    }
+   ]
   },
   "protoss_clarion": {
    "edit": 81,
@@ -6036,7 +6504,12 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Clarion"
+   "name": "Protoss Clarion",
+   "requires": [
+    {
+     "at": 220
+    }
+   ]
   },
   "protoss_empyrean": {
    "edit": 82,
@@ -6110,7 +6583,12 @@
    "destroy_score": 1800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Empyrean"
+   "name": "Protoss Empyrean",
+   "requires": [
+    {
+     "at": 168
+    }
+   ]
   },
   "protoss_accantor_deprecated": {
    "edit": 83,
@@ -6184,7 +6662,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Accantor (deprecated)"
+   "name": "Protoss Accantor (deprecated)",
+   "requires": [
+    {
+     "at": "protoss_sequestered_icon"
+    }
+   ]
   },
   "protoss_witness": {
    "edit": 84,
@@ -6260,7 +6743,12 @@
    "destroy_score": 450,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Witness"
+   "name": "Protoss Witness",
+   "requires": [
+    {
+     "at": 166
+    }
+   ]
   },
   "protoss_plasma_shell_deprecated": {
    "edit": 85,
@@ -6332,7 +6820,12 @@
    "destroy_score": 50,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Plasma Shell (deprecated)"
+   "name": "Protoss Plasma Shell (deprecated)",
+   "requires": [
+    {
+     "at": 83
+    }
+   ]
   },
   "protoss_demiurge": {
    "edit": 86,
@@ -6407,7 +6900,12 @@
    "destroy_score": 1500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Demiurge"
+   "name": "Protoss Demiurge",
+   "requires": [
+    {
+     "at": 171
+    }
+   ]
   },
   "protoss_pariah": {
    "edit": 87,
@@ -6481,7 +6979,12 @@
    "destroy_score": 1600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Pariah"
+   "name": "Protoss Pariah",
+   "requires": [
+    {
+     "at": 159
+    }
+   ]
   },
   "tassadar": {
    "edit": 88,
@@ -6555,7 +7058,12 @@
    "destroy_score": 1400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Tassadar"
+   "name": "Tassadar",
+   "requires": [
+    {
+     "at": 155
+    }
+   ]
   },
   "protoss_simulacrum": {
    "edit": 89,
@@ -6628,7 +7136,12 @@
    "destroy_score": 125,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Simulacrum"
+   "name": "Protoss Simulacrum",
+   "requires": [
+    {
+     "at": 155
+    }
+   ]
   },
   "protoss_charlatan": {
    "edit": 90,
@@ -6700,7 +7213,12 @@
    "destroy_score": 1400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Charlatan"
+   "name": "Protoss Charlatan",
+   "requires": [
+    {
+     "at": 161
+    }
+   ]
   },
   "terran_wyvern": {
    "edit": 91,
@@ -6774,7 +7292,12 @@
    "destroy_score": 1150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Wyvern"
+   "name": "Terran Wyvern",
+   "requires": [
+    {
+     "at": 114
+    }
+   ]
   },
   "terran_cyprian": {
    "edit": 92,
@@ -6846,7 +7369,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Cyprian"
+   "name": "Terran Cyprian",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "zerg_rililisk": {
    "edit": 93,
@@ -6994,7 +7522,12 @@
    "destroy_score": 1500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Exemplar"
+   "name": "Protoss Exemplar",
+   "requires": [
+    {
+     "at": 167
+    }
+   ]
   },
   "zerg_quazilisk": {
    "edit": 95,
@@ -7069,7 +7602,17 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Quazilisk"
+   "name": "Zerg Quazilisk",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     142,
+     "zerg_vornath_pond",
+     "zerg_kalkiir_lake_2"
+    ]
+   ]
   },
   "zerg_keskathalor": {
    "edit": 96,
@@ -7144,7 +7687,16 @@
    "destroy_score": 1800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Keskathalor"
+   "name": "Zerg Keskathalor",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     219,
+     "zerg_kethraj_keep"
+    ]
+   ]
   },
   "zerg_zoryusthaleth": {
    "edit": 97,
@@ -7219,7 +7771,17 @@
    "destroy_score": 500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Zoryusthaleth"
+   "name": "Zerg Zoryusthaleth",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     193,
+     140,
+     "zerg_zozarc_gorge"
+    ]
+   ]
   },
   "terran_azazel": {
    "edit": 98,
@@ -7294,7 +7856,12 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Azazel"
+   "name": "Terran Azazel",
+   "requires": [
+    {
+     "at": 114
+    }
+   ]
   },
   "protoss_idol": {
    "edit": 99,
@@ -7368,7 +7935,12 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Idol"
+   "name": "Protoss Idol",
+   "requires": [
+    {
+     "at": 155
+    }
+   ]
   },
   "protoss_golem": {
    "edit": 100,
@@ -7442,7 +8014,12 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Golem"
+   "name": "Protoss Golem",
+   "requires": [
+    {
+     "at": 155
+    }
+   ]
   },
   "map_revealer": {
    "edit": 101,
@@ -7585,7 +8162,12 @@
    "destroy_score": 1500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Augur"
+   "name": "Protoss Augur",
+   "requires": [
+    {
+     "at": "protoss_hall_of_heretics"
+    }
+   ]
   },
   "zerg_lakizilisk": {
    "edit": 103,
@@ -7660,7 +8242,17 @@
    "destroy_score": 500,
    "map_string": 0,
    "broodwar": 1,
-   "name": "Zerg Lakizilisk"
+   "name": "Zerg Lakizilisk",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     193,
+     140,
+     "zerg_zozarc_gorge"
+    ]
+   ]
   },
   "protoss_barghest": {
    "edit": 104,
@@ -7736,7 +8328,12 @@
    "destroy_score": 450,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Barghest"
+   "name": "Protoss Barghest",
+   "requires": [
+    {
+     "at": 161
+    }
+   ]
   },
   "carapace_swarm_small": {
    "edit": 105,
@@ -7881,7 +8478,20 @@
    "destroy_score": 1200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Ministry"
+   "name": "Terran Ministry",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ]
+   ]
   },
   "terran_comsat_station": {
    "edit": 107,
@@ -7956,7 +8566,17 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Comsat Station"
+   "name": "Terran Comsat Station",
+   "requires": [
+    [
+     {
+      "at": 106
+     },
+     {
+      "at": 215
+     }
+    ]
+   ]
   },
   "terran_anvil": {
    "edit": 108,
@@ -8029,7 +8649,17 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Anvil"
+   "name": "Terran Anvil",
+   "requires": [
+    [
+     {
+      "at": 106
+     },
+     {
+      "at": 215
+     }
+    ]
+   ]
   },
   "terran_supply_depot": {
    "edit": 109,
@@ -8101,7 +8731,20 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Supply Depot"
+   "name": "Terran Supply Depot",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ]
+   ]
   },
   "terran_reservoir": {
    "edit": 110,
@@ -8174,7 +8817,21 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Reservoir"
+   "name": "Terran Reservoir",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    122
+   ]
   },
   "terran_stockade": {
    "edit": 111,
@@ -8248,7 +8905,20 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Stockade"
+   "name": "Terran Stockade",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ]
+   ]
   },
   "zerg_liiralisk": {
    "edit": 112,
@@ -8322,7 +8992,18 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Liiralisk"
+   "name": "Zerg Liiralisk",
+   "requires": [
+    [
+     {
+      "at": 95
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    "zerg_kalkiir_lake_2"
+   ]
   },
   "terran_fulcrum": {
    "edit": 113,
@@ -8396,7 +9077,20 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Fulcrum"
+   "name": "Terran Fulcrum",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ]
+   ]
   },
   "terran_starport": {
    "edit": 114,
@@ -8469,7 +9163,21 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Starport"
+   "name": "Terran Starport",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    163
+   ]
   },
   "terran_commandment": {
    "edit": 115,
@@ -8542,7 +9250,12 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Commandment"
+   "name": "Terran Commandment",
+   "requires": [
+    {
+     "at": 114
+    }
+   ]
   },
   "terran_daedala": {
    "edit": 116,
@@ -8616,7 +9329,21 @@
    "destroy_score": 1500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Daedala"
+   "name": "Terran Daedala",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    122
+   ]
   },
   "terran_covenant": {
    "edit": 117,
@@ -8689,7 +9416,12 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Covenant"
+   "name": "Terran Covenant",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "terran_magnetar": {
    "edit": 118,
@@ -8764,7 +9496,12 @@
    "destroy_score": 2600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Magnetar"
+   "name": "Terran Magnetar",
+   "requires": [
+    {
+     "at": "terran_nanite_assembly"
+    }
+   ]
   },
   "terran_vestry": {
    "edit": 119,
@@ -8837,7 +9574,12 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Vestry"
+   "name": "Terran Vestry",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "terran_palladium": {
    "edit": 120,
@@ -8910,7 +9652,12 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Palladium"
+   "name": "Terran Palladium",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "terran_rotary": {
    "edit": 121,
@@ -8983,7 +9730,12 @@
    "destroy_score": 250,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Rotary"
+   "name": "Terran Rotary",
+   "requires": [
+    {
+     "at": 114
+    }
+   ]
   },
   "terran_atlas": {
    "edit": 122,
@@ -9057,7 +9809,20 @@
    "destroy_score": 195,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Atlas"
+   "name": "Terran Atlas",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ]
+   ]
   },
   "zerg_sovroleth": {
    "edit": 123,
@@ -9132,7 +9897,18 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Sovroleth"
+   "name": "Zerg Sovroleth",
+   "requires": [
+    [
+     {
+      "at": "zerg_protathalor"
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    197
+   ]
   },
   "terran_watchdog": {
    "edit": 124,
@@ -9207,7 +9983,20 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Watchdog"
+   "name": "Terran Watchdog",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ]
+   ]
   },
   "terran_anchor": {
    "edit": 125,
@@ -9281,7 +10070,20 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Anchor"
+   "name": "Terran Anchor",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ]
+   ]
   },
   "zerg_kagralisk": {
    "edit": 126,
@@ -9355,7 +10157,16 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Kagralisk"
+   "name": "Zerg Kagralisk",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     170,
+     "zerg_chokral_chazsal"
+    ]
+   ]
   },
   "terran_diadem": {
    "edit": 127,
@@ -9430,7 +10241,21 @@
    "destroy_score": 5000,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Diadem"
+   "name": "Terran Diadem",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    116
+   ]
   },
   "zerg_vorvrokor": {
    "edit": 128,
@@ -9504,7 +10329,21 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Vorvrokor"
+   "name": "Zerg Vorvrokor",
+   "requires": [
+    [
+     {
+      "at": 37
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    [
+     "zerg_vornath_pond",
+     "zerg_kalkiir_lake_2"
+    ]
+   ]
   },
   "zerg_bactalisk": {
    "edit": 129,
@@ -9579,7 +10418,21 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Bactalisk"
+   "name": "Zerg Bactalisk",
+   "requires": [
+    [
+     {
+      "at": 38
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    [
+     "zerg_skibact_scab",
+     153
+    ]
+   ]
   },
   "zerg_axtoth_axis": {
    "edit": 130,
@@ -9654,7 +10507,18 @@
    "destroy_score": 750,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Axtoth Axis"
+   "name": "Zerg Axtoth Axis",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_agrileth"
+     }
+    ],
+    152
+   ]
   },
   "zerg_hachirosk": {
    "edit": 131,
@@ -9730,7 +10594,17 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Hachirosk"
+   "name": "Zerg Hachirosk",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_agrileth"
+     }
+    ]
+   ]
   },
   "zerg_caphrolosk": {
    "edit": 132,
@@ -9806,7 +10680,21 @@
    "destroy_score": 1200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Caphrolosk"
+   "name": "Zerg Caphrolosk",
+   "requires": [
+    [
+     {
+      "at": 131
+     },
+     {
+      "at": 47
+     }
+    ],
+    [
+     224,
+     152
+    ]
+   ]
   },
   "zerg_gathtelosk": {
    "edit": 133,
@@ -9882,7 +10770,18 @@
    "destroy_score": 1500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Gathtelosk"
+   "name": "Zerg Gathtelosk",
+   "requires": [
+    [
+     {
+      "at": 131
+     },
+     {
+      "at": 47
+     }
+    ],
+    152
+   ]
   },
   "zerg_nydus_cesiant": {
    "edit": 134,
@@ -9957,7 +10856,24 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Nydus Cesiant"
+   "name": "Zerg Nydus Cesiant",
+   "requires": [
+    [
+     {
+      "at": 143
+     },
+     {
+      "at": 47
+     },
+     {
+      "at": "zerg_malkothrokor"
+     }
+    ],
+    [
+     224,
+     152
+    ]
+   ]
   },
   "zerg_hydrith_den": {
    "edit": 135,
@@ -10032,7 +10948,17 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Hydrith Den"
+   "name": "Zerg Hydrith Den",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_agrileth"
+     }
+    ]
+   ]
   },
   "zerg_rakzogth_roost": {
    "edit": 136,
@@ -10107,7 +11033,18 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Rakzogth Roost"
+   "name": "Zerg Rakzogth Roost",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_agrileth"
+     }
+    ],
+    152
+   ]
   },
   "terran_olympian": {
    "edit": 137,
@@ -10180,7 +11117,12 @@
    "destroy_score": 250,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Olympian"
+   "name": "Terran Olympian",
+   "requires": [
+    {
+     "at": 199
+    }
+   ]
   },
   "zerg_matravil_nest": {
    "edit": 138,
@@ -10255,7 +11197,21 @@
    "destroy_score": 525,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Matravil Nest"
+   "name": "Zerg Matravil Nest",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_agrileth"
+     }
+    ],
+    [
+     224,
+     152
+    ]
+   ]
   },
   "zerg_almakis_antre": {
    "edit": 139,
@@ -10330,7 +11286,17 @@
    "destroy_score": 750,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Almakis Antre"
+   "name": "Zerg Almakis Antre",
+   "requires": [
+    [
+     {
+      "at": 138
+     },
+     {
+      "at": 47
+     }
+    ]
+   ]
   },
   "zerg_ulgorg_cavern": {
    "edit": 140,
@@ -10405,7 +11371,17 @@
    "destroy_score": 825,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Ulgorg Cavern"
+   "name": "Zerg Ulgorg Cavern",
+   "requires": [
+    [
+     {
+      "at": 193
+     },
+     {
+      "at": 47
+     }
+    ]
+   ]
   },
   "zerg_mutath_spire": {
    "edit": 141,
@@ -10480,7 +11456,21 @@
    "destroy_score": 750,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Mutath Spire"
+   "name": "Zerg Mutath Spire",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_agrileth"
+     }
+    ],
+    [
+     224,
+     152
+    ]
+   ]
   },
   "zerg_quazeth_pool": {
    "edit": 142,
@@ -10555,7 +11545,17 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Quazeth Pool"
+   "name": "Zerg Quazeth Pool",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_agrileth"
+     }
+    ]
+   ]
   },
   "zerg_cagrant_cesiant": {
    "edit": 143,
@@ -10630,7 +11630,17 @@
    "destroy_score": 120,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Cagrant Cesiant"
+   "name": "Zerg Cagrant Cesiant",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_agrileth"
+     }
+    ]
+   ]
   },
   "zerg_spraith_cesiant": {
    "edit": 144,
@@ -10706,7 +11716,17 @@
    "destroy_score": 195,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Spraith Cesiant"
+   "name": "Zerg Spraith Cesiant",
+   "requires": [
+    [
+     {
+      "at": 143
+     },
+     {
+      "at": 47
+     }
+    ]
+   ]
   },
   "terran_autocrat": {
    "edit": 145,
@@ -10779,7 +11799,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Autocrat"
+   "name": "Terran Autocrat",
+   "requires": [
+    {
+     "at": 199
+    }
+   ]
   },
   "zerg_surkith_cesiant": {
    "edit": 146,
@@ -10855,7 +11880,20 @@
    "destroy_score": 240,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Surkith Cesiant"
+   "name": "Zerg Surkith Cesiant",
+   "requires": [
+    [
+     {
+      "at": 143
+     },
+     {
+      "at": 47
+     },
+     {
+      "at": "zerg_malkothrokor"
+     }
+    ]
+   ]
   },
   "terran_guildhall": {
    "edit": 147,
@@ -10929,7 +11967,12 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Guildhall"
+   "name": "Terran Guildhall",
+   "requires": [
+    {
+     "at": 199
+    }
+   ]
   },
   "terran_striga": {
    "edit": 148,
@@ -11001,7 +12044,12 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Striga"
+   "name": "Terran Striga",
+   "requires": [
+    {
+     "at": 199
+    }
+   ]
   },
   "zerg_excisant": {
    "edit": 149,
@@ -11076,7 +12124,21 @@
    "destroy_score": 75,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Excisant"
+   "name": "Zerg Excisant",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_agrileth"
+     }
+    ],
+    [
+     224,
+     152
+    ]
+   ]
   },
   "terran_luminary_golden": {
    "edit": 150,
@@ -11152,7 +12214,18 @@
    "destroy_score": 1000,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Luminary (Golden)"
+   "name": "Terran Luminary (Golden)",
+   "requires": [
+    [
+     {
+      "at": 200
+     },
+     {
+      "at": 161
+     }
+    ],
+    163
+   ]
   },
   "terran_siren": {
    "edit": 151,
@@ -11225,7 +12298,12 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Siren"
+   "name": "Terran Siren",
+   "requires": [
+    {
+     "at": 199
+    }
+   ]
   },
   "zerg_othstol_oviform": {
    "edit": 152,
@@ -11301,7 +12379,17 @@
    "destroy_score": 750,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Othstol Oviform"
+   "name": "Zerg Othstol Oviform",
+   "requires": [
+    [
+     {
+      "at": 224
+     },
+     {
+      "at": 47
+     }
+    ]
+   ]
   },
   "zerg_tethvith_swamp": {
    "edit": 153,
@@ -11376,7 +12464,12 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Tethvith Swamp"
+   "name": "Zerg Tethvith Swamp",
+   "requires": [
+    {
+     "at": "zerg_skibact_scab"
+    }
+   ]
   },
   "protoss_nexus": {
    "edit": 154,
@@ -11450,7 +12543,20 @@
    "destroy_score": 1200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Nexus"
+   "name": "Protoss Nexus",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "protoss_lattice": {
    "edit": 155,
@@ -11524,7 +12630,20 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Lattice"
+   "name": "Protoss Lattice",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "protoss_pylon": {
    "edit": 156,
@@ -11596,7 +12715,20 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Pylon"
+   "name": "Protoss Pylon",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "protoss_aquifer": {
    "edit": 157,
@@ -11669,7 +12801,20 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Aquifer"
+   "name": "Protoss Aquifer",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "protoss_automaton_register": {
    "edit": 158,
@@ -11743,7 +12888,20 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Automaton Register"
+   "name": "Protoss Automaton Register",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "protoss_prostration_stage": {
    "edit": 159,
@@ -11817,7 +12975,27 @@
    "destroy_score": 525,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Prostration Stage"
+   "name": "Protoss Prostration Stage",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ],
+    [
+     226,
+     226,
+     161,
+     220,
+     167
+    ]
+   ]
   },
   "protoss_gateway": {
    "edit": 160,
@@ -11891,7 +13069,20 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Gateway"
+   "name": "Protoss Gateway",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "protoss_rogue_gallery": {
    "edit": 161,
@@ -11965,7 +13156,25 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Rogue Gallery"
+   "name": "Protoss Rogue Gallery",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ],
+    [
+     166,
+     160,
+     155
+    ]
+   ]
   },
   "protoss_warden": {
    "edit": 162,
@@ -12039,7 +13248,20 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Warden"
+   "name": "Protoss Warden",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "terran_fountainhead": {
    "edit": 163,
@@ -12112,7 +13334,12 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Fountainhead"
+   "name": "Terran Fountainhead",
+   "requires": [
+    {
+     "at": 122
+    }
+   ]
   },
   "protoss_cenotaph": {
    "edit": 164,
@@ -12186,7 +13413,20 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Cenotaph"
+   "name": "Protoss Cenotaph",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "protoss_ancestral_archives": {
    "edit": 165,
@@ -12260,7 +13500,25 @@
    "destroy_score": 750,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Ancestral Archives"
+   "name": "Protoss Ancestral Archives",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ],
+    [
+     159,
+     "protoss_unitary_union",
+     168
+    ]
+   ]
   },
   "protoss_embassy": {
    "edit": 166,
@@ -12334,7 +13592,20 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Embassy"
+   "name": "Protoss Embassy",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "protoss_stargate": {
    "edit": 167,
@@ -12407,7 +13678,25 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Stargate"
+   "name": "Protoss Stargate",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ],
+    [
+     166,
+     160,
+     155
+    ]
+   ]
   },
   "protoss_argosy": {
    "edit": 168,
@@ -12480,7 +13769,27 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Argosy"
+   "name": "Protoss Argosy",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ],
+    [
+     226,
+     226,
+     161,
+     220,
+     167
+    ]
+   ]
   },
   "protoss_fleet_beacon": {
    "edit": 169,
@@ -12554,7 +13863,20 @@
    "destroy_score": 1050,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Fleet Beacon"
+   "name": "Protoss Fleet Beacon",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "zerg_alkag_iteth": {
    "edit": 170,
@@ -12629,7 +13951,21 @@
    "destroy_score": 500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Alkag Iteth"
+   "name": "Zerg Alkag Iteth",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_agrileth"
+     }
+    ],
+    [
+     224,
+     152
+    ]
+   ]
   },
   "protoss_synthetic_synod": {
    "edit": 171,
@@ -12703,7 +14039,25 @@
    "destroy_score": 375,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Synthetic Synod"
+   "name": "Protoss Synthetic Synod",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ],
+    [
+     159,
+     "protoss_unitary_union",
+     168
+    ]
+   ]
   },
   "protoss_vagrant": {
    "edit": 172,
@@ -12775,7 +14129,12 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Vagrant"
+   "name": "Protoss Vagrant",
+   "requires": [
+    {
+     "at": 161
+    }
+   ]
   },
   "zerg_alaszileth": {
    "edit": 173,
@@ -12851,7 +14210,18 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Alaszileth"
+   "name": "Zerg Alaszileth",
+   "requires": [
+    [
+     {
+      "at": 57
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    152
+   ]
   },
   "terran_quarry": {
    "edit": 174,
@@ -12924,7 +14294,17 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Quarry"
+   "name": "Terran Quarry",
+   "requires": [
+    [
+     {
+      "at": 106
+     },
+     {
+      "at": 215
+     }
+    ]
+   ]
   },
   "terran_tinkerer_s_tower": {
    "edit": 175,
@@ -12997,7 +14377,12 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Tinkerer's Tower"
+   "name": "Terran Tinkerer's Tower",
+   "requires": [
+    {
+     "at": 199
+    }
+   ]
   },
   "mineral_field_type_1": {
    "edit": 176,
@@ -13290,7 +14675,12 @@
    "destroy_score": 5000,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Anthelion"
+   "name": "Protoss Anthelion",
+   "requires": [
+    {
+     "at": 223
+    }
+   ]
   },
   "zerg_izirokor": {
    "edit": 180,
@@ -13365,7 +14755,17 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Izirokor"
+   "name": "Zerg Izirokor",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     135,
+     "zerg_skibact_scab",
+     153
+    ]
+   ]
   },
   "zerg_irulant_ivoa": {
    "edit": 181,
@@ -13441,7 +14841,12 @@
    "destroy_score": 1000,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Irulant Ivoa"
+   "name": "Zerg Irulant Ivoa",
+   "requires": [
+    {
+     "at": 224
+    }
+   ]
   },
   "protoss_artisan": {
    "edit": 182,
@@ -13516,7 +14921,12 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Artisan"
+   "name": "Protoss Artisan",
+   "requires": [
+    {
+     "at": 166
+    }
+   ]
   },
   "protoss_empress": {
    "edit": 183,
@@ -13590,7 +15000,12 @@
    "destroy_score": 1600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Empress"
+   "name": "Protoss Empress",
+   "requires": [
+    {
+     "at": 171
+    }
+   ]
   },
   "protoss_prudence": {
    "edit": 184,
@@ -13665,7 +15080,12 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Prudence"
+   "name": "Protoss Prudence",
+   "requires": [
+    {
+     "at": 166
+    }
+   ]
   },
   "zerg_skithrokor": {
    "edit": 185,
@@ -13740,7 +15160,16 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Skithrokor"
+   "name": "Zerg Skithrokor",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     "zerg_skibact_scab",
+     153
+    ]
+   ]
   },
   "terran_paladin": {
    "edit": 186,
@@ -13813,7 +15242,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Paladin"
+   "name": "Terran Paladin",
+   "requires": [
+    {
+     "at": 198
+    }
+   ]
   },
   "terran_savant_entropy_gauntlets": {
    "edit": 187,
@@ -13886,7 +15320,12 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Savant (Entropy Gauntlets)"
+   "name": "Terran Savant (Entropy Gauntlets)",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "vespene_geyser": {
    "edit": 188,
@@ -14032,7 +15471,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Hadron"
+   "name": "Terran Hadron",
+   "requires": [
+    {
+     "at": "terran_nanite_assembly"
+    }
+   ]
   },
   "terran_biotic_bastion": {
    "edit": 190,
@@ -14105,7 +15549,12 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Biotic Bastion"
+   "name": "Terran Biotic Bastion",
+   "requires": [
+    {
+     "at": 198
+    }
+   ]
   },
   "zerg_axitrilisk": {
    "edit": 191,
@@ -14180,7 +15629,13 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Axitrilisk"
+   "name": "Zerg Axitrilisk",
+   "requires": [
+    {
+     "at": 35
+    },
+    130
+   ]
   },
   "town_center_marker_ai": {
    "edit": 192,
@@ -14252,7 +15707,13 @@
    "destroy_score": 250,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Town Center Marker (AI)"
+   "name": "Town Center Marker (AI)",
+   "requires": [
+    {
+     "at": 200
+    },
+    122
+   ]
   },
   "zerg_zorkiz_shroud": {
    "edit": 193,
@@ -14327,7 +15788,17 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Zorkiz Shroud"
+   "name": "Zerg Zorkiz Shroud",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_agrileth"
+     }
+    ]
+   ]
   },
   "terran_aspirant": {
    "edit": 194,
@@ -14400,7 +15871,12 @@
    "destroy_score": 550,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Aspirant"
+   "name": "Terran Aspirant",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "terran_blackjack": {
    "edit": 195,
@@ -14474,7 +15950,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Blackjack"
+   "name": "Terran Blackjack",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "terran_claymore": {
    "edit": 196,
@@ -14547,7 +16028,12 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Claymore"
+   "name": "Terran Claymore",
+   "requires": [
+    {
+     "at": 198
+    }
+   ]
   },
   "zerg_tosvrol_haunt": {
    "edit": 197,
@@ -14622,7 +16108,17 @@
    "destroy_score": 1350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Tosvrol Haunt"
+   "name": "Zerg Tosvrol Haunt",
+   "requires": [
+    [
+     {
+      "at": 141
+     },
+     {
+      "at": 47
+     }
+    ]
+   ]
   },
   "terran_iron_foundry": {
    "edit": 198,
@@ -14696,7 +16192,21 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Iron Foundry"
+   "name": "Terran Iron Foundry",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    116
+   ]
   },
   "terran_captaincy": {
    "edit": 199,
@@ -14770,7 +16280,21 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Captaincy"
+   "name": "Terran Captaincy",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    122
+   ]
   },
   "terran_scrapyard": {
    "edit": 200,
@@ -14843,7 +16367,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Scrapyard"
+   "name": "Terran Scrapyard",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "protoss_crucible": {
    "edit": 201,
@@ -14915,7 +16444,20 @@
    "destroy_score": 375,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Crucible"
+   "name": "Protoss Crucible",
+   "requires": [
+    {
+     "at": 64
+    },
+    [
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "carapace_swarm": {
    "edit": 202,
@@ -15774,7 +17316,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Wall Flame Trap (Right)"
+   "name": "Wall Flame Trap (Right)",
+   "requires": [
+    {
+     "at": 116
+    }
+   ]
   },
   "start_location": {
    "edit": 214,
@@ -15920,7 +17467,20 @@
    "destroy_score": 1500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Treasury"
+   "name": "Terran Treasury",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ]
+   ]
   },
   "zerg_larvosk_cesiant": {
    "edit": 216,
@@ -15996,7 +17556,20 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Larvosk Cesiant"
+   "name": "Zerg Larvosk Cesiant",
+   "requires": [
+    [
+     {
+      "at": 143
+     },
+     {
+      "at": 47
+     },
+     {
+      "at": "zerg_malkothrokor"
+     }
+    ]
+   ]
   },
   "zerg_konvilisk": {
    "edit": 217,
@@ -16071,7 +17644,16 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Konvilisk"
+   "name": "Zerg Konvilisk",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     138,
+     139
+    ]
+   ]
   },
   "zerg_akistrokor": {
    "edit": 218,
@@ -16146,7 +17728,18 @@
    "destroy_score": 500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Akistrokor"
+   "name": "Zerg Akistrokor",
+   "requires": [
+    [
+     {
+      "at": 45
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    139
+   ]
   },
   "zerg_geszkath_grotto": {
    "edit": 219,
@@ -16221,7 +17814,18 @@
    "destroy_score": 825,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Geszkath Grotto"
+   "name": "Zerg Geszkath Grotto",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_agrileth"
+     }
+    ],
+    152
+   ]
   },
   "protoss_ardent_authority": {
    "edit": 220,
@@ -16295,7 +17899,25 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Ardent Authority"
+   "name": "Protoss Ardent Authority",
+   "requires": [
+    {
+     "at": 64
+    },
+    [
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ],
+    [
+     166,
+     160,
+     155
+    ]
+   ]
   },
   "vespene_ridge": {
    "edit": 221,
@@ -16368,7 +17990,12 @@
    "destroy_score": 10,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Vespene Ridge"
+   "name": "Vespene Ridge",
+   "requires": [
+    {
+     "at": 64
+    }
+   ]
   },
   "zerg_iroleth": {
    "edit": 222,
@@ -16444,7 +18071,21 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Iroleth"
+   "name": "Zerg Iroleth",
+   "requires": [
+    [
+     {
+      "at": 42
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    [
+     224,
+     152
+    ]
+   ]
   },
   "protoss_monument_of_sin": {
    "edit": 223,
@@ -16518,7 +18159,25 @@
    "destroy_score": 2000,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Monument of Sin"
+   "name": "Protoss Monument of Sin",
+   "requires": [
+    {
+     "at": 64
+    },
+    [
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ],
+    [
+     159,
+     "protoss_unitary_union",
+     168
+    ]
+   ]
   },
   "zerg_irol_iris": {
    "edit": 224,
@@ -16594,7 +18253,17 @@
    "destroy_score": 1000,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Irol Iris"
+   "name": "Zerg Irol Iris",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_agrileth"
+     }
+    ]
+   ]
   },
   "protoss_sanctum_of_sorrow": {
    "edit": 225,
@@ -16667,7 +18336,20 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Sanctum of Sorrow"
+   "name": "Protoss Sanctum of Sorrow",
+   "requires": [
+    {
+     "at": 64
+    },
+    [
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "protoss_grand_library": {
    "edit": 226,
@@ -16741,7 +18423,25 @@
    "destroy_score": 2500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Grand Library"
+   "name": "Protoss Grand Library",
+   "requires": [
+    {
+     "at": 64
+    },
+    [
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ],
+    [
+     166,
+     160,
+     155
+    ]
+   ]
   },
   "zerg_sibraelosk": {
    "edit": 227,
@@ -16817,7 +18517,13 @@
    "destroy_score": 2000,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Sibraelosk"
+   "name": "Zerg Sibraelosk",
+   "requires": [
+    {
+     "at": 132
+    },
+    152
+   ]
   },
   "old_none": {
    "base": 0,
@@ -18619,7 +20325,20 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Matrix"
+   "name": "Protoss Matrix",
+   "requires": [
+    {
+     "at": 64
+    },
+    [
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "terran_sundog": {
    "base": 0,
@@ -18694,7 +20413,12 @@
    "destroy_score": 1200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Sundog"
+   "name": "Terran Sundog",
+   "requires": [
+    {
+     "at": 114
+    }
+   ]
   },
   "terran_starpad": {
    "base": 0,
@@ -18767,7 +20491,20 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Starpad"
+   "name": "Terran Starpad",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ]
+   ]
   },
   "terran_ancile": {
    "base": 0,
@@ -18843,7 +20580,12 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Ancile"
+   "name": "Terran Ancile",
+   "requires": [
+    {
+     "at": "terran_starpad"
+    }
+   ]
   },
   "terran_matador_tank_mode": {
    "base": 0,
@@ -18915,7 +20657,12 @@
    "destroy_score": 250,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Matador (Tank Mode)"
+   "name": "Terran Matador (Tank Mode)",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "terran_future_station": {
    "base": 0,
@@ -18988,7 +20735,12 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Future Station"
+   "name": "Terran Future Station",
+   "requires": [
+    {
+     "at": 198
+    }
+   ]
   },
   "zerg_zarcavrokor": {
    "base": 0,
@@ -19064,7 +20816,21 @@
    "destroy_score": 1200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Zarcavrokor"
+   "name": "Zerg Zarcavrokor",
+   "requires": [
+    [
+     {
+      "at": 56
+     },
+     {
+      "at": "zerg_azanthrokor_orkoti"
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    "zerg_zozarc_gorge"
+   ]
   },
   "terran_cestus": {
    "base": 0,
@@ -19138,7 +20904,20 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Cestus"
+   "name": "Terran Cestus",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ]
+   ]
   },
   "terran_sentinel": {
    "base": 0,
@@ -19213,7 +20992,21 @@
    "destroy_score": 250,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Sentinel"
+   "name": "Terran Sentinel",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    122
+   ]
   },
   "terran_nanite_assembly": {
    "base": 0,
@@ -19288,7 +21081,21 @@
    "destroy_score": 1500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Nanite Assembly"
+   "name": "Terran Nanite Assembly",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    116
+   ]
   },
   "terran_hippogriff": {
    "base": 0,
@@ -19362,7 +21169,12 @@
    "destroy_score": 1800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Hippogriff"
+   "name": "Terran Hippogriff",
+   "requires": [
+    {
+     "at": "terran_nanite_assembly"
+    }
+   ]
   },
   "terran_tarasque_nydus": {
    "base": 0,
@@ -19436,7 +21248,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Tarasque (Nydus)"
+   "name": "Terran Tarasque (Nydus)",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "terran_aion": {
    "base": 0,
@@ -19509,7 +21326,12 @@
    "destroy_score": 1500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Aion"
+   "name": "Terran Aion",
+   "requires": [
+    {
+     "at": 198
+    }
+   ]
   },
   "protoss_herald": {
    "base": 0,
@@ -19582,7 +21404,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Herald"
+   "name": "Protoss Herald",
+   "requires": [
+    {
+     "at": 226
+    }
+   ]
   },
   "protoss_epigraph": {
    "base": 0,
@@ -19656,7 +21483,12 @@
    "destroy_score": 1600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Epigraph"
+   "name": "Protoss Epigraph",
+   "requires": [
+    {
+     "at": 168
+    }
+   ]
   },
   "zerg_tethzorokor": {
    "base": 0,
@@ -19730,7 +21562,21 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Tethzorokor"
+   "name": "Zerg Tethzorokor",
+   "requires": [
+    [
+     {
+      "at": 180
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     },
+     {
+      "at": "zerg_iziralisk_zorthos"
+     }
+    ],
+    153
+   ]
   },
   "zerg_protathalor": {
    "base": 0,
@@ -19805,7 +21651,16 @@
    "destroy_score": 450,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Protathalor"
+   "name": "Zerg Protathalor",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     141,
+     197
+    ]
+   ]
   },
   "zerg_vilgorokor": {
    "base": 0,
@@ -19880,7 +21735,16 @@
    "destroy_score": 1300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Vilgorokor"
+   "name": "Zerg Vilgorokor",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     138,
+     139
+    ]
+   ]
   },
   "zerg_cikralisk": {
    "base": 0,
@@ -19955,7 +21819,16 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Cikralisk"
+   "name": "Zerg Cikralisk",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     141,
+     197
+    ]
+   ]
   },
   "zerg_tosgrilisk": {
    "base": 0,
@@ -20030,7 +21903,18 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Tosgrilisk"
+   "name": "Zerg Tosgrilisk",
+   "requires": [
+    [
+     {
+      "at": 43
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    197
+   ]
   },
   "zerg_ghitorokor": {
    "base": 0,
@@ -20105,7 +21989,18 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Ghitorokor"
+   "name": "Zerg Ghitorokor",
+   "requires": [
+    [
+     {
+      "at": "zerg_cikralisk"
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    197
+   ]
   },
   "zerg_zobriolisk": {
    "base": 0,
@@ -20256,7 +22151,18 @@
    "destroy_score": 1200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Tetcaerokor"
+   "name": "Zerg Tetcaerokor",
+   "requires": [
+    [
+     {
+      "at": 217
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    139
+   ]
   },
   "terran_wendigo": {
    "base": 0,
@@ -20330,7 +22236,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Wendigo"
+   "name": "Terran Wendigo",
+   "requires": [
+    {
+     "at": "terran_starpad"
+    }
+   ]
   },
   "terran_southpaw": {
    "base": 0,
@@ -20402,7 +22313,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Southpaw"
+   "name": "Terran Southpaw",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "zerg_selkerilisk": {
    "base": 0,
@@ -20475,7 +22391,18 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Selkerilisk"
+   "name": "Zerg Selkerilisk",
+   "requires": [
+    [
+     {
+      "at": "zerg_vilgorokor"
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    139
+   ]
   },
   "protoss_strident_stratum": {
    "base": 0,
@@ -20549,7 +22476,20 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Strident Stratum"
+   "name": "Protoss Strident Stratum",
+   "requires": [
+    {
+     "at": 64
+    },
+    [
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "protoss_auxiliary_oasis": {
    "base": 0,
@@ -20623,7 +22563,20 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Auxiliary Oasis"
+   "name": "Protoss Auxiliary Oasis",
+   "requires": [
+    {
+     "at": 64
+    },
+    [
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "terran_mantle": {
    "base": 0,
@@ -20697,7 +22650,21 @@
    "destroy_score": 750,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Mantle"
+   "name": "Terran Mantle",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    122
+   ]
   },
   "terran_ramesses": {
    "base": 0,
@@ -20770,7 +22737,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Ramesses"
+   "name": "Terran Ramesses",
+   "requires": [
+    {
+     "at": "terran_mantle"
+    }
+   ]
   },
   "terran_durendal": {
    "base": 0,
@@ -20843,7 +22815,12 @@
    "destroy_score": 750,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Durendal"
+   "name": "Terran Durendal",
+   "requires": [
+    {
+     "at": "terran_mantle"
+    }
+   ]
   },
   "terran_cataphract": {
    "base": 0,
@@ -20916,7 +22893,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Cataphract"
+   "name": "Terran Cataphract",
+   "requires": [
+    {
+     "at": "terran_mantle"
+    }
+   ]
   },
   "terran_apothecary": {
    "base": 0,
@@ -20990,7 +22972,21 @@
    "destroy_score": 750,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Apothecary"
+   "name": "Terran Apothecary",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    116
+   ]
   },
   "terran_dilettante": {
    "base": 0,
@@ -21062,7 +23058,12 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Dilettante"
+   "name": "Terran Dilettante",
+   "requires": [
+    {
+     "at": "terran_apothecary"
+    }
+   ]
   },
   "terran_sevenstep": {
    "base": 0,
@@ -21134,7 +23135,12 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Sevenstep"
+   "name": "Terran Sevenstep",
+   "requires": [
+    {
+     "at": "terran_apothecary"
+    }
+   ]
   },
   "terran_hypnagogue": {
    "base": 0,
@@ -21207,7 +23213,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Hypnagogue"
+   "name": "Terran Hypnagogue",
+   "requires": [
+    {
+     "at": "terran_apothecary"
+    }
+   ]
   },
   "terran_parthenon": {
    "base": 0,
@@ -21281,7 +23292,21 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Parthenon"
+   "name": "Terran Parthenon",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    116
+   ]
   },
   "terran_anticthon": {
    "base": 0,
@@ -21355,7 +23380,12 @@
    "destroy_score": 1500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Anticthon"
+   "name": "Terran Anticthon",
+   "requires": [
+    {
+     "at": 198
+    }
+   ]
   },
   "terran_pythean": {
    "base": 0,
@@ -21429,7 +23459,12 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Pythean"
+   "name": "Terran Pythean",
+   "requires": [
+    {
+     "at": 114
+    }
+   ]
   },
   "zerg_ogroszaleth": {
    "base": 0,
@@ -21504,7 +23539,13 @@
    "destroy_score": 500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Ogroszaleth"
+   "name": "Zerg Ogroszaleth",
+   "requires": [
+    {
+     "at": 35
+    },
+    136
+   ]
   },
   "zerg_spirtith_cesiant": {
    "base": 0,
@@ -21580,7 +23621,16 @@
    "destroy_score": 195,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Spirtith Cesiant"
+   "name": "Zerg Spirtith Cesiant",
+   "requires": [
+    {
+     "at": 144
+    },
+    [
+     224,
+     152
+    ]
+   ]
   },
   "zerg_skortrith_cesiant": {
    "base": 0,
@@ -21656,7 +23706,16 @@
    "destroy_score": 240,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Skortrith Cesiant"
+   "name": "Zerg Skortrith Cesiant",
+   "requires": [
+    {
+     "at": 146
+    },
+    [
+     224,
+     152
+    ]
+   ]
   },
   "protoss_engram": {
    "base": 0,
@@ -21730,7 +23789,27 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Engram"
+   "name": "Protoss Engram",
+   "requires": [
+    {
+     "at": 64
+    },
+    [
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ],
+    [
+     226,
+     226,
+     161,
+     220,
+     167
+    ]
+   ]
   },
   "terran_iron_council": {
    "base": 0,
@@ -21804,7 +23883,21 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Iron Council"
+   "name": "Terran Iron Council",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    "terran_cestus"
+   ]
   },
   "terran_amphitheater": {
    "base": 0,
@@ -21876,7 +23969,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Amphitheater"
+   "name": "Terran Amphitheater",
+   "requires": [
+    {
+     "at": "terran_iron_council"
+    }
+   ]
   },
   "terran_thespian": {
    "base": 0,
@@ -21948,7 +24046,12 @@
    "destroy_score": 1200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Thespian"
+   "name": "Terran Thespian",
+   "requires": [
+    {
+     "at": "terran_iron_council"
+    }
+   ]
   },
   "terran_silvertongue": {
    "base": 0,
@@ -22020,7 +24123,12 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Silvertongue"
+   "name": "Terran Silvertongue",
+   "requires": [
+    {
+     "at": "terran_apothecary"
+    }
+   ]
   },
   "terran_throneroom": {
    "base": 0,
@@ -22311,7 +24419,17 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Agrileth"
+   "name": "Zerg Agrileth",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     142,
+     "zerg_vornath_pond",
+     "zerg_kalkiir_lake_2"
+    ]
+   ]
   },
   "zerg_kethraj_keep": {
    "base": 0,
@@ -22386,7 +24504,12 @@
    "destroy_score": 825,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Kethraj Keep"
+   "name": "Zerg Kethraj Keep",
+   "requires": [
+    {
+     "at": 219
+    }
+   ]
   },
   "protoss_sequestered_icon": {
    "base": 0,
@@ -22460,7 +24583,20 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Sequestered Icon"
+   "name": "Protoss Sequestered Icon",
+   "requires": [
+    {
+     "at": 64
+    },
+    [
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "protoss_unitary_union": {
    "base": 0,
@@ -22534,7 +24670,27 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Unitary Union"
+   "name": "Protoss Unitary Union",
+   "requires": [
+    {
+     "at": 64
+    },
+    [
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ],
+    [
+     226,
+     226,
+     161,
+     220,
+     167
+    ]
+   ]
   },
   "protoss_servitor": {
    "base": 0,
@@ -22607,7 +24763,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Servitor"
+   "name": "Protoss Servitor",
+   "requires": [
+    {
+     "at": 220
+    }
+   ]
   },
   "protoss_positron": {
    "base": 0,
@@ -22680,7 +24841,12 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Positron"
+   "name": "Protoss Positron",
+   "requires": [
+    {
+     "at": 220
+    }
+   ]
   },
   "protoss_analogue": {
    "base": 0,
@@ -22753,7 +24919,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Analogue"
+   "name": "Protoss Analogue",
+   "requires": [
+    {
+     "at": 171
+    }
+   ]
   },
   "protoss_unar": {
    "base": 0,
@@ -22826,7 +24997,12 @@
    "destroy_score": 500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Unar"
+   "name": "Protoss Unar",
+   "requires": [
+    {
+     "at": "protoss_unitary_union"
+    }
+   ]
   },
   "protoss_maven": {
    "base": 0,
@@ -22898,7 +25074,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Maven"
+   "name": "Protoss Maven",
+   "requires": [
+    {
+     "at": "protoss_auxiliary_oasis"
+    }
+   ]
   },
   "protoss_cloudform": {
    "base": 0,
@@ -22970,7 +25151,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Cloudform"
+   "name": "Protoss Cloudform",
+   "requires": [
+    {
+     "at": "protoss_auxiliary_oasis"
+    }
+   ]
   },
   "protoss_vibrance": {
    "base": 0,
@@ -23043,7 +25229,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Vibrance"
+   "name": "Protoss Vibrance",
+   "requires": [
+    {
+     "at": "protoss_unitary_union"
+    }
+   ]
   },
   "protoss_oscilliant": {
    "base": 0,
@@ -23116,7 +25307,12 @@
    "destroy_score": 500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Oscilliant"
+   "name": "Protoss Oscilliant",
+   "requires": [
+    {
+     "at": "protoss_unitary_union"
+    }
+   ]
   },
   "protoss_potentate": {
    "base": 0,
@@ -23189,7 +25385,12 @@
    "destroy_score": 1200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Potentate"
+   "name": "Protoss Potentate",
+   "requires": [
+    {
+     "at": 159
+    }
+   ]
   },
   "protoss_sycophant": {
    "base": 0,
@@ -23261,7 +25462,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Sycophant"
+   "name": "Protoss Sycophant",
+   "requires": [
+    {
+     "at": 159
+    }
+   ]
   },
   "protoss_optecton": {
    "base": 0,
@@ -23334,7 +25540,12 @@
    "destroy_score": 1200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Optecton"
+   "name": "Protoss Optecton",
+   "requires": [
+    {
+     "at": 165
+    }
+   ]
   },
   "protoss_patriarch": {
    "base": 0,
@@ -23407,7 +25618,12 @@
    "destroy_score": 1200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Patriarch"
+   "name": "Protoss Patriarch",
+   "requires": [
+    {
+     "at": 165
+    }
+   ]
   },
   "protoss_apostate": {
    "base": 0,
@@ -23479,7 +25695,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Apostate"
+   "name": "Protoss Apostate",
+   "requires": [
+    {
+     "at": "protoss_hall_of_heretics"
+    }
+   ]
   },
   "zerg_mortothrokor": {
    "base": 0,
@@ -23554,7 +25775,16 @@
    "destroy_score": 1300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Mortothrokor"
+   "name": "Zerg Mortothrokor",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     130,
+     "zerg_begrozith_barrow"
+    ]
+   ]
   },
   "zerg_cherbrathalor": {
    "base": 0,
@@ -23629,7 +25859,18 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Cherbrathalor"
+   "name": "Zerg Cherbrathalor",
+   "requires": [
+    [
+     {
+      "at": 126
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    "zerg_chokral_chazsal"
+   ]
   },
   "zerg_okrimnilisk": {
    "base": 0,
@@ -23704,7 +25945,18 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Okrimnilisk"
+   "name": "Zerg Okrimnilisk",
+   "requires": [
+    [
+     {
+      "at": 52
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    "zerg_chokral_chazsal"
+   ]
   },
   "zerg_algoztalisk": {
    "base": 0,
@@ -23779,7 +26031,18 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Algoztalisk"
+   "name": "Zerg Algoztalisk",
+   "requires": [
+    [
+     {
+      "at": 29
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    "zerg_chokral_chazsal"
+   ]
   },
   "zerg_elthrazalisk": {
    "base": 0,
@@ -23853,7 +26116,16 @@
    "destroy_score": 1000,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Elthrazalisk"
+   "name": "Zerg Elthrazalisk",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     136,
+     "zerg_kethraj_keep"
+    ]
+   ]
   },
   "zerg_begrothilisk": {
    "base": 0,
@@ -24072,7 +26344,18 @@
    "destroy_score": 3000,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Kethrostalor"
+   "name": "Zerg Kethrostalor",
+   "requires": [
+    [
+     {
+      "at": 96
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    "zerg_kethraj_keep"
+   ]
   },
   "zerg_rakzilisk": {
    "base": 0,
@@ -24144,7 +26427,13 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Rakzilisk"
+   "name": "Zerg Rakzilisk",
+   "requires": [
+    {
+     "at": 35
+    },
+    136
+   ]
   },
   "terran_philoc": {
    "base": 0,
@@ -24218,7 +26507,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Philoc"
+   "name": "Terran Philoc",
+   "requires": [
+    {
+     "at": "terran_starpad"
+    }
+   ]
   },
   "zerg_begrozith_barrow": {
    "base": 0,
@@ -24290,7 +26584,17 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Begrozith Barrow"
+   "name": "Zerg Begrozith Barrow",
+   "requires": [
+    [
+     {
+      "at": 130
+     },
+     {
+      "at": 47
+     }
+    ]
+   ]
   },
   "zerg_chokral_chazsal": {
    "base": 0,
@@ -24365,7 +26669,17 @@
    "destroy_score": 500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Chokral Chazsal"
+   "name": "Zerg Chokral Chazsal",
+   "requires": [
+    [
+     {
+      "at": 170
+     },
+     {
+      "at": 47
+     }
+    ]
+   ]
   },
   "protoss_bulwark": {
    "base": 0,
@@ -24439,7 +26753,20 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Bulwark"
+   "name": "Protoss Bulwark",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "terran_civilian": {
    "base": 0,
@@ -25687,7 +28014,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Monogram"
+   "name": "Protoss Monogram",
+   "requires": [
+    {
+     "at": "protoss_strident_stratum"
+    }
+   ]
   },
   "protoss_hall_of_heretics": {
    "base": 0,
@@ -25759,7 +28091,20 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Hall of Heretics"
+   "name": "Protoss Hall of Heretics",
+   "requires": [
+    {
+     "at": 64
+    },
+    [
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "zerg_nephrilosk": {
    "base": 0,
@@ -25831,7 +28176,13 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Nephrilosk"
+   "name": "Zerg Nephrilosk",
+   "requires": [
+    {
+     "at": 133
+    },
+    152
+   ]
   },
   "protoss_vagrant_shade": {
    "base": 0,
@@ -25977,7 +28328,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Accantor"
+   "name": "Protoss Accantor",
+   "requires": [
+    {
+     "at": 220
+    }
+   ]
   },
   "zerg_ocsal_larva": {
    "base": 0,
@@ -26126,7 +28482,16 @@
    "destroy_score": 500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Ocsal Cesiant"
+   "name": "Zerg Ocsal Cesiant",
+   "requires": [
+    {
+     "at": 216
+    },
+    [
+     224,
+     152
+    ]
+   ]
   },
   "zerg_kazitrith_cesiant": {
    "base": 0,
@@ -26202,7 +28567,20 @@
    "destroy_score": 120,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Kazitrith Cesiant"
+   "name": "Zerg Kazitrith Cesiant",
+   "requires": [
+    [
+     {
+      "at": 143
+     },
+     {
+      "at": 47
+     },
+     {
+      "at": "zerg_malkothrokor"
+     }
+    ]
+   ]
   },
   "btn_ocsal_larva_swarm": {
    "base": 0,
@@ -26564,7 +28942,12 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Vassal"
+   "name": "Protoss Vassal",
+   "requires": [
+    {
+     "at": 155
+    }
+   ]
   },
   "btn_mixed_mason_training": {
    "base": 0,
@@ -26859,7 +29242,18 @@
    "destroy_score": 75,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Ezigrisant"
+   "name": "Zerg Ezigrisant",
+   "requires": [
+    [
+     {
+      "at": 149
+     },
+     {
+      "at": 47
+     }
+    ],
+    152
+   ]
   },
   "terran_wellbore": {
    "base": 0,
@@ -26932,7 +29326,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Wellbore"
+   "name": "Terran Wellbore",
+   "requires": [
+    {
+     "at": "police_intern"
+    }
+   ]
   },
   "protoss_pennant": {
    "base": 0,
@@ -27005,7 +29404,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Pennant"
+   "name": "Protoss Pennant",
+   "requires": [
+    {
+     "at": "zerg_ezigrisant"
+    }
+   ]
   },
   "police_intern": {
    "base": 0,
@@ -27078,7 +29482,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Police Intern"
+   "name": "Police Intern",
+   "requires": [
+    {
+     "at": "zerg_ezigrisant"
+    }
+   ]
   },
   "btn_mixed_scribe_training": {
    "base": 0,
@@ -27295,7 +29704,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Police Dugout"
+   "name": "Police Dugout",
+   "requires": [
+    {
+     "at": "police_intern"
+    }
+   ]
   },
   "terran_matador_cinder_mode": {
    "base": 0,
@@ -27365,7 +29779,17 @@
    "destroy_score": 250,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Matador (Cinder Mode)"
+   "name": "Terran Matador (Cinder Mode)",
+   "requires": [
+    [
+     {
+      "at": "zerg_ezigrisant"
+     },
+     {
+      "at": "protoss_pennant"
+     }
+    ]
+   ]
   },
   "terran_cuirass_trench_mode": {
    "base": 0,
@@ -28305,7 +30729,17 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Lodestone"
+   "name": "Terran Lodestone",
+   "requires": [
+    [
+     {
+      "at": 106
+     },
+     {
+      "at": 215
+     }
+    ]
+   ]
   },
   "floor_hatch": {
    "base": 0,
@@ -29100,7 +31534,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Hotshot"
+   "name": "Terran Hotshot",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "zerg_vornath_pond": {
    "base": 0,
@@ -29175,7 +31614,17 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Vornath Pond"
+   "name": "Zerg Vornath Pond",
+   "requires": [
+    [
+     {
+      "at": 142
+     },
+     {
+      "at": 47
+     }
+    ]
+   ]
   },
   "zerg_skibact_scab": {
    "base": 0,
@@ -29250,7 +31699,17 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Skibact Scab"
+   "name": "Zerg Skibact Scab",
+   "requires": [
+    [
+     {
+      "at": 135
+     },
+     {
+      "at": 47
+     }
+    ]
+   ]
   },
   "terran_qilin": {
    "base": 0,
@@ -29324,7 +31783,12 @@
    "destroy_score": 500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Qilin"
+   "name": "Terran Qilin",
+   "requires": [
+    {
+     "at": "terran_starpad"
+    }
+   ]
   },
   "terran_auriel": {
    "base": 0,
@@ -29397,7 +31861,12 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Auriel"
+   "name": "Terran Auriel",
+   "requires": [
+    {
+     "at": 199
+    }
+   ]
   },
   "protoss_adherent": {
    "base": 0,
@@ -29469,7 +31938,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Adherent"
+   "name": "Protoss Adherent",
+   "requires": [
+    {
+     "at": 160
+    }
+   ]
   },
   "protoss_extatus": {
    "base": 0,
@@ -29543,7 +32017,12 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Extatus"
+   "name": "Protoss Extatus",
+   "requires": [
+    {
+     "at": 167
+    }
+   ]
   },
   "zerg_nathrelisk_zorthos": {
    "base": 0,
@@ -29617,7 +32096,16 @@
    "destroy_score": 50,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Nathrelisk (Zorthos)"
+   "name": "Zerg Nathrelisk (Zorthos)",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     "zerg_vornath_pond",
+     "zerg_kalkiir_lake_2"
+    ]
+   ]
   },
   "zerg_iziralisk_zorthos": {
    "base": 0,
@@ -29692,7 +32180,17 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Iziralisk (Zorthos)"
+   "name": "Zerg Iziralisk (Zorthos)",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     135,
+     "zerg_skibact_scab",
+     153
+    ]
+   ]
   },
   "faction_selection_protoss": {
    "base": 0,
@@ -29985,7 +32483,16 @@
    "destroy_score": 850,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Sasyrvoleth"
+   "name": "Zerg Sasyrvoleth",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     130,
+     "zerg_begrozith_barrow"
+    ]
+   ]
   },
   "terran_tencendur": {
    "base": 0,
@@ -30059,7 +32566,21 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Tencendur"
+   "name": "Terran Tencendur",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    122
+   ]
   },
   "ackmed": {
    "base": 0,
@@ -30205,7 +32726,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Cyclops (Futurist)"
+   "name": "Terran Cyclops (Futurist)",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "protoss_zealot_starbound": {
    "base": 0,
@@ -30277,7 +32803,12 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Zealot (Starbound)"
+   "name": "Protoss Zealot (Starbound)",
+   "requires": [
+    {
+     "at": 160
+    }
+   ]
   },
   "protoss_ecclesiast_khalendric_knights": {
    "base": 0,
@@ -30349,7 +32880,12 @@
    "destroy_score": 1400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Ecclesiast (Khalendric Knights)"
+   "name": "Protoss Ecclesiast (Khalendric Knights)",
+   "requires": [
+    {
+     "at": 160
+    }
+   ]
   },
   "terran_harakan_golden": {
    "base": 0,
@@ -30421,7 +32957,12 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Harakan (Golden)"
+   "name": "Terran Harakan (Golden)",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "protoss_cicatus_starbound": {
    "base": 0,
@@ -30493,7 +33034,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Cicatus (Starbound)"
+   "name": "Protoss Cicatus (Starbound)",
+   "requires": [
+    {
+     "at": 160
+    }
+   ]
   },
   "zerg_inzorthrokor_imicren": {
    "base": 0,
@@ -30568,7 +33114,17 @@
    "destroy_score": 500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Inzorthrokor (Imicren)"
+   "name": "Zerg Inzorthrokor (Imicren)",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     193,
+     140,
+     "zerg_zozarc_gorge"
+    ]
+   ]
   },
   "volatile_egg": {
    "base": 0,
@@ -30782,7 +33338,13 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 1,
-   "name": "Terran Cleric (Futurist)"
+   "name": "Terran Cleric (Futurist)",
+   "requires": [
+    {
+     "at": 111
+    },
+    119
+   ]
   },
   "terran_sieve": {
    "base": 0,
@@ -30855,7 +33417,20 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Sieve"
+   "name": "Terran Sieve",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ]
+   ]
   },
   "protoss_cedent": {
    "base": 0,
@@ -30928,7 +33503,20 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Cedent"
+   "name": "Protoss Cedent",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ]
+   ]
   },
   "zerg_eskigant": {
    "base": 0,
@@ -31003,7 +33591,17 @@
    "destroy_score": 75,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Eskigant"
+   "name": "Zerg Eskigant",
+   "requires": [
+    [
+     {
+      "at": 41
+     },
+     {
+      "at": "zerg_agrileth"
+     }
+    ]
+   ]
   },
   "zerg_quazrokor": {
    "base": 0,
@@ -31078,7 +33676,17 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Quazrokor"
+   "name": "Zerg Quazrokor",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     142,
+     "zerg_vornath_pond",
+     "zerg_kalkiir_lake_2"
+    ]
+   ]
   },
   "protoss_renesair": {
    "base": 0,
@@ -31152,7 +33760,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Renesair"
+   "name": "Protoss Renesair",
+   "requires": [
+    {
+     "at": 155
+    }
+   ]
   },
   "protoss_ashguard": {
    "base": 0,
@@ -31225,7 +33838,12 @@
    "destroy_score": 850,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Ashguard"
+   "name": "Protoss Ashguard",
+   "requires": [
+    {
+     "at": 160
+    }
+   ]
   },
   "zerg_lakizilisk_zorthos": {
    "base": 0,
@@ -31374,7 +33992,39 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Xenolith"
+   "name": "Protoss Xenolith",
+   "requires": [
+    [
+     {
+      "at": 64
+     },
+     {
+      "at": 184
+     },
+     {
+      "at": "protoss_autocort"
+     }
+    ],
+    [
+     226,
+     226,
+     161,
+     220,
+     167
+    ],
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    122
+   ]
   },
   "terran_facade": {
    "base": 0,
@@ -31448,7 +34098,21 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Facade"
+   "name": "Terran Facade",
+   "requires": [
+    [
+     {
+      "at": 7
+     },
+     {
+      "at": 20
+     },
+     {
+      "at": "terran_ogun_worker_mode"
+     }
+    ],
+    122
+   ]
   },
   "terran_savant_power_siphon": {
    "base": 0,
@@ -31593,7 +34257,20 @@
    "destroy_score": 1200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Landlock"
+   "name": "Askosi Landlock",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ]
+   ]
   },
   "protoss_dracadin_order": {
    "base": 0,
@@ -31666,7 +34343,12 @@
    "destroy_score": 500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Dracadin (Order)"
+   "name": "Protoss Dracadin (Order)",
+   "requires": [
+    {
+     "at": 160
+    }
+   ]
   },
   "terran_blackjack_golden": {
    "base": 0,
@@ -31740,7 +34422,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Blackjack (Golden)"
+   "name": "Terran Blackjack (Golden)",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "terran_eidolon_nydus": {
    "base": 0,
@@ -31814,7 +34501,12 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Eidolon (Nydus)"
+   "name": "Terran Eidolon (Nydus)",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "terran_tiangou_base": {
    "base": 0,
@@ -31887,7 +34579,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Tiangou (Base)"
+   "name": "Terran Tiangou (Base)",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "tiangou_turret": {
    "base": 0,
@@ -32031,7 +34728,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Maverick (Futurist)"
+   "name": "Terran Maverick (Futurist)",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "zerg_hydralisk_orkoti": {
    "base": 0,
@@ -32105,7 +34807,17 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Hydralisk (Orkoti)"
+   "name": "Zerg Hydralisk (Orkoti)",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     135,
+     "zerg_skibact_scab",
+     153
+    ]
+   ]
   },
   "protoss_manifold_starbound": {
    "base": 0,
@@ -32254,7 +34966,17 @@
    "destroy_score": 250,
    "map_string": 0,
    "broodwar": 1,
-   "name": "Zerg Yblyleth (Zorthos)"
+   "name": "Zerg Yblyleth (Zorthos)",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     142,
+     "zerg_vornath_pond",
+     "zerg_kalkiir_lake_2"
+    ]
+   ]
   },
   "askosi_pilgrim": {
    "base": 0,
@@ -32327,7 +35049,20 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Pilgrim"
+   "name": "Askosi Pilgrim",
+   "requires": [
+    [
+     {
+      "at": "askosi_landlock"
+     },
+     {
+      "at": "askosi_domain"
+     },
+     {
+      "at": "omnivale"
+     }
+    ]
+   ]
   },
   "basic_askosi_facilities": {
    "base": 0,
@@ -32616,7 +35351,21 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Proselyte"
+   "name": "Askosi Proselyte",
+   "requires": [
+    [
+     {
+      "at": "askosi_landlock"
+     },
+     {
+      "at": "askosi_domain"
+     }
+    ],
+    [
+     "askosi_radix",
+     "askosi_function"
+    ]
+   ]
   },
   "askosi_dyad": {
    "base": 0,
@@ -32688,7 +35437,13 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Dyad"
+   "name": "Askosi Dyad",
+   "requires": [
+    {
+     "at": "askosi_radix"
+    },
+    "askosi_cipher"
+   ]
   },
   "askosi_missionary": {
    "base": 0,
@@ -32833,7 +35588,12 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Cardinal"
+   "name": "Askosi Cardinal",
+   "requires": [
+    {
+     "at": "askosi_radix"
+    }
+   ]
   },
   "askosi_mimic": {
    "base": 0,
@@ -32979,7 +35739,13 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Vicar"
+   "name": "Askosi Vicar",
+   "requires": [
+    {
+     "at": "askosi_radix"
+    },
+    "askosi_gauntlet"
+   ]
   },
   "askosi_rove": {
    "base": 0,
@@ -33052,7 +35818,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Rove"
+   "name": "Askosi Rove",
+   "requires": [
+    {
+     "at": "askosi_function"
+    }
+   ]
   },
   "askosi_object": {
    "base": 0,
@@ -33125,7 +35896,12 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Object"
+   "name": "Askosi Object",
+   "requires": [
+    {
+     "at": "askosi_function"
+    }
+   ]
   },
   "askosi_scepter": {
    "base": 0,
@@ -33198,7 +35974,13 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Scepter"
+   "name": "Askosi Scepter",
+   "requires": [
+    {
+     "at": "askosi_function"
+    },
+    "askosi_cipher"
+   ]
   },
   "askosi_intendent": {
    "base": 0,
@@ -33271,7 +36053,13 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Intendent"
+   "name": "Askosi Intendent",
+   "requires": [
+    {
+     "at": "askosi_function"
+    },
+    "askosi_gauntlet"
+   ]
   },
   "askosi_helion": {
    "base": 0,
@@ -33345,7 +36133,12 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Helion"
+   "name": "Askosi Helion",
+   "requires": [
+    {
+     "at": "askosi_cosmoscope"
+    }
+   ]
   },
   "askosi_emissary": {
    "base": 0,
@@ -33420,7 +36213,12 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Emissary"
+   "name": "Askosi Emissary",
+   "requires": [
+    {
+     "at": "askosi_cosmoscope"
+    }
+   ]
   },
   "askosi_inkblot": {
    "base": 0,
@@ -33494,7 +36292,13 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Inkblot"
+   "name": "Askosi Inkblot",
+   "requires": [
+    {
+     "at": "askosi_cosmoscope"
+    },
+    "askosi_cipher"
+   ]
   },
   "askosi_tirade": {
    "base": 0,
@@ -33568,7 +36372,13 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Tirade"
+   "name": "Askosi Tirade",
+   "requires": [
+    {
+     "at": "askosi_cosmoscope"
+    },
+    "askosi_gauntlet"
+   ]
   },
   "askosi_arch": {
    "base": 0,
@@ -33641,7 +36451,20 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Arch"
+   "name": "Askosi Arch",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ]
+   ]
   },
   "askosi_grandstand_cannon": {
    "base": 0,
@@ -33714,7 +36537,24 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Grandstand (Cannon)"
+   "name": "Askosi Grandstand (Cannon)",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    [
+     "askosi_radix",
+     "askosi_function"
+    ]
+   ]
   },
   "askosi_chantry": {
    "base": 0,
@@ -33786,7 +36626,24 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Chantry"
+   "name": "Askosi Chantry",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    [
+     "askosi_radix",
+     "askosi_function"
+    ]
+   ]
   },
   "askosi_radix": {
    "base": 0,
@@ -33859,7 +36716,20 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Radix"
+   "name": "Askosi Radix",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ]
+   ]
   },
   "askosi_cipher": {
    "base": 0,
@@ -33931,7 +36801,24 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Cipher"
+   "name": "Askosi Cipher",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    [
+     "askosi_radix",
+     "askosi_function"
+    ]
+   ]
   },
   "askosi_function": {
    "base": 0,
@@ -34004,7 +36891,20 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Function"
+   "name": "Askosi Function",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ]
+   ]
   },
   "askosi_gauntlet": {
    "base": 0,
@@ -34076,7 +36976,24 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Gauntlet"
+   "name": "Askosi Gauntlet",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    [
+     "askosi_radix",
+     "askosi_function"
+    ]
+   ]
   },
   "askosi_cosmoscope": {
    "base": 0,
@@ -34149,7 +37066,24 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Cosmoscope"
+   "name": "Askosi Cosmoscope",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    [
+     "askosi_radix",
+     "askosi_function"
+    ]
+   ]
   },
   "ragnasaur_ashworld": {
    "base": 0,
@@ -35936,7 +38870,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Blackguard"
+   "name": "Terran Blackguard",
+   "requires": [
+    {
+     "at": 199
+    }
+   ]
   },
   "terran_arhaun": {
    "base": 0,
@@ -36009,7 +38948,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Arhaun"
+   "name": "Terran Arhaun",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "arhaun_turret": {
    "base": 0,
@@ -36228,7 +39172,12 @@
    "destroy_score": 825,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Zozarc Gorge"
+   "name": "Zerg Zozarc Gorge",
+   "requires": [
+    {
+     "at": 140
+    }
+   ]
   },
   "terran_ogun_worker_mode": {
    "base": 0,
@@ -36300,7 +39249,18 @@
    "destroy_score": 250,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Ogun (Worker Mode)"
+   "name": "Terran Ogun (Worker Mode)",
+   "requires": [
+    [
+     {
+      "at": 106
+     },
+     {
+      "at": 215
+     }
+    ],
+    174
+   ]
   },
   "protoss_autocort": {
    "base": 0,
@@ -36373,7 +39333,12 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Autocort"
+   "name": "Protoss Autocort",
+   "requires": [
+    {
+     "at": 166
+    }
+   ]
   },
   "terran_cannibal_upstart": {
    "base": 0,
@@ -36445,7 +39410,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Cannibal (Upstart)"
+   "name": "Terran Cannibal (Upstart)",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "terran_ogun_smithy_mode": {
    "base": 0,
@@ -37033,7 +40003,12 @@
    "destroy_score": 450,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Madrigal (Hecaton, Imperioso)"
+   "name": "Terran Madrigal (Hecaton, Imperioso)",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "madrigal_turret_hecaton_imperioso": {
    "base": 0,
@@ -37177,7 +40152,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Vulture (Hecaton)"
+   "name": "Terran Vulture (Hecaton)",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "terran_tartarus_mine_hecaton": {
    "base": 0,
@@ -37464,7 +40444,22 @@
    "destroy_score": 1200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Bounty"
+   "name": "Askosi Bounty",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    "askosi_cipher",
+    "askosi_gauntlet"
+   ]
   },
   "zerg_azanthrokor_orkoti": {
    "base": 0,
@@ -37540,7 +40535,16 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Azanthrokor (Orkoti)"
+   "name": "Zerg Azanthrokor (Orkoti)",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     140,
+     "zerg_zozarc_gorge"
+    ]
+   ]
   },
   "terran_triton": {
    "base": 0,
@@ -37614,7 +40618,12 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Triton"
+   "name": "Terran Triton",
+   "requires": [
+    {
+     "at": "terran_mantle"
+    }
+   ]
   },
   "triton_turret": {
    "base": 0,
@@ -38122,7 +41131,17 @@
    "destroy_score": 50,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Sovrokor (Goszirith)"
+   "name": "Zerg Sovrokor (Goszirith)",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     142,
+     "zerg_vornath_pond",
+     "zerg_kalkiir_lake_2"
+    ]
+   ]
   },
   "terran_valkyrie_hecaton": {
    "base": 0,
@@ -38196,7 +41215,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 1,
-   "name": "Terran Valkyrie (Hecaton)"
+   "name": "Terran Valkyrie (Hecaton)",
+   "requires": [
+    {
+     "at": "terran_starpad"
+    }
+   ]
   },
   "zerg_garvrokor_goszirith": {
    "base": 0,
@@ -38270,7 +41294,21 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Garvrokor (Goszirith)"
+   "name": "Zerg Garvrokor (Goszirith)",
+   "requires": [
+    [
+     {
+      "at": "zerg_sovrokor_goszirith"
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    [
+     "zerg_vornath_pond",
+     "zerg_kalkiir_lake_2"
+    ]
+   ]
   },
   "protoss_simulacrum_astral": {
    "base": 0,
@@ -38343,7 +41381,12 @@
    "destroy_score": 125,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Simulacrum (Astral)"
+   "name": "Protoss Simulacrum (Astral)",
+   "requires": [
+    {
+     "at": 155
+    }
+   ]
   },
   "protoss_warlock_astral": {
    "base": 0,
@@ -38416,7 +41459,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Warlock (Astral)"
+   "name": "Protoss Warlock (Astral)",
+   "requires": [
+    {
+     "at": 226
+    }
+   ]
   },
   "scenario_unit_1": {
    "base": 0,
@@ -39516,7 +42564,13 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Avatar"
+   "name": "Askosi Avatar",
+   "requires": [
+    {
+     "at": "askosi_proscenium"
+    },
+    "askosi_conduit"
+   ]
   },
   "askosi_abutment": {
    "base": 0,
@@ -39589,7 +42643,22 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Abutment"
+   "name": "Askosi Abutment",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    "askosi_cipher",
+    "askosi_gauntlet"
+   ]
   },
   "askosi_proscenium": {
    "base": 0,
@@ -39662,7 +42731,22 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Proscenium"
+   "name": "Askosi Proscenium",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    "askosi_cipher",
+    "askosi_gauntlet"
+   ]
   },
   "terran_quadriga_golden": {
    "base": 0,
@@ -39808,7 +42892,12 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Thaumalogue"
+   "name": "Askosi Thaumalogue",
+   "requires": [
+    {
+     "at": "askosi_proscenium"
+    }
+   ]
   },
   "askosi_petract": {
    "base": 0,
@@ -40029,7 +43118,22 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Zylode"
+   "name": "Askosi Zylode",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    "askosi_cipher",
+    "askosi_gauntlet"
+   ]
   },
   "askosi_astrolabe": {
    "base": 0,
@@ -40102,7 +43206,24 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Astrolabe"
+   "name": "Askosi Astrolabe",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    [
+     "askosi_proscenium",
+     "askosi_zylode"
+    ]
+   ]
   },
   "terran_serathiel_hecaton": {
    "base": 0,
@@ -40179,7 +43300,12 @@
    "destroy_score": 1250,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Serathiel (Hecaton)"
+   "name": "Terran Serathiel (Hecaton)",
+   "requires": [
+    {
+     "at": 114
+    }
+   ]
   },
   "zerg_malkothrokor": {
    "base": 0,
@@ -40254,7 +43380,13 @@
    "destroy_score": 2000,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Malkothrokor"
+   "name": "Zerg Malkothrokor",
+   "requires": [
+    {
+     "at": 35
+    },
+    152
+   ]
   },
   "zerg_kalkiir_lake_2": {
    "base": 0,
@@ -40329,7 +43461,12 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Kalkiir Lake"
+   "name": "Zerg Kalkiir Lake",
+   "requires": [
+    {
+     "at": "zerg_vornath_pond"
+    }
+   ]
   },
   "askosi_panoply": {
    "base": 0,
@@ -40402,7 +43539,22 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Panoply"
+   "name": "Askosi Panoply",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    "askosi_conduit",
+    "askosi_bestiary"
+   ]
   },
   "askosi_aphorist": {
    "base": 0,
@@ -40475,7 +43627,12 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Aphorist"
+   "name": "Askosi Aphorist",
+   "requires": [
+    {
+     "at": "askosi_proscenium"
+    }
+   ]
   },
   "askosi_doronin": {
    "base": 0,
@@ -40548,7 +43705,13 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Doronin"
+   "name": "Askosi Doronin",
+   "requires": [
+    {
+     "at": "askosi_proscenium"
+    },
+    "askosi_bestiary"
+   ]
   },
   "askosi_agonist": {
    "base": 0,
@@ -41065,7 +44228,21 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Zethalor (Orkoti)"
+   "name": "Zerg Zethalor (Orkoti)",
+   "requires": [
+    [
+     {
+      "at": 37
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    [
+     "zerg_vornath_pond",
+     "zerg_kalkiir_lake_2"
+    ]
+   ]
   },
   "zerg_scrylyleth_zorthos": {
    "base": 0,
@@ -41140,7 +44317,21 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 1,
-   "name": "Zerg Scrylyleth (Zorthos)"
+   "name": "Zerg Scrylyleth (Zorthos)",
+   "requires": [
+    [
+     {
+      "at": "zerg_yblyleth_zorthos"
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    [
+     224,
+     152
+    ]
+   ]
   },
   "askosi_bestiary": {
    "base": 0,
@@ -41212,7 +44403,24 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Bestiary"
+   "name": "Askosi Bestiary",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    [
+     "askosi_proscenium",
+     "askosi_zylode"
+    ]
+   ]
   },
   "askosi_conduit": {
    "base": 0,
@@ -41284,7 +44492,24 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Conduit"
+   "name": "Askosi Conduit",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    [
+     "askosi_proscenium",
+     "askosi_zylode"
+    ]
+   ]
   },
   "askosi_obelisk": {
    "base": 0,
@@ -41577,7 +44802,21 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Constituent"
+   "name": "Askosi Constituent",
+   "requires": [
+    [
+     {
+      "at": "askosi_landlock"
+     },
+     {
+      "at": "askosi_domain"
+     }
+    ],
+    [
+     "askosi_proscenium",
+     "askosi_zylode"
+    ]
+   ]
   },
   "terran_goremast_upstart": {
    "base": 0,
@@ -41721,7 +44960,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Broadside (Upstart)"
+   "name": "Terran Broadside (Upstart)",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "broadside_turret_upstart": {
    "base": 0,
@@ -41865,7 +45109,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Vulture (Upstart)"
+   "name": "Terran Vulture (Upstart)",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "terran_cutlass_futurist": {
    "base": 0,
@@ -41937,7 +45186,12 @@
    "destroy_score": 250,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Cutlass (Futurist)"
+   "name": "Terran Cutlass (Futurist)",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "cutlass_turret_futurist": {
    "base": 0,
@@ -42081,7 +45335,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Maverick (Upstart)"
+   "name": "Terran Maverick (Upstart)",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "protoss_tritius_astral": {
    "base": 0,
@@ -42153,7 +45412,12 @@
    "destroy_score": 1400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Tritius (Astral)"
+   "name": "Protoss Tritius (Astral)",
+   "requires": [
+    {
+     "at": 160
+    }
+   ]
   },
   "terran_morrigan_upstart": {
    "base": 0,
@@ -42226,7 +45490,12 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Morrigan (Upstart)"
+   "name": "Terran Morrigan (Upstart)",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "terran_ajax_futurist": {
    "base": 0,
@@ -42299,7 +45568,12 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Ajax (Futurist)"
+   "name": "Terran Ajax (Futurist)",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "askosi_dorminge": {
    "base": 0,
@@ -42371,7 +45645,22 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Dorminge"
+   "name": "Askosi Dorminge",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    "askosi_cipher",
+    "askosi_gauntlet"
+   ]
   },
   "askosi_lotiro": {
    "base": 0,
@@ -42444,7 +45733,22 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Lotiro"
+   "name": "Askosi Lotiro",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    "askosi_conduit",
+    "askosi_bestiary"
+   ]
   },
   "askosi_domain": {
    "base": 0,
@@ -42518,7 +45822,22 @@
    "destroy_score": 1200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Domain"
+   "name": "Askosi Domain",
+   "requires": [
+    [
+     {
+      "at": "askosi_pilgrim"
+     },
+     {
+      "at": "askosi_dyad"
+     },
+     {
+      "at": "askosi_constituent"
+     }
+    ],
+    "askosi_conduit",
+    "askosi_bestiary"
+   ]
   },
   "terran_maverick_golden": {
    "base": 0,
@@ -42590,7 +45909,12 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Maverick (Golden)"
+   "name": "Terran Maverick (Golden)",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "terran_shaman_support_upstart": {
    "base": 0,
@@ -42663,7 +45987,13 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 1,
-   "name": "Terran Shaman (Support, Upstart)"
+   "name": "Terran Shaman (Support, Upstart)",
+   "requires": [
+    {
+     "at": 111
+    },
+    119
+   ]
   },
   "terran_shaman_adrenaline_upstart": {
    "base": 0,
@@ -42808,7 +46138,12 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Insurant"
+   "name": "Askosi Insurant",
+   "requires": [
+    {
+     "at": "askosi_panoply"
+    }
+   ]
   },
   "askosi_silversoul": {
    "base": 0,
@@ -42881,7 +46216,12 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Silversoul"
+   "name": "Askosi Silversoul",
+   "requires": [
+    {
+     "at": "askosi_panoply"
+    }
+   ]
   },
   "askosi_ghostwrit": {
    "base": 0,
@@ -42954,7 +46294,13 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Ghostwrit"
+   "name": "Askosi Ghostwrit",
+   "requires": [
+    {
+     "at": "askosi_panoply"
+    },
+    "askosi_lekrot"
+   ]
   },
   "askosi_azjoran": {
    "base": 0,
@@ -43027,7 +46373,13 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Azjoran"
+   "name": "Askosi Azjoran",
+   "requires": [
+    {
+     "at": "askosi_panoply"
+    },
+    "askosi_hearthshard"
+   ]
   },
   "askosi_elgird": {
    "base": 0,
@@ -43101,7 +46453,12 @@
    "destroy_score": 500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Elgird"
+   "name": "Askosi Elgird",
+   "requires": [
+    {
+     "at": "askosi_lotiro"
+    }
+   ]
   },
   "askosi_histrion": {
    "base": 0,
@@ -43175,7 +46532,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Histrion"
+   "name": "Askosi Histrion",
+   "requires": [
+    {
+     "at": "askosi_lotiro"
+    }
+   ]
   },
   "askosi_egocent": {
    "base": 0,
@@ -43322,7 +46684,13 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Alacyne"
+   "name": "Askosi Alacyne",
+   "requires": [
+    {
+     "at": "askosi_lotiro"
+    },
+    "askosi_lekrot"
+   ]
   },
   "askosi_begolor": {
    "base": 0,
@@ -43396,7 +46764,13 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Begolor"
+   "name": "Askosi Begolor",
+   "requires": [
+    {
+     "at": "askosi_lotiro"
+    },
+    "askosi_hearthshard"
+   ]
   },
   "askosi_limire": {
    "base": 0,
@@ -43470,7 +46844,12 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Limire"
+   "name": "Askosi Limire",
+   "requires": [
+    {
+     "at": "askosi_obelisk"
+    }
+   ]
   },
   "askosi_endbore": {
    "base": 0,
@@ -43544,7 +46923,12 @@
    "destroy_score": 900,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Endbore"
+   "name": "Askosi Endbore",
+   "requires": [
+    {
+     "at": "askosi_obelisk"
+    }
+   ]
   },
   "askosi_tortare": {
    "base": 0,
@@ -43618,7 +47002,13 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Tortare"
+   "name": "Askosi Tortare",
+   "requires": [
+    {
+     "at": "askosi_obelisk"
+    },
+    "askosi_lekrot"
+   ]
   },
   "askosi_cybrene": {
    "base": 0,
@@ -43693,7 +47083,13 @@
    "destroy_score": 600,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Cybrene"
+   "name": "Askosi Cybrene",
+   "requires": [
+    {
+     "at": "askosi_obelisk"
+    },
+    "askosi_hearthshard"
+   ]
   },
   "askosi_lekrot": {
    "base": 0,
@@ -44433,7 +47829,12 @@
    "destroy_score": 1300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Forerunner Ferrum"
+   "name": "Forerunner Ferrum",
+   "requires": [
+    {
+     "at": "forerunner_machinamentum"
+    }
+   ]
   },
   "forerunner_chalyb": {
    "base": 0,
@@ -44507,7 +47908,12 @@
    "destroy_score": 1300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Forerunner Chalyb"
+   "name": "Forerunner Chalyb",
+   "requires": [
+    {
+     "at": "forerunner_machinamentum"
+    }
+   ]
   },
   "forerunner_circitor": {
    "base": 0,
@@ -44581,7 +47987,12 @@
    "destroy_score": 1300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Forerunner Circitor"
+   "name": "Forerunner Circitor",
+   "requires": [
+    {
+     "at": "forerunner_machinamentum"
+    }
+   ]
   },
   "forerunner_exigo": {
    "base": 0,
@@ -44655,7 +48066,12 @@
    "destroy_score": 1300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Forerunner Exigo"
+   "name": "Forerunner Exigo",
+   "requires": [
+    {
+     "at": "forerunner_machinamentum"
+    }
+   ]
   },
   "forerunner_athla": {
    "base": 0,
@@ -44729,7 +48145,12 @@
    "destroy_score": 150,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Forerunner Athla"
+   "name": "Forerunner Athla",
+   "requires": [
+    {
+     "at": "forerunner_machinamentum"
+    }
+   ]
   },
   "forerunner_vicere": {
    "base": 0,
@@ -44803,7 +48224,12 @@
    "destroy_score": 1300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Forerunner Vicere"
+   "name": "Forerunner Vicere",
+   "requires": [
+    {
+     "at": "forerunner_machinamentum"
+    }
+   ]
   },
   "forerunner_machinamentum": {
    "base": 0,
@@ -44877,7 +48303,12 @@
    "destroy_score": 225,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Forerunner Machinamentum"
+   "name": "Forerunner Machinamentum",
+   "requires": [
+    {
+     "at": "forerunner_athla"
+    }
+   ]
   },
   "big_infested_kerrigan": {
    "base": 0,
@@ -45174,7 +48605,13 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Scralia"
+   "name": "Askosi Scralia",
+   "requires": [
+    {
+     "at": "askosi_function"
+    },
+    "askosi_gauntlet"
+   ]
   },
   "zerg_rozirokor_imicren": {
    "base": 0,
@@ -45249,7 +48686,17 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Rozirokor (Imicren)"
+   "name": "Zerg Rozirokor (Imicren)",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     135,
+     "zerg_skibact_scab",
+     153
+    ]
+   ]
   },
   "bloodsummon_thrombocyte": {
    "base": 0,
@@ -45472,7 +48919,13 @@
    "destroy_score": 1500,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Zytryleth (Zorthos)"
+   "name": "Zerg Zytryleth (Zorthos)",
+   "requires": [
+    {
+     "at": "zerg_scrylyleth_zorthos"
+    },
+    152
+   ]
   },
   "terran_camazotz_nydus": {
    "base": 0,
@@ -45544,7 +48997,12 @@
    "destroy_score": 200,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Camazotz (Nydus)"
+   "name": "Terran Camazotz (Nydus)",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "protoss_simulacrum_khalendric": {
    "base": 0,
@@ -45617,7 +49075,12 @@
    "destroy_score": 125,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Simulacrum (Khalendric)"
+   "name": "Protoss Simulacrum (Khalendric)",
+   "requires": [
+    {
+     "at": 155
+    }
+   ]
   },
   "protoss_idol_khalendric": {
    "base": 0,
@@ -45691,7 +49154,12 @@
    "destroy_score": 300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Idol (Khalendric)"
+   "name": "Protoss Idol (Khalendric)",
+   "requires": [
+    {
+     "at": 155
+    }
+   ]
   },
   "protoss_vestige_starbound": {
    "base": 0,
@@ -45764,7 +49232,12 @@
    "destroy_score": 650,
    "map_string": 0,
    "broodwar": 1,
-   "name": "Protoss Vestige (Starbound)"
+   "name": "Protoss Vestige (Starbound)",
+   "requires": [
+    {
+     "at": 161
+    }
+   ]
   },
   "terran_arquebus_hecaton": {
    "base": 0,
@@ -45837,7 +49310,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Arquebus (Hecaton)"
+   "name": "Terran Arquebus (Hecaton)",
+   "requires": [
+    {
+     "at": "terran_mantle"
+    }
+   ]
   },
   "bloodsummon_acqui": {
    "base": 0,
@@ -45985,7 +49463,21 @@
    "destroy_score": 1300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Alzurokor (Imicren)"
+   "name": "Zerg Alzurokor (Imicren)",
+   "requires": [
+    [
+     {
+      "at": "zerg_inzorthrokor_imicren"
+     },
+     {
+      "at": "zerg_ocsal_larva"
+     }
+    ],
+    [
+     140,
+     "zerg_zozarc_gorge"
+    ]
+   ]
   },
   "zerg_hydrokor_goszirith": {
    "base": 0,
@@ -46060,7 +49552,17 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Hydrokor (Goszirith)"
+   "name": "Zerg Hydrokor (Goszirith)",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     135,
+     "zerg_skibact_scab",
+     153
+    ]
+   ]
   },
   "protoss_gladius_order": {
    "base": 0,
@@ -46134,7 +49636,12 @@
    "destroy_score": 1300,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Gladius (Order)"
+   "name": "Protoss Gladius (Order)",
+   "requires": [
+    {
+     "at": 167
+    }
+   ]
   },
   "terran_eidolon_golden": {
    "base": 0,
@@ -46207,7 +49714,12 @@
    "destroy_score": 350,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Eidolon (Golden)"
+   "name": "Terran Eidolon (Golden)",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "zerg_zethalisk_orkoti": {
    "base": 0,
@@ -46282,7 +49794,17 @@
    "destroy_score": 50,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Zerg Zethalisk (Orkoti)"
+   "name": "Zerg Zethalisk (Orkoti)",
+   "requires": [
+    {
+     "at": 35
+    },
+    [
+     142,
+     "zerg_vornath_pond",
+     "zerg_kalkiir_lake_2"
+    ]
+   ]
   },
   "bloodsummon_nihilist": {
    "base": 0,
@@ -46931,7 +50453,12 @@
    "destroy_score": 0,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Eveningstar"
+   "name": "Terran Eveningstar",
+   "requires": [
+    {
+     "at": 108
+    }
+   ]
   },
   "raynor_maverick": {
    "base": 0,
@@ -47077,7 +50604,12 @@
    "destroy_score": 400,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Cyprian (Hecaton)"
+   "name": "Terran Cyprian (Hecaton)",
+   "requires": [
+    {
+     "at": 111
+    }
+   ]
   },
   "terran_memphis_tank": {
    "base": 0,
@@ -47149,7 +50681,12 @@
    "destroy_score": 250,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Memphis (Tank)"
+   "name": "Terran Memphis (Tank)",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "terran_memphis_tank_turret": {
    "base": 0,
@@ -48165,7 +51702,12 @@
    "destroy_score": 800,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Protoss Athuzelon"
+   "name": "Protoss Athuzelon",
+   "requires": [
+    {
+     "at": 165
+    }
+   ]
   },
   "terran_ifrit_tank": {
    "base": 0,
@@ -48238,7 +51780,12 @@
    "destroy_score": 700,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Terran Ifrit (Tank)"
+   "name": "Terran Ifrit (Tank)",
+   "requires": [
+    {
+     "at": 113
+    }
+   ]
   },
   "ifrit_turret_tank": {
    "base": 0,
@@ -48526,7 +52073,21 @@
    "destroy_score": 100,
    "map_string": 0,
    "broodwar": 0,
-   "name": "Askosi Magian"
+   "name": "Askosi Magian",
+   "requires": [
+    [
+     {
+      "at": "askosi_landlock"
+     },
+     {
+      "at": "askosi_domain"
+     }
+    ],
+    [
+     "askosi_radix",
+     "askosi_function"
+    ]
+   ]
   },
   "askosi_tirade_deployed": {
    "base": 0,
@@ -123908,7 +127469,31 @@
    "race": 1,
    "researched": 0,
    "broodwar": 0,
-   "name": "Stim Packs (Maverick)"
+   "name": "Stim Packs (Maverick)",
+   "requires": [
+    {
+     "at": 112
+    }
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": 0
+     },
+     {
+      "caster": "ackmed"
+     },
+     {
+      "caster": "terran_maverick_upstart"
+     },
+     {
+      "caster": "terran_nuriel"
+     },
+     {
+      "caster": "raynor_maverick"
+     }
+    ]
+   ]
   },
   "lobotomy_grenade_francisco_goska": {
    "edit": 1,
@@ -123923,7 +127508,26 @@
    "race": 1,
    "researched": 0,
    "broodwar": 0,
-   "name": "Lobotomy Grenade (Francisco Goska)"
+   "name": "Lobotomy Grenade (Francisco Goska)",
+   "requires": [
+    {
+     "at": 117
+    },
+    123
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": "francisco_goska"
+     },
+     {
+      "caster": "terran_triton"
+     },
+     {
+      "caster": "raynor_maverick"
+     }
+    ]
+   ]
   },
   "controlled_demolition_terran": {
    "edit": 2,
@@ -123938,7 +127542,61 @@
    "race": 1,
    "researched": 0,
    "broodwar": 0,
-   "name": "Controlled Demolition (Terran)"
+   "name": "Controlled Demolition (Terran)",
+   "requires": [
+    {
+     "at": 115
+    }
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": 110
+     },
+     {
+      "caster": 107
+     },
+     {
+      "caster": 108
+     },
+     {
+      "caster": 115
+     },
+     {
+      "caster": 117
+     },
+     {
+      "caster": 119
+     },
+     {
+      "caster": 120
+     },
+     {
+      "caster": 121
+     },
+     {
+      "caster": 147
+     },
+     {
+      "caster": 174
+     },
+     {
+      "caster": 175
+     },
+     {
+      "caster": 189
+     },
+     {
+      "caster": 192
+     },
+     {
+      "caster": 200
+     },
+     {
+      "caster": "terran_wellbore"
+     }
+    ]
+   ]
   },
   "terran_mines_and_askosi_wards": {
    "edit": 3,
@@ -123953,7 +127611,34 @@
    "race": 1,
    "researched": 0,
    "broodwar": 0,
-   "name": "Terran Mines and Askosi Wards"
+   "name": "Terran Mines and Askosi Wards",
+   "requires": [
+    {
+     "at": 123
+    }
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": 2
+     },
+     {
+      "caster": "terran_cleric_futurist"
+     },
+     {
+      "caster": "askosi_proselyte"
+     },
+     {
+      "caster": "terran_vulture_hecaton"
+     },
+     {
+      "caster": "terran_vulture_upstart"
+     },
+     {
+      "caster": "raynor_vulture"
+     }
+    ]
+   ]
   },
   "scanner_sweep_comsat_station": {
    "edit": 4,
@@ -123968,7 +127653,12 @@
    "race": 1,
    "researched": 1,
    "broodwar": 0,
-   "name": "Scanner Sweep (Comsat Station)"
+   "name": "Scanner Sweep (Comsat Station)",
+   "use_requires": [
+    {
+     "caster": 107
+    }
+   ]
   },
   "deployed_mode_terran": {
    "edit": 5,
@@ -123983,7 +127673,91 @@
    "race": 1,
    "researched": 1,
    "broodwar": 0,
-   "name": "Deployed Mode (Terran)"
+   "name": "Deployed Mode (Terran)",
+   "requires": [
+    {
+     "at": 120
+    }
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": 5
+     },
+     {
+      "caster": 15
+     },
+     {
+      "caster": 19
+     },
+     {
+      "caster": 27
+     },
+     {
+      "caster": 30
+     },
+     {
+      "caster": 187
+     },
+     {
+      "caster": "terran_matador_tank_mode"
+     },
+     {
+      "caster": "terran_matador_cinder_mode"
+     },
+     {
+      "caster": "terran_cuirass_trench_mode"
+     },
+     {
+      "caster": "terran_shaman_visionary_mode"
+     },
+     {
+      "caster": "terran_madrigal_furia_mode"
+     },
+     {
+      "caster": "terran_savant_power_siphon"
+     },
+     {
+      "caster": "askosi_grandstand_cannon"
+     },
+     {
+      "caster": "terran_ogun_worker_mode"
+     },
+     {
+      "caster": "terran_ogun_smithy_mode"
+     },
+     {
+      "caster": "terran_madrigal_hecaton_imperioso"
+     },
+     {
+      "caster": "terran_madrigal_hecaton_furia"
+     },
+     {
+      "caster": "askosi_grandstand_holdout"
+     },
+     {
+      "caster": "askosi_grandstand_vision"
+     },
+     {
+      "caster": "terran_shaman_support_upstart"
+     },
+     {
+      "caster": "terran_shaman_adrenaline_upstart"
+     },
+     {
+      "caster": "terran_memphis_tank"
+     },
+     {
+      "caster": "terran_memphis_flak"
+     },
+     {
+      "caster": "terran_ifrit_tank"
+     },
+     {
+      "caster": "terran_ifrit_siege"
+     }
+    ]
+   ]
   },
   "defensive_matrix_azazel": {
    "edit": 6,
@@ -123998,7 +127772,17 @@
    "race": 1,
    "researched": 1,
    "broodwar": 0,
-   "name": "Defensive Matrix (Azazel)"
+   "name": "Defensive Matrix (Azazel)",
+   "use_requires": [
+    [
+     {
+      "caster": 98
+     },
+     {
+      "caster": "terran_archbishop"
+     }
+    ]
+   ]
   },
   "irradiate_seraph": {
    "edit": 7,
@@ -124013,7 +127797,22 @@
    "race": 1,
    "researched": 1,
    "broodwar": 0,
-   "name": "Irradiate (Seraph)"
+   "name": "Irradiate (Seraph)",
+   "requires": [
+    {
+     "at": 116
+    }
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": 9
+     },
+     {
+      "caster": "terran_archbishop"
+     }
+    ]
+   ]
   },
   "yamato_cannon_magnetar": {
    "edit": 8,
@@ -124028,7 +127827,17 @@
    "race": 1,
    "researched": 0,
    "broodwar": 0,
-   "name": "Yamato Cannon (Magnetar)"
+   "name": "Yamato Cannon (Magnetar)",
+   "requires": [
+    {
+     "at": 118
+    }
+   ],
+   "use_requires": [
+    {
+     "caster": 118
+    }
+   ]
   },
   "rapid_rendezvous_askosi": {
    "edit": 9,
@@ -124043,7 +127852,25 @@
    "race": 2,
    "researched": 1,
    "broodwar": 0,
-   "name": "Rapid Rendezvous (Askosi)"
+   "name": "Rapid Rendezvous (Askosi)",
+   "requires": [
+    {
+     "at": 225
+    }
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": "askosi_proselyte"
+     },
+     {
+      "caster": "askosi_rove"
+     },
+     {
+      "caster": "askosi_magian"
+     }
+    ]
+   ]
   },
   "divine_discipline_serathiel": {
    "edit": 10,
@@ -124058,7 +127885,17 @@
    "race": 1,
    "researched": 1,
    "broodwar": 0,
-   "name": "Divine Discipline (Serathiel)"
+   "name": "Divine Discipline (Serathiel)",
+   "requires": [
+    {
+     "at": 117
+    }
+   ],
+   "use_requires": [
+    {
+     "caster": "terran_serathiel_hecaton"
+    }
+   ]
   },
   "burrowing_zerg": {
    "edit": 11,
@@ -124073,7 +127910,165 @@
    "race": 0,
    "researched": 1,
    "broodwar": 0,
-   "name": "Burrowing (Zerg)"
+   "name": "Burrowing (Zerg)",
+   "requires": [
+    [
+     {
+      "at": 131
+     },
+     {
+      "at": 132
+     },
+     {
+      "at": 133
+     }
+    ]
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": 37
+     },
+     {
+      "caster": 39
+     },
+     {
+      "caster": 41
+     },
+     {
+      "caster": 46
+     },
+     {
+      "caster": 50
+     },
+     {
+      "caster": 52
+     },
+     {
+      "caster": 38
+     },
+     {
+      "caster": 95
+     },
+     {
+      "caster": 96
+     },
+     {
+      "caster": 97
+     },
+     {
+      "caster": 103
+     },
+     {
+      "caster": 112
+     },
+     {
+      "caster": 126
+     },
+     {
+      "caster": 217
+     },
+     {
+      "caster": 128
+     },
+     {
+      "caster": 129
+     },
+     {
+      "caster": 180
+     },
+     {
+      "caster": 191
+     },
+     {
+      "caster": "zerg_tethzorokor"
+     },
+     {
+      "caster": "zerg_protathalor"
+     },
+     {
+      "caster": "zerg_vilgorokor"
+     },
+     {
+      "caster": "zerg_cikralisk"
+     },
+     {
+      "caster": "zerg_zobriolisk"
+     },
+     {
+      "caster": "zerg_ogroszaleth"
+     },
+     {
+      "caster": "zerg_agrileth"
+     },
+     {
+      "caster": "zerg_mortothrokor"
+     },
+     {
+      "caster": "zerg_cherbrathalor"
+     },
+     {
+      "caster": "zerg_okrimnilisk"
+     },
+     {
+      "caster": "zerg_kethrostalor"
+     },
+     {
+      "caster": "zerg_axitrilisk_weaponless"
+     },
+     {
+      "caster": "zerg_iziralisk_zorthos"
+     },
+     {
+      "caster": "zerg_inzorthrokor_imicren"
+     },
+     {
+      "caster": "zerg_quazrokor"
+     },
+     {
+      "caster": "zerg_lakizilisk_zorthos"
+     },
+     {
+      "caster": "zerg_hydralisk_orkoti"
+     },
+     {
+      "caster": "zerg_yblyleth_zorthos"
+     },
+     {
+      "caster": "stroluum"
+     },
+     {
+      "caster": "zerg_sovrokor_goszirith"
+     },
+     {
+      "caster": "zerg_garvrokor_goszirith"
+     },
+     {
+      "caster": "zerg_malkothrokor"
+     },
+     {
+      "caster": "zerg_zethalor_orkoti"
+     },
+     {
+      "caster": "zerg_scrylyleth_zorthos"
+     },
+     {
+      "caster": "zerg_zoltorokor"
+     },
+     {
+      "caster": "zerg_rozirokor_imicren"
+     },
+     {
+      "caster": "zerg_alzurokor_imicren"
+     },
+     {
+      "caster": "zerg_hydrokor_goszirith"
+     },
+     {
+      "caster": "zerg_zethalisk_orkoti"
+     }
+    ]
+   ]
   },
   "rejoinder_of_service_serathiel": {
    "edit": 12,
@@ -124088,7 +128083,12 @@
    "race": 0,
    "researched": 1,
    "broodwar": 0,
-   "name": "Rejoinder of Service (Serathiel)"
+   "name": "Rejoinder of Service (Serathiel)",
+   "use_requires": [
+    {
+     "caster": "terran_serathiel_hecaton"
+    }
+   ]
   },
   "ensnaring_brood_matraleth": {
    "edit": 13,
@@ -124103,7 +128103,25 @@
    "race": 0,
    "researched": 1,
    "broodwar": 0,
-   "name": "Ensnaring Brood (Matraleth)"
+   "name": "Ensnaring Brood (Matraleth)",
+   "requires": [
+    {
+     "at": 138
+    }
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": 45
+     },
+     {
+      "caster": "infested_kerrigan"
+     },
+     {
+      "caster": "big_infested_kerrigan"
+     }
+    ]
+   ]
   },
   "carapace_swarm_isthrathaleth": {
    "edit": 14,
@@ -124118,7 +128136,17 @@
    "race": 0,
    "researched": 1,
    "broodwar": 0,
-   "name": "Carapace Swarm (Isthrathaleth)"
+   "name": "Carapace Swarm (Isthrathaleth)",
+   "use_requires": [
+    [
+     {
+      "caster": 46
+     },
+     {
+      "caster": "stroluum"
+     }
+    ]
+   ]
   },
   "plague_isthrathaleth": {
    "edit": 15,
@@ -124133,7 +128161,17 @@
    "race": 0,
    "researched": 0,
    "broodwar": 0,
-   "name": "Plague (Isthrathaleth)"
+   "name": "Plague (Isthrathaleth)",
+   "requires": [
+    {
+     "at": 136
+    }
+   ],
+   "use_requires": [
+    {
+     "caster": 46
+    }
+   ]
   },
   "remote_hijack_askosi": {
    "edit": 16,
@@ -124148,7 +128186,17 @@
    "race": 2,
    "researched": 1,
    "broodwar": 0,
-   "name": "Remote Hijack (Askosi)"
+   "name": "Remote Hijack (Askosi)",
+   "requires": [
+    {
+     "at": 136
+    }
+   ],
+   "use_requires": [
+    {
+     "caster": "askosi_paraclete"
+    }
+   ]
   },
   "land_grab_wyvern": {
    "edit": 17,
@@ -124163,7 +128211,12 @@
    "race": 1,
    "researched": 1,
    "broodwar": 0,
-   "name": "Land Grab (Wyvern)"
+   "name": "Land Grab (Wyvern)",
+   "use_requires": [
+    {
+     "caster": 91
+    }
+   ]
   },
   "parasitic_excision_matraleth": {
    "edit": 18,
@@ -124178,7 +128231,17 @@
    "race": 0,
    "researched": 1,
    "broodwar": 0,
-   "name": "Parasitic Excision (Matraleth)"
+   "name": "Parasitic Excision (Matraleth)",
+   "requires": [
+    {
+     "at": 138
+    }
+   ],
+   "use_requires": [
+    {
+     "caster": 45
+    }
+   ]
   },
   "psionic_storm_cantavis": {
    "edit": 19,
@@ -124193,7 +128256,28 @@
    "race": 2,
    "researched": 0,
    "broodwar": 0,
-   "name": "Psionic Storm (Cantavis)"
+   "name": "Psionic Storm (Cantavis)",
+   "requires": [
+    {
+     "at": 165
+    }
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": 67
+     },
+     {
+      "caster": 88
+     },
+     {
+      "caster": "infested_kerrigan"
+     },
+     {
+      "caster": "big_infested_kerrigan"
+     }
+    ]
+   ]
   },
   "hallucination_cantavis": {
    "edit": 20,
@@ -124208,7 +128292,22 @@
    "race": 2,
    "researched": 1,
    "broodwar": 0,
-   "name": "Hallucination (Cantavis)"
+   "name": "Hallucination (Cantavis)",
+   "requires": [
+    {
+     "at": 165
+    }
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": 67
+     },
+     {
+      "caster": 88
+     }
+    ]
+   ]
   },
   "dimensional_recall_didact": {
    "edit": 21,
@@ -124223,7 +128322,25 @@
    "race": 2,
    "researched": 0,
    "broodwar": 0,
-   "name": "Dimensional Recall (Didact)"
+   "name": "Dimensional Recall (Didact)",
+   "requires": [
+    {
+     "at": 170
+    }
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": 71
+     },
+     {
+      "caster": "protoss_xenolith"
+     },
+     {
+      "caster": "protoss_saladius"
+     }
+    ]
+   ]
   },
   "stasis_field_didact": {
    "edit": 22,
@@ -124238,7 +128355,22 @@
    "race": 2,
    "researched": 0,
    "broodwar": 0,
-   "name": "Stasis Field (Didact)"
+   "name": "Stasis Field (Didact)",
+   "requires": [
+    {
+     "at": 170
+    }
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": 71
+     },
+     {
+      "caster": "protoss_saladius"
+     }
+    ]
+   ]
   },
   "rematerialize_askosi": {
    "edit": 23,
@@ -124253,7 +128385,23 @@
    "race": 2,
    "researched": 1,
    "broodwar": 0,
-   "name": "Rematerialize (Askosi)"
+   "name": "Rematerialize (Askosi)",
+   "use_requires": [
+    [
+     {
+      "caster": "askosi_vicar"
+     },
+     {
+      "caster": "askosi_emissary"
+     },
+     {
+      "caster": "askosi_eyelet"
+     },
+     {
+      "caster": "askosi_histrion"
+     }
+    ]
+   ]
   },
   "preylock_askosi": {
    "edit": 24,
@@ -124268,7 +128416,18 @@
    "race": 2,
    "researched": 1,
    "broodwar": 0,
-   "name": "Preylock (Askosi)"
+   "name": "Preylock (Askosi)",
+   "requires": [
+    "broodwar",
+    {
+     "at": 112
+    }
+   ],
+   "use_requires": [
+    {
+     "caster": "askosi_zonguard"
+    }
+   ]
   },
   "disruption_field_lanifect": {
    "edit": 25,
@@ -124283,7 +128442,18 @@
    "race": 2,
    "researched": 0,
    "broodwar": 1,
-   "name": "Disruption Field (Lanifect)"
+   "name": "Disruption Field (Lanifect)",
+   "requires": [
+    "broodwar",
+    {
+     "at": 169
+    }
+   ],
+   "use_requires": [
+    {
+     "caster": 60
+    }
+   ]
   },
   "rescind_control_mind_tyrant": {
    "edit": 26,
@@ -124298,7 +128468,23 @@
    "race": 3,
    "researched": 0,
    "broodwar": 1,
-   "name": "Rescind Control (Mind Tyrant)"
+   "name": "Rescind Control (Mind Tyrant)",
+   "use_requires": [
+    [
+     {
+      "caster": 91
+     },
+     {
+      "caster": 63
+     },
+     {
+      "caster": 218
+     },
+     {
+      "caster": 123
+     }
+    ]
+   ]
   },
   "maledictus_mind_tyrant": {
    "edit": 27,
@@ -124313,7 +128499,18 @@
    "race": 2,
    "researched": 1,
    "broodwar": 1,
-   "name": "Maledictus (Mind Tyrant)"
+   "name": "Maledictus (Mind Tyrant)",
+   "requires": [
+    "broodwar",
+    {
+     "at": 165
+    }
+   ],
+   "use_requires": [
+    {
+     "caster": 63
+    }
+   ]
   },
   "select_control_larva": {
    "edit": 28,
@@ -124328,7 +128525,29 @@
    "race": 2,
    "researched": 1,
    "broodwar": 1,
-   "name": "Select Control (Larva)"
+   "name": "Select Control (Larva)",
+   "use_requires": [
+    [
+     {
+      "caster": 131
+     },
+     {
+      "caster": 132
+     },
+     {
+      "caster": 133
+     },
+     {
+      "caster": 216
+     },
+     {
+      "caster": "omnivale"
+     },
+     {
+      "caster": "zerg_zytryleth_zorthos"
+     }
+    ]
+   ]
   },
   "grief_of_all_gods_star_sovereign": {
    "edit": 29,
@@ -124343,7 +128562,18 @@
    "race": 2,
    "researched": 1,
    "broodwar": 1,
-   "name": "Grief of All Gods (Star Sovereign)"
+   "name": "Grief of All Gods (Star Sovereign)",
+   "requires": [
+    "broodwar",
+    {
+     "at": 165
+    }
+   ],
+   "use_requires": [
+    {
+     "caster": 21
+    }
+   ]
   },
   "aural_assault_luminary": {
    "edit": 30,
@@ -124358,7 +128588,17 @@
    "race": 1,
    "researched": 1,
    "broodwar": 1,
-   "name": "Aural Assault (Luminary)"
+   "name": "Aural Assault (Luminary)",
+   "requires": [
+    {
+     "at": 119
+    }
+   ],
+   "use_requires": [
+    {
+     "caster": 150
+    }
+   ]
   },
   "maelstrom_mind_tyrant": {
    "edit": 31,
@@ -124373,7 +128613,17 @@
    "race": 2,
    "researched": 0,
    "broodwar": 1,
-   "name": "Maelstrom (Mind Tyrant)"
+   "name": "Maelstrom (Mind Tyrant)",
+   "requires": [
+    {
+     "at": 226
+    }
+   ],
+   "use_requires": [
+    {
+     "caster": 63
+    }
+   ]
   },
   "lazarus_agent_apostle": {
    "edit": 32,
@@ -124388,7 +128638,22 @@
    "race": 0,
    "researched": 0,
    "broodwar": 1,
-   "name": "Lazarus Agent (Apostle)"
+   "name": "Lazarus Agent (Apostle)",
+   "requires": [
+    "broodwar",
+    {
+     "at": 135
+    },
+    [
+     132,
+     133
+    ]
+   ],
+   "use_requires": [
+    {
+     "caster": 10
+    }
+   ]
   },
   "select_swarm_larva": {
    "edit": 33,
@@ -124403,7 +128668,29 @@
    "race": 3,
    "researched": 1,
    "broodwar": 1,
-   "name": "Select Swarm (Larva)"
+   "name": "Select Swarm (Larva)",
+   "use_requires": [
+    [
+     {
+      "caster": 131
+     },
+     {
+      "caster": 132
+     },
+     {
+      "caster": 133
+     },
+     {
+      "caster": 216
+     },
+     {
+      "caster": "omnivale"
+     },
+     {
+      "caster": "zerg_zytryleth_zorthos"
+     }
+    ]
+   ]
   },
   "healing_cleric": {
    "edit": 34,
@@ -124418,7 +128705,17 @@
    "race": 1,
    "researched": 0,
    "broodwar": 1,
-   "name": "Healing (Cleric)"
+   "name": "Healing (Cleric)",
+   "use_requires": [
+    [
+     {
+      "caster": 34
+     },
+     {
+      "caster": "terran_cleric_futurist"
+     }
+    ]
+   ]
   },
   "blissful_embrace_zerg": {
    "edit": 35,
@@ -124433,7 +128730,17 @@
    "race": 3,
    "researched": 0,
    "broodwar": 1,
-   "name": "Blissful Embrace (Zerg)"
+   "name": "Blissful Embrace (Zerg)",
+   "requires": [
+    {
+     "at": 148
+    }
+   ],
+   "use_requires": [
+    {
+     "caster": 45
+    }
+   ]
   },
   "hijack_askosi": {
    "edit": 36,
@@ -124448,7 +128755,25 @@
    "race": 2,
    "researched": 1,
    "broodwar": 0,
-   "name": "Hijack (Askosi)"
+   "name": "Hijack (Askosi)",
+   "requires": [
+    {
+     "at": 189
+    }
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": "askosi_inkblot"
+     },
+     {
+      "caster": "askosi_avatar"
+     },
+     {
+      "caster": "askosi_auxine"
+     }
+    ]
+   ]
   },
   "ashbind_askosi": {
    "edit": 37,
@@ -124463,7 +128788,23 @@
    "race": 1,
    "researched": 0,
    "broodwar": 0,
-   "name": "Ashbind (Askosi)"
+   "name": "Ashbind (Askosi)",
+   "requires": [
+    {
+     "at": 189
+    },
+    116
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": "askosi_cardinal"
+     },
+     {
+      "caster": "askosi_elgird"
+     }
+    ]
+   ]
   },
   "select_assault_larva": {
    "edit": 38,
@@ -124478,7 +128819,29 @@
    "race": 3,
    "researched": 0,
    "broodwar": 1,
-   "name": "Select Assault (Larva)"
+   "name": "Select Assault (Larva)",
+   "use_requires": [
+    [
+     {
+      "caster": 131
+     },
+     {
+      "caster": 132
+     },
+     {
+      "caster": 133
+     },
+     {
+      "caster": 216
+     },
+     {
+      "caster": "omnivale"
+     },
+     {
+      "caster": "zerg_zytryleth_zorthos"
+     }
+    ]
+   ]
   },
   "emergency_detonation_terran": {
    "edit": 39,
@@ -124493,7 +128856,58 @@
    "race": 1,
    "researched": 0,
    "broodwar": 1,
-   "name": "Emergency Detonation (Terran)"
+   "name": "Emergency Detonation (Terran)",
+   "requires": [
+    {
+     "at": 116
+    }
+   ],
+   "use_requires": [
+    [
+     {
+      "caster": 110
+     },
+     {
+      "caster": 107
+     },
+     {
+      "caster": 108
+     },
+     {
+      "caster": 115
+     },
+     {
+      "caster": 117
+     },
+     {
+      "caster": 119
+     },
+     {
+      "caster": 120
+     },
+     {
+      "caster": 189
+     },
+     {
+      "caster": 121
+     },
+     {
+      "caster": 174
+     },
+     {
+      "caster": 147
+     },
+     {
+      "caster": 192
+     },
+     {
+      "caster": 175
+     },
+     {
+      "caster": 190
+     }
+    ]
+   ]
   },
   "sublime_shepherd_azazel": {
    "edit": 40,
@@ -124508,7 +128922,17 @@
    "race": 3,
    "researched": 0,
    "broodwar": 1,
-   "name": "Sublime Shepherd (Azazel)"
+   "name": "Sublime Shepherd (Azazel)",
+   "requires": [
+    {
+     "at": 115
+    }
+   ],
+   "use_requires": [
+    {
+     "caster": 98
+    }
+   ]
   },
   "salvage_askosi": {
    "edit": 41,
@@ -124523,7 +128947,12 @@
    "race": 3,
    "researched": 0,
    "broodwar": 1,
-   "name": "Salvage (Askosi)"
+   "name": "Salvage (Askosi)",
+   "use_requires": [
+    {
+     "caster": "askosi_dyad"
+    }
+   ]
   },
   "through_the_looking_glass_hypnagogue": {
    "edit": 42,
@@ -124538,7 +128967,12 @@
    "race": 3,
    "researched": 0,
    "broodwar": 1,
-   "name": "Through the Looking Glass (Hypnagogue)"
+   "name": "Through the Looking Glass (Hypnagogue)",
+   "use_requires": [
+    {
+     "caster": "terran_hypnagogue"
+    }
+   ]
   },
   "none": {
    "edit": 43,
@@ -124583,7 +129017,12 @@
    "race": 3,
    "researched": 0,
    "broodwar": 1,
-   "name": "Hive Tissue (Malkothrokor)"
+   "name": "Hive Tissue (Malkothrokor)",
+   "use_requires": [
+    {
+     "caster": "zerg_malkothrokor"
+    }
+   ]
   },
   "lobotomy_warhead_triton": {
    "base": 0,
@@ -124598,7 +129037,12 @@
    "race": 1,
    "researched": 0,
    "broodwar": 0,
-   "name": "Lobotomy Warhead (Triton)"
+   "name": "Lobotomy Warhead (Triton)",
+   "use_requires": [
+    {
+     "caster": "terran_triton"
+    }
+   ]
   },
   "prying_eyes_facade": {
    "base": 0,
@@ -124613,7 +129057,12 @@
    "race": 1,
    "researched": 0,
    "broodwar": 0,
-   "name": "Prying Eyes (Facade)"
+   "name": "Prying Eyes (Facade)",
+   "use_requires": [
+    {
+     "caster": "terran_facade"
+    }
+   ]
   },
   "remote_hijack_askosi_2": {
    "base": 0,
@@ -124628,7 +129077,12 @@
    "race": 2,
    "researched": 1,
    "broodwar": 0,
-   "name": "Remote Hijack (Askosi)"
+   "name": "Remote Hijack (Askosi)",
+   "use_requires": [
+    {
+     "caster": "askosi_paraclete"
+    }
+   ]
   },
   "preylock_askosi_2": {
    "base": 0,
@@ -124643,7 +129097,12 @@
    "race": 2,
    "researched": 1,
    "broodwar": 0,
-   "name": "Preylock (Askosi)"
+   "name": "Preylock (Askosi)",
+   "use_requires": [
+    {
+     "caster": "askosi_zonguard"
+    }
+   ]
   },
   "lobotomy_grenade_goska_dupe": {
    "base": 0,
@@ -124673,7 +129132,12 @@
    "race": 0,
    "researched": 1,
    "broodwar": 0,
-   "name": "Skryspawn (Stroluum)"
+   "name": "Skryspawn (Stroluum)",
+   "use_requires": [
+    {
+     "caster": "stroluum"
+    }
+   ]
   },
   "puppeteer_askosi": {
    "base": 0,
@@ -124688,7 +129152,12 @@
    "race": 1,
    "researched": 0,
    "broodwar": 0,
-   "name": "Puppeteer (Askosi)"
+   "name": "Puppeteer (Askosi)",
+   "use_requires": [
+    {
+     "caster": "askosi_ghostwrit"
+    }
+   ]
   },
   "blood_burst_bloodsummon": {
    "base": 0,
@@ -124703,7 +129172,12 @@
    "race": 1,
    "researched": 0,
    "broodwar": 0,
-   "name": "Blood Burst (Bloodsummon)"
+   "name": "Blood Burst (Bloodsummon)",
+   "use_requires": [
+    {
+     "caster": "bloodsummon_thrombocyte"
+    }
+   ]
   },
   "landfall_askosi": {
    "base": 0,
@@ -124718,7 +129192,12 @@
    "race": 2,
    "researched": 1,
    "broodwar": 0,
-   "name": "Landfall (Askosi)"
+   "name": "Landfall (Askosi)",
+   "use_requires": [
+    {
+     "caster": "askosi_magian"
+    }
+   ]
   }
  },
  "upgrades": {
@@ -124736,7 +129215,12 @@
    "race": 1,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Terran Infantry Armor"
+   "name": "Terran Infantry Armor",
+   "requires": [
+    {
+     "at": 122
+    }
+   ]
   },
   "terran_vehicle_plating": {
    "edit": 1,
@@ -124752,7 +129236,12 @@
    "race": 1,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Terran Vehicle Plating"
+   "name": "Terran Vehicle Plating",
+   "requires": [
+    {
+     "at": 123
+    }
+   ]
   },
   "terran_ship_plating": {
    "edit": 2,
@@ -124768,7 +129257,12 @@
    "race": 1,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Terran Ship Plating"
+   "name": "Terran Ship Plating",
+   "requires": [
+    {
+     "at": 123
+    }
+   ]
   },
   "zerg_carapace": {
    "edit": 3,
@@ -124784,7 +129278,12 @@
    "race": 0,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Zerg Carapace"
+   "name": "Zerg Carapace",
+   "requires": [
+    {
+     "at": 139
+    }
+   ]
   },
   "zerg_flyer_caparace": {
    "edit": 4,
@@ -124800,7 +129299,17 @@
    "race": 0,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Zerg Flyer Caparace"
+   "name": "Zerg Flyer Caparace",
+   "requires": [
+    [
+     {
+      "at": 141
+     },
+     {
+      "at": 137
+     }
+    ]
+   ]
   },
   "protoss_armor": {
    "edit": 5,
@@ -124816,7 +129325,12 @@
    "race": 2,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Protoss Armor"
+   "name": "Protoss Armor",
+   "requires": [
+    {
+     "at": 166
+    }
+   ]
   },
   "protoss_plating": {
    "edit": 6,
@@ -124832,7 +129346,12 @@
    "race": 2,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Protoss Plating"
+   "name": "Protoss Plating",
+   "requires": [
+    {
+     "at": 164
+    }
+   ]
   },
   "terran_infantry_weapons": {
    "edit": 7,
@@ -124848,7 +129367,12 @@
    "race": 1,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Terran Infantry Weapons"
+   "name": "Terran Infantry Weapons",
+   "requires": [
+    {
+     "at": 122
+    }
+   ]
   },
   "terran_vehicle_weapons": {
    "edit": 8,
@@ -124864,7 +129388,12 @@
    "race": 1,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Terran Vehicle Weapons"
+   "name": "Terran Vehicle Weapons",
+   "requires": [
+    {
+     "at": 123
+    }
+   ]
   },
   "terran_ship_weapons": {
    "edit": 9,
@@ -124880,7 +129409,12 @@
    "race": 1,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Terran Ship Weapons"
+   "name": "Terran Ship Weapons",
+   "requires": [
+    {
+     "at": 123
+    }
+   ]
   },
   "zerg_melee_attacks": {
    "edit": 10,
@@ -124896,7 +129430,12 @@
    "race": 0,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Zerg Melee Attacks"
+   "name": "Zerg Melee Attacks",
+   "requires": [
+    {
+     "at": 139
+    }
+   ]
   },
   "zerg_missile_attacks": {
    "edit": 11,
@@ -124912,7 +129451,12 @@
    "race": 0,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Zerg Missile Attacks"
+   "name": "Zerg Missile Attacks",
+   "requires": [
+    {
+     "at": 139
+    }
+   ]
   },
   "zerg_flyer_attacks": {
    "edit": 12,
@@ -124928,7 +129472,17 @@
    "race": 0,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Zerg Flyer Attacks"
+   "name": "Zerg Flyer Attacks",
+   "requires": [
+    [
+     {
+      "at": 141
+     },
+     {
+      "at": 137
+     }
+    ]
+   ]
   },
   "protoss_ground_weapons": {
    "edit": 13,
@@ -124944,7 +129498,12 @@
    "race": 2,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Protoss Ground Weapons"
+   "name": "Protoss Ground Weapons",
+   "requires": [
+    {
+     "at": 166
+    }
+   ]
   },
   "protoss_air_weapons": {
    "edit": 14,
@@ -124960,7 +129519,12 @@
    "race": 2,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Protoss Air Weapons"
+   "name": "Protoss Air Weapons",
+   "requires": [
+    {
+     "at": 164
+    }
+   ]
   },
   "protoss_plasma_shields": {
    "edit": 15,
@@ -124976,7 +129540,12 @@
    "race": 2,
    "max_level": 5,
    "broodwar": 0,
-   "name": "Protoss Plasma Shields"
+   "name": "Protoss Plasma Shields",
+   "requires": [
+    {
+     "at": 166
+    }
+   ]
   },
   "u_238_shells": {
    "edit": 16,
@@ -124992,7 +129561,12 @@
    "race": 1,
    "max_level": 1,
    "broodwar": 0,
-   "name": "U-238 Shells"
+   "name": "U-238 Shells",
+   "requires": [
+    {
+     "at": 112
+    }
+   ]
   },
   "ion_thrusters": {
    "edit": 17,
@@ -125008,7 +129582,12 @@
    "race": 1,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Ion Thrusters"
+   "name": "Ion Thrusters",
+   "requires": [
+    {
+     "at": 120
+    }
+   ]
   },
   "mining_efficiency": {
    "edit": 18,
@@ -125040,7 +129619,12 @@
    "race": 1,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Titan Reactor (SV +50)"
+   "name": "Titan Reactor (SV +50)",
+   "requires": [
+    {
+     "at": 116
+    }
+   ]
   },
   "ocular_implants": {
    "edit": 20,
@@ -125056,7 +129640,12 @@
    "race": 1,
    "max_level": 0,
    "broodwar": 0,
-   "name": "Ocular Implants"
+   "name": "Ocular Implants",
+   "requires": [
+    {
+     "at": 117
+    }
+   ]
   },
   "moebius_reactor_ghost_50": {
    "edit": 21,
@@ -125072,7 +129661,12 @@
    "race": 1,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Moebius Reactor (Ghost +50)"
+   "name": "Moebius Reactor (Ghost +50)",
+   "requires": [
+    {
+     "at": 117
+    }
+   ]
   },
   "apollo_reactor_wraith_50": {
    "edit": 22,
@@ -125088,7 +129682,12 @@
    "race": 1,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Apollo Reactor (Wraith +50)"
+   "name": "Apollo Reactor (Wraith +50)",
+   "requires": [
+    {
+     "at": 115
+    }
+   ]
   },
   "colossus_reactor_bc_50": {
    "edit": 23,
@@ -125104,7 +129703,12 @@
    "race": 1,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Colossus Reactor (BC +50)"
+   "name": "Colossus Reactor (BC +50)",
+   "requires": [
+    {
+     "at": 118
+    }
+   ]
   },
   "ventral_sacs": {
    "edit": 24,
@@ -125120,7 +129724,17 @@
    "race": 0,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Ventral Sacs"
+   "name": "Ventral Sacs",
+   "requires": [
+    [
+     {
+      "at": 132
+     },
+     {
+      "at": 133
+     }
+    ]
+   ]
   },
   "antennae": {
    "edit": 25,
@@ -125136,7 +129750,17 @@
    "race": 0,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Antennae"
+   "name": "Antennae",
+   "requires": [
+    [
+     {
+      "at": 132
+     },
+     {
+      "at": 133
+     }
+    ]
+   ]
   },
   "pneumatized_carapace": {
    "edit": 26,
@@ -125152,7 +129776,17 @@
    "race": 0,
    "max_level": 0,
    "broodwar": 0,
-   "name": "Pneumatized Carapace"
+   "name": "Pneumatized Carapace",
+   "requires": [
+    [
+     {
+      "at": 132
+     },
+     {
+      "at": 133
+     }
+    ]
+   ]
   },
   "metabolic_boost": {
    "edit": 27,
@@ -125168,7 +129802,12 @@
    "race": 0,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Metabolic Boost"
+   "name": "Metabolic Boost",
+   "requires": [
+    {
+     "at": 142
+    }
+   ]
   },
   "adrenal_glands": {
    "edit": 28,
@@ -125184,7 +129823,13 @@
    "race": 0,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Adrenal Glands"
+   "name": "Adrenal Glands",
+   "requires": [
+    {
+     "at": 142
+    },
+    133
+   ]
   },
   "muscular_augments": {
    "edit": 29,
@@ -125200,7 +129845,12 @@
    "race": 0,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Muscular Augments"
+   "name": "Muscular Augments",
+   "requires": [
+    {
+     "at": 135
+    }
+   ]
   },
   "grooved_spines": {
    "edit": 30,
@@ -125216,7 +129866,12 @@
    "race": 0,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Grooved Spines"
+   "name": "Grooved Spines",
+   "requires": [
+    {
+     "at": 135
+    }
+   ]
   },
   "gamete_meiosis_queen_50": {
    "edit": 31,
@@ -125232,7 +129887,12 @@
    "race": 0,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Gamete Meiosis (Queen +50)"
+   "name": "Gamete Meiosis (Queen +50)",
+   "requires": [
+    {
+     "at": 138
+    }
+   ]
   },
   "metasynaptic_node_defiler_50": {
    "edit": 32,
@@ -125248,7 +129908,12 @@
    "race": 0,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Metasynaptic Node (Defiler +50)"
+   "name": "Metasynaptic Node (Defiler +50)",
+   "requires": [
+    {
+     "at": 136
+    }
+   ]
   },
   "singularity_charge": {
    "edit": 33,
@@ -125264,7 +129929,12 @@
    "race": 2,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Singularity Charge"
+   "name": "Singularity Charge",
+   "requires": [
+    {
+     "at": 164
+    }
+   ]
   },
   "leg_enhancements": {
    "edit": 34,
@@ -125280,7 +129950,12 @@
    "race": 2,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Leg Enhancements"
+   "name": "Leg Enhancements",
+   "requires": [
+    {
+     "at": 163
+    }
+   ]
   },
   "scarab_damage": {
    "edit": 35,
@@ -125296,7 +129971,12 @@
    "race": 2,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Scarab Damage"
+   "name": "Scarab Damage",
+   "requires": [
+    {
+     "at": 171
+    }
+   ]
   },
   "reaver_capacity": {
    "edit": 36,
@@ -125312,7 +129992,12 @@
    "race": 2,
    "max_level": 0,
    "broodwar": 0,
-   "name": "Reaver Capacity"
+   "name": "Reaver Capacity",
+   "requires": [
+    {
+     "at": 171
+    }
+   ]
   },
   "gravitic_drive": {
    "edit": 37,
@@ -125328,7 +130013,12 @@
    "race": 2,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Gravitic Drive"
+   "name": "Gravitic Drive",
+   "requires": [
+    {
+     "at": 171
+    }
+   ]
   },
   "sensor_array": {
    "edit": 38,
@@ -125344,7 +130034,12 @@
    "race": 2,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Sensor Array"
+   "name": "Sensor Array",
+   "requires": [
+    {
+     "at": 159
+    }
+   ]
   },
   "gravitic_boosters": {
    "edit": 39,
@@ -125360,7 +130055,12 @@
    "race": 2,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Gravitic Boosters"
+   "name": "Gravitic Boosters",
+   "requires": [
+    {
+     "at": 159
+    }
+   ]
   },
   "khaydarin_amulet_ht_50": {
    "edit": 40,
@@ -125376,7 +130076,12 @@
    "race": 2,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Khaydarin Amulet (HT +50)"
+   "name": "Khaydarin Amulet (HT +50)",
+   "requires": [
+    {
+     "at": 165
+    }
+   ]
   },
   "apial_sensors": {
    "edit": 41,
@@ -125392,7 +130097,12 @@
    "race": 2,
    "max_level": 0,
    "broodwar": 0,
-   "name": "Apial Sensors"
+   "name": "Apial Sensors",
+   "requires": [
+    {
+     "at": 169
+    }
+   ]
   },
   "gravitic_thrusters": {
    "edit": 42,
@@ -125408,7 +130118,12 @@
    "race": 2,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Gravitic Thrusters"
+   "name": "Gravitic Thrusters",
+   "requires": [
+    {
+     "at": 169
+    }
+   ]
   },
   "carrier_capacity": {
    "edit": 43,
@@ -125424,7 +130139,12 @@
    "race": 2,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Carrier Capacity"
+   "name": "Carrier Capacity",
+   "requires": [
+    {
+     "at": 169
+    }
+   ]
   },
   "khaydarin_core_arbiter_50": {
    "edit": 44,
@@ -125440,7 +130160,12 @@
    "race": 2,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Khaydarin Core (Arbiter +50)"
+   "name": "Khaydarin Core (Arbiter +50)",
+   "requires": [
+    {
+     "at": 170
+    }
+   ]
   },
   "unknown_upgrade45": {
    "edit": 45,
@@ -125488,7 +130213,13 @@
    "race": 2,
    "max_level": 1,
    "broodwar": 1,
-   "name": "Argus Jewel (Corsair +50)"
+   "name": "Argus Jewel (Corsair +50)",
+   "requires": [
+    "broodwar",
+    {
+     "at": 169
+    }
+   ]
   },
   "unknown_upgrade48": {
    "edit": 48,
@@ -125520,7 +130251,13 @@
    "race": 2,
    "max_level": 1,
    "broodwar": 1,
-   "name": "Argus Talisman (DA +50)"
+   "name": "Argus Talisman (DA +50)",
+   "requires": [
+    "broodwar",
+    {
+     "at": 165
+    }
+   ]
   },
   "unknown_upgrade50": {
    "edit": 50,
@@ -125552,7 +130289,13 @@
    "race": 1,
    "max_level": 1,
    "broodwar": 1,
-   "name": "Caduceus Reactor (Medic +50)"
+   "name": "Caduceus Reactor (Medic +50)",
+   "requires": [
+    "broodwar",
+    {
+     "at": 112
+    }
+   ]
   },
   "chitinous_plating": {
    "edit": 52,
@@ -125568,7 +130311,13 @@
    "race": 0,
    "max_level": 1,
    "broodwar": 1,
-   "name": "Chitinous Plating"
+   "name": "Chitinous Plating",
+   "requires": [
+    "broodwar",
+    {
+     "at": 140
+    }
+   ]
   },
   "askosi_biotic_bolting": {
    "edit": 53,
@@ -125584,7 +130333,13 @@
    "race": 0,
    "max_level": 1,
    "broodwar": 1,
-   "name": "Askosi Biotic Bolting"
+   "name": "Askosi Biotic Bolting",
+   "requires": [
+    "broodwar",
+    {
+     "at": 140
+    }
+   ]
   },
   "askosi_mechani_bolting": {
    "edit": 54,
@@ -125600,7 +130355,14 @@
    "race": 1,
    "max_level": 1,
    "broodwar": 1,
-   "name": "Askosi Mechani Bolting"
+   "name": "Askosi Mechani Bolting",
+   "requires": [
+    "broodwar",
+    {
+     "at": 120
+    },
+    123
+   ]
   },
   "askosi_skyskip_bolting": {
    "edit": 55,
@@ -125712,7 +130474,12 @@
    "race": 2,
    "max_level": 3,
    "broodwar": 1,
-   "name": "Forerunner Alloy"
+   "name": "Forerunner Alloy",
+   "requires": [
+    {
+     "at": "forerunner_molaris"
+    }
+   ]
   },
   "forerunner_lattice": {
    "base": 0,
@@ -125792,7 +130559,12 @@
    "race": 0,
    "max_level": 1,
    "broodwar": 0,
-   "name": "Forerunner Capacitors"
+   "name": "Forerunner Capacitors",
+   "requires": [
+    {
+     "at": "forerunner_molaris"
+    }
+   ]
   }
  },
  "sounds": {

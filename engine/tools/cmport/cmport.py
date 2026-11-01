@@ -381,6 +381,128 @@ def _plus_one(units, item, applied):
 # Reference costs for verification.
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Requirement grafts (mpq/datreq/*.graft): the game's requirement scripts,
+# one run per subject, [subject id][opcodes...][0xFFFF], 0xFF01 joining the
+# opcodes of one group (or). The opcode set is the game's own: TTAllowed in
+# engine/src117/lang/TechTree.cpp and CheckAllowed in Allowed.cpp.
+# ---------------------------------------------------------------------------
+
+kGraftKinds = {
+    "units": ("units", "requires", False),
+    "research": ("techs", "requires", False),
+    "upgrades": ("upgrades", "requires", False),
+    "tech": ("techs", "use_requires", True),
+}
+
+
+def read_graft_runs(path):
+    raw = open(path, "rb").read()
+    words = struct.unpack("<%dH" % (len(raw) // 2), raw)
+    runs = []
+    cur = []
+    # word 0 is sgTree's unused index 0, as the game's own indexer skips it
+    # (TechTree.cpp sub_4B3230 starts at 1)
+    for w in words[1:]:
+        if w == 0xFFFF:
+            if cur:
+                runs.append(cur)
+            cur = []
+        else:
+            cur.append(w)
+    if cur:
+        runs.append(cur)
+    return runs
+
+
+def graft_requires(mod_dir, tables, names):
+    """Decode the four requirement grafts into (table, row) -> requires lists,
+    and a list of unsupported constructs for the report."""
+    req_map = {}
+    unsupported = []
+
+    def uref(v):
+        """A graft operand naming a unit."""
+        if v in kNoneMarkers["units"] or v < kV117["units"]:
+            return v
+        if v < len(names["units"]):
+            keep_targets.add(("units", v))
+            return names["units"][v]
+        return v
+
+    def tref(v):
+        if v == 44 or v < kV117["techs"]:
+            return v
+        if v < len(names["techs"]):
+            keep_targets.add(("techs", v))
+            return names["techs"][v]
+        return v
+
+    keep_targets = set()
+    for graft, (t_id, field, bUse) in kGraftKinds.items():
+        path = os.path.join(mod_dir, "datreq", graft + ".graft")
+        if not os.path.exists(path):
+            path = os.path.join(mod_dir, "datreq", graft.capitalize() + ".graft")
+        if not os.path.exists(path):
+            continue
+        t = tables[t_id]
+        for run in read_graft_runs(path):
+            if not run:
+                continue
+            subject = run[0]
+            if subject >= t.rows:
+                unsupported.append((graft, subject, "subject past the table"))
+                continue
+            keep_targets.add((t_id, subject))
+            groups = []
+            i = 1
+            while i < len(run):
+                group = []
+                while i < len(run):
+                    w = run[i]
+                    if w == 0xFF02:
+                        op = run[i + 1] if i + 1 < len(run) else 0
+                        i += 2
+                        group.append({("caster" if bUse else "at"): uref(op)})
+                    elif w == 0xFF25:
+                        op = run[i + 1] if i + 1 < len(run) else 0
+                        i += 2
+                        group.append({"tech": tref(op)})
+                    elif w == 0xFF0F:
+                        i += 1
+                        group.append("researched")
+                    elif w == 0xFF24:
+                        i += 1
+                        group.append("broodwar")
+                    elif w == 0xFF03:
+                        op = run[i + 1] if i + 1 < len(run) else 0
+                        i += 2
+                        group.append(uref(op))
+                        unsupported.append((graft, subject,
+                                            f"0xFF03 counts {op} with its in-progress ones too"))
+                    elif w == 0xFF04:
+                        op = run[i + 1] if i + 1 < len(run) else 0
+                        i += 2
+                        unsupported.append((graft, subject,
+                                            f"0xFF04 needs addon {op} attached: not expressible yet"))
+                    elif w == 0xFF01:
+                        i += 1  # the next opcode continues this group
+                    elif w < 0xFF00:
+                        group.append(uref(w))
+                        i += 1
+                    else:
+                        unsupported.append((graft, subject, f"opcode {w:#x} dropped"))
+                        i += 1
+                    if i >= len(run) or run[i] != 0xFF01:
+                        break
+                    i += 1
+                if group:
+                    groups.append(group if len(group) > 1 else group[0])
+            if groups:
+                req_map[(t_id, subject, field)] = groups
+    return req_map, keep_targets, unsupported
+
+
 def reference_costs(path=None):
     path = path or os.path.expanduser("~/Games/cosmonarchy/CMBW-reference.txt")
     rows = {}
@@ -589,6 +711,10 @@ def gen_types(tables, out_path, mod_dir):
         real[t_id] = frozenset(
             r for r in range(kV117[t_id], t.rows) if is_real_name(t, r))
 
+    # The requirement grafts: tech trees and use requirements, and their
+    # subjects and operands join the kept rows.
+    req_map, graft_targets, graft_notes = graft_requires(mod_dir, tables, names)
+
     def refs_of(table_id, r):
         t = tables[table_id]
         row = t.row(r)
@@ -613,9 +739,13 @@ def gen_types(tables, out_path, mod_dir):
                 out.add((ref_table, v))
         return out
 
-    # Rows kept as records: real extended rows, plus the closure of what the
-    # edits and the kept rows reference.
+    # Rows kept as records: real extended rows, the grafts' subjects and
+    # operands, plus the closure of what the edits and the kept rows
+    # reference.
     keep = {t_id: set(real[t_id]) for t_id in tables}
+    for (t_id, v) in graft_targets:
+        if v < tables[t_id].rows:
+            keep[t_id].add(v)
     for t_id in tables:
         t = tables[t_id]
         for r in range(kV117[t_id]):
@@ -659,6 +789,9 @@ def gen_types(tables, out_path, mod_dir):
                 rec = {k: v for k, v in rec.items() if v is not None}
             if is_real_name(t, r):
                 rec["name"] = t.names[r].strip()
+            for fld in ("requires", "use_requires"):
+                if (t_id, r, fld) in req_map:
+                    rec[fld] = req_map[(t_id, r, fld)]
             recs[names[t_id][r]] = rec
         for r in sorted(keep[t_id]):
             if r < v117:
@@ -676,10 +809,17 @@ def gen_types(tables, out_path, mod_dir):
                     continue
             if t_id == "portraits":
                 flds = {k: v for k, v in flds.items() if v is not None}
+            for fld in ("requires", "use_requires"):
+                if (t_id, r, fld) in req_map:
+                    flds[fld] = req_map[(t_id, r, fld)]
             rec.update(flds)
             recs[names[t_id][r]] = rec
         doc[t_id] = recs
         stats[t_id] = len(recs)
+    for note in graft_notes[:40]:
+        print(f"graft note: {note[0]} {note[1]}: {note[2]}")
+    if len(graft_notes) > 40:
+        print(f"graft note: ... {len(graft_notes) - 40} more")
 
     out = json.dumps(doc, indent=1, ensure_ascii=False)
     if out_path:
@@ -719,6 +859,17 @@ def main():
             named = sum(1 for n in t.names if n.strip())
             print(f"{t.id:10s} rows={t.rows:6d} names={named:6d} file={t.file}")
         verify(tables)
+    elif cmd == "grafts":
+        tables = load_all(mod_dir)
+        apply_ext(tables, mod_dir)
+        apply_rewrites(tables, mod_dir)
+        apply_plus_yml(tables, mod_dir)
+        names = build_names(tables)
+        req_map, targets, notes = graft_requires(mod_dir, tables, names)
+        print(f"{len(req_map)} graft requirement runs decoded; "
+              f"{len(targets)} rows they touch; {len(notes)} notes")
+        for n in notes[:40]:
+            print(f"  note: {n[0]} {n[1]}: {n[2]}")
     elif cmd == "check":
         tables = load_all(mod_dir)
         verify(tables)

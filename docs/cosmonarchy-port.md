@@ -29,8 +29,8 @@ Prerelease/`), which is what we actually play.
 | portraits (Smacker) | `mpq/portrait/*.smk` | mod data portraits | TODO: art copier |
 | sounds (WAV) | `mpq/sound/` (~533 MB) | mod data sounds | TODO: art copier |
 | strings | the mod's stat_txt (in the exe's MPQs / `rez/`) | unit names via `name`; tech/upgrade/weapon labels, button texts | TODO: labels past vanilla ids need engine mod-strings |
-| QoL & gameplay code (GPTP + MTL + aise + hotloader: saturation, F11 HUD, Tab cycling, extended selections, custom triggers, Lua melee AI, game modes) | `~/Projects/gptp-fork` (C++, open) | engine C++, gated on the mod | TODO: the hard part; inventory in `engine/tools/cmport/gptp-inventory.md` |
-| Plus QoL (idle-worker key, larva picker, zoom floor, anti-meta, rollback) | `~/Projects/cosmonarchy-plus` (Rust QDP) | engine C++, gated on the mod; anti-meta exists as a mutator already | TODO |
+| QoL & gameplay code (GPTP + MTL + aise + hotloader: saturation, F11 HUD, Tab cycling, extended selections, custom triggers, Lua melee AI, game modes) | `~/Projects/gptp-fork` (C++, open) | engine C++, gated on the mod | **DEFERRED to last**, one feature at a time; several features already exist in Hyperion itself (mutators, HUD designs, zoom, 240-unit selection) — each item gets an "already present?" check first |
+| Plus QoL (idle-worker key, larva picker, zoom floor, anti-meta, rollback) | `~/Projects/cosmonarchy-plus` (Rust QDP) | engine C++, gated on the mod; anti-meta exists as a mutator already | **DEFERRED to last** with the QoL bucket above |
 | maps | `Maps/CMBW-*` in the install | maps play as-is; extended tilesets (65 rows) need engine support | TODO |
 | home screen main button for a gameplay mod | — | engine: let a data mod offer the normal game set-up | TODO |
 
@@ -94,6 +94,12 @@ Hyperion.exe --mod cosmonarchy                     # play it
    the install (player-side), wire paths.
 4. **Engine: gameplay-mod support** — main button for a data mod, extended
    tilesets, mod strings for labels.
-5. **GPTP QoL port** — the long tail; see the inventory doc.
+5. **QoL port — LAST, and slow.** The GPTP/Plus plugin features (saturation
+   overlays, Tab cycling, F11 HUD, idle-worker key, larva picker, custom
+   triggers, Lua melee AI, the game modes). Some are already in Hyperion
+   itself (anti-meta is a mutator; the engine has extended selections,
+   zoom, HUD designs), so each item gets a "already present?" check first.
+   This is the hardest part to get right and is deliberately scheduled at
+   the end, one feature at a time, with the test campaign behind it.
 6. **Test campaign** — replay-free, headless matches against the reference
    install, then merge back to `pre-release`/release.
