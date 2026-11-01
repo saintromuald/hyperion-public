@@ -51,6 +51,11 @@ struct MutatorSet {
   // automatic (PoolsForGame), else at least that many, 1,700 to 262,144. Chosen in
   // Game Options, not on the Mutators tab, but held, sent and recorded with the mutators.
   int nUnits = 0;
+  // the anti-meta start (the user, 2026-11-01): the workers and the starting minerals and gas
+  // rolled fresh every game as it starts, 4 to 8 workers, 100 to 300 minerals and 0 to 125 gas,
+  // in steps of five. Held and sent with the mutators, but not recorded: the game's own set
+  // holds the rolled values, which its replay and save record as any other mutator game's.
+  int nAntiMeta = 0;
 };
 
 struct PortSession {

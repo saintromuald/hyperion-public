@@ -2,7 +2,9 @@
 //
 // The skirmish set-up's and a room's mutators change values 1.17 fixes for every game: what each
 // mineral field and geyser holds, or that it never runs dry; the minerals, gas and workers each
-// player begins with; the supply cap; the supply each depot, pylon, overlord and town hall
+// player begins with (or, with the anti-meta start, rolled fresh every game: 4 to 8 workers, 100
+// to 300 minerals and 0 to 125 gas, in steps of five); the supply cap; the supply each depot,
+// pylon, overlord and town hall
 // gives; the fog of war; how long things take to build; and the tech and upgrades. The game
 // asks for each where 1.17 has its own: a resource made or placed (CUnitInit.cpp, maphdr.cpp), a
 // harvest (CUnit::GetHarvest), the start resources (gametype_mutator_resources), the start units
