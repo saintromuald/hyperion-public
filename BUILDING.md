@@ -104,6 +104,52 @@ Hyperion keeps profiles, replays, saves, settings and logs in a `Data` folder be
 program, or in the folder `--data <folder>` names. It never writes into the game's folder.
 Every option and variable is in `engine/docs/hyperion-exe.md`.
 
+## The online match's relay netcode
+
+The SB provider (the "Online (rally point)" network) links a Rust static library built from
+the vendored `engine/tools/rallypoint2/` (`engine/tools/rallypoint2/PINNED.md` — upstream
+ShieldBattery/rally-point2, MIT/Apache-2.0). The build needs a Rust toolchain:
+
+- Rust 1.95 or newer (`rustup`), on Windows (MSVC) or Linux;
+- `cargo` on the PATH. On Windows, the engine build runs it directly; on Linux,
+  `build_engine_linux.py` does. `--no-sb` skips the crate and stubs the provider.
+
+The engine build also produces the two server binaries from the same workspace, into
+`engine/src117/build/<target>/rallypoint/release/`:
+
+- `rally-point-relay` — the game relay each session dials (QUIC);
+- `rally-point-coordinator` — the control plane that places sessions on relays and mints
+  the per-seat launch JSONs;
+- `rp_dev_setup` — a helper for certificates, tenants and the dev coordinator's sessions.
+
+### Running the stack yourself
+
+For development and a LAN party's server, the dev-tenant shape (see
+`engine/docs/sb-netcode-port.md` §"Server bring-up" and the scripts under
+`engine/tools/sbtest/`):
+
+1. Certificates and a tenant: `rp_dev_setup gen-cert`, `rp_dev_setup gen-tenant`.
+2. The coordinator, with the tenant's keys (a dev tenant accepts any relay's enrollment):
+
+       rally-point-coordinator --listen 0.0.0.0:14910 \
+           --dev-tenant --tenant my-tenant --kid dev-key-1 \
+           --allow-insecure-control --tenant-key <pkcs8> --dev-tenant-client-key <seed>
+
+3. One relay per region, enrolled on it:
+
+       rally-point-relay --listen 0.0.0.0:15000 --relay-id 1 \
+           --coordinator-url http://<host>:14910 --cert cert.pem --key key.pem
+
+4. The room (the lobby's host) mints each match's sessions itself, with these settings in
+   its `lanroom.json`: `sbCoordinator` (the URL), `sbTenant`, `sbKid`, `sbClientSeed` (the
+   app-server seed), and `sbServerName` (the relay cert's name). A match with
+   `"transport":"sb"` in its JSON plays online.
+
+Headless two-seat gates, all `--coordinated` (see `docs/sb-netcode-port.md` §10):
+`engine/tools/sbtest/{run_game,desync,reconnect,drop,sb_room}.sh`, plus the bridge's C ABI
+test `engine/tools/rallypoint2/bridge/ctest/run.sh` and the command-table conformance check
+`cmdtable.sh`.
+
 ## Tests
 
 From `engine/`, after a build:
