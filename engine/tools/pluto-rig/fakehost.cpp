@@ -138,14 +138,88 @@ static void *__attribute__((thiscall)) UnitEmptySet(void *self, void *sret) {
   return sret;
 }
 
-// Logs the faulting context (the return address on the stack is the caller in the
-// bot's code) before the crash handler runs. A call through NULL is redirected to a
-// ret stub (logged), so the bot can limp past broken slots and reveal the next one.
+// Guard-page taps: a PAGE_GUARD on the page of each interesting entry raises
+// STATUS_GUARD_PAGE_VIOLATION on the next execution there; the handler logs the
+// context (the this/arg registers), clears the guard and lets the instruction run.
+// Re-armed every frame (ArmTaps).
+struct Tap {
+  void *page;     // page to guard
+  void *at;       // exact address whose execution is logged
+  const char *name;
+  int hits;
+};
+static Tap g_taps[] = {
+  {reinterpret_cast<void *>(0x7b19d000), reinterpret_cast<void *>(0x7b19d01b), "driver-gate", 0},
+  {reinterpret_cast<void *>(0x7b1b0000), reinterpret_cast<void *>(0x7b1b0130), "walk", 0},
+  {reinterpret_cast<void *>(0x7b1c4000), reinterpret_cast<void *>(0x7b1c4960), "writer", 0},
+};
+
+static void ArmTaps() {
+  for (Tap &t : g_taps) {
+    DWORD old;
+    VirtualProtect(t.page, 0x1000, PAGE_EXECUTE_READ | PAGE_GUARD, &old);
+  }
+}
+
+static void TapLog(const Tap &t, EXCEPTION_POINTERS *e) {
+  FILE *f = fopen("c:\\taps.log", "a");
+  if (!f)
+    return;
+  DWORD esp = e->ContextRecord->Esp;
+  fprintf(f, "%s #%d eip=%p ecx=%p esi=%p edi=%p ebx=%p eax=%p edx=%p ebp=%p esp=%p ret=%p a1=%p a2=%p\\n",
+          t.name, t.hits, e->ExceptionRecord->ExceptionAddress,
+          reinterpret_cast<void *>(e->ContextRecord->Ecx),
+          reinterpret_cast<void *>(e->ContextRecord->Esi),
+          reinterpret_cast<void *>(e->ContextRecord->Edi),
+          reinterpret_cast<void *>(e->ContextRecord->Ebx),
+          reinterpret_cast<void *>(e->ContextRecord->Eax),
+          reinterpret_cast<void *>(e->ContextRecord->Edx),
+          reinterpret_cast<void *>(e->ContextRecord->Ebp),
+          reinterpret_cast<void *>(esp),
+          reinterpret_cast<void *>(*reinterpret_cast<DWORD *>(esp)),
+          reinterpret_cast<void *>(*reinterpret_cast<DWORD *>(esp + 4)),
+          reinterpret_cast<void *>(*reinterpret_cast<DWORD *>(esp + 8)));
+  fclose(f);
+  // Only for a hit exactly at the walk's entry: dump its this and the record head.
+  if (e->ExceptionRecord->ExceptionAddress != t.at)
+    return;
+  f = fopen("c:\\taps.log", "a");
+  if (!f)
+    return;
+  MEMORY_BASIC_INFORMATION mbi;
+  unsigned char *c = reinterpret_cast<unsigned char *>(e->ContextRecord->Ecx);
+  if (VirtualQuery(c, &mbi, sizeof mbi) == sizeof mbi && mbi.State == MEM_COMMIT &&
+      !(mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD))) {
+    unsigned head;
+    memcpy(&head, c + 0x1EC, 4);
+    fprintf(f, "  walk this=%p head=%08x a134=%08x a2a4=%08x\\n", c, head,
+            *reinterpret_cast<unsigned *>(c + 0x134),
+            *reinterpret_cast<unsigned *>(c + 0x2A4));
+  }
+  fclose(f);
+}
 __attribute__((naked)) static void NullStub(void) {
   __asm__("ret");
 }
 
 static LONG CALLBACK VecHandler(EXCEPTION_POINTERS *e) {
+  // Guard-page taps: log every execution on a tapped page (throttled per page per
+  // frame), clear the guard and rerun. Re-armed each frame before onFrame (ArmTaps).
+  if (e->ExceptionRecord->ExceptionCode == 0x80000001) {
+    for (Tap &t : g_taps) {
+      if ((reinterpret_cast<DWORD>(e->ExceptionRecord->ExceptionAddress) & ~0xFFFu) ==
+              reinterpret_cast<DWORD>(t.page) &&
+          t.hits < 400) {
+        ++t.hits;
+        TapLog(t, e);
+      }
+    }
+    void *page = reinterpret_cast<void *>(
+        reinterpret_cast<DWORD>(e->ExceptionRecord->ExceptionAddress) & ~0xFFFu);
+    DWORD old;
+    VirtualProtect(page, 0x1000, PAGE_EXECUTE_READ, &old);
+    return EXCEPTION_CONTINUE_EXECUTION;
+  }
   if (e->ExceptionRecord->ExceptionAddress == reinterpret_cast<void *>(0)) {
     static int s_nulls;
     FILE *f = fopen("c:\\fault.log", "a");
@@ -166,13 +240,15 @@ static LONG CALLBACK VecHandler(EXCEPTION_POINTERS *e) {
   }
   FILE *f = fopen("c:\\fault.log", "a");
   if (f) {
-    fprintf(f, "AV at eip=%p esp=%p ret=%p arg1=%p eax=%p ecx=%p edx=%p\\n",
+    fprintf(f, "AV at eip=%p esp=%p ret=%p arg1=%p eax=%p ecx=%p edx=%p faddr=%p fcode=%lx\\n",
             e->ExceptionRecord->ExceptionAddress, reinterpret_cast<void *>(e->ContextRecord->Esp),
             *reinterpret_cast<void **>(e->ContextRecord->Esp),
             *reinterpret_cast<void **>(e->ContextRecord->Esp + 4),
             reinterpret_cast<void *>(e->ContextRecord->Eax),
             reinterpret_cast<void *>(e->ContextRecord->Ecx),
-            reinterpret_cast<void *>(e->ContextRecord->Edx));
+            reinterpret_cast<void *>(e->ContextRecord->Edx),
+            reinterpret_cast<void *>(e->ExceptionRecord->ExceptionInformation[1]),
+            e->ExceptionRecord->ExceptionInformation[0]);
     DWORD fp = e->ContextRecord->Ebp;
     fprintf(f, "ebp-walk:");
     for (int i = 0; i < 12 && fp > 0x10000 && fp < 0x80000000; ++i) {
@@ -264,6 +340,7 @@ static DWORD WINAPI ServePipe(LPVOID p) {  HANDLE hPipe = static_cast<HANDLE>(p)
 
 static HANDLE s_hShm;
 static void *s_view;
+static void *s_bigview;  // the writer's real target: a big writable buffer (see main)
 
 static int s_nScan;
 static void ScanForHeader(int frame) {
@@ -284,12 +361,12 @@ static void ScanForHeader(int frame) {
       }
     }
   }
-  if (s_found && frame % 10 == 0) {
+  if (s_bigview && frame % 10 == 0) {
     char path[64];
     snprintf(path, sizeof path, "dump/shm-f%05d.bin", frame);
     FILE *f = fopen(path, "wb");
     if (f) {
-      fwrite(s_found, 1, 0x20000, f);
+      fwrite(s_bigview, 1, 0x90000, f);
       fclose(f);
     }
   }
@@ -426,6 +503,19 @@ int main(int argc, char **argv) {
     printf("[fakehost] exports missing\n");
     return 1;
   }
+  // The bot's zero-fill BSS tail (its uninitialised globals: the obs gates at
+  // base+0x72654/0x72661 and the obs-state object at base+0x73120) is mapped
+  // read-only by Wine; a real game's loader gives it write access. Make it writable
+  // so the bot's own stores and the rig's gate forcing can land.
+  {
+    void *bss = reinterpret_cast<void *>(0x7b1a2000);
+    DWORD old;
+    if (VirtualProtect(bss, 0x2000, PAGE_READWRITE, &old))
+      printf("[fakehost] bss 0x7b1a2000..0x7b1a4000 protected RW\n");
+    else
+      printf("[fakehost] bss protect failed (%lu)\n", GetLastError());
+    fflush(stdout);
+  }
   MeasureTypes();
   {
     unsigned char *img = reinterpret_cast<unsigned char *>(GetModuleHandleA("pluto.patched.dll"));
@@ -528,40 +618,28 @@ int main(int argc, char **argv) {
   V0 onFrame = reinterpret_cast<V0>(vt[3]);
   printf("[fakehost] driving the module (vt[1]=%p vt[2]=%p vt[3]=%p)\n", vt[1], vt[2], vt[3]);
   fflush(stdout);
-  // Dump the bot's unit-record list at [client+0x1EC] for the record-format work.
-  {
-    unsigned char *c = reinterpret_cast<unsigned char *>(0x7b1e4160);
-    unsigned head;
-    memcpy(&head, c + 0x1EC, 4);
-    FILE *f = fopen("dump/unitlist.txt", "w");
-    if (f) {
-      fprintf(f, "list head at client+0x1EC: %08x\n", head);
-      unsigned node = head;
-      for (int i = 0; i < 12 && node > 0x10000 && node < 0x80000000; ++i) {
-        unsigned char *n = reinterpret_cast<unsigned char *>(node);
-        fprintf(f, "node %d (%p):", i, reinterpret_cast<void *>(node));
-        for (int k = 0; k < 24; k += 4) {
-          unsigned v;
-          memcpy(&v, n + k, 4);
-          fprintf(f, " %08x", v);
-        }
-        fprintf(f, "\n");
-        memcpy(&node, n, 4);
-      }
-      fclose(f);
-    }
-  }
   // The bot's client (a static object at base+0x54160) never got its shm view
-  // pointer (+0x18) or its send flag (+0x1C) from the handshake in the rig; the view
-  // is the bot's own .data page holding the PLO1 header (base+0x54000).
+  // pointer (+0x18) or its send flag (+0x1C) from the handshake in the rig. The view
+  // was set to the bot's own .data page (base+0x54000), but the writer writes the obs
+  // up to view+0x85f1c: past .data (ends base+0x54678) into .rdata (read-only) and off
+  // the image. Give it a big writable buffer instead, seeded with the .data page so
+  // the PLO1 header the bot and engine expect is where they expect it.
+  s_bigview = VirtualAlloc(NULL, 0x100000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+  if (!s_bigview) {
+    printf("[fakehost] view buffer alloc failed\n");
+    return 1;
+  }
+  memcpy(s_bigview, reinterpret_cast<void *>(0x7b1e4000), 0x20000);
+  memset(reinterpret_cast<char *>(s_bigview) + 0x20000, 0, 0xE0000);
   {
     unsigned *client = reinterpret_cast<unsigned *>(0x7b1e4160);
-    printf("[fakehost] client: view-slot %08x flag %02x -> setting view+flag\n",
-           client[6], *reinterpret_cast<unsigned char *>(client + 7));
+    printf("[fakehost] client: view-slot %08x flag %02x -> setting view=%p+flag\n",
+           client[6], *reinterpret_cast<unsigned char *>(client + 7), s_bigview);
     fflush(stdout);
-    client[6] = 0x7b1e4000;
+    client[6] = reinterpret_cast<unsigned>(s_bigview);
     *reinterpret_cast<unsigned char *>(client + 7) = 1;
   }
+  ArmTaps();
   for (int f = 0; f < 1200; ++f) {
     g->frameCount = f;
     g->elapsedTime = f * 42;
@@ -571,8 +649,60 @@ int main(int argc, char **argv) {
     g->events[0].v2 = 0;
     if (f == 0)
       onStart(mod);
+    // Force the obs gates open before the frame, in case the bot's pump resets them
+    // at the start of its update (they are forced again after onFrame below).
+    {
+      unsigned char *gates = reinterpret_cast<unsigned char *>(0x7b1a2640);
+      *reinterpret_cast<unsigned *>(gates + 0x14) = 0;  // next obs frame: never future
+      gates[0x18] = 0;                                  // not yet sent
+      gates[0x21] = 1;                                  // engine "ready"
+    }
+    ArmTaps();
     handoff.onMatchFrame();
     onFrame(mod);
+    // Watch the bot's per-unit record list: the obs-state object is the global at
+    // base+0x73120 (the writer's this is base+0x54160, a different object), so the
+    // list head is at 0x7b1a3120+0x1EC.
+    if (f % 5 == 0) {
+      FILE *uf = fopen("dump/unitlist.txt", f == 0 ? "w" : "a");
+      if (uf) {
+        unsigned char *c = reinterpret_cast<unsigned char *>(0x7b1a3120);
+        unsigned char *gates = reinterpret_cast<unsigned char *>(0x7b1a2640);
+        unsigned head;
+        memcpy(&head, c + 0x1EC, 4);
+        fprintf(uf, "f%d head=%08x gate654=%08x gate658=%02x gate661=%02x gate660=%02x a2a4=%08x\n",
+                f, head, *reinterpret_cast<unsigned *>(gates + 0x14),
+                gates[0x18], gates[0x21], gates[0x20],
+                *reinterpret_cast<unsigned *>(c + 0x2A4));
+        unsigned node = head;
+        for (int i = 0; i < 8 && node > 0x10000 && node < 0x80000000; ++i) {
+          MEMORY_BASIC_INFORMATION mbi;
+          unsigned char *n = reinterpret_cast<unsigned char *>(node);
+          if (VirtualQuery(n, &mbi, sizeof mbi) != sizeof mbi ||
+              mbi.State != MEM_COMMIT || mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD))
+            break;
+          fprintf(uf, "  n%d (%p):", i, reinterpret_cast<void *>(node));
+          for (int k = 0; k < 28; k += 4) {
+            unsigned v;
+            memcpy(&v, n + k, 4);
+            fprintf(uf, " %08x", v);
+          }
+          fprintf(uf, "\n");
+          memcpy(&node, n, 4);
+        }
+        fclose(uf);
+      }
+    }
+    // The obs build is gated on the engine's ready-reply, which the rig does not
+    // service: the driver skips the build while gate661==0, gate658!=0 ("already
+    // sent") or gate654 > frame ("next obs frame"). Force all three open so the
+    // writer runs against our buffer every frame.
+    {
+      unsigned char *gates = reinterpret_cast<unsigned char *>(0x7b1a2640);
+      *reinterpret_cast<unsigned *>(gates + 0x14) = 0;  // next obs frame: never future
+      gates[0x18] = 0;                                  // not yet sent
+      gates[0x21] = 1;                                  // engine "ready"
+    }
     if (scenario == 2 && f >= 600) {
       UnitData &m = g->units[7];
       m.positionY -= 1;

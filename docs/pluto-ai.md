@@ -75,21 +75,38 @@ Transport: shared memory + events, with a pipes fallback.
   the actions, an AI boundary made for another level, and the lab's pattern of starting and
   owning a helper process.
 
-## The rig (tools/pluto-rig) — status 2026-11-01
+## The rig (tools/pluto-rig) — status 2026-11-01, session 3
 
-A Wine-hosted 32-bit harness now runs the real pluto.dll against scripted game state:
-the host compiles BWAPI 4.4.0's client-side GameImpl/PlayerImpl/UnitImpl over a
-GameData block it fills, patches a copy of the DLL so its StarCraft-global writes land
-in stand-in buffers (it writes SC's speed global at 0x5124d8 and friends by absolute
-address), and drives the module through its real vtable ([1] onStart, [2] onEnd(bool),
-[3] onFrame — not BWAPI 4.4.0's AIModule order).
+The obs path is mapped end to end; the schema extraction is one gate away.
+New this session, read from the binaries and the running rig:
 
-Reached: onStart runs, pluto_infer.exe launches and handshakes over BWRL_SHM
-("inference server up ... shm transport"), the model loads (int8mv, 6 threads,
-768 max_units).
+- **The writer runs with a real writable view.** The writer (this = the shm client at
+  base+0x54160: view +0x18, send flag +0x1C, frame counter +0x20; args = the two obs
+  objects and the global at base+0x73254) writes the request header at view+0xC0
+  (N, W, H, zeros) and the obs at fixed offsets — +0xC100, +0x79100, +0x79500,
+  +0x79900, +0x79940, +0x79A40, +0x79F00, +0x81F00, +0x85F00 — each a (begin,end)
+  span of the obs objects. The rig's view had pointed at the bot's .data page, past
+  which the writes hit read-only .rdata; a 1 MB writable buffer seeded with the
+  header page fixes it.
+- **The build gates are three globals**, read by the driver at base+0xD01B..0xD04E:
+  base+0x72654 (dword, the next obs frame), base+0x72658 (byte, already sent; the
+  writer's success sets it, the engine's reply pump clears it) and base+0x72661
+  (byte, engine ready). The driver builds the obs, walks the record list (the walk,
+  base+0x30130) and calls the writer (base+0x34960).
+- **The record node shape is {next, b..g}, 28 bytes** (from the walk's disassembly);
+  the obs unit entry is the six fields {b..g}, 24 bytes, appended by base+0x2E110.
+  A second per-unit writer (base+0x307F0/0x30850) turns a record (ecx) into the
+  float features ([esi]): position x/y scaled by the map size, an id, and more.
+- **The obs-state object** (record list head at +0x1EC) is a static at base+0x73120
+  and a copy owned by the module object (module+0x10F4, seen beside the module in a
+  tap). The static's head reads 0x0F000009 in the rig, and the module's walker runs
+  with edi=0x0F000009 without faulting — the head's representation is the last
+  unknown (a tagged pointer, or a field read one word off).
+- **The harness** gained the writable view buffer, the BSS zero-fill tail made
+  writable (Wine maps base+0x72000.. read-only), fault logging with the fault address
+  and code, and guard-page taps (PAGE_GUARD + the vectored handler) on the driver,
+  walk and writer pages that log every execution with the register context.
 
-Blocked on: the bot's compiled Game/Player/Unit ABIs differ from the public 4.4.0
-headers, so its state reads hit the wrong vtable slots (own_race reads as -1; crash at
-onStart's tail). Next: align the host's vtables to what the bot calls (trace all
-impl methods / follow the worker), then the shm dumps become meaningful and the
-observation schema extraction begins.
+Open (next session): pin down the record-head representation (module-owned obs-state,
+module+0x10F4), let the walk complete so the writer fills view+0xC0, then the
+differential scenarios (move a unit, change resources) name every field.
