@@ -1,0 +1,9 @@
+{
+ "console": {
+  "art": {
+   "terran": "art/game/tconsole.pcx",
+   "zerg": "art/game/zconsole.pcx",
+   "protoss": "art/game/pconsole.pcx"
+  }
+ }
+}
