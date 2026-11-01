@@ -138,8 +138,24 @@ static void *__attribute__((thiscall)) UnitEmptySet(void *self, void *sret) {
   return sret;
 }
 
-static DWORD WINAPI ServePipe(LPVOID p) {
-  HANDLE hPipe = static_cast<HANDLE>(p);
+// Logs the faulting context (the return address on the stack is the caller in the
+// bot's code) before the crash handler runs.
+static LONG CALLBACK VecHandler(EXCEPTION_POINTERS *e) {
+  FILE *f = fopen("c:\\fault.log", "a");
+  if (f) {
+    fprintf(f, "AV at eip=%p esp=%p ret=%p arg1=%p eax=%p ecx=%p edx=%p\\n",
+            e->ExceptionRecord->ExceptionAddress, reinterpret_cast<void *>(e->ContextRecord->Esp),
+            *reinterpret_cast<void **>(e->ContextRecord->Esp),
+            *reinterpret_cast<void **>(e->ContextRecord->Esp + 4),
+            reinterpret_cast<void *>(e->ContextRecord->Eax),
+            reinterpret_cast<void *>(e->ContextRecord->Ecx),
+            reinterpret_cast<void *>(e->ContextRecord->Edx));
+    fclose(f);
+  }
+  return EXCEPTION_CONTINUE_SEARCH;
+}
+
+static DWORD WINAPI ServePipe(LPVOID p) {  HANDLE hPipe = static_cast<HANDLE>(p);
   if (!ConnectNamedPipe(hPipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED)
     return 1;
   DWORD code = 2, n;
@@ -192,6 +208,7 @@ static void ReserveScMemory() {
 }
 
 int main(int argc, char **argv) {
+  AddVectoredExceptionHandler(1, VecHandler);
   const int scenario = argc > 1 ? atoi(argv[1]) : 1;
   ReserveScMemory();
   printf("[fakehost] scenario %d\n", scenario);
@@ -331,12 +348,25 @@ int main(int argc, char **argv) {
   // inline destructor at 0).
   if (getenv("HX_NO_SETS") == NULL) {
     g_emptyHead.left = g_emptyHead.parent = g_emptyHead.right = &g_emptyHead;
+    // Slot audit: the set-returning methods' real slots (PMF encoding) and neighbours.
+    {
+      auto slotOf = [](auto pmf) -> int {
+        return static_cast<int>((*reinterpret_cast<unsigned *>(&pmf) - 1) / 4);
+      };
+      printf("[fakehost] slots: loadedUnits=%d interceptors=%d larva=%d hatchery=%d transport=%d\\n",
+             slotOf(static_cast<Unitset (UnitImpl::*)() const>(&UnitImpl::getLoadedUnits)),
+             slotOf(static_cast<Unitset (UnitImpl::*)() const>(&UnitImpl::getInterceptors)),
+             slotOf(static_cast<Unitset (UnitImpl::*)() const>(&UnitImpl::getLarva)),
+             slotOf(static_cast<Unit (UnitImpl::*)() const>(&UnitImpl::getHatchery)),
+             slotOf(static_cast<Unit (UnitImpl::*)() const>(&UnitImpl::getTransport)));
+      fflush(stdout);
+    }
     UnitImpl probe(0);
     void **vt = *reinterpret_cast<void ***>(&probe);
     DWORD old;
     VirtualProtect(vt, 0x200, PAGE_READWRITE, &old);
     if (getenv("HX_NO_SETS") == NULL || *getenv("HX_NO_SETS") == '2')
-      for (int s : {63, 65, 67})
+      for (int s : {64, 66, 68})
         vt[s] = reinterpret_cast<void *>(&UnitEmptySet);
     VirtualProtect(vt, 0x200, old, &old);
     printf("[fakehost] UnitImpl set slots -> %p\\n", reinterpret_cast<void *>(&UnitEmptySet));
