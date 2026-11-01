@@ -16,6 +16,7 @@ struct LanRoomFound {
   int nPort = 0;
   PortJson info;     // the room's summary (port_lanroom.cpp's Advertise)
   bool bOk = false;
+  bool bNetcode = false;  // its matches play online through the relay netcode (by default)
   std::string why, fix, mark;  // mark: "Plays here", "Needs a mod", "Another version"...
 };
 

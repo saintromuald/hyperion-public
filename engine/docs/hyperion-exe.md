@@ -355,6 +355,15 @@ launches is played through 1.17's own lobby (`port_lanlobby.cpp`), and its repla
 Presentation and transport only; `hyperion_lan.log` has the room's evening and each match's
 relay.
 
+A room can also be on the internet's game list (`modules/lan.md`, "The game list over the
+internet"): `"announce": "<host>:<port>"` in `lanroom.json` sends the room's summary to the
+directory there as a UDP datagram every ten seconds (`"announceHost"` the address the players
+join at, `"announceSecret"` the directory's secret), and a joiner's `HYPERION_LAN_HOSTS` holds
+the directory's address so its rooms show in Multiplayer's list with their `NETCODE` or `LAN`
+chip. `"defaultTransport": "sb"` (the default once `sbCoordinator` and `sbClientSeed` are set)
+makes the room's new matches play online through the rally-point relay; the host's lobby shows
+the transport and can toggle a match back to this network.
+
 A room's match is fed to the room as it is played (`port_lanfeed.cpp`): each seat sends the
 record's blocks as they complete, the room writes the match's replay into
 `maps\replays\<room name>\` and passes the feed to who watches. Watching plays the match as a

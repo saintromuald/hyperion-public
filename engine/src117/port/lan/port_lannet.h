@@ -56,6 +56,9 @@ struct Answer {
 };
 void Query(void);
 std::vector<Answer> Answers(void);
+// A datagram to an address and port (the room's announce to a directory). Nothing is sent
+// when the network has not started or the address is not one.
+void SendTo(uint32_t dwAddr, int nPort, const void *pv, size_t cb);
 
 std::string AddrText(uint32_t dwAddr);
 // An address as text, in network order; false when it is not one.

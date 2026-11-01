@@ -174,9 +174,9 @@ msgstr "최대 속도"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:54
 #: src117/port/front/port_front_campaign.cpp:58
-#: src117/port/front/port_front_mutators.cpp:1001
+#: src117/port/front/port_front_mutators.cpp:1002
 #: src117/port/front/port_front_replays.cpp:50
-#: src117/port/front/port_front_skirmish.cpp:1628
+#: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
 #: src117/port/tools/port_benchview.cpp:1307
 msgid "Zerg"
@@ -185,9 +185,9 @@ msgstr "저그"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:53
 #: src117/port/front/port_front_campaign.cpp:57
-#: src117/port/front/port_front_mutators.cpp:1001
+#: src117/port/front/port_front_mutators.cpp:1002
 #: src117/port/front/port_front_replays.cpp:50
-#: src117/port/front/port_front_skirmish.cpp:1628
+#: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
 #: src117/port/tools/port_benchview.cpp:1307
 msgid "Terran"
@@ -196,9 +196,9 @@ msgstr "테란"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:55
 #: src117/port/front/port_front_campaign.cpp:56
-#: src117/port/front/port_front_mutators.cpp:1001
+#: src117/port/front/port_front_mutators.cpp:1002
 #: src117/port/front/port_front_replays.cpp:50
-#: src117/port/front/port_front_skirmish.cpp:1628
+#: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
 #: src117/port/tools/port_benchview.cpp:1307
 msgid "Protoss"
@@ -207,9 +207,9 @@ msgstr "프로토스"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_bench.cpp:1423
 #: src117/port/front/port_front_replays.cpp:877
-#: src117/port/front/port_front_skirmish.cpp:1635
-#: src117/port/front/port_front_skirmish.cpp:2812
-#: src117/port/front/port_front_skirmish.cpp:2820
+#: src117/port/front/port_front_skirmish.cpp:1636
+#: src117/port/front/port_front_skirmish.cpp:2813
+#: src117/port/front/port_front_skirmish.cpp:2821
 #: src117/port/front/port_front_trainer.cpp:48
 msgid "Random"
 msgstr "무작위"
@@ -219,13 +219,13 @@ msgid "Sixty-four computers on Big Game Hunters 8x8, 1,024 tiles a side, as fast
 msgstr "Big Game Hunters 8x8, 한 변 1,024타일 지도에서 컴퓨터 64명이 30분 동안 최대 속도로 플레이합니다. 현재 Hyperion이 목표로 하는 플레이어 32명, 512타일을 넘어서는 한계치입니다. 지도는 maps\\Hyperion\\Experimental\\에 있습니다."
 
 #: src117/port/front/port_front_bench.cpp:1088
-#: src117/port/front/port_front_skirmish.cpp:2040
-#: src117/port/front/port_front_skirmish.cpp:2044
+#: src117/port/front/port_front_skirmish.cpp:2041
+#: src117/port/front/port_front_skirmish.cpp:2045
 msgid "Player {0}"
 msgstr "플레이어 {0}"
 
 #: src117/port/front/port_front_bench.cpp:1090
-#: src117/port/front/port_front_skirmish.cpp:2041
+#: src117/port/front/port_front_skirmish.cpp:2042
 msgid "Starts by slot: player {0} starts where the map’s picture shows {0}."
 msgstr "슬롯 순서대로 시작합니다. 플레이어 {0}은(는) 지도 그림에 {0}으로 표시된 곳에서 시작합니다."
 
@@ -237,10 +237,10 @@ msgstr "시작 위치는 시드로 추첨되므로 슬롯이 지도상의 위치
 #: src117/port/front/port_front_replays.cpp:880
 #: src117/port/front/port_front_score.cpp:720
 #: src117/port/front/port_front_score.cpp:731
-#: src117/port/front/port_front_skirmish.cpp:2081
-#: src117/port/front/port_front_skirmish.cpp:2085
-#: src117/port/front/port_front_skirmish.cpp:2089
-#: src117/port/front/port_front_skirmish.cpp:3086
+#: src117/port/front/port_front_skirmish.cpp:2082
+#: src117/port/front/port_front_skirmish.cpp:2086
+#: src117/port/front/port_front_skirmish.cpp:2090
+#: src117/port/front/port_front_skirmish.cpp:3113
 #: src117/port/lan/port_front_lanhost.cpp:464
 #: src117/port/lan/port_front_lanhost.cpp:1104
 msgid "Computer"
@@ -252,7 +252,7 @@ msgid "Its own"
 msgstr "플레이어별"
 
 #: src117/port/front/port_front_bench.cpp:1104
-#: src117/port/front/port_front_skirmish.cpp:2160
+#: src117/port/front/port_front_skirmish.cpp:2161
 msgid "Colours by team"
 msgstr "팀별 색상"
 
@@ -270,7 +270,7 @@ msgstr "각 슬롯이 게임이 지정한 색상으로 표시됩니다. 팀전�
 
 #: src117/port/front/port_front_bench.cpp:1119
 #: src117/port/front/port_front_bench.cpp:1168
-#: src117/port/front/port_front_skirmish.cpp:2398
+#: src117/port/front/port_front_skirmish.cpp:2399
 msgid "Race"
 msgstr "종족"
 
@@ -279,7 +279,7 @@ msgid "Random is drawn from the seed: the same seed gives the same races."
 msgstr "무작위는 시드로 추첨되므로 같은 시드에서는 같은 종족이 나옵니다."
 
 #: src117/port/front/port_front_bench.cpp:1121
-#: src117/port/front/port_front_skirmish.cpp:2221
+#: src117/port/front/port_front_skirmish.cpp:2222
 msgid "Handicap"
 msgstr "핸디캡"
 
@@ -288,31 +288,31 @@ msgid "A player’s units at a share of their life, as in SC2. Not available yet
 msgstr "SC2처럼 플레이어의 유닛 체력을 일정 비율로 줄입니다. 아직 사용할 수 없습니다."
 
 #: src117/port/front/port_front_bench.cpp:1128
-#: src117/port/front/port_front_skirmish.cpp:2255
+#: src117/port/front/port_front_skirmish.cpp:2256
 msgid "Computer level"
 msgstr "컴퓨터 수준"
 
 #: src117/port/front/port_front_bench.cpp:1129
 #: src117/port/front/port_front_bench.cpp:1187
-#: src117/port/front/port_front_skirmish.cpp:2260
-#: src117/port/front/port_front_skirmish.cpp:2420
+#: src117/port/front/port_front_skirmish.cpp:2261
+#: src117/port/front/port_front_skirmish.cpp:2421
 #: src117/port/gameplay/port_ai.cpp:67
 msgid "Its own script"
 msgstr "자체 스크립트"
 
 #: src117/port/front/port_front_bench.cpp:1129
-#: src117/port/front/port_front_skirmish.cpp:2260
+#: src117/port/front/port_front_skirmish.cpp:2261
 msgid "Personality"
 msgstr "성향"
 
 #: src117/port/front/port_front_bench.cpp:1130
-#: src117/port/front/port_front_skirmish.cpp:2261
+#: src117/port/front/port_front_skirmish.cpp:2262
 msgid "How the computer plays: turtle, rusher, expander and the like. Not available yet."
 msgstr "컴퓨터의 플레이 방식입니다. 수비형, 러시형, 확장형 등. 아직 사용할 수 없습니다."
 
 #: src117/port/front/port_front_bench.cpp:1155
-#: src117/port/front/port_front_skirmish.cpp:2384
-#: src117/port/front/port_front_skirmish.cpp:2425
+#: src117/port/front/port_front_skirmish.cpp:2385
+#: src117/port/front/port_front_skirmish.cpp:2426
 msgid "All computers:"
 msgstr "모든 컴퓨터:"
 
@@ -329,32 +329,32 @@ msgid "Sets every slot’s race at once; each slot’s own list changes it after
 msgstr "모든 슬롯의 종족을 한 번에 설정합니다. 이후 슬롯별 목록에서 각각 바꿀 수 있습니다. 무작위는 시드로 추첨됩니다."
 
 #: src117/port/front/port_front_bench.cpp:1182
-#: src117/port/front/port_front_skirmish.cpp:2412
+#: src117/port/front/port_front_skirmish.cpp:2413
 msgid "Level"
 msgstr "수준"
 
 #: src117/port/front/port_front_bench.cpp:1186
-#: src117/port/front/port_front_skirmish.cpp:2419
+#: src117/port/front/port_front_skirmish.cpp:2420
 msgid "Every computer’s level"
 msgstr "모든 컴퓨터의 수준"
 
 #: src117/port/front/port_front_bench.cpp:1187
-#: src117/port/front/port_front_skirmish.cpp:2420
+#: src117/port/front/port_front_skirmish.cpp:2421
 msgid "Every computer’s personality"
 msgstr "모든 컴퓨터의 성향"
 
 #: src117/port/front/port_front_bench.cpp:1188
-#: src117/port/front/port_front_skirmish.cpp:2421
+#: src117/port/front/port_front_skirmish.cpp:2422
 msgid "How the computers play: turtle, rusher, expander and the like. Not available yet."
 msgstr "컴퓨터들의 플레이 방식입니다. 수비형, 러시형, 확장형 등. 아직 사용할 수 없습니다."
 
 #: src117/port/front/port_front_bench.cpp:1197
-#: src117/port/front/port_front_skirmish.cpp:2440
+#: src117/port/front/port_front_skirmish.cpp:2441
 msgid "New Team"
 msgstr "새 팀"
 
 #: src117/port/front/port_front_bench.cpp:1201
-#: src117/port/front/port_front_skirmish.cpp:2446
+#: src117/port/front/port_front_skirmish.cpp:2447
 #: src117/port/front/port_frontlobby.cpp:156
 msgid "New team"
 msgstr "새 팀"
@@ -373,8 +373,8 @@ msgstr "크립 확산과 축소"
 
 #: src117/port/front/port_front_bench.cpp:1210
 #: src117/port/front/port_front_bench.cpp:1213
-#: src117/port/front/port_front_skirmish.cpp:2455
-#: src117/port/front/port_front_skirmish.cpp:2460
+#: src117/port/front/port_front_skirmish.cpp:2456
+#: src117/port/front/port_front_skirmish.cpp:2461
 msgid "Quick layout"
 msgstr "빠른 배치"
 
@@ -427,11 +427,11 @@ msgid "empty: choose it in a slot’s Team list"
 msgstr "비어 있음: 슬롯의 팀 목록에서 선택하십시오"
 
 #: src117/port/front/port_front_bench.cpp:1302
-#: src117/port/front/port_front_skirmish.cpp:2335
-#: src117/port/front/port_front_skirmish.cpp:2372
-#: src117/port/front/port_front_skirmish.cpp:2584
+#: src117/port/front/port_front_skirmish.cpp:2336
+#: src117/port/front/port_front_skirmish.cpp:2373
+#: src117/port/front/port_front_skirmish.cpp:2585
 #: src117/port/front/port_front_trainer.cpp:427
-#: src117/port/lan/port_front_lan.cpp:1161
+#: src117/port/lan/port_front_lan.cpp:1163
 #: src117/port/platform/port_discord.cpp:613
 #: src117/port/platform/port_discord.cpp:616
 #: src117/port/tools/port_benchview.cpp:761
@@ -464,14 +464,14 @@ msgstr "{2}개 중 {0}~{1}번째 표시, 휠로 스크롤"
 #: src117/port/front/port_front_bench.cpp:1341
 #: src117/port/front/port_front_bench.cpp:1404
 #: src117/port/front/port_front_score.cpp:65
-#: src117/port/front/port_front_skirmish.cpp:1467
+#: src117/port/front/port_front_skirmish.cpp:1468
 #: src117/port/tools/port_benchview.cpp:830
 #: src117/port/tools/port_benchview.cpp:858
 msgid "Players"
 msgstr "플레이어"
 
 #: src117/port/front/port_front_bench.cpp:1344
-#: src117/port/front/port_frontkit.cpp:369
+#: src117/port/front/port_frontkit.cpp:373
 #: src117/port/tools/port_benchview.cpp:868
 msgid "Free For All"
 msgstr "개별 전투"
@@ -482,12 +482,12 @@ msgid "Melee, all allied"
 msgstr "섬멸전, 전원 동맹"
 
 #: src117/port/front/port_front_bench.cpp:1345
-#: src117/port/front/port_front_skirmish.cpp:2737
+#: src117/port/front/port_front_skirmish.cpp:2738
 msgid "Team Match"
 msgstr "팀전"
 
 #: src117/port/front/port_front_bench.cpp:1355
-#: src117/port/front/port_front_skirmish.cpp:2730
+#: src117/port/front/port_front_skirmish.cpp:2731
 #: src117/port/tools/port_benchview.cpp:863
 msgid "Game type"
 msgstr "게임 유형"
@@ -497,10 +497,10 @@ msgid "Free For All: every computer for itself. Melee: the original’s, where e
 msgstr "개별 전투: 컴퓨터가 각자 플레이합니다. 섬멸전: 원작 방식으로, 모든 컴퓨터가 한편이 되어 전투가 일어나지 않습니다. 비교용으로 남겨 둡니다. 팀전: 컴퓨터가 팀을 이뤄 동맹을 맺고 시야를 공유하며 함께 승리합니다. 빠른 배치가 지도의 시작 위치로 팀을 구성합니다. 팀전은 Hyperion의 규칙으로 진행됩니다. 팀과 시작 위치가 같을 때만 같은 게임이 반복됩니다."
 
 #: src117/port/front/port_front_bench.cpp:1364
-#: src117/port/front/port_front_skirmish.cpp:1991
-#: src117/port/front/port_front_skirmish.cpp:2078
-#: src117/port/front/port_front_skirmish.cpp:2089
-#: src117/port/front/port_front_skirmish.cpp:2644
+#: src117/port/front/port_front_skirmish.cpp:1992
+#: src117/port/front/port_front_skirmish.cpp:2079
+#: src117/port/front/port_front_skirmish.cpp:2090
+#: src117/port/front/port_front_skirmish.cpp:2645
 msgid "You"
 msgstr "나"
 
@@ -522,7 +522,7 @@ msgid "A minute, to see it runs"
 msgstr "1분, 정상 동작 확인용"
 
 #: src117/port/front/port_front_bench.cpp:138
-#: src117/port/gameplay/port_mutators.cpp:87
+#: src117/port/gameplay/port_mutators.cpp:112
 msgid "Standard"
 msgstr "표준"
 
@@ -581,9 +581,9 @@ msgstr[0] "{0}에는 시작 위치가 {1}개 있습니다."
 
 #: src117/port/front/port_front_bench.cpp:1421
 #: src117/port/front/port_front_bench.cpp:1427
-#: src117/port/front/port_front_skirmish.cpp:2810
-#: src117/port/front/port_front_skirmish.cpp:2816
-#: src117/port/front/port_front_skirmish.cpp:2821
+#: src117/port/front/port_front_skirmish.cpp:2811
+#: src117/port/front/port_front_skirmish.cpp:2817
+#: src117/port/front/port_front_skirmish.cpp:2822
 msgid "Start positions"
 msgstr "시작 위치"
 
@@ -596,8 +596,8 @@ msgid "drawn from the seed"
 msgstr "시드로 추첨"
 
 #: src117/port/front/port_front_bench.cpp:1423
-#: src117/port/front/port_front_skirmish.cpp:2173
-#: src117/port/front/port_front_skirmish.cpp:2812
+#: src117/port/front/port_front_skirmish.cpp:2174
+#: src117/port/front/port_front_skirmish.cpp:2813
 msgid "By slot"
 msgstr "슬롯순"
 
@@ -611,18 +611,18 @@ msgstr "지도의 시작 위치를 읽을 수 없어 시드로 추첨합니다."
 
 #: src117/port/front/port_front_bench.cpp:1437
 #: src117/port/front/port_front_bench.cpp:1442
-#: src117/port/front/port_front_skirmish.cpp:2830
-#: src117/port/front/port_front_skirmish.cpp:2837
+#: src117/port/front/port_front_skirmish.cpp:2831
+#: src117/port/front/port_front_skirmish.cpp:2838
 msgid "Colours"
 msgstr "색상"
 
 #: src117/port/front/port_front_bench.cpp:1438
-#: src117/port/front/port_front_skirmish.cpp:2831
+#: src117/port/front/port_front_skirmish.cpp:2832
 msgid "By player"
 msgstr "플레이어별"
 
 #: src117/port/front/port_front_bench.cpp:1438
-#: src117/port/front/port_front_skirmish.cpp:2831
+#: src117/port/front/port_front_skirmish.cpp:2832
 msgid "By team"
 msgstr "팀별"
 
@@ -636,8 +636,8 @@ msgstr "팀별 색상은 팀전에서만 사용할 수 있습니다."
 
 #: src117/port/front/port_front_bench.cpp:1452
 #: src117/port/front/port_front_settings.cpp:827
-#: src117/port/front/port_front_skirmish.cpp:2758
-#: src117/port/front/port_front_skirmish.cpp:2762
+#: src117/port/front/port_front_skirmish.cpp:2759
+#: src117/port/front/port_front_skirmish.cpp:2763
 msgid "Game speed"
 msgstr "게임 속도"
 
@@ -664,10 +664,10 @@ msgid "at most {0} frames"
 msgstr "최대 {0}프레임"
 
 #: src117/port/front/port_front_bench.cpp:1474
-#: src117/port/front/port_front_mutators.cpp:1637
+#: src117/port/front/port_front_mutators.cpp:1639
 #: src117/port/front/port_front_theme.cpp:611
-#: src117/port/front/port_frontkit.cpp:381
-#: src117/port/gameplay/port_mutators.cpp:501
+#: src117/port/front/port_frontkit.cpp:385
+#: src117/port/gameplay/port_mutators.cpp:533
 msgid "Custom"
 msgstr "사용자 지정"
 
@@ -709,7 +709,7 @@ msgstr "다른 게임이 됩니다. 실행 결과는 같은 시드에서만 비�
 
 #: src117/port/front/port_front_bench.cpp:1557
 #: src117/port/front/port_front_bench.cpp:1575
-#: src117/port/gameplay/port_mutators.cpp:64
+#: src117/port/gameplay/port_mutators.cpp:86
 msgid "Supply cap"
 msgstr "보급품 한도"
 
@@ -722,7 +722,7 @@ msgid "each player"
 msgstr "플레이어당"
 
 #: src117/port/front/port_front_bench.cpp:1563
-#: src117/port/gameplay/port_mutators.cpp:443
+#: src117/port/gameplay/port_mutators.cpp:474
 msgid "Unlimited"
 msgstr "무제한"
 
@@ -732,9 +732,9 @@ msgstr "컴퓨터 하나가 보유할 수 있는 최대 보급품입니다. 원�
 
 #: src117/port/front/port_front_bench.cpp:1583
 #: src117/port/front/port_front_bench.cpp:1591
-#: src117/port/front/port_front_skirmish.cpp:2790
-#: src117/port/front/port_front_skirmish.cpp:2800
-#: src117/port/front/port_front_skirmish.cpp:2802
+#: src117/port/front/port_front_skirmish.cpp:2791
+#: src117/port/front/port_front_skirmish.cpp:2801
+#: src117/port/front/port_front_skirmish.cpp:2803
 msgid "Unit limit"
 msgstr "유닛 한도"
 
@@ -889,8 +889,8 @@ msgstr "벤치마크 시작"
 #: src117/port/front/port_front_campaign.cpp:667
 #: src117/port/front/port_front_campaign.cpp:904
 #: src117/port/front/port_front_home.cpp:735
-#: src117/port/front/port_front_skirmish.cpp:1530
-#: src117/port/front/port_front_skirmish.cpp:3014
+#: src117/port/front/port_front_skirmish.cpp:1531
+#: src117/port/front/port_front_skirmish.cpp:3015
 #: src117/port/front/port_front_trainer.cpp:542
 #: src117/port/front/port_front_trainer.cpp:684
 msgid "Back"
@@ -1106,7 +1106,7 @@ msgid "Classic AI is the original’s own computer. The others play by Hyperion�
 msgstr "클래식 AI는 원작의 컴퓨터입니다. 나머지는 Hyperion의 규칙을 따릅니다. StarCraft II의 난이도로, 아주 쉬움부터 정예까지 느리고 작은 규모에서 빠른 규모로 올라가며, 치트 난이도는 정예처럼 플레이하면서 StarCraft II와 같은 방식으로 치트를 사용합니다. 시야는 지도 전체를 봅니다. 자원은 지도 전체를 보면서 한 번에 가져오는 자원이 늘어 20분에는 1.5배가 됩니다. 극악은 처음부터 1.2배를 가져오며 최대 2배까지 늘어납니다."
 
 #: src117/port/front/port_front_bench.cpp:541
-#: src117/port/front/port_front_skirmish.cpp:2472
+#: src117/port/front/port_front_skirmish.cpp:2473
 msgid "Teams by hand"
 msgstr "팀 직접 구성"
 
@@ -1178,9 +1178,9 @@ msgstr "{0}프레임"
 #: src117/port/front/port_front_bench.cpp:1058
 #: src117/port/front/port_front_replays.cpp:1001
 #: src117/port/front/port_front_score.cpp:927
-#: src117/port/front/port_front_skirmish.cpp:2579
+#: src117/port/front/port_front_skirmish.cpp:2580
 #: src117/port/hud/port_hudstats.cpp:513
-#: src117/port/lan/port_front_lan.cpp:1159
+#: src117/port/lan/port_front_lan.cpp:1161
 #: src117/port/lan/port_front_lanhost.cpp:242
 #: src117/port/platform/port_discord.cpp:611
 #: src117/port/platform/port_discord.cpp:615
@@ -1260,8 +1260,8 @@ msgstr "느림"
 #: src117/port/front/port_front_bench.cpp:90
 #: src117/port/front/port_front_replays.cpp:123
 #: src117/port/front/port_front_skirmish.cpp:83
-#: src117/port/gameplay/port_mutators.cpp:49
-#: src117/port/gameplay/port_mutators.cpp:51
+#: src117/port/gameplay/port_mutators.cpp:67
+#: src117/port/gameplay/port_mutators.cpp:69
 #: src117/port/tools/port_benchview.cpp:62
 msgid "Normal"
 msgstr "일반"
@@ -1313,8 +1313,8 @@ msgstr "임무 {0}"
 #: src117/port/front/port_front_profile.cpp:760
 #: src117/port/front/port_front_profile.cpp:1166
 #: src117/port/lan/port_front_lan.cpp:424
-#: src117/port/lan/port_front_lan.cpp:1162
-#: src117/port/lan/port_lanlobby.cpp:109
+#: src117/port/lan/port_front_lan.cpp:1164
+#: src117/port/lan/port_lanlobby.cpp:113
 msgid "{0} and {1}"
 msgstr "{0} 및 {1}"
 
@@ -1464,10 +1464,10 @@ msgstr "지금 플레이"
 #: src117/port/front/port_front_score.cpp:1120
 #: src117/port/front/port_front_settings.cpp:1814
 #: src117/port/front/port_front_settings.cpp:2000
-#: src117/port/front/port_front_skirmish.cpp:1607
+#: src117/port/front/port_front_skirmish.cpp:1608
 #: src117/port/gameplay/port_trainerview.cpp:1496
-#: src117/port/lan/port_front_lan.cpp:1068
-#: src117/port/lan/port_front_lan.cpp:1587
+#: src117/port/lan/port_front_lan.cpp:1070
+#: src117/port/lan/port_front_lan.cpp:1613
 #: src117/port/lan/port_front_lanhost.cpp:235
 #: src117/port/lan/port_front_lanhost.cpp:249
 #: src117/port/lan/port_front_lanhost.cpp:323
@@ -1542,7 +1542,7 @@ msgid "Watch Again"
 msgstr "다시 보기"
 
 #: src117/port/front/port_front_campaign.cpp:899
-#: src117/port/lan/port_front_lan.cpp:1807
+#: src117/port/lan/port_front_lan.cpp:1833
 #: src117/port/lan/port_front_lanhost.cpp:500
 msgid "Watch"
 msgstr "보기"
@@ -1909,7 +1909,7 @@ msgid "Resume Game"
 msgstr "게임 계속하기"
 
 #: src117/port/front/port_front_gamemenu.cpp:326
-#: src117/port/front/port_front_mutators.cpp:1534
+#: src117/port/front/port_front_mutators.cpp:1536
 msgid "Options"
 msgstr "설정"
 
@@ -2278,7 +2278,7 @@ msgid "Right column"
 msgstr "오른쪽 열"
 
 #: src117/port/front/port_front_hud.cpp:678
-#: src117/port/front/port_front_skirmish.cpp:1480
+#: src117/port/front/port_front_skirmish.cpp:1481
 msgid "Size"
 msgstr "크기"
 
@@ -2371,13 +2371,13 @@ msgstr "캠페인"
 #: src117/port/front/port_front_load.cpp:334
 #: src117/port/front/port_front_load.cpp:399
 #: src117/port/front/port_front_load.cpp:400
-#: src117/port/front/port_front_skirmish.cpp:2946
+#: src117/port/front/port_front_skirmish.cpp:2947
 #: src117/port/platform/port_discord.cpp:707
 msgid "Skirmish"
 msgstr "사용자 지정 게임"
 
 #: src117/port/front/port_front_internal.h:31
-#: src117/port/lan/port_front_lan.cpp:1630
+#: src117/port/lan/port_front_lan.cpp:1656
 msgid "Multiplayer"
 msgstr "멀티플레이어"
 
@@ -2540,7 +2540,7 @@ msgstr "삭제"
 #: src117/port/front/port_front_mods.cpp:341
 #: src117/port/front/port_front_notes.cpp:787
 #: src117/port/front/port_front_profile.cpp:1213
-#: src117/port/front/port_front_skirmish.cpp:3098
+#: src117/port/front/port_front_skirmish.cpp:3125
 #: src117/port/gameplay/port_trainerview.cpp:1569
 #: src117/port/gameplay/port_trainerview.cpp:1587
 #: src117/port/hud/port_hudstats.cpp:721
@@ -2681,397 +2681,397 @@ msgstr "Hyperion을 다시 시작하면 “{0}” 없이 게임이 진행됩니�
 msgid "“{0}” opens Hyperion's live channel while it is active. Programs on this computer that you run can then read and change your games through it. Allow it only for a mod you trust."
 msgstr "\"{0}\"은(는) 활성화된 동안 Hyperion의 라이브 채널을 엽니다. 직접 실행하는 이 컴퓨터의 프로그램이 이를 통해 게임을 읽고 바꿀 수 있게 됩니다. 신뢰하는 모드에만 허용하세요."
 
-#: src117/port/front/port_front_mutators.cpp:1007
+#: src117/port/front/port_front_mutators.cpp:1008
 msgid "Town halls"
 msgstr "본진 건물"
 
-#: src117/port/front/port_front_mutators.cpp:1013
+#: src117/port/front/port_front_mutators.cpp:1014
 msgid "depot, pylon, overlord"
 msgstr "서플라이 디포, 파일론, 오버로드"
 
-#: src117/port/front/port_front_mutators.cpp:1058
+#: src117/port/front/port_front_mutators.cpp:1059
 msgid "Black until scouted"
 msgstr "정찰할 때까지 검은 화면"
 
-#: src117/port/front/port_front_mutators.cpp:1058
+#: src117/port/front/port_front_mutators.cpp:1059
 msgid "Land known, units in sight"
 msgstr "지형은 알고, 유닛은 시야 내에서만"
 
-#: src117/port/front/port_front_mutators.cpp:1059
+#: src117/port/front/port_front_mutators.cpp:1060
 msgid "The whole map, all game"
 msgstr "게임 내내 지도 전체 공개"
 
-#: src117/port/front/port_front_mutators.cpp:1086
+#: src117/port/front/port_front_mutators.cpp:1087
 msgid "This game · harder"
 msgstr "이 게임 · 더 어려움"
 
-#: src117/port/front/port_front_mutators.cpp:1089
+#: src117/port/front/port_front_mutators.cpp:1090
 msgid "{0} s"
 msgstr "{0}초"
 
-#: src117/port/front/port_front_mutators.cpp:1094
-#: src117/port/front/port_front_mutators.cpp:1142
+#: src117/port/front/port_front_mutators.cpp:1095
+#: src117/port/front/port_front_mutators.cpp:1143
 msgid "as Classic"
 msgstr "클래식과 동일"
 
-#: src117/port/front/port_front_mutators.cpp:1095
+#: src117/port/front/port_front_mutators.cpp:1096
 msgid "an SCV at {0}"
 msgstr "SCV 기준 {0}"
 
-#: src117/port/front/port_front_mutators.cpp:1098
+#: src117/port/front/port_front_mutators.cpp:1099
 msgid "Buildings, units, research and upgrades alike"
 msgstr "건물, 유닛, 연구, 업그레이드 모두"
 
-#: src117/port/front/port_front_mutators.cpp:1133
+#: src117/port/front/port_front_mutators.cpp:1134
 msgid "all to research"
 msgstr "모두 연구해야 함"
 
-#: src117/port/front/port_front_mutators.cpp:1133
+#: src117/port/front/port_front_mutators.cpp:1134
 msgid "all done at the start"
 msgstr "시작부터 모두 완료"
 
-#: src117/port/front/port_front_mutators.cpp:1133
-#: src117/port/gameplay/port_mutators.cpp:583
+#: src117/port/front/port_front_mutators.cpp:1134
+#: src117/port/gameplay/port_mutators.cpp:615
 msgid "no upgrades"
 msgstr "업그레이드 없음"
 
-#: src117/port/front/port_front_mutators.cpp:1134
+#: src117/port/front/port_front_mutators.cpp:1135
 msgid "nothing to research"
 msgstr "연구 없음"
 
-#: src117/port/front/port_front_mutators.cpp:1135
+#: src117/port/front/port_front_mutators.cpp:1136
 msgid "Upgrades"
 msgstr "업그레이드"
 
-#: src117/port/front/port_front_mutators.cpp:1136
+#: src117/port/front/port_front_mutators.cpp:1137
 #: src117/port/gameplay/port_trainerview.cpp:420
 msgid "Research"
 msgstr "연구"
 
-#: src117/port/front/port_front_mutators.cpp:1142
+#: src117/port/front/port_front_mutators.cpp:1143
 msgid "This game · {0}"
 msgstr "이 게임 · {0}"
 
-#: src117/port/front/port_front_mutators.cpp:1143
+#: src117/port/front/port_front_mutators.cpp:1144
 msgid "Classic · {0}"
 msgstr "클래식 · {0}"
 
-#: src117/port/front/port_front_mutators.cpp:1150
+#: src117/port/front/port_front_mutators.cpp:1151
 msgid "Weapons, Armor, U-238 Shells · Stim Packs, Lockdown, Siege Tech"
 msgstr "공격력, 방어력, U-238 쉘 · 스팀 팩, 락다운, 공성 모드"
 
-#: src117/port/front/port_front_mutators.cpp:1151
+#: src117/port/front/port_front_mutators.cpp:1152
 msgid "Three upgrades and three researches"
 msgstr "업그레이드 3개와 연구 3개"
 
-#: src117/port/front/port_front_mutators.cpp:1318
+#: src117/port/front/port_front_mutators.cpp:1320
 msgid "NEW"
 msgstr "신규"
 
-#: src117/port/front/port_front_mutators.cpp:1374
+#: src117/port/front/port_front_mutators.cpp:1376
 msgid "Classic’s."
 msgstr "클래식과 같습니다."
 
-#: src117/port/front/port_front_mutators.cpp:1376
+#: src117/port/front/port_front_mutators.cpp:1378
 msgid "Harder than Classic."
 msgstr "클래식보다 어렵습니다."
 
-#: src117/port/front/port_front_mutators.cpp:1507
-#: src117/port/front/port_front_skirmish.cpp:2724
+#: src117/port/front/port_front_mutators.cpp:1509
+#: src117/port/front/port_front_skirmish.cpp:2725
 msgid "GAME OPTIONS"
 msgstr "게임 설정"
 
-#: src117/port/front/port_front_mutators.cpp:1507
-#: src117/port/front/port_front_mutators.cpp:1611
-#: src117/port/front/port_front_mutators.cpp:1868
+#: src117/port/front/port_front_mutators.cpp:1509
+#: src117/port/front/port_front_mutators.cpp:1613
+#: src117/port/front/port_front_mutators.cpp:1870
 msgid "MUTATORS"
 msgstr "변이원"
 
-#: src117/port/front/port_front_mutators.cpp:1534
-#: src117/port/front/port_front_mutators.cpp:1613
+#: src117/port/front/port_front_mutators.cpp:1536
+#: src117/port/front/port_front_mutators.cpp:1615
 msgid "Mutators"
 msgstr "변이원"
 
-#: src117/port/front/port_front_mutators.cpp:1534
+#: src117/port/front/port_front_mutators.cpp:1536
 msgid "Game Options"
 msgstr "게임 설정"
 
-#: src117/port/front/port_front_mutators.cpp:1535
+#: src117/port/front/port_front_mutators.cpp:1537
 msgid "One set of mutators for every player: what the map holds, what each player starts with, supply, the fog, build time and tech. Hotkey: U"
 msgstr "모든 플레이어에게 같은 변이원 세트를 적용합니다. 지도의 자원, 각 플레이어의 시작 조건, 보급품, 시야, 건설 시간, 기술이 포함됩니다. 단축키: U"
 
-#: src117/port/front/port_front_mutators.cpp:1538
+#: src117/port/front/port_front_mutators.cpp:1540
 msgid "The game type, speed, rules and start positions, and the map. Hotkey: O"
 msgstr "게임 유형, 속도, 규칙, 시작 위치, 지도를 설정합니다. 단축키: O"
 
-#: src117/port/front/port_front_mutators.cpp:1546
+#: src117/port/front/port_front_mutators.cpp:1548
 msgid "{0} · Hyperion rules"
 msgstr "{0} · Hyperion 규칙"
 
-#: src117/port/front/port_front_mutators.cpp:1547
+#: src117/port/front/port_front_mutators.cpp:1549
 msgid "Custom set"
 msgstr "사용자 지정 세트"
 
-#: src117/port/front/port_front_mutators.cpp:1548
+#: src117/port/front/port_front_mutators.cpp:1550
 msgid "No mutators · as Classic"
 msgstr "변이원 없음 · 클래식과 동일"
 
-#: src117/port/front/port_front_mutators.cpp:1614
+#: src117/port/front/port_front_mutators.cpp:1616
 msgid "They change the game past the classic rules, the same for every player, so they play by Hyperion’s, and its replay and save keep them."
 msgstr "클래식 규칙을 넘어서 게임을 바꾸며, 모든 플레이어에게 똑같이 적용됩니다. 따라서 Hyperion의 규칙으로 진행되고, 리플레이와 저장된 게임에도 그대로 기록됩니다."
 
-#: src117/port/front/port_front_mutators.cpp:1620
+#: src117/port/front/port_front_mutators.cpp:1622
 msgid "One set for every player. Any mutator plays by Hyperion rules, and the replay keeps the set."
 msgstr "모든 플레이어에게 한 세트를 적용합니다. 변이원을 하나라도 쓰면 Hyperion 규칙으로 진행되며, 리플레이에 세트가 기록됩니다."
 
-#: src117/port/front/port_front_mutators.cpp:1621
+#: src117/port/front/port_front_mutators.cpp:1623
 msgid "The host’s set, the same for every player. Any mutator plays by Hyperion rules."
 msgstr "방장이 정한 세트가 모든 플레이어에게 똑같이 적용됩니다. 변이원을 하나라도 쓰면 Hyperion 규칙으로 진행됩니다."
 
-#: src117/port/front/port_front_mutators.cpp:1632
+#: src117/port/front/port_front_mutators.cpp:1634
 msgid "Presets"
 msgstr "프리셋"
 
-#: src117/port/front/port_front_mutators.cpp:1641
+#: src117/port/front/port_front_mutators.cpp:1643
 msgid "Any other set of the mutators below."
 msgstr "아래 변이원을 자유롭게 조합한 세트입니다."
 
-#: src117/port/front/port_front_mutators.cpp:1642
+#: src117/port/front/port_front_mutators.cpp:1644
 msgid "The host chooses the mutators."
 msgstr "변이원은 방장이 선택합니다."
 
-#: src117/port/front/port_front_mutators.cpp:1723
+#: src117/port/front/port_front_mutators.cpp:1725
 msgid "CLICK TO CHOOSE"
 msgstr "클릭하여 선택"
 
-#: src117/port/front/port_front_mutators.cpp:1777
+#: src117/port/front/port_front_mutators.cpp:1779
 #: src117/port/tools/port_benchview.cpp:2215
 #: src117/port/tools/port_benchview.cpp:2224
 #: src117/port/tools/port_benchview.cpp:2226
 msgid "Where"
 msgstr "위치"
 
-#: src117/port/front/port_front_mutators.cpp:1778
+#: src117/port/front/port_front_mutators.cpp:1780
 msgid "Which bases may turn rich: those past each start’s natural, those at least a distance from every start, only the farthest, or every base. Off has none, as Classic."
 msgstr "어느 기지가 풍부한 자원이 될 수 있는지 정합니다. 각 시작 지점의 앞마당 이후 기지, 모든 시작 지점에서 일정 거리 이상 떨어진 기지, 가장 먼 기지만, 또는 모든 기지입니다. 끄기는 클래식과 같이 하나도 없습니다."
 
-#: src117/port/front/port_front_mutators.cpp:1789
+#: src117/port/front/port_front_mutators.cpp:1791
 msgid "Distance"
 msgstr "거리"
 
-#: src117/port/front/port_front_mutators.cpp:1790
+#: src117/port/front/port_front_mutators.cpp:1792
 msgid "How far a base must be from every start, in a straight line, to turn rich: in tiles, or a share of the map’s size, its width and height averaged. For Outside a radius."
 msgstr "기지가 풍부한 자원이 되려면 모든 시작 지점에서 직선 거리로 얼마나 떨어져 있어야 하는지입니다. 타일 단위, 또는 지도 가로와 세로의 평균 크기에 대한 비율로 지정합니다. 반경 밖 설정에만 적용됩니다."
 
-#: src117/port/front/port_front_mutators.cpp:1799
+#: src117/port/front/port_front_mutators.cpp:1801
 msgid "Chance"
 msgstr "확률"
 
-#: src117/port/front/port_front_mutators.cpp:1800
+#: src117/port/front/port_front_mutators.cpp:1802
 msgid "The chance a base far enough from every start turns rich at. Bases that mirror each other are rolled together. Not for Off or Every base, which roll nothing."
 msgstr "모든 시작 지점에서 충분히 떨어진 기지가 풍부한 자원이 될 확률입니다. 서로 대칭인 기지는 함께 판정합니다. 끄기와 모든 기지는 판정하지 않으므로 적용되지 않습니다."
 
-#: src117/port/front/port_front_mutators.cpp:1823
-#: src117/port/front/port_front_mutators.cpp:1826
+#: src117/port/front/port_front_mutators.cpp:1825
+#: src117/port/front/port_front_mutators.cpp:1828
 msgid "Announce at the start"
 msgstr "시작할 때 알리기"
 
-#: src117/port/front/port_front_mutators.cpp:1827
+#: src117/port/front/port_front_mutators.cpp:1829
 msgid "On, the game’s first message says how many bases turned rich, or why none did. Off, it says nothing, and players find the gold and violet bases on the map."
 msgstr "켜면 게임의 첫 메시지로 풍부한 자원이 된 기지 수, 또는 하나도 없는 이유를 알립니다. 끄면 아무것도 알리지 않으며, 플레이어가 지도에서 금색과 보라색 기지를 직접 찾습니다."
 
-#: src117/port/front/port_front_mutators.cpp:1872
+#: src117/port/front/port_front_mutators.cpp:1874
 msgid "{0} ON"
 msgstr "{0}개 사용"
 
-#: src117/port/front/port_front_mutators.cpp:1873
+#: src117/port/front/port_front_mutators.cpp:1875
 msgid "NONE ON"
 msgstr "사용 없음"
 
-#: src117/port/front/port_front_mutators.cpp:1880
+#: src117/port/front/port_front_mutators.cpp:1882
 msgid "The game plays as Classic: the map’s resources, 50 minerals, 4 workers, 200 supply."
 msgstr "게임이 클래식과 같이 진행됩니다. 지도의 자원, 미네랄 50, 일꾼 4기, 보급품 200입니다."
 
-#: src117/port/front/port_front_mutators.cpp:1924
+#: src117/port/front/port_front_mutators.cpp:1926
 msgid "Change Mutators"
 msgstr "변이원 변경"
 
-#: src117/port/front/port_front_mutators.cpp:1925
+#: src117/port/front/port_front_mutators.cpp:1927
 msgid "Choose Mutators"
 msgstr "변이원 선택"
 
-#: src117/port/front/port_front_mutators.cpp:1926
+#: src117/port/front/port_front_mutators.cpp:1928
 msgid "See Mutators"
 msgstr "변이원 보기"
 
-#: src117/port/front/port_front_mutators.cpp:398
+#: src117/port/front/port_front_mutators.cpp:399
 msgid "a quarter as long"
 msgstr "4분의 1"
 
-#: src117/port/front/port_front_mutators.cpp:399
+#: src117/port/front/port_front_mutators.cpp:400
 msgid "half as long"
 msgstr "2분의 1"
 
-#: src117/port/front/port_front_mutators.cpp:400
+#: src117/port/front/port_front_mutators.cpp:401
 msgid "three quarters as long"
 msgstr "4분의 3"
 
-#: src117/port/front/port_front_mutators.cpp:401
+#: src117/port/front/port_front_mutators.cpp:402
 msgid "as long as Classic"
 msgstr "클래식과 동일"
 
-#: src117/port/front/port_front_mutators.cpp:402
+#: src117/port/front/port_front_mutators.cpp:403
 msgid "half again as long"
 msgstr "1.5배"
 
-#: src117/port/front/port_front_mutators.cpp:403
+#: src117/port/front/port_front_mutators.cpp:404
 msgid "twice as long"
 msgstr "2배"
 
-#: src117/port/front/port_front_mutators.cpp:404
+#: src117/port/front/port_front_mutators.cpp:405
 msgid "three times as long"
 msgstr "3배"
 
-#: src117/port/front/port_front_mutators.cpp:405
+#: src117/port/front/port_front_mutators.cpp:406
 msgid "four times as long"
 msgstr "4배"
 
-#: src117/port/front/port_front_mutators.cpp:406
+#: src117/port/front/port_front_mutators.cpp:407
 msgid "eight times as long"
 msgstr "8배"
 
-#: src117/port/front/port_front_mutators.cpp:411
+#: src117/port/front/port_front_mutators.cpp:412
 msgid "×{0} as long"
 msgstr "×{0}배"
 
-#: src117/port/front/port_front_mutators.cpp:440
+#: src117/port/front/port_front_mutators.cpp:441
 msgid "this map"
 msgstr "이 지도"
 
-#: src117/port/front/port_front_mutators.cpp:444
+#: src117/port/front/port_front_mutators.cpp:445
 msgid "Fields never run dry: a base can be mined all game."
 msgstr "미네랄이 고갈되지 않습니다. 게임 내내 한 기지에서 채취할 수 있습니다."
 
-#: src117/port/front/port_front_mutators.cpp:446
+#: src117/port/front/port_front_mutators.cpp:447
 msgid "A field holds {0}, the small ones {1}: a base lasts {2}."
 msgstr "미네랄 하나에 {0}, 작은 것에는 {1}이 있습니다. 한 기지가 {2} 동안 유지됩니다."
 
-#: src117/port/front/port_front_mutators.cpp:451
+#: src117/port/front/port_front_mutators.cpp:452
 msgid "Geysers never run dry."
 msgstr "가이저가 고갈되지 않습니다."
 
-#: src117/port/front/port_front_mutators.cpp:452
+#: src117/port/front/port_front_mutators.cpp:453
 msgid "A geyser holds {0} before it runs dry, then gives 2 a trip. It lasts {1}."
 msgstr "가이저는 {0}까지 나오고 고갈된 뒤에는 한 번에 2씩 나옵니다. {1} 동안 유지됩니다."
 
-#: src117/port/front/port_front_mutators.cpp:456
+#: src117/port/front/port_front_mutators.cpp:457
 msgid "Every base as the map made it."
 msgstr "모든 기지가 지도에 설정된 그대로입니다."
 
-#: src117/port/front/port_front_mutators.cpp:459
+#: src117/port/front/port_front_mutators.cpp:460
 msgid "Every mineral field and geyser on {0} is rich: a trip brings 11 minerals or 16 gas, Classic 8."
 msgstr "{0}의 모든 미네랄과 가이저가 풍부한 자원입니다. 한 번에 미네랄 11 또는 가스 16을 가져옵니다(클래식 8)."
 
-#: src117/port/front/port_front_mutators.cpp:465
+#: src117/port/front/port_front_mutators.cpp:466
 msgid "{0} ({1} tiles)"
 msgstr "{0}({1}타일)"
 
-#: src117/port/front/port_front_mutators.cpp:469
+#: src117/port/front/port_front_mutators.cpp:470
 msgid "that is no start’s main or natural"
 msgstr "본진도 앞마당도 아닌"
 
-#: src117/port/front/port_front_mutators.cpp:470
+#: src117/port/front/port_front_mutators.cpp:471
 msgid "{0} or more from every start"
 msgstr "모든 시작 지점에서 {0} 이상 떨어진"
 
-#: src117/port/front/port_front_mutators.cpp:471
+#: src117/port/front/port_front_mutators.cpp:472
 msgid "farthest from every start"
 msgstr "모든 시작 지점에서 가장 먼"
 
-#: src117/port/front/port_front_mutators.cpp:477
+#: src117/port/front/port_front_mutators.cpp:478
 msgid "Any base {0} may turn rich, at {1}%. Reading this map’s bases…"
 msgstr "{0} 기지는 {1}% 확률로 풍부한 자원이 될 수 있습니다. 이 지도의 기지를 읽는 중…"
 
-#: src117/port/front/port_front_mutators.cpp:479
+#: src117/port/front/port_front_mutators.cpp:480
 msgid "Any base {0} may turn rich, at {1}%. Read from the map as the game starts."
 msgstr "{0} 기지는 {1}% 확률로 풍부한 자원이 될 수 있습니다. 게임이 시작될 때 지도에서 읽습니다."
 
-#: src117/port/front/port_front_mutators.cpp:483
+#: src117/port/front/port_front_mutators.cpp:484
 msgid "{0} No base turns rich, so no player starts ahead."
 msgstr "{0} 풍부한 자원이 되는 기지가 없으므로 먼저 앞서는 플레이어가 없습니다."
 
-#: src117/port/front/port_front_mutators.cpp:486
+#: src117/port/front/port_front_mutators.cpp:487
 msgid "that are no start’s main or natural"
 msgstr "본진도 앞마당도 아닌"
 
-#: src117/port/front/port_front_mutators.cpp:488
+#: src117/port/front/port_front_mutators.cpp:489
 msgid "Up to {0} base {1} on {2} may turn rich, each at {3}%: a trip brings 11 minerals or 16 gas, Classic 8."
 msgid_plural "Up to {0} bases {1} on {2} may turn rich, each at {3}%: a trip brings 11 minerals or 16 gas, Classic 8."
 msgstr[0] "{2}에서 {1} 기지 최대 {0}개가 각각 {3}% 확률로 풍부한 자원이 될 수 있습니다. 한 번에 미네랄 11 또는 가스 16을 가져옵니다(클래식 8)."
 
-#: src117/port/front/port_front_mutators.cpp:496
+#: src117/port/front/port_front_mutators.cpp:497
 msgid "Each player begins with {0} minerals and {1} gas: {2} worker’s worth."
 msgid_plural "Each player begins with {0} minerals and {1} gas: {2} workers’ worth."
 msgstr[0] "각 플레이어는 미네랄 {0}과 가스 {1}로 시작합니다. 일꾼 {2}기 값에 해당합니다."
 
-#: src117/port/front/port_front_mutators.cpp:501
+#: src117/port/front/port_front_mutators.cpp:502
 msgid "Each player begins with {0} worker beside the town hall."
 msgid_plural "Each player begins with {0} workers beside the town hall."
 msgstr[0] "각 플레이어는 본진 건물 옆에서 일꾼 {0}기로 시작합니다."
 
-#: src117/port/front/port_front_mutators.cpp:505
+#: src117/port/front/port_front_mutators.cpp:506
 msgid "Not on this game: Use Map Settings keeps the map’s own start units."
 msgstr "이 게임에서는 적용되지 않습니다. 유즈맵 설정은 지도에 정해진 시작 유닛을 그대로 사용합니다."
 
-#: src117/port/front/port_front_mutators.cpp:510
+#: src117/port/front/port_front_mutators.cpp:511
 msgid "No cap: an army is held back only by the supply built."
 msgstr "한도 없음. 병력은 건설한 보급품만큼만 제한됩니다."
 
-#: src117/port/front/port_front_mutators.cpp:511
+#: src117/port/front/port_front_mutators.cpp:512
 msgid "Each player can hold {0} supply."
 msgstr "각 플레이어는 보급품 {0}까지 보유할 수 있습니다."
 
-#: src117/port/front/port_front_mutators.cpp:517
+#: src117/port/front/port_front_mutators.cpp:518
 msgid "A depot, pylon or overlord gives {0}, a command center {1}, a nexus {2}, a hatchery {3}: whole supply, rounded down."
 msgstr "서플라이 디포, 파일론, 오버로드가 {0}, 커맨드 센터가 {1}, 넥서스가 {2}, 해처리가 {3}을 제공합니다. 소수점은 버린 정수 보급품입니다."
 
-#: src117/port/front/port_front_mutators.cpp:520
+#: src117/port/front/port_front_mutators.cpp:521
 msgid "A depot, pylon or overlord gives {0}, a command center {1}, a nexus {2}, a hatchery {3}, as Classic."
 msgstr "서플라이 디포, 파일론, 오버로드가 {0}, 커맨드 센터가 {1}, 넥서스가 {2}, 해처리가 {3}을 제공합니다. 클래식과 같습니다."
 
-#: src117/port/front/port_front_mutators.cpp:526
+#: src117/port/front/port_front_mutators.cpp:527
 msgid "Every player knows the map’s land from the start. Units still show only in sight."
 msgstr "모든 플레이어가 시작부터 지도의 지형을 알고 있습니다. 유닛은 여전히 시야 안에서만 보입니다."
 
-#: src117/port/front/port_front_mutators.cpp:528
+#: src117/port/front/port_front_mutators.cpp:529
 msgid "Every player sees the whole map all game."
 msgstr "모든 플레이어가 게임 내내 지도 전체를 봅니다."
 
-#: src117/port/front/port_front_mutators.cpp:529
+#: src117/port/front/port_front_mutators.cpp:530
 msgid "The fog of war, as Classic plays it."
 msgstr "클래식과 같은 전장의 안개입니다."
 
-#: src117/port/front/port_front_mutators.cpp:534
+#: src117/port/front/port_front_mutators.cpp:535
 msgid "As Classic: an SCV trains in {0} s at {1}."
 msgstr "클래식과 같습니다. {1}에서 SCV 훈련에 {0}초가 걸립니다."
 
-#: src117/port/front/port_front_mutators.cpp:536
+#: src117/port/front/port_front_mutators.cpp:537
 msgid "Everything takes {0}: an SCV trains in {1} s at {2}, Classic {3} s."
 msgstr "모든 것이 {0} 걸립니다. {2}에서 SCV 훈련에 {1}초가 걸립니다(클래식 {3}초)."
 
-#: src117/port/front/port_front_mutators.cpp:542
+#: src117/port/front/port_front_mutators.cpp:543
 msgid "Every upgrade at its top level and every ability researched from the start."
 msgstr "모든 업그레이드가 최고 단계이고 모든 능력이 시작부터 연구되어 있습니다."
 
-#: src117/port/front/port_front_mutators.cpp:544
+#: src117/port/front/port_front_mutators.cpp:545
 msgid "Upgrades cannot be researched. Abilities still can."
 msgstr "업그레이드는 연구할 수 없습니다. 능력은 연구할 수 있습니다."
 
-#: src117/port/front/port_front_mutators.cpp:546
+#: src117/port/front/port_front_mutators.cpp:547
 msgid "Neither upgrades nor the abilities that need research."
 msgstr "업그레이드와 연구가 필요한 능력 모두 사용할 수 없습니다."
 
-#: src117/port/front/port_front_mutators.cpp:547
+#: src117/port/front/port_front_mutators.cpp:548
 msgid "Everything to research, as Classic."
 msgstr "클래식과 같이 모두 연구해야 합니다."
 
@@ -3087,29 +3087,30 @@ msgstr "자원"
 msgid "The start"
 msgstr "시작 조건"
 
-#: src117/port/front/port_front_mutators.cpp:686
+#: src117/port/front/port_front_mutators.cpp:687
 #: src117/port/gameplay/port_ai.cpp:64
 msgid "Harder"
 msgstr "더 어려움"
 
-#: src117/port/front/port_front_mutators.cpp:686
-#: src117/port/front/port_front_mutators.cpp:1086
+#: src117/port/front/port_front_mutators.cpp:687
+#: src117/port/front/port_front_mutators.cpp:1087
 msgid "This game"
 msgstr "이 게임"
 
-#: src117/port/front/port_front_mutators.cpp:686
-#: src117/port/front/port_front_mutators.cpp:833
-#: src117/port/front/port_front_mutators.cpp:1086
-#: src117/port/front/port_front_mutators.cpp:1696
+#: src117/port/front/port_front_mutators.cpp:687
+#: src117/port/front/port_front_mutators.cpp:834
+#: src117/port/front/port_front_mutators.cpp:1087
+#: src117/port/front/port_front_mutators.cpp:1698
 #: src117/port/front/port_front_replays.cpp:54
 #: src117/port/front/port_front_replays.cpp:1010
 #: src117/port/front/port_front_score.cpp:929
-#: src117/port/front/port_front_skirmish.cpp:2769
+#: src117/port/front/port_front_skirmish.cpp:2770
+#: src117/port/gameplay/port_mutators.cpp:83
 msgid "Classic"
 msgstr "클래식"
 
 #: src117/port/front/port_front_mutators.cpp:69
-#: src117/port/front/port_front_mutators.cpp:1007
+#: src117/port/front/port_front_mutators.cpp:1008
 #: src117/port/gameplay/port_trainerview.cpp:409
 #: src117/port/hud/port_hudstats.cpp:414
 msgid "Supply"
@@ -3127,11 +3128,11 @@ msgstr "미네랄 하나에 들어 있는 양, 즉 한 기지에서 얼마나 �
 msgid "How much each geyser holds before it runs dry."
 msgstr "가이저가 고갈되기 전까지 나오는 양입니다."
 
-#: src117/port/front/port_front_mutators.cpp:730
+#: src117/port/front/port_front_mutators.cpp:731
 msgid "a geyser"
 msgstr "가이저"
 
-#: src117/port/front/port_front_mutators.cpp:730
+#: src117/port/front/port_front_mutators.cpp:731
 msgid "a field"
 msgstr "미네랄"
 
@@ -3139,25 +3140,25 @@ msgstr "미네랄"
 msgid "What each player has to spend at the first second."
 msgstr "각 플레이어가 시작 순간에 쓸 수 있는 자원입니다."
 
-#: src117/port/front/port_front_mutators.cpp:740
+#: src117/port/front/port_front_mutators.cpp:741
 msgid "never runs dry"
 msgstr "고갈되지 않음"
 
-#: src117/port/front/port_front_mutators.cpp:741
+#: src117/port/front/port_front_mutators.cpp:742
 msgid "lasts {0}"
 msgstr "{0} 유지"
 
-#: src117/port/front/port_front_mutators.cpp:742
+#: src117/port/front/port_front_mutators.cpp:743
 msgid "then 2 a trip"
 msgstr "이후 한 번에 2"
 
-#: src117/port/front/port_front_mutators.cpp:743
+#: src117/port/front/port_front_mutators.cpp:744
 msgid "the small ones {0}"
 msgstr "작은 것은 {0}"
 
-#: src117/port/front/port_front_mutators.cpp:744
-#: src117/port/gameplay/port_mutators.cpp:87
-#: src117/port/gameplay/port_mutators.cpp:111
+#: src117/port/front/port_front_mutators.cpp:745
+#: src117/port/gameplay/port_mutators.cpp:112
+#: src117/port/gameplay/port_mutators.cpp:136
 msgid "Infinite"
 msgstr "무한"
 
@@ -3189,80 +3190,84 @@ msgstr "모든 연구를 끝낸 상태로 시작하거나, 업그레이드와 �
 msgid "Some bases away from the starts get gold minerals and violet gas, which bring more each trip."
 msgstr "시작 지점에서 떨어진 일부 기지에 금색 미네랄과 보라색 가스가 생겨 한 번에 더 많이 가져옵니다."
 
-#: src117/port/front/port_front_mutators.cpp:828
+#: src117/port/front/port_front_mutators.cpp:82
+msgid "How many workers and how much minerals and gas each player starts with, rolled fresh every game."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:829
 msgid "A trip brings"
 msgstr "한 번에 가져오는 양"
 
-#: src117/port/front/port_front_mutators.cpp:834
+#: src117/port/front/port_front_mutators.cpp:835
 msgid "Rich · off"
 msgstr "풍부한 자원 · 끄기"
 
-#: src117/port/front/port_front_mutators.cpp:835
+#: src117/port/front/port_front_mutators.cpp:836
 msgid "Rich · every base"
 msgstr "풍부한 자원 · 모든 기지"
 
-#: src117/port/front/port_front_mutators.cpp:836
+#: src117/port/front/port_front_mutators.cpp:837
 msgid "Rich · up to {0} base"
 msgid_plural "Rich · up to {0} bases"
 msgstr[0] "풍부한 자원 · 최대 {0}개 기지"
 
-#: src117/port/front/port_front_mutators.cpp:838
+#: src117/port/front/port_front_mutators.cpp:839
 msgid "Rich · none far enough"
 msgstr "풍부한 자원 · 충분히 먼 기지 없음"
 
-#: src117/port/front/port_front_mutators.cpp:851
+#: src117/port/front/port_front_mutators.cpp:852
 msgid "Reading this map…"
 msgstr "이 지도를 읽는 중…"
 
-#: src117/port/front/port_front_mutators.cpp:851
+#: src117/port/front/port_front_mutators.cpp:852
 msgid "A sketch, not this map"
 msgstr "이 지도가 아닌 예시 그림"
 
-#: src117/port/front/port_front_mutators.cpp:871
+#: src117/port/front/port_front_mutators.cpp:872
 msgid "gas"
 msgstr "가스"
 
-#: src117/port/front/port_front_mutators.cpp:871
+#: src117/port/front/port_front_mutators.cpp:872
 msgid "minerals"
 msgstr "미네랄"
 
-#: src117/port/front/port_front_mutators.cpp:912
+#: src117/port/front/port_front_mutators.cpp:913
 msgid "No cap"
 msgstr "한도 없음"
 
-#: src117/port/front/port_front_mutators.cpp:916
+#: src117/port/front/port_front_mutators.cpp:917
 msgid "supply has no limit"
 msgstr "보급품 제한 없음"
 
-#: src117/port/front/port_front_mutators.cpp:917
+#: src117/port/front/port_front_mutators.cpp:918
 msgid "supply, less than Classic: harder"
 msgstr "보급품, 클래식보다 적음: 더 어려움"
 
-#: src117/port/front/port_front_mutators.cpp:918
+#: src117/port/front/port_front_mutators.cpp:919
 msgid "supply, the most a player holds"
 msgstr "보급품, 플레이어 보유 최대치"
 
-#: src117/port/front/port_front_mutators.cpp:947
+#: src117/port/front/port_front_mutators.cpp:948
 msgid "Classic 200"
 msgstr "클래식 200"
 
-#: src117/port/front/port_front_mutators.cpp:953
+#: src117/port/front/port_front_mutators.cpp:954
 msgid "marines"
 msgstr "마린"
 
-#: src117/port/front/port_front_mutators.cpp:953
+#: src117/port/front/port_front_mutators.cpp:954
 msgid "zealots"
 msgstr "질럿"
 
-#: src117/port/front/port_front_mutators.cpp:953
+#: src117/port/front/port_front_mutators.cpp:954
 msgid "ultralisks"
 msgstr "울트라리스크"
 
-#: src117/port/front/port_front_mutators.cpp:961
+#: src117/port/front/port_front_mutators.cpp:962
 msgid "Any number of {0}"
 msgstr "{0} 무제한"
 
-#: src117/port/front/port_front_mutators.cpp:965
+#: src117/port/front/port_front_mutators.cpp:966
 msgid "Classic {0}"
 msgstr "클래식 {0}"
 
@@ -3400,7 +3405,7 @@ msgid "Make a profile to play. It keeps your campaign and your saves."
 msgstr "플레이하려면 프로필을 만드십시오. 캠페인 진행 상황과 저장된 게임이 프로필에 보관됩니다."
 
 #: src117/port/front/port_front_profile.cpp:1201
-#: src117/port/front/port_front_skirmish.cpp:1602
+#: src117/port/front/port_front_skirmish.cpp:1603
 msgid "Choose"
 msgstr "선택"
 
@@ -3562,7 +3567,7 @@ msgid "Made {0}"
 msgstr "만든 날짜 {0}"
 
 #: src117/port/front/port_front_profile.cpp:838
-#: src117/port/lan/port_front_lan.cpp:1614
+#: src117/port/lan/port_front_lan.cpp:1640
 msgid "In {0}"
 msgstr "위치 {0}"
 
@@ -3599,7 +3604,7 @@ msgid "New profile"
 msgstr "새 프로필"
 
 #: src117/port/front/port_front_profile.cpp:869
-#: src117/port/front/port_front_skirmish.cpp:1443
+#: src117/port/front/port_front_skirmish.cpp:1444
 #: src117/port/lan/port_front_lanhost.cpp:603
 msgid "and {0} more"
 msgstr "외 {0}개"
@@ -3621,7 +3626,7 @@ msgid "{0} frames at {1}"
 msgstr "{1} 속도에서 {0}프레임"
 
 #: src117/port/front/port_front_replays.cpp:1010
-#: src117/port/front/port_front_skirmish.cpp:2768
+#: src117/port/front/port_front_skirmish.cpp:2769
 msgid "Rules"
 msgstr "규칙"
 
@@ -3755,7 +3760,7 @@ msgid "Campaign mission"
 msgstr "캠페인 임무"
 
 #: src117/port/front/port_front_replays.cpp:300
-#: src117/port/front/port_front_skirmish.cpp:1349
+#: src117/port/front/port_front_skirmish.cpp:1350
 #: src117/port/front/port_front_trainer.cpp:423
 msgid "Unreadable"
 msgstr "읽을 수 없음"
@@ -3834,8 +3839,8 @@ msgid "My Replays"
 msgstr "내 리플레이"
 
 #: src117/port/front/port_front_replays.cpp:53
-#: src117/port/lan/port_front_lan.cpp:1648
-#: src117/port/lan/port_front_lan.cpp:1649
+#: src117/port/lan/port_front_lan.cpp:1674
+#: src117/port/lan/port_front_lan.cpp:1675
 msgid "Online"
 msgstr "온라인"
 
@@ -3885,13 +3890,13 @@ msgid "REPLAY"
 msgstr "리플레이"
 
 #: src117/port/front/port_front_replays.cpp:745
-#: src117/port/front/port_front_skirmish.cpp:1237
+#: src117/port/front/port_front_skirmish.cpp:1238
 msgid "MAP"
 msgstr "지도"
 
 #: src117/port/front/port_front_replays.cpp:745
-#: src117/port/front/port_front_skirmish.cpp:1239
-#: src117/port/front/port_front_skirmish.cpp:2582
+#: src117/port/front/port_front_skirmish.cpp:1240
+#: src117/port/front/port_front_skirmish.cpp:2583
 #: src117/port/hud/port_hudstats.cpp:531
 #: src117/port/hud/port_hudstats.cpp:1083
 #: src117/port/tools/port_benchview.cpp:1668
@@ -4110,23 +4115,23 @@ msgid "Spent"
 msgstr "사용"
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2484
+#: src117/port/front/port_front_skirmish.cpp:2485
 msgid "Auto"
 msgstr "자동"
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2484
+#: src117/port/front/port_front_skirmish.cpp:2485
 msgid "Rows"
 msgstr "행"
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2484
+#: src117/port/front/port_front_skirmish.cpp:2485
 #: src117/port/tools/port_benchview.cpp:2234
 msgid "Compact"
 msgstr "간략"
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2484
+#: src117/port/front/port_front_skirmish.cpp:2485
 msgid "Columns"
 msgstr "열"
 
@@ -4135,7 +4140,7 @@ msgid "By Team"
 msgstr "팀별"
 
 #: src117/port/front/port_front_score.cpp:65
-#: src117/port/front/port_front_skirmish.cpp:2745
+#: src117/port/front/port_front_skirmish.cpp:2746
 msgid "Teams"
 msgstr "팀"
 
@@ -4172,8 +4177,8 @@ msgid "{0} of {1} by score"
 msgstr "점수 기준 {1}명 중 {0}위"
 
 #: src117/port/front/port_front_score.cpp:959
-#: src117/port/front/port_front_skirmish.cpp:2329
-#: src117/port/front/port_front_skirmish.cpp:2370
+#: src117/port/front/port_front_skirmish.cpp:2330
+#: src117/port/front/port_front_skirmish.cpp:2371
 #: src117/port/hud/port_hudinput.cpp:675
 msgid "{0} of {1}"
 msgstr "{1}명 중 {0}위"
@@ -4199,9 +4204,9 @@ msgid "Primary"
 msgstr "주 디스플레이"
 
 #: src117/port/front/port_front_settings.cpp:1673
-#: src117/port/gameplay/port_mutators.cpp:49
-#: src117/port/gameplay/port_mutators.cpp:363
-#: src117/port/gameplay/port_mutators.cpp:446
+#: src117/port/gameplay/port_mutators.cpp:67
+#: src117/port/gameplay/port_mutators.cpp:391
+#: src117/port/gameplay/port_mutators.cpp:477
 #: src117/port/tools/port_benchview.cpp:2237
 msgid "None"
 msgstr "없음"
@@ -4739,8 +4744,8 @@ msgstr "단축키 편집기"
 
 #: src117/port/front/port_front_settings.cpp:919
 #: src117/port/front/port_front_settings.cpp:1737
-#: src117/port/front/port_front_skirmish.cpp:2092
-#: src117/port/front/port_front_skirmish.cpp:3085
+#: src117/port/front/port_front_skirmish.cpp:2093
+#: src117/port/front/port_front_skirmish.cpp:3112
 msgid "Open"
 msgstr "열기"
 
@@ -4968,633 +4973,658 @@ msgstr "자동|큰 캐시|제한 없음"
 msgid "On a processor whose cores do not all share one cache, such as a Ryzen X3D with its two halves, which cores the game runs on. Large cache plays large games faster, a 64-player game by a tenth; Any lets Windows choose, which favours the fastest clocks and suits small games a little better. Auto takes the large cache once a game has 2,000 units. Where every core shares one cache it makes no difference."
 msgstr "두 부분으로 나뉜 Ryzen X3D처럼 모든 코어가 하나의 캐시를 공유하지 않는 프로세서에서, 게임을 실행할 코어를 정합니다. 큰 캐시는 큰 게임을 더 빠르게 진행하며, 64인 게임에서 약 10% 빨라집니다. 제한 없음은 Windows가 선택하게 해 가장 빠른 클록을 우선하므로 작은 게임에 조금 더 적합합니다. 자동은 게임의 유닛이 2,000기를 넘으면 큰 캐시를 사용합니다. 모든 코어가 하나의 캐시를 공유하는 프로세서에서는 차이가 없습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1239
+#: src117/port/front/port_front_skirmish.cpp:1240
 msgid "SIZE"
 msgstr "크기"
 
-#: src117/port/front/port_front_skirmish.cpp:1239
+#: src117/port/front/port_front_skirmish.cpp:1240
 msgid "TILESET"
 msgstr "타일 모음"
 
-#: src117/port/front/port_front_skirmish.cpp:1239
+#: src117/port/front/port_front_skirmish.cpp:1240
 msgid "RULES"
 msgstr "규칙"
 
-#: src117/port/front/port_front_skirmish.cpp:1317
+#: src117/port/front/port_front_skirmish.cpp:1318
 msgid "Up One Level"
 msgstr "상위 폴더"
 
-#: src117/port/front/port_front_skirmish.cpp:1324
+#: src117/port/front/port_front_skirmish.cpp:1325
 msgid "To {0} · Backspace"
 msgstr "{0}(으)로 · Backspace"
 
-#: src117/port/front/port_front_skirmish.cpp:1326
+#: src117/port/front/port_front_skirmish.cpp:1327
 msgid "Folder"
 msgstr "폴더"
 
-#: src117/port/front/port_front_skirmish.cpp:1335
+#: src117/port/front/port_front_skirmish.cpp:1336
 msgid "{0} map"
 msgid_plural "{0} maps"
 msgstr[0] "지도 {0}개"
 
-#: src117/port/front/port_front_skirmish.cpp:1335
+#: src117/port/front/port_front_skirmish.cpp:1336
 msgid "No maps"
 msgstr "지도 없음"
 
-#: src117/port/front/port_front_skirmish.cpp:1347
+#: src117/port/front/port_front_skirmish.cpp:1348
 msgid "Either"
 msgstr "둘 다"
 
-#: src117/port/front/port_front_skirmish.cpp:1349
+#: src117/port/front/port_front_skirmish.cpp:1350
 msgid "Too many"
 msgstr "너무 많음"
 
-#: src117/port/front/port_front_skirmish.cpp:1365
+#: src117/port/front/port_front_skirmish.cpp:1366
 msgid "No maps in this folder."
 msgstr "이 폴더에 지도가 없습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1366
+#: src117/port/front/port_front_skirmish.cpp:1367
 msgid "No map in this folder has that many players at that size."
 msgstr "이 폴더에는 해당 플레이어 수와 크기에 맞는 지도가 없습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1402
-#: src117/port/front/port_front_skirmish.cpp:2888
+#: src117/port/front/port_front_skirmish.cpp:1403
+#: src117/port/front/port_front_skirmish.cpp:2889
 msgid "{0} starts · {1} × {2} tiles · {3}"
 msgstr "시작 위치 {0}개 · {1} × {2} 타일 · {3}"
 
-#: src117/port/front/port_front_skirmish.cpp:1409
+#: src117/port/front/port_front_skirmish.cpp:1410
 msgid "Plays under Hyperion rules: past the original’s 8 players."
 msgstr "Hyperion 규칙으로 진행됩니다. 원작의 8인을 넘습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1410
+#: src117/port/front/port_front_skirmish.cpp:1411
 msgid "Plays under Hyperion rules: past the original’s 256 tiles."
 msgstr "Hyperion 규칙으로 진행됩니다. 원작의 256타일을 넘습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1413
+#: src117/port/front/port_front_skirmish.cpp:1414
 msgid "Classic or Hyperion rules."
 msgstr "클래식 규칙과 Hyperion 규칙 모두 가능합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1432
+#: src117/port/front/port_front_skirmish.cpp:1433
 msgid "{0} map, counting its folders"
 msgid_plural "{0} maps, counting its folders"
 msgstr[0] "하위 폴더까지 지도 {0}개"
 
-#: src117/port/front/port_front_skirmish.cpp:1447
+#: src117/port/front/port_front_skirmish.cpp:1448
 msgid "Double-click or Enter opens it."
 msgstr "두 번 클릭하거나 Enter를 누르면 열립니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1458
+#: src117/port/front/port_front_skirmish.cpp:1459
 msgid "CHOOSE A MAP"
 msgstr "지도 선택"
 
-#: src117/port/front/port_front_skirmish.cpp:1490
+#: src117/port/front/port_front_skirmish.cpp:1491
 msgid "Maps for Brood War"
 msgstr "브루드 워 지도"
 
-#: src117/port/front/port_front_skirmish.cpp:1490
+#: src117/port/front/port_front_skirmish.cpp:1491
 msgid "Maps for StarCraft"
 msgstr "StarCraft 지도"
 
-#: src117/port/front/port_front_skirmish.cpp:1525
-#: src117/port/front/port_front_skirmish.cpp:1602
+#: src117/port/front/port_front_skirmish.cpp:1526
+#: src117/port/front/port_front_skirmish.cpp:1603
 msgid "Open Folder"
 msgstr "폴더 열기"
 
-#: src117/port/front/port_front_skirmish.cpp:1525
+#: src117/port/front/port_front_skirmish.cpp:1526
 msgid "Choose Map"
 msgstr "지도 선택"
 
-#: src117/port/front/port_front_skirmish.cpp:1538
+#: src117/port/front/port_front_skirmish.cpp:1539
 msgid "The set-up waits: choose {0} again to keep it."
 msgstr "설정이 보류되었습니다. 유지하려면 {0}을(를) 다시 선택하십시오."
 
-#: src117/port/front/port_front_skirmish.cpp:1540
+#: src117/port/front/port_front_skirmish.cpp:1541
 msgid "Slots, races and options come next."
 msgstr "다음으로 슬롯과 종족, 설정을 정합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1741
+#: src117/port/front/port_front_skirmish.cpp:1742
 msgid "{0}: player {1}’s colour. Picking it swaps the two."
 msgstr "{0}: 플레이어 {1}의 색상입니다. 선택하면 두 플레이어의 색상이 서로 바뀝니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1743
+#: src117/port/front/port_front_skirmish.cpp:1744
 msgid "{0}: reads as player {1}’s colour {2}. Picking it swaps the two."
 msgstr "{0}: 플레이어 {1}의 색상 {2}과 같게 보입니다. 선택하면 두 플레이어의 색상이 서로 바뀝니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1746
+#: src117/port/front/port_front_skirmish.cpp:1747
 msgid "{0}: hard to tell from player {1}’s colour {2}."
 msgstr "{0}: 플레이어 {1}의 색상 {2}과 구별하기 어렵습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1779
+#: src117/port/front/port_front_skirmish.cpp:1780
 msgid "Now its own colour, {0}"
 msgstr "이제 고유 색상 {0}을(를) 사용합니다"
 
-#: src117/port/front/port_front_skirmish.cpp:1780
+#: src117/port/front/port_front_skirmish.cpp:1781
 msgid "Now {0}"
 msgstr "이제 {0}"
 
-#: src117/port/front/port_front_skirmish.cpp:1787
+#: src117/port/front/port_front_skirmish.cpp:1788
 msgid "A number: that player’s colour. Picking it swaps the two."
 msgstr "숫자는 해당 플레이어의 색상입니다. 선택하면 두 플레이어의 색상이 서로 바뀝니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1790
+#: src117/port/front/port_front_skirmish.cpp:1791
 msgid "Orange rim: hard to tell from a player’s colour."
 msgstr "주황 테두리는 다른 플레이어의 색상과 구별하기 어렵다는 표시입니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1827
+#: src117/port/front/port_front_skirmish.cpp:1828
 msgid "The units"
 msgstr "유닛"
 
-#: src117/port/front/port_front_skirmish.cpp:1834
+#: src117/port/front/port_front_skirmish.cpp:1835
 msgid "The minimap"
 msgstr "미니맵"
 
-#: src117/port/front/port_front_skirmish.cpp:1839
+#: src117/port/front/port_front_skirmish.cpp:1840
 msgid "Nobody else to compare with."
 msgstr "비교할 다른 플레이어가 없습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1840
+#: src117/port/front/port_front_skirmish.cpp:1841
 msgid "Clear of every other player, on the minimap and in the units."
 msgstr "미니맵과 유닛 모두에서 다른 모든 플레이어와 구별됩니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1845
+#: src117/port/front/port_front_skirmish.cpp:1846
 msgid "Reads as player {0}’s colour {1}. Choose another, or give player {0} a new colour first."
 msgstr "플레이어 {0}의 색상 {1}과 같게 보입니다. 다른 색을 고르거나, 먼저 플레이어 {0}에게 다른 색을 지정하십시오."
 
-#: src117/port/front/port_front_skirmish.cpp:1848
+#: src117/port/front/port_front_skirmish.cpp:1849
 msgid "Close to player {0}’s colour {1}. Allowed, and marked on both."
 msgstr "플레이어 {0}의 색상 {1}과 비슷합니다. 사용할 수는 있으며, 양쪽에 표시됩니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1859
+#: src117/port/front/port_front_skirmish.cpp:1860
 msgid "Use This Colour"
 msgstr "이 색상 사용"
 
-#: src117/port/front/port_front_skirmish.cpp:1919
+#: src117/port/front/port_front_skirmish.cpp:1920
 msgid "Close colours"
 msgstr "비슷한 색상"
 
-#: src117/port/front/port_front_skirmish.cpp:1920
+#: src117/port/front/port_front_skirmish.cpp:1921
 msgid "Hard to tell from player {0}’s colour {1}. Pick another, or press Distinct Colours to separate every player’s."
 msgstr "플레이어 {0}의 색상 {1}과 구별하기 어렵습니다. 다른 색을 고르거나, 색상 구분을 눌러 모든 플레이어의 색을 분리하십시오."
 
-#: src117/port/front/port_front_skirmish.cpp:1946
+#: src117/port/front/port_front_skirmish.cpp:1947
 msgid "Colour for player {0}"
 msgstr "플레이어 {0}의 색상"
 
-#: src117/port/front/port_front_skirmish.cpp:1947
+#: src117/port/front/port_front_skirmish.cpp:1948
 msgid "The game’s colours"
 msgstr "게임 기본 색상"
 
-#: src117/port/front/port_front_skirmish.cpp:1947
+#: src117/port/front/port_front_skirmish.cpp:1948
 msgid "Any colour"
 msgstr "모든 색상"
 
-#: src117/port/front/port_front_skirmish.cpp:1971
+#: src117/port/front/port_front_skirmish.cpp:1972
 msgid "Observer 1"
 msgstr "관전자 1"
 
-#: src117/port/front/port_front_skirmish.cpp:1972
+#: src117/port/front/port_front_skirmish.cpp:1973
 msgid "An observer has no seat: they watch every seat play, the whole map shown."
 msgstr "관전자는 자리를 차지하지 않습니다. 지도 전체가 보이는 상태로 모든 자리의 플레이를 관전합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1991
+#: src117/port/front/port_front_skirmish.cpp:1992
 msgid "Empty"
 msgstr "비어 있음"
 
-#: src117/port/front/port_front_skirmish.cpp:1994
-#: src117/port/front/port_front_skirmish.cpp:2115
-#: src117/port/front/port_front_skirmish.cpp:2119
-#: src117/port/front/port_front_skirmish.cpp:2198
-#: src117/port/front/port_frontkit.cpp:376
+#: src117/port/front/port_front_skirmish.cpp:1995
+#: src117/port/front/port_front_skirmish.cpp:2116
+#: src117/port/front/port_front_skirmish.cpp:2120
+#: src117/port/front/port_front_skirmish.cpp:2199
+#: src117/port/front/port_frontkit.cpp:380
 msgid "Use Map Settings"
 msgstr "유즈맵 설정"
 
-#: src117/port/front/port_front_skirmish.cpp:1995
-#: src117/port/front/port_front_skirmish.cpp:2116
+#: src117/port/front/port_front_skirmish.cpp:1996
+#: src117/port/front/port_front_skirmish.cpp:2117
 msgid "The map seats the players and runs the game, and expects you in your seat. Watching a game of computers is for melee games."
 msgstr "지도가 플레이어를 배치하고 게임을 진행하며, 내가 내 자리에 있다고 전제합니다. 컴퓨터끼리의 게임 관전은 섬멸전에서만 가능합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:1998
+#: src117/port/front/port_front_skirmish.cpp:1999
 msgid "Observer"
 msgstr "관전자"
 
-#: src117/port/front/port_front_skirmish.cpp:1999
+#: src117/port/front/port_front_skirmish.cpp:2000
 msgid "Watch instead of playing: your seat becomes a computer, and you watch every seat play with the whole map shown, the replay’s controls and speeds up to 16 times Fastest."
 msgstr "플레이하지 않고 관전합니다. 내 자리가 컴퓨터로 바뀌고, 지도 전체가 보이는 상태로 모든 자리의 플레이를 관전하며, 리플레이 조작과 가장 빠름의 최대 16배 속도를 쓸 수 있습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2012
+#: src117/port/front/port_front_skirmish.cpp:2013
 msgid "The whole map shown, the replay’s controls, up to 16 times Fastest"
 msgstr "지도 전체 표시, 리플레이 조작, 가장 빠름의 최대 16배"
 
-#: src117/port/front/port_front_skirmish.cpp:2020
+#: src117/port/front/port_front_skirmish.cpp:2021
 msgid "EMPTY"
 msgstr "비어 있음"
 
-#: src117/port/front/port_front_skirmish.cpp:2022
+#: src117/port/front/port_front_skirmish.cpp:2023
 msgid "watching is for melee games"
 msgstr "관전은 섬멸전에서만 가능"
 
-#: src117/port/front/port_front_skirmish.cpp:2023
+#: src117/port/front/port_front_skirmish.cpp:2024
 msgid "choose You to watch a game of computers"
 msgstr "컴퓨터끼리의 게임을 관전하려면 나를 선택하십시오"
 
-#: src117/port/front/port_front_skirmish.cpp:2045
+#: src117/port/front/port_front_skirmish.cpp:2046
 msgid "Starts are drawn at random in a melee game, so a slot is not a place on the map. Choose Start positions: By slot to give each player a start."
 msgstr "섬멸전에서는 시작 위치가 무작위로 추첨되므로 슬롯이 지도상의 위치를 뜻하지 않습니다. 각 플레이어에게 고정된 시작 위치를 주려면 시작 위치: 슬롯순을 선택하십시오."
 
-#: src117/port/front/port_front_skirmish.cpp:2078
+#: src117/port/front/port_front_skirmish.cpp:2079
 msgid "You, the host"
 msgstr "나, 방장"
 
-#: src117/port/front/port_front_skirmish.cpp:2078
+#: src117/port/front/port_front_skirmish.cpp:2079
 msgid "The host"
 msgstr "방장"
 
-#: src117/port/front/port_front_skirmish.cpp:2085
+#: src117/port/front/port_front_skirmish.cpp:2086
 msgid "Closed"
 msgstr "닫힘"
 
-#: src117/port/front/port_front_skirmish.cpp:2105
-#: src117/port/lan/port_front_lan.cpp:1835
+#: src117/port/front/port_front_skirmish.cpp:2106
+#: src117/port/lan/port_front_lan.cpp:1861
 msgid "{0} (you)"
 msgstr "{0}(나)"
 
-#: src117/port/front/port_front_skirmish.cpp:2119
+#: src117/port/front/port_front_skirmish.cpp:2120
 msgid "The map seats the players and runs the game."
 msgstr "지도가 플레이어를 배치하고 게임을 진행합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2121
+#: src117/port/front/port_front_skirmish.cpp:2122
 msgid "Your seat"
 msgstr "내 자리"
 
-#: src117/port/front/port_front_skirmish.cpp:2122
+#: src117/port/front/port_front_skirmish.cpp:2123
 msgid "Play it yourself, or make it a computer and watch: every seat a computer, the whole map shown, with the replay’s controls and speeds up to 16 times Fastest."
 msgstr "직접 플레이하거나, 컴퓨터로 바꾸고 관전할 수 있습니다. 모든 자리가 컴퓨터가 되고 지도 전체가 보이며, 리플레이 조작과 가장 빠름의 최대 16배 속도를 쓸 수 있습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2125
+#: src117/port/front/port_front_skirmish.cpp:2126
 msgid "The seat"
 msgstr "자리"
 
-#: src117/port/front/port_front_skirmish.cpp:2126
+#: src117/port/front/port_front_skirmish.cpp:2127
 msgid "Open: the next person in the room to join takes it. A person seated here goes back to the room when the seat is made a computer, closed or open. The host may give up their own seat to run the room, and take any seat that is not a person's again."
 msgstr "열림: 방에 다음으로 참가하는 사람이 이 자리를 차지합니다. 이 자리를 컴퓨터로 바꾸거나 닫거나 열면 앉아 있던 사람은 방으로 돌아갑니다. 방장은 방을 운영하기 위해 자기 자리를 비울 수 있고, 사람이 없는 자리는 다시 차지할 수 있습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2145
+#: src117/port/front/port_front_skirmish.cpp:2146
 msgid "OPEN"
 msgstr "열림"
 
-#: src117/port/front/port_front_skirmish.cpp:2145
+#: src117/port/front/port_front_skirmish.cpp:2146
 msgid "CLOSED"
 msgstr "닫힘"
 
-#: src117/port/front/port_front_skirmish.cpp:2147
+#: src117/port/front/port_front_skirmish.cpp:2148
 msgid "for the next person to join"
 msgstr "다음으로 참가하는 사람용"
 
-#: src117/port/front/port_front_skirmish.cpp:2161
+#: src117/port/front/port_front_skirmish.cpp:2162
 msgid "Each team plays in shades of its colour. Choose Colours: By player to pick each player’s."
 msgstr "각 팀이 팀 색상의 명암으로 표시됩니다. 플레이어마다 색을 고르려면 색상: 플레이어별을 선택하십시오."
 
-#: src117/port/front/port_front_skirmish.cpp:2173
-#: src117/port/front/port_front_skirmish.cpp:2820
+#: src117/port/front/port_front_skirmish.cpp:2174
+#: src117/port/front/port_front_skirmish.cpp:2821
 msgid "The map’s"
 msgstr "지도 설정"
 
-#: src117/port/front/port_front_skirmish.cpp:2197
+#: src117/port/front/port_front_skirmish.cpp:2198
 msgid "Their race"
 msgstr "각자 선택"
 
-#: src117/port/front/port_front_skirmish.cpp:2199
-#: src117/port/front/port_front_skirmish.cpp:2223
+#: src117/port/front/port_front_skirmish.cpp:2200
+#: src117/port/front/port_front_skirmish.cpp:2224
 msgid "The host’s"
 msgstr "방장 선택"
 
-#: src117/port/front/port_front_skirmish.cpp:2200
+#: src117/port/front/port_front_skirmish.cpp:2201
 msgid "Each person in the room chooses their own race."
 msgstr "방의 각 사람이 자기 종족을 직접 선택합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2201
+#: src117/port/front/port_front_skirmish.cpp:2202
 msgid "The map gives the computers their races."
 msgstr "지도가 컴퓨터의 종족을 정합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2202
+#: src117/port/front/port_front_skirmish.cpp:2203
 msgid "The host chooses the computers’ races."
 msgstr "방장이 컴퓨터의 종족을 선택합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2222
+#: src117/port/front/port_front_skirmish.cpp:2223
 msgid "Their handicap"
 msgstr "각자 선택"
 
-#: src117/port/front/port_front_skirmish.cpp:2225
+#: src117/port/front/port_front_skirmish.cpp:2226
 msgid "Each person in the room chooses their own handicap."
 msgstr "방의 각 사람이 자기 핸디캡을 직접 선택합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2226
+#: src117/port/front/port_front_skirmish.cpp:2227
 msgid "The host chooses the computers’ handicaps."
 msgstr "방장이 컴퓨터의 핸디캡을 선택합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2244
+#: src117/port/front/port_front_skirmish.cpp:2245
 msgid "READY"
 msgstr "준비 완료"
 
-#: src117/port/front/port_front_skirmish.cpp:2244
+#: src117/port/front/port_front_skirmish.cpp:2245
 msgid "NOT READY"
 msgstr "준비 안 됨"
 
-#: src117/port/front/port_front_skirmish.cpp:2256
+#: src117/port/front/port_front_skirmish.cpp:2257
 msgid "Use Map Settings: the map runs its computers."
 msgstr "유즈맵 설정: 지도가 컴퓨터를 운영합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2257
+#: src117/port/front/port_front_skirmish.cpp:2258
 msgid "A room’s computers are the original’s own, Classic AI. Other levels in a room are not available yet."
 msgstr "방의 컴퓨터는 원작의 컴퓨터인 클래식 AI입니다. 방에서 다른 수준은 아직 사용할 수 없습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2291
-#: src117/port/front/port_front_skirmish.cpp:2427
+#: src117/port/front/port_front_skirmish.cpp:2292
+#: src117/port/front/port_front_skirmish.cpp:2428
 msgid "Distinct Colours ({0})"
 msgstr "색상 구분({0})"
 
-#: src117/port/front/port_front_skirmish.cpp:2292
+#: src117/port/front/port_front_skirmish.cpp:2293
 msgid "Distinct Colours"
 msgstr "색상 구분"
 
-#: src117/port/front/port_front_skirmish.cpp:2295
+#: src117/port/front/port_front_skirmish.cpp:2296
 msgid "Distinct colours"
 msgstr "색상 구분"
 
-#: src117/port/front/port_front_skirmish.cpp:2296
+#: src117/port/front/port_front_skirmish.cpp:2297
 msgid "Some players’ colours are close to another’s. Gives each player the colour farthest from those already taken; you keep yours. Hotkey: T"
 msgstr "일부 플레이어의 색상이 서로 비슷합니다. 이미 쓰인 색에서 가장 먼 색을 각 플레이어에게 지정하며, 내 색상은 그대로 유지됩니다. 단축키: T"
 
-#: src117/port/front/port_front_skirmish.cpp:2298
+#: src117/port/front/port_front_skirmish.cpp:2299
 msgid "No two colours are close. Gives each player the colour farthest from those already taken; you keep yours. Hotkey: T"
 msgstr "비슷한 색상이 없습니다. 이미 쓰인 색에서 가장 먼 색을 각 플레이어에게 지정하며, 내 색상은 그대로 유지됩니다. 단축키: T"
 
-#: src117/port/front/port_front_skirmish.cpp:2334
+#: src117/port/front/port_front_skirmish.cpp:2335
 #: src117/port/platform/port_discord.cpp:656
 msgid "{0} person"
 msgid_plural "{0} people"
 msgstr[0] "{0}명"
 
-#: src117/port/front/port_front_skirmish.cpp:2337
+#: src117/port/front/port_front_skirmish.cpp:2338
 msgid "{0} open"
 msgstr "{0}자리 열림"
 
-#: src117/port/front/port_front_skirmish.cpp:2339
+#: src117/port/front/port_front_skirmish.cpp:2340
 msgid "{0} of {1} ready"
 msgstr "{1}명 중 {0}명 준비 완료"
 
-#: src117/port/front/port_front_skirmish.cpp:2346
-#: src117/port/front/port_front_skirmish.cpp:2379
-#: src117/port/front/port_front_skirmish.cpp:2424
+#: src117/port/front/port_front_skirmish.cpp:2347
+#: src117/port/front/port_front_skirmish.cpp:2380
+#: src117/port/front/port_front_skirmish.cpp:2425
 msgid "Fill Empty"
 msgstr "빈자리 채우기"
 
-#: src117/port/front/port_front_skirmish.cpp:2348
+#: src117/port/front/port_front_skirmish.cpp:2349
 msgid "Fill empty"
 msgstr "빈자리 채우기"
 
-#: src117/port/front/port_front_skirmish.cpp:2349
+#: src117/port/front/port_front_skirmish.cpp:2350
 msgid "A computer of a random race in each closed seat; open seats wait for people. Hotkey: F"
 msgstr "닫힌 자리마다 무작위 종족의 컴퓨터를 넣습니다. 열린 자리는 사람을 기다립니다. 단축키: F"
 
-#: src117/port/front/port_front_skirmish.cpp:2374
+#: src117/port/front/port_front_skirmish.cpp:2375
 msgid "{0} empty"
 msgstr "{0}자리 비어 있음"
 
-#: src117/port/front/port_front_skirmish.cpp:2447
+#: src117/port/front/port_front_skirmish.cpp:2448
 msgid "Adds a team; choose it in a player’s Team list to move them to it. Hotkey: N"
 msgstr "팀을 추가합니다. 플레이어의 팀 목록에서 선택하면 그 팀으로 이동합니다. 단축키: N"
 
-#: src117/port/front/port_front_skirmish.cpp:2462
+#: src117/port/front/port_front_skirmish.cpp:2463
 msgid "This map’s starts could not be read, so no layout can be worked out from them. New Team and each player’s Team list make the teams."
 msgstr "이 지도의 시작 위치를 읽을 수 없어 배치를 계산할 수 없습니다. 새 팀과 플레이어별 팀 목록으로 팀을 구성하십시오."
 
-#: src117/port/front/port_front_skirmish.cpp:2464
+#: src117/port/front/port_front_skirmish.cpp:2465
 msgid "Sets the teams from where the map’s starts are: halves of the map, or groups of nearby starts. Each player starts in their team’s part (Start positions: By slot). Move anyone with their Team list after."
 msgstr "지도의 시작 위치를 기준으로 팀을 구성합니다. 지도를 반으로 나누거나 가까운 시작 위치끼리 묶습니다. 각 플레이어는 자기 팀 구역에서 시작합니다(시작 위치: 슬롯순). 이후 팀 목록에서 옮길 수 있습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2488
+#: src117/port/front/port_front_skirmish.cpp:2489
 msgid "Each team a column of chips, for games past 24 players. Not available yet."
 msgstr "팀마다 한 열로 표시해 24인을 넘는 게임에 사용합니다. 아직 사용할 수 없습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2578
+#: src117/port/front/port_front_skirmish.cpp:2579
 msgid "empty: choose it in a player’s Team list"
 msgstr "비어 있음: 플레이어의 팀 목록에서 선택하십시오"
 
-#: src117/port/front/port_front_skirmish.cpp:2583
+#: src117/port/front/port_front_skirmish.cpp:2584
 msgid "{0} slots"
 msgstr "{0}자리"
 
-#: src117/port/front/port_front_skirmish.cpp:2605
+#: src117/port/front/port_front_skirmish.cpp:2606
 msgid "{0} to {1} shown, the wheel scrolls"
 msgstr "{0}~{1}번째 표시, 휠로 스크롤"
 
-#: src117/port/front/port_front_skirmish.cpp:2613
+#: src117/port/front/port_front_skirmish.cpp:2614
 msgid "Use Map Settings: the map seats the players and runs the game."
 msgstr "유즈맵 설정: 지도가 플레이어를 배치하고 게임을 진행합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2638
+#: src117/port/front/port_front_skirmish.cpp:2639
 msgid "OBSERVERS"
 msgstr "관전자"
 
-#: src117/port/front/port_front_skirmish.cpp:2644
-#: src117/port/front/port_front_skirmish.cpp:2646
+#: src117/port/front/port_front_skirmish.cpp:2645
+#: src117/port/front/port_front_skirmish.cpp:2647
 #: src117/port/lan/port_front_lanhost.cpp:54
 msgid "Nobody"
 msgstr "없음"
 
-#: src117/port/front/port_front_skirmish.cpp:2644
+#: src117/port/front/port_front_skirmish.cpp:2645
 msgid "Multiplayer only"
 msgstr "멀티플레이어 전용"
 
-#: src117/port/front/port_front_skirmish.cpp:2645
+#: src117/port/front/port_front_skirmish.cpp:2646
 #: src117/port/lan/port_front_lanhost.cpp:54
 msgid "Anyone in the room"
 msgstr "방의 모든 사람"
 
-#: src117/port/front/port_front_skirmish.cpp:2653
+#: src117/port/front/port_front_skirmish.cpp:2654
 msgid "Observers watch a multiplayer game without playing. They come with multiplayer, which is not available yet."
 msgstr "관전자는 플레이하지 않고 멀티플레이어 게임을 봅니다. 멀티플레이어와 함께 제공되며 아직 사용할 수 없습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2656
+#: src117/port/front/port_front_skirmish.cpp:2657
 msgid "The room’s people who are not seated can watch the match once it starts, {0} s behind the players."
 msgstr "방에서 자리에 앉지 않은 사람은 경기가 시작되면 플레이어보다 {0}초 늦게 관전할 수 있습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2659
+#: src117/port/front/port_front_skirmish.cpp:2660
 #: src117/port/lan/port_front_lan.cpp:762
-#: src117/port/lan/port_lanroom_proto.cpp:690
+#: src117/port/lan/port_lanroom_proto.cpp:744
 msgid "The host has turned watching off."
 msgstr "방장이 관전을 껐습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2688
+#: src117/port/front/port_front_skirmish.cpp:2689
 msgid "The host chooses it."
 msgstr "방장이 선택합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2732
+#: src117/port/front/port_front_skirmish.cpp:2733
 msgid "Free For All while you watch"
 msgstr "관전 중에는 개별 전투"
 
-#: src117/port/front/port_front_skirmish.cpp:2738
+#: src117/port/front/port_front_skirmish.cpp:2739
 msgid "Players on teams: teammates are allied, share vision and win together, and every other team is an enemy. Quick layout sets the teams from the map’s starts; New Team and each player’s Team list change them. Plays by Hyperion’s rules."
 msgstr "플레이어가 팀을 이룹니다. 같은 팀은 동맹을 맺고 시야를 공유하며 함께 승리하고, 다른 모든 팀은 적입니다. 빠른 배치가 지도의 시작 위치로 팀을 구성하며, 새 팀과 플레이어별 팀 목록으로 바꿀 수 있습니다. Hyperion의 규칙으로 진행됩니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2745
-#: src117/port/front/port_frontkit.cpp:380
+#: src117/port/front/port_front_skirmish.cpp:2746
+#: src117/port/front/port_frontkit.cpp:384
 msgid "Top vs Bottom"
 msgstr "홈팀 대 원정팀"
 
-#: src117/port/front/port_front_skirmish.cpp:2754
+#: src117/port/front/port_front_skirmish.cpp:2755
 msgid "Fastest ×{0}"
 msgstr "가장 빠름 ×{0}"
 
-#: src117/port/front/port_front_skirmish.cpp:2776
-#: src117/port/front/port_front_skirmish.cpp:2779
+#: src117/port/front/port_front_skirmish.cpp:2777
+#: src117/port/front/port_front_skirmish.cpp:2780
 msgid "Rule set"
 msgstr "규칙"
 
-#: src117/port/front/port_front_skirmish.cpp:2777
+#: src117/port/front/port_front_skirmish.cpp:2778
 msgid "The host chooses the rules the room’s match plays by."
 msgstr "방장이 방의 경기에 적용할 규칙을 선택합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2780
+#: src117/port/front/port_front_skirmish.cpp:2781
 msgid "Classic plays as the original does, to the frame. Hyperion has the improvements, starting with pathing. The replay keeps the choice."
 msgstr "클래식은 원작과 프레임 단위로 똑같이 진행됩니다. Hyperion은 경로 탐색을 비롯한 개선 사항을 적용합니다. 선택한 규칙은 리플레이에 기록됩니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2784
+#: src117/port/front/port_front_skirmish.cpp:2785
 msgid "Hyperion rules, required"
 msgstr "Hyperion 규칙 필수"
 
-#: src117/port/front/port_front_skirmish.cpp:2785
+#: src117/port/front/port_front_skirmish.cpp:2786
 msgid "Because of {0}. The original never had such games, so there is nothing to match."
 msgstr "{0} 때문입니다. 원작에는 이런 게임이 없었으므로 맞출 기준이 없습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2800
+#: src117/port/front/port_front_skirmish.cpp:2801
 msgid "The host chooses the most units the game holds."
 msgstr "방장이 게임의 최대 유닛 수를 선택합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2803
+#: src117/port/front/port_front_skirmish.cpp:2804
 msgid "The most units the game holds at once, every player’s and the map’s minerals and geysers together. The original holds 1,700. Automatic: the original’s in a game it could play, and in a bigger game or with a supply cap past 200, room for the map’s own and for each player’s whole supply cap in units. A number plays by Hyperion’s rules."
 msgstr "게임이 동시에 유지하는 최대 유닛 수로, 모든 플레이어의 유닛과 지도의 미네랄, 가이저를 합한 값입니다. 원작은 1,700개입니다. 자동: 원작이 플레이할 수 있는 규모에서는 원작과 같고, 더 큰 게임이거나 보급품 한도가 200을 넘으면 지도의 자원과 각 플레이어의 보급품 한도를 전부 채울 자리를 확보합니다. 숫자를 지정하면 Hyperion의 규칙으로 진행됩니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2810
+#: src117/port/front/port_front_skirmish.cpp:2811
 msgid "The map sets them"
 msgstr "지도가 정함"
 
-#: src117/port/front/port_front_skirmish.cpp:2817
+#: src117/port/front/port_front_skirmish.cpp:2818
 msgid "Random: the original draws each player a start. By slot: each player starts where the map’s picture shows their number. Either plays by the original’s rules."
 msgstr "무작위: 원작이 각 플레이어의 시작 위치를 추첨합니다. 슬롯순: 지도 그림에 표시된 자기 번호 위치에서 시작합니다. 어느 쪽이든 원작의 규칙으로 진행됩니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2823
-#: src117/port/front/port_front_skirmish.cpp:2892
+#: src117/port/front/port_front_skirmish.cpp:2824
+#: src117/port/front/port_front_skirmish.cpp:2893
 msgid "The map places the players."
 msgstr "지도가 플레이어를 배치합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2824
+#: src117/port/front/port_front_skirmish.cpp:2825
 msgid "This game type draws the starts at random. Choosing them is not available for it."
 msgstr "이 게임 유형은 시작 위치를 무작위로 추첨합니다. 직접 선택할 수 없습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2838
+#: src117/port/front/port_front_skirmish.cpp:2839
 msgid "By player: each player’s own colour. By team: each team in shades of one colour, so a team reads at a glance."
 msgstr "플레이어별: 각 플레이어의 고유 색상입니다. 팀별: 팀마다 한 색상의 명암을 사용해 팀을 한눈에 알 수 있습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2855
-#: src117/port/front/port_front_skirmish.cpp:2857
+#: src117/port/front/port_front_skirmish.cpp:2856
+#: src117/port/front/port_front_skirmish.cpp:2858
 msgid "Lock teams"
 msgstr "팀 고정"
 
-#: src117/port/front/port_front_skirmish.cpp:2858
+#: src117/port/front/port_front_skirmish.cpp:2859
 msgid "Keeps players from changing team in a multiplayer lobby. Not available yet."
 msgstr "멀티플레이어 대기실에서 플레이어가 팀을 바꾸지 못하게 합니다. 아직 사용할 수 없습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2894
+#: src117/port/front/port_front_skirmish.cpp:2895
 msgid "Starts by slot: each number is that player’s start."
 msgstr "슬롯순 시작: 각 번호가 해당 플레이어의 시작 위치입니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2895
+#: src117/port/front/port_front_skirmish.cpp:2896
 msgid "Random starts: the numbers are the map’s, not the players’."
 msgstr "무작위 시작 위치: 번호는 지도의 번호이며 플레이어의 번호가 아닙니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2899
+#: src117/port/front/port_front_skirmish.cpp:2900
 msgid "Enlarge"
 msgstr "확대"
 
-#: src117/port/front/port_front_skirmish.cpp:2945
+#: src117/port/front/port_front_skirmish.cpp:2946
 msgid "{0} on {1}"
 msgstr "{1}의 {0}"
 
-#: src117/port/front/port_front_skirmish.cpp:2947
-#: src117/port/front/port_front_skirmish.cpp:3060
+#: src117/port/front/port_front_skirmish.cpp:2948
+#: src117/port/front/port_front_skirmish.cpp:3087
 msgid "{0} starts"
 msgstr "시작 위치 {0}개"
 
-#: src117/port/front/port_front_skirmish.cpp:2962
+#: src117/port/front/port_front_skirmish.cpp:2963
 msgid "Mod: {0}"
 msgstr "모드: {0}"
 
-#: src117/port/front/port_front_skirmish.cpp:2962
+#: src117/port/front/port_front_skirmish.cpp:2963
 msgid "Game: {0}"
 msgstr "게임: {0}"
 
-#: src117/port/front/port_front_skirmish.cpp:2965
-#: src117/port/front/port_front_skirmish.cpp:2970
+#: src117/port/front/port_front_skirmish.cpp:2966
+#: src117/port/front/port_front_skirmish.cpp:2971
 msgid "The game"
 msgstr "게임"
 
-#: src117/port/front/port_front_skirmish.cpp:2966
+#: src117/port/front/port_front_skirmish.cpp:2967
 msgid "{0}, a mod on {1}: its units, weapons and rules are in every game started here. The Mods screen chooses another mod, or the original game."
 msgstr "{0}, {1} 기반 모드입니다. 여기에서 시작하는 모든 게임에 이 모드의 유닛과 무기, 규칙이 적용됩니다. 다른 모드나 원작 게임은 모드 화면에서 선택합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2971
+#: src117/port/front/port_front_skirmish.cpp:2972
 msgid "StarCraft, Brood War or a mod built on one, chosen for each game: it sets the races, the maps and the rules. For now it is the one Hyperion started in; choosing it here is not available yet."
 msgstr "StarCraft, 브루드 워, 또는 그 위에 만든 모드를 게임마다 선택합니다. 종족과 지도, 규칙이 여기에서 정해집니다. 현재는 Hyperion을 시작할 때의 것으로 고정되며, 여기에서 선택하는 기능은 아직 사용할 수 없습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:2977
+#: src117/port/front/port_front_skirmish.cpp:2978
 msgid "Change Map"
 msgstr "지도 변경"
 
-#: src117/port/front/port_front_skirmish.cpp:2979
+#: src117/port/front/port_front_skirmish.cpp:2980
 msgid "The map"
 msgstr "지도"
 
-#: src117/port/front/port_front_skirmish.cpp:2979
+#: src117/port/front/port_front_skirmish.cpp:2980
 msgid "The host chooses the map."
 msgstr "방장이 지도를 선택합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:3009
+#: src117/port/front/port_front_skirmish.cpp:3010
 msgid "Start Game"
 msgstr "게임 시작"
 
-#: src117/port/front/port_front_skirmish.cpp:3014
+#: src117/port/front/port_front_skirmish.cpp:3015
 #: src117/port/gameplay/port_trainerview.cpp:851
 msgid "Leave"
 msgstr "나가기"
 
-#: src117/port/front/port_front_skirmish.cpp:3030
+#: src117/port/front/port_front_skirmish.cpp:3033
+msgid "ONLINE (RELAY)"
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3033
+msgid "THIS NETWORK"
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3038
+msgid "Online (relay)"
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3038
+#: src117/port/lan/port_front_lanhost.cpp:1235
+msgid "This network"
+msgstr "이 네트워크"
+
+#: src117/port/front/port_front_skirmish.cpp:3039
+msgid "The host set this match to play online: at its start the room asks its coordinator for a session, and every seat joins it over the internet. The host toggles this."
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3040
+msgid "The host set this match to play on the room's own network relay. The host toggles this."
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3057
 msgid "MOD RULES"
 msgstr "모드 규칙"
 
-#: src117/port/front/port_front_skirmish.cpp:3030
+#: src117/port/front/port_front_skirmish.cpp:3057
 msgid "HYPERION RULES"
 msgstr "HYPERION 규칙"
 
-#: src117/port/front/port_front_skirmish.cpp:3033
+#: src117/port/front/port_front_skirmish.cpp:3060
 msgid "Mod rules"
 msgstr "모드 규칙"
 
-#: src117/port/front/port_front_skirmish.cpp:3033
+#: src117/port/front/port_front_skirmish.cpp:3060
 #: src117/port/front/port_front_trainer.cpp:432
 msgid "Hyperion rules"
 msgstr "Hyperion 규칙"
 
-#: src117/port/front/port_front_skirmish.cpp:3034
+#: src117/port/front/port_front_skirmish.cpp:3061
 msgid "Required by {0}. Its replay and save are Hyperion’s and say so."
 msgstr "{0} 때문에 필요합니다. 이 게임의 리플레이와 저장된 게임은 Hyperion 형식이며 그렇게 표시됩니다."
 
-#: src117/port/front/port_front_skirmish.cpp:3258
+#: src117/port/front/port_front_skirmish.cpp:3285
 msgid "Choose a map first."
 msgstr "먼저 지도를 선택하십시오."
 
-#: src117/port/front/port_front_skirmish.cpp:3265
+#: src117/port/front/port_front_skirmish.cpp:3292
 msgid "A session needs at least one computer."
 msgstr "세션에는 컴퓨터가 최소 한 명 필요합니다."
 
@@ -5602,15 +5632,15 @@ msgstr "세션에는 컴퓨터가 최소 한 명 필요합니다."
 msgid "Classic AI is the original’s own computer, and plays by either rules. The others play by Hyperion’s rules: StarCraft II’s levels, Very Easy to Elite, from slower and smaller to faster, and the Cheater levels, which play as Elite and cheat as StarCraft II’s do. Vision sees the whole map; resources sees it too and brings back more from each trip, growing to half as much again by 20 minutes; insane brings back a fifth more from the start, growing to twice as much."
 msgstr "클래식 AI는 원작의 컴퓨터이며 두 규칙 모두에서 사용할 수 있습니다. 나머지는 Hyperion의 규칙을 따릅니다. StarCraft II의 난이도로, 아주 쉬움부터 정예까지 느리고 작은 규모에서 빠른 규모로 올라가며, 치트 난이도는 정예처럼 플레이하면서 StarCraft II와 같은 방식으로 치트를 사용합니다. 시야는 지도 전체를 봅니다. 자원은 지도 전체를 보면서 한 번에 가져오는 자원이 늘어 20분에는 1.5배가 됩니다. 극악은 처음부터 1.2배를 가져오며 최대 2배까지 늘어납니다."
 
-#: src117/port/front/port_front_skirmish.cpp:768
+#: src117/port/front/port_front_skirmish.cpp:769
 msgid "Brood War map (.scx)"
 msgstr "브루드 워 지도(.scx)"
 
-#: src117/port/front/port_front_skirmish.cpp:770
+#: src117/port/front/port_front_skirmish.cpp:771
 msgid "Hyperion map (.hxm)"
 msgstr "Hyperion 지도(.hxm)"
 
-#: src117/port/front/port_front_skirmish.cpp:771
+#: src117/port/front/port_front_skirmish.cpp:772
 msgid "StarCraft map (.scm)"
 msgstr "StarCraft 지도(.scm)"
 
@@ -5618,59 +5648,59 @@ msgstr "StarCraft 지도(.scm)"
 msgid "The player’s units and buildings at this share of their life and shields, as in StarCraft II, to even a game between players of different skill. Damage, energy and speed stay as they are. Below 100% the game plays by Hyperion’s rules."
 msgstr "StarCraft II처럼 플레이어의 유닛과 건물의 체력과 보호막을 이 비율로 조정해, 실력이 다른 플레이어 간의 게임을 맞춥니다. 공격력과 에너지, 속도는 그대로입니다. 100% 미만이면 게임이 Hyperion의 규칙으로 진행됩니다."
 
-#: src117/port/front/port_front_skirmish.cpp:824
-#: src117/port/front/port_front_skirmish.cpp:893
-#: src117/port/front/port_front_skirmish.cpp:1418
+#: src117/port/front/port_front_skirmish.cpp:825
+#: src117/port/front/port_front_skirmish.cpp:894
+#: src117/port/front/port_front_skirmish.cpp:1419
 msgid "That map could not be read."
 msgstr "지도를 읽을 수 없습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:828
-#: src117/port/front/port_front_skirmish.cpp:894
-#: src117/port/front/port_front_skirmish.cpp:1417
+#: src117/port/front/port_front_skirmish.cpp:829
+#: src117/port/front/port_front_skirmish.cpp:895
+#: src117/port/front/port_front_skirmish.cpp:1418
 msgid "That map has more players than Hyperion holds."
 msgstr "이 지도의 플레이어 수가 Hyperion이 지원하는 수를 넘습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:858
+#: src117/port/front/port_front_skirmish.cpp:859
 msgid "the mod {0}, which brings its own data"
 msgstr "자체 데이터를 제공하는 모드 {0}"
 
-#: src117/port/front/port_front_skirmish.cpp:860
+#: src117/port/front/port_front_skirmish.cpp:861
 msgid "{0} players (the original allows 8)"
 msgstr "플레이어 {0}명(원작은 8명)"
 
-#: src117/port/front/port_front_skirmish.cpp:862
+#: src117/port/front/port_front_skirmish.cpp:863
 msgid "a {0} × {1} map (the original allows 256)"
 msgstr "{0} × {1} 지도(원작은 256)"
 
-#: src117/port/front/port_front_skirmish.cpp:865
+#: src117/port/front/port_front_skirmish.cpp:866
 msgid "Team Match (the original has no teams in a game against computers)"
 msgstr "팀전(원작은 컴퓨터와의 게임에서 팀을 지원하지 않음)"
 
-#: src117/port/front/port_front_skirmish.cpp:868
+#: src117/port/front/port_front_skirmish.cpp:869
 msgid "a computer at {0} (the original has one computer, its own)"
 msgstr "{0} 수준 컴퓨터(원작은 자체 컴퓨터 하나뿐)"
 
-#: src117/port/front/port_front_skirmish.cpp:872
+#: src117/port/front/port_front_skirmish.cpp:873
 msgid "a handicap (the original has none)"
 msgstr "핸디캡(원작에는 없음)"
 
-#: src117/port/front/port_front_skirmish.cpp:877
+#: src117/port/front/port_front_skirmish.cpp:878
 msgid "a unit limit of {0} (the original holds 1,700)"
 msgstr "유닛 한도 {0}(원작은 1,700)"
 
-#: src117/port/front/port_front_skirmish.cpp:880
+#: src117/port/front/port_front_skirmish.cpp:881
 msgid "mutators ({0})"
 msgstr "변이원({0})"
 
-#: src117/port/front/port_front_skirmish.cpp:896
+#: src117/port/front/port_front_skirmish.cpp:897
 msgid "That map has no room for a computer opponent in this game type."
 msgstr "이 게임 유형에서는 이 지도에 컴퓨터 상대가 들어갈 자리가 없습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:897
+#: src117/port/front/port_front_skirmish.cpp:898
 msgid "That game type does not fit this map."
 msgstr "이 게임 유형은 이 지도에 맞지 않습니다."
 
-#: src117/port/front/port_front_skirmish.cpp:898
+#: src117/port/front/port_front_skirmish.cpp:899
 msgid "The game could not be made."
 msgstr "게임을 만들 수 없습니다."
 
@@ -5695,12 +5725,12 @@ msgstr "256까지"
 msgid "Past 256"
 msgstr "256 초과"
 
-#: src117/port/front/port_front_skirmish.cpp:971
+#: src117/port/front/port_front_skirmish.cpp:972
 msgid "A skirmish needs at least one computer."
 msgstr "사용자 지정 게임에는 컴퓨터가 최소 한 명 필요합니다."
 
-#: src117/port/front/port_front_skirmish.cpp:976
-#: src117/port/front/port_front_skirmish.cpp:3270
+#: src117/port/front/port_front_skirmish.cpp:977
+#: src117/port/front/port_front_skirmish.cpp:3297
 msgid "That map is no longer there."
 msgstr "지도가 더 이상 존재하지 않습니다."
 
@@ -6047,12 +6077,12 @@ msgstr "어느 순간으로든 돌아가 다시 시도"
 msgid "timelines and their paths"
 msgstr "시간선과 분기"
 
-#: src117/port/front/port_frontkit.cpp:334
+#: src117/port/front/port_frontkit.cpp:338
 msgid "{0} {1} {2}, {3}"
 msgstr "{2}년 {1} {0}일 {3}"
 
-#: src117/port/front/port_frontkit.cpp:341
-#: src117/port/gameplay/port_mutators.cpp:551
+#: src117/port/front/port_frontkit.cpp:345
+#: src117/port/gameplay/port_mutators.cpp:583
 #: src117/port/gameplay/port_trainerview.cpp:228
 #: src117/port/hud/port_hudstats.cpp:472
 #: src117/port/tools/port_benchview.cpp:344
@@ -6060,63 +6090,63 @@ msgctxt "thousands"
 msgid ","
 msgstr ","
 
-#: src117/port/front/port_frontkit.cpp:368
+#: src117/port/front/port_frontkit.cpp:372
 msgid "Melee"
 msgstr "섬멸전"
 
-#: src117/port/front/port_frontkit.cpp:370
+#: src117/port/front/port_frontkit.cpp:374
 msgid "One on One"
 msgstr "1대1"
 
-#: src117/port/front/port_frontkit.cpp:371
+#: src117/port/front/port_frontkit.cpp:375
 msgid "Capture The Flag"
 msgstr "깃발 뺏기"
 
-#: src117/port/front/port_frontkit.cpp:372
+#: src117/port/front/port_frontkit.cpp:376
 msgid "Greed"
 msgstr "탐욕"
 
-#: src117/port/front/port_frontkit.cpp:373
+#: src117/port/front/port_frontkit.cpp:377
 msgid "Slaughter"
 msgstr "학살"
 
-#: src117/port/front/port_frontkit.cpp:374
+#: src117/port/front/port_frontkit.cpp:378
 msgid "Sudden Death"
 msgstr "서든데스"
 
-#: src117/port/front/port_frontkit.cpp:375
+#: src117/port/front/port_frontkit.cpp:379
 msgid "Ladder"
 msgstr "래더"
 
-#: src117/port/front/port_frontkit.cpp:377
+#: src117/port/front/port_frontkit.cpp:381
 msgid "Team Melee"
 msgstr "팀 섬멸전"
 
-#: src117/port/front/port_frontkit.cpp:378
+#: src117/port/front/port_frontkit.cpp:382
 msgid "Team Free For All"
 msgstr "팀 개별 전투"
 
-#: src117/port/front/port_frontkit.cpp:379
+#: src117/port/front/port_frontkit.cpp:383
 msgid "Team Capture The Flag"
 msgstr "팀 깃발 뺏기"
 
-#: src117/port/front/port_frontkit.cpp:845
+#: src117/port/front/port_frontkit.cpp:849
 msgid "Blue and gold"
 msgstr "파랑과 금색"
 
-#: src117/port/front/port_frontkit.cpp:845
+#: src117/port/front/port_frontkit.cpp:849
 msgid "Black and red"
 msgstr "검정과 빨강"
 
-#: src117/port/front/port_frontkit.cpp:845
+#: src117/port/front/port_frontkit.cpp:849
 msgid "Purple and green"
 msgstr "자주와 초록"
 
-#: src117/port/front/port_frontkit.cpp:846
+#: src117/port/front/port_frontkit.cpp:850
 msgid "Steel and amber"
 msgstr "강철색과 호박색"
 
-#: src117/port/front/port_frontkit.cpp:846
+#: src117/port/front/port_frontkit.cpp:850
 msgid "Gold and cyan"
 msgstr "금색과 청록"
 
@@ -6326,278 +6356,298 @@ msgstr "치트: 자원"
 msgid "Cheater: insane"
 msgstr "치트: 극악"
 
-#: src117/port/gameplay/port_mutators.cpp:174
+#: src117/port/gameplay/port_mutators.cpp:100
+msgid "Researched: every upgrade at its top level and every ability researched from the start. No upgrades: none can be researched. No research: neither upgrades nor the abilities that need research. Classic: all to research."
+msgstr "연구 완료: 모든 업그레이드가 최고 단계이고 모든 능력이 시작부터 연구되어 있습니다. 업그레이드 없음: 업그레이드를 연구할 수 없습니다. 연구 없음: 업그레이드와 연구가 필요한 능력 모두 사용할 수 없습니다. 클래식: 모두 연구해야 합니다."
+
+#: src117/port/gameplay/port_mutators.cpp:103
+msgid "Bases away from every start may turn rich: gold mineral fields and violet geysers that give 11 minerals and 16 gas a trip, and run dry sooner. Never a start's main or natural; bases that mirror each other turn rich together. Every base: all of them. Classic: none."
+msgstr "모든 시작 지점에서 떨어진 기지가 풍부한 자원이 될 수 있습니다. 금색 미네랄과 보라색 가이저로 한 번에 미네랄 11과 가스 16을 주지만 더 빨리 고갈됩니다. 본진과 앞마당은 절대 해당되지 않으며, 서로 대칭인 기지는 함께 풍부한 자원이 됩니다. 모든 기지: 전부 적용됩니다. 클래식: 하나도 없습니다."
+
+#: src117/port/gameplay/port_mutators.cpp:106
+msgid "The workers and the minerals and gas each player begins with, rolled fresh every game as it starts: 4 to 8 workers, 100 to 300 minerals and 0 to 125 gas, in steps of five. Classic: 4 workers, 50 minerals and no gas."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:112
+msgid "Plenty"
+msgstr "풍족"
+
+#: src117/port/gameplay/port_mutators.cpp:112
+msgid "Gold Rush"
+msgstr "골드 러시"
+
+#: src117/port/gameplay/port_mutators.cpp:113
+msgid "Quick Start"
+msgstr "빠른 시작"
+
+#: src117/port/gameplay/port_mutators.cpp:200
 msgid "a quarter of the map"
 msgstr "지도의 4분의 1"
 
-#: src117/port/gameplay/port_mutators.cpp:175
+#: src117/port/gameplay/port_mutators.cpp:201
 msgid "a third of the map"
 msgstr "지도의 3분의 1"
 
-#: src117/port/gameplay/port_mutators.cpp:176
+#: src117/port/gameplay/port_mutators.cpp:202
 msgid "half the map"
 msgstr "지도의 절반"
 
-#: src117/port/gameplay/port_mutators.cpp:178
+#: src117/port/gameplay/port_mutators.cpp:204
 msgid "{0}% of the map"
 msgstr "지도의 {0}%"
 
-#: src117/port/gameplay/port_mutators.cpp:179
-#: src117/port/gameplay/port_mutators.cpp:190
+#: src117/port/gameplay/port_mutators.cpp:205
+#: src117/port/gameplay/port_mutators.cpp:216
 msgid "{0} tiles"
 msgstr "{0}타일"
 
-#: src117/port/gameplay/port_mutators.cpp:185
+#: src117/port/gameplay/port_mutators.cpp:211
 msgid "Quarter map"
 msgstr "지도 1/4"
 
-#: src117/port/gameplay/port_mutators.cpp:186
+#: src117/port/gameplay/port_mutators.cpp:212
 msgid "Third map"
 msgstr "지도 1/3"
 
-#: src117/port/gameplay/port_mutators.cpp:187
+#: src117/port/gameplay/port_mutators.cpp:213
 msgid "Half map"
 msgstr "지도 1/2"
 
-#: src117/port/gameplay/port_mutators.cpp:189
+#: src117/port/gameplay/port_mutators.cpp:215
 msgid "{0}% of map"
 msgstr "지도 {0}%"
 
-#: src117/port/gameplay/port_mutators.cpp:315
+#: src117/port/gameplay/port_mutators.cpp:342
 msgid "Automatic"
 msgstr "자동"
 
-#: src117/port/gameplay/port_mutators.cpp:368
-#: src117/port/gameplay/port_mutators.cpp:448
+#: src117/port/gameplay/port_mutators.cpp:397
+#: src117/port/gameplay/port_mutators.cpp:479
 msgid "{0}% chance"
 msgstr "확률 {0}%"
 
-#: src117/port/gameplay/port_mutators.cpp:49
-msgid "Explored"
-msgstr "탐색 완료"
-
-#: src117/port/gameplay/port_mutators.cpp:51
-msgid "Researched"
-msgstr "연구 완료"
-
-#: src117/port/gameplay/port_mutators.cpp:51
-msgid "No upgrades"
-msgstr "업그레이드 없음"
-
-#: src117/port/gameplay/port_mutators.cpp:52
-msgid "No research"
-msgstr "연구 없음"
-
-#: src117/port/gameplay/port_mutators.cpp:53
-#: src117/port/lan/port_front_lanhost.cpp:1222
-msgid "Off"
-msgstr "끄기"
-
-#: src117/port/gameplay/port_mutators.cpp:53
-msgid "Past the naturals"
-msgstr "앞마당 이후"
-
-#: src117/port/gameplay/port_mutators.cpp:53
-msgid "Outside a radius"
-msgstr "반경 밖"
-
-#: src117/port/gameplay/port_mutators.cpp:53
-msgid "Farthest only"
-msgstr "가장 먼 기지만"
-
-#: src117/port/gameplay/port_mutators.cpp:54
-msgid "Every base"
-msgstr "모든 기지"
-
-#: src117/port/gameplay/port_mutators.cpp:545
+#: src117/port/gameplay/port_mutators.cpp:577
 msgctxt "list"
 msgid ", "
 msgstr ", "
 
-#: src117/port/gameplay/port_mutators.cpp:557
+#: src117/port/gameplay/port_mutators.cpp:589
 msgid "infinite mineral fields"
 msgstr "무한 미네랄"
 
-#: src117/port/gameplay/port_mutators.cpp:557
+#: src117/port/gameplay/port_mutators.cpp:589
 msgid "mineral fields {0}"
 msgstr "미네랄 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:559
+#: src117/port/gameplay/port_mutators.cpp:591
 msgid "infinite geysers"
 msgstr "무한 가이저"
 
-#: src117/port/gameplay/port_mutators.cpp:559
+#: src117/port/gameplay/port_mutators.cpp:591
 msgid "geysers {0}"
 msgstr "가이저 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:562
+#: src117/port/gameplay/port_mutators.cpp:594
 msgid "start resources {0} / {1}"
 msgstr "시작 자원 {0} / {1}"
 
-#: src117/port/gameplay/port_mutators.cpp:564
+#: src117/port/gameplay/port_mutators.cpp:596
 msgid "no supply cap"
 msgstr "보급품 한도 없음"
 
-#: src117/port/gameplay/port_mutators.cpp:564
+#: src117/port/gameplay/port_mutators.cpp:596
 msgid "supply cap {0}"
 msgstr "보급품 한도 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:568
+#: src117/port/gameplay/port_mutators.cpp:600
 msgid "{0} start worker"
 msgid_plural "{0} start workers"
 msgstr[0] "시작 일꾼 {0}기"
 
-#: src117/port/gameplay/port_mutators.cpp:573
+#: src117/port/gameplay/port_mutators.cpp:605
 msgid "supply +{0}%"
 msgstr "보급품 +{0}%"
 
-#: src117/port/gameplay/port_mutators.cpp:575
+#: src117/port/gameplay/port_mutators.cpp:607
 msgid "the map explored"
 msgstr "지도 탐색 완료"
 
-#: src117/port/gameplay/port_mutators.cpp:577
+#: src117/port/gameplay/port_mutators.cpp:609
 msgid "no fog of war"
 msgstr "전장의 안개 없음"
 
-#: src117/port/gameplay/port_mutators.cpp:579
+#: src117/port/gameplay/port_mutators.cpp:611
 msgid "build time {0}"
 msgstr "건설 시간 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:581
+#: src117/port/gameplay/port_mutators.cpp:613
 msgid "all researched"
 msgstr "모두 연구 완료"
 
-#: src117/port/gameplay/port_mutators.cpp:585
+#: src117/port/gameplay/port_mutators.cpp:617
 msgid "no research"
 msgstr "연구 없음"
 
-#: src117/port/gameplay/port_mutators.cpp:587
+#: src117/port/gameplay/port_mutators.cpp:619
 msgid "every base rich, not announced"
 msgstr "모든 기지 풍부한 자원, 알리지 않음"
 
-#: src117/port/gameplay/port_mutators.cpp:587
+#: src117/port/gameplay/port_mutators.cpp:619
 msgid "every base rich"
 msgstr "모든 기지 풍부한 자원"
 
-#: src117/port/gameplay/port_mutators.cpp:592
+#: src117/port/gameplay/port_mutators.cpp:624
 msgid "rich resources past the naturals at {0}%"
 msgstr "앞마당 이후 기지에 {0}% 확률로 풍부한 자원"
 
-#: src117/port/gameplay/port_mutators.cpp:595
+#: src117/port/gameplay/port_mutators.cpp:627
 msgid "rich resources {0} or more from every start at {1}%"
 msgstr "모든 시작 지점에서 {0} 이상 떨어진 기지에 {1}% 확률로 풍부한 자원"
 
-#: src117/port/gameplay/port_mutators.cpp:597
+#: src117/port/gameplay/port_mutators.cpp:629
 msgid "rich resources farthest only at {0}%"
 msgstr "가장 먼 기지에만 {0}% 확률로 풍부한 자원"
 
-#: src117/port/gameplay/port_mutators.cpp:599
+#: src117/port/gameplay/port_mutators.cpp:631
 msgid "each rolled alone"
 msgstr "각각 개별 판정"
 
-#: src117/port/gameplay/port_mutators.cpp:601
+#: src117/port/gameplay/port_mutators.cpp:633
 msgid "maybe none"
 msgstr "하나도 없을 수 있음"
 
-#: src117/port/gameplay/port_mutators.cpp:603
+#: src117/port/gameplay/port_mutators.cpp:635
 msgid "the same every game"
 msgstr "매 게임 동일"
 
-#: src117/port/gameplay/port_mutators.cpp:605
+#: src117/port/gameplay/port_mutators.cpp:637
 msgid "not announced"
 msgstr "알리지 않음"
 
-#: src117/port/gameplay/port_mutators.cpp:608
+#: src117/port/gameplay/port_mutators.cpp:640
 msgid "unit limit {0}"
 msgstr "유닛 한도 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:63
+#: src117/port/gameplay/port_mutators.cpp:642
+msgid "anti-meta start"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:67
+msgid "Explored"
+msgstr "탐색 완료"
+
+#: src117/port/gameplay/port_mutators.cpp:69
+msgid "Researched"
+msgstr "연구 완료"
+
+#: src117/port/gameplay/port_mutators.cpp:69
+msgid "No upgrades"
+msgstr "업그레이드 없음"
+
+#: src117/port/gameplay/port_mutators.cpp:70
+msgid "No research"
+msgstr "연구 없음"
+
+#: src117/port/gameplay/port_mutators.cpp:71
+#: src117/port/lan/port_front_lanhost.cpp:1222
+msgid "Off"
+msgstr "끄기"
+
+#: src117/port/gameplay/port_mutators.cpp:71
+msgid "Past the naturals"
+msgstr "앞마당 이후"
+
+#: src117/port/gameplay/port_mutators.cpp:71
+msgid "Outside a radius"
+msgstr "반경 밖"
+
+#: src117/port/gameplay/port_mutators.cpp:71
+msgid "Farthest only"
+msgstr "가장 먼 기지만"
+
+#: src117/port/gameplay/port_mutators.cpp:72
+msgid "Every base"
+msgstr "모든 기지"
+
+#: src117/port/gameplay/port_mutators.cpp:83
+msgid "Anti-meta"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:85
 msgid "Mineral fields"
 msgstr "미네랄"
 
-#: src117/port/gameplay/port_mutators.cpp:63
+#: src117/port/gameplay/port_mutators.cpp:85
 msgid "Vespene geysers"
 msgstr "베스핀 가이저"
 
-#: src117/port/gameplay/port_mutators.cpp:63
+#: src117/port/gameplay/port_mutators.cpp:85
 msgid "Start resources"
 msgstr "시작 자원"
 
-#: src117/port/gameplay/port_mutators.cpp:64
+#: src117/port/gameplay/port_mutators.cpp:86
 msgid "Start workers"
 msgstr "시작 일꾼"
 
-#: src117/port/gameplay/port_mutators.cpp:64
+#: src117/port/gameplay/port_mutators.cpp:86
 msgid "Supply boost"
 msgstr "보급품 증가"
 
-#: src117/port/gameplay/port_mutators.cpp:65
+#: src117/port/gameplay/port_mutators.cpp:862
+msgid "Anti-meta start: {0} workers, {1} minerals, {2} gas."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:87
 msgid "Fog of war"
 msgstr "전장의 안개"
 
-#: src117/port/gameplay/port_mutators.cpp:65
+#: src117/port/gameplay/port_mutators.cpp:87
 msgid "Build time"
 msgstr "건설 시간"
 
-#: src117/port/gameplay/port_mutators.cpp:65
+#: src117/port/gameplay/port_mutators.cpp:87
 msgid "Tech and upgrades"
 msgstr "기술과 업그레이드"
 
-#: src117/port/gameplay/port_mutators.cpp:66
+#: src117/port/gameplay/port_mutators.cpp:88
 msgid "Rich resources"
 msgstr "풍부한 자원"
 
-#: src117/port/gameplay/port_mutators.cpp:68
+#: src117/port/gameplay/port_mutators.cpp:88
+msgid "Anti-meta start"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:90
 msgid "What each mineral field holds, or that it never runs dry. Classic: 1,500, the small ones 750."
 msgstr "미네랄 하나에 들어 있는 양, 또는 고갈되지 않게 할지 정합니다. 클래식: 1,500, 작은 것은 750."
 
-#: src117/port/gameplay/port_mutators.cpp:69
+#: src117/port/gameplay/port_mutators.cpp:91
 msgid "What each geyser holds before it runs dry, or that it never does. Classic: 5,000."
 msgstr "가이저가 고갈되기 전까지 나오는 양, 또는 고갈되지 않게 할지 정합니다. 클래식: 5,000."
 
-#: src117/port/gameplay/port_mutators.cpp:70
+#: src117/port/gameplay/port_mutators.cpp:92
 msgid "The minerals and gas each player begins with. Classic: 50 and 0."
 msgstr "각 플레이어가 시작할 때 보유하는 미네랄과 가스입니다. 클래식: 50과 0."
 
-#: src117/port/gameplay/port_mutators.cpp:71
+#: src117/port/gameplay/port_mutators.cpp:93
 msgid "The most supply each player can hold. Classic: 200."
 msgstr "각 플레이어가 보유할 수 있는 최대 보급품입니다. 클래식: 200."
 
-#: src117/port/gameplay/port_mutators.cpp:72
+#: src117/port/gameplay/port_mutators.cpp:94
 msgid "The workers each player begins with, beside the town hall. Classic: 4."
 msgstr "각 플레이어가 본진 건물 옆에서 시작할 때 보유하는 일꾼입니다. 클래식: 4."
 
-#: src117/port/gameplay/port_mutators.cpp:73
+#: src117/port/gameplay/port_mutators.cpp:95
 msgid "More supply from each depot, pylon, overlord and town hall. Classic: none, a depot’s 8."
 msgstr "서플라이 디포, 파일론, 오버로드, 본진 건물이 제공하는 보급품을 늘립니다. 클래식: 증가 없음, 서플라이 디포는 8."
 
-#: src117/port/gameplay/port_mutators.cpp:74
+#: src117/port/gameplay/port_mutators.cpp:96
 msgid "Explored: every player knows the map’s land from the start, under the fog. None: every player sees the whole map all game. Classic: the fog of war."
 msgstr "탐색 완료: 모든 플레이어가 시작부터 안개 아래의 지형을 알고 있습니다. 없음: 모든 플레이어가 게임 내내 지도 전체를 봅니다. 클래식: 전장의 안개가 적용됩니다."
 
-#: src117/port/gameplay/port_mutators.cpp:76
+#: src117/port/gameplay/port_mutators.cpp:98
 msgid "How long buildings, units, research and upgrades take to make: ×0.5 takes half as long. Classic: ×1."
 msgstr "건물과 유닛, 연구, 업그레이드에 걸리는 시간입니다. ×0.5는 절반으로 줄입니다. 클래식: ×1."
-
-#: src117/port/gameplay/port_mutators.cpp:78
-msgid "Researched: every upgrade at its top level and every ability researched from the start. No upgrades: none can be researched. No research: neither upgrades nor the abilities that need research. Classic: all to research."
-msgstr "연구 완료: 모든 업그레이드가 최고 단계이고 모든 능력이 시작부터 연구되어 있습니다. 업그레이드 없음: 업그레이드를 연구할 수 없습니다. 연구 없음: 업그레이드와 연구가 필요한 능력 모두 사용할 수 없습니다. 클래식: 모두 연구해야 합니다."
-
-#: src117/port/gameplay/port_mutators.cpp:81
-msgid "Bases away from every start may turn rich: gold mineral fields and violet geysers that give 11 minerals and 16 gas a trip, and run dry sooner. Never a start's main or natural; bases that mirror each other turn rich together. Every base: all of them. Classic: none."
-msgstr "모든 시작 지점에서 떨어진 기지가 풍부한 자원이 될 수 있습니다. 금색 미네랄과 보라색 가이저로 한 번에 미네랄 11과 가스 16을 주지만 더 빨리 고갈됩니다. 본진과 앞마당은 절대 해당되지 않으며, 서로 대칭인 기지는 함께 풍부한 자원이 됩니다. 모든 기지: 전부 적용됩니다. 클래식: 하나도 없습니다."
-
-#: src117/port/gameplay/port_mutators.cpp:87
-msgid "Plenty"
-msgstr "풍족"
-
-#: src117/port/gameplay/port_mutators.cpp:87
-msgid "Gold Rush"
-msgstr "골드 러시"
-
-#: src117/port/gameplay/port_mutators.cpp:88
-msgid "Quick Start"
-msgstr "빠른 시작"
 
 #: src117/port/gameplay/port_teams.cpp:310
 #: src117/port/gameplay/port_teams.cpp:400
@@ -7427,122 +7477,122 @@ msgctxt "figure letter"
 msgid "W"
 msgstr "일"
 
-#: src117/port/lan/port_front_lan.cpp:1036
+#: src117/port/lan/port_front_lan.cpp:1038
 msgid "Console"
 msgstr "콘솔"
 
-#: src117/port/lan/port_front_lan.cpp:1036
-#: src117/port/lan/port_front_lan.cpp:1143
+#: src117/port/lan/port_front_lan.cpp:1038
+#: src117/port/lan/port_front_lan.cpp:1145
 #: src117/port/lan/port_front_lanhost.cpp:1202
 msgid "The Room"
 msgstr "방"
 
-#: src117/port/lan/port_front_lan.cpp:1038
+#: src117/port/lan/port_front_lan.cpp:1040
 msgid "The host’s console"
 msgstr "방장의 콘솔"
 
-#: src117/port/lan/port_front_lan.cpp:1038
-#: src117/port/lan/port_front_lan.cpp:1745
+#: src117/port/lan/port_front_lan.cpp:1040
+#: src117/port/lan/port_front_lan.cpp:1771
 msgid "The room"
 msgstr "방"
 
-#: src117/port/lan/port_front_lan.cpp:1039
+#: src117/port/lan/port_front_lan.cpp:1041
 msgid "Everyone in the room, the matches and this machine’s load. Hotkey: R"
 msgstr "방의 모든 사람과 경기, 이 컴퓨터의 부하를 봅니다. 단축키: R"
 
-#: src117/port/lan/port_front_lan.cpp:1040
+#: src117/port/lan/port_front_lan.cpp:1042
 msgid "Who is in the room and what they play. Leave goes back to Multiplayer. Hotkey: R"
 msgstr "방에 누가 있고 무엇을 하는지 봅니다. 나가기를 누르면 멀티플레이어로 돌아갑니다. 단축키: R"
 
-#: src117/port/lan/port_front_lan.cpp:1047
+#: src117/port/lan/port_front_lan.cpp:1049
 msgid "Choose a map first"
 msgstr "먼저 지도를 선택하십시오"
 
-#: src117/port/lan/port_front_lan.cpp:1058
+#: src117/port/lan/port_front_lan.cpp:1060
 msgid "A match needs two players or more"
 msgstr "경기에는 플레이어가 두 명 이상 필요합니다"
 
-#: src117/port/lan/port_front_lan.cpp:1059
+#: src117/port/lan/port_front_lan.cpp:1061
 msgid "Open a seat for the room, or make one a computer."
 msgstr "방을 위해 자리를 열거나 한 자리를 컴퓨터로 바꾸십시오."
 
-#: src117/port/lan/port_front_lan.cpp:1064
+#: src117/port/lan/port_front_lan.cpp:1066
 msgid "{0} Is Not Ready"
 msgstr "{0} 준비 안 됨"
 
-#: src117/port/lan/port_front_lan.cpp:1065
+#: src117/port/lan/port_front_lan.cpp:1067
 msgid "Every seat says Ready before the match starts."
 msgstr "경기를 시작하려면 모든 자리가 준비 완료여야 합니다."
 
-#: src117/port/lan/port_front_lan.cpp:1066
+#: src117/port/lan/port_front_lan.cpp:1068
 msgid "Wait for {0}"
 msgstr "{0} 기다리기"
 
-#: src117/port/lan/port_front_lan.cpp:1066
+#: src117/port/lan/port_front_lan.cpp:1068
 msgid "The match starts when every seat is ready."
 msgstr "모든 자리가 준비되면 경기가 시작됩니다."
 
-#: src117/port/lan/port_front_lan.cpp:1067
+#: src117/port/lan/port_front_lan.cpp:1069
 msgid "Start Anyway"
 msgstr "그대로 시작"
 
-#: src117/port/lan/port_front_lan.cpp:1067
+#: src117/port/lan/port_front_lan.cpp:1069
 msgid "The match starts now, with everyone seated."
 msgstr "지금 앉아 있는 사람들로 경기를 시작합니다."
 
-#: src117/port/lan/port_front_lan.cpp:1082
+#: src117/port/lan/port_front_lan.cpp:1084
 msgid "Not Ready"
 msgstr "준비 안 됨"
 
-#: src117/port/lan/port_front_lan.cpp:1082
-#: src117/port/lan/port_front_lan.cpp:1253
+#: src117/port/lan/port_front_lan.cpp:1084
+#: src117/port/lan/port_front_lan.cpp:1255
 msgid "Ready"
 msgstr "준비 완료"
 
-#: src117/port/lan/port_front_lan.cpp:1094
+#: src117/port/lan/port_front_lan.cpp:1096
 msgid "You left the room"
 msgstr "방에서 나갔습니다"
 
-#: src117/port/lan/port_front_lan.cpp:1163
+#: src117/port/lan/port_front_lan.cpp:1165
 msgid "{0} in a browser, {1} installed"
 msgstr "브라우저 {0}명, 설치본 {1}명"
 
-#: src117/port/lan/port_front_lan.cpp:1166
+#: src117/port/lan/port_front_lan.cpp:1168
 msgid "When it starts: {0} from the host"
 msgstr "시작하면: 방장에게서 {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1167
+#: src117/port/lan/port_front_lan.cpp:1169
 msgid "{0} new stream"
 msgid_plural "{0} new streams"
 msgstr[0] "새 스트림 {0}개"
 
-#: src117/port/lan/port_front_lan.cpp:1180
+#: src117/port/lan/port_front_lan.cpp:1182
 #: src117/port/lan/port_front_landevices.cpp:279
 msgid "{0}, the host’s own"
 msgstr "{0}, 방장 본인"
 
-#: src117/port/lan/port_front_lan.cpp:1211
+#: src117/port/lan/port_front_lan.cpp:1213
 msgid "Chat"
 msgstr "대화"
 
-#: src117/port/lan/port_front_lan.cpp:1236
+#: src117/port/lan/port_front_lan.cpp:1238
 msgid "Nothing said yet. Enter types a line."
 msgstr "아직 대화가 없습니다. Enter를 누르면 입력합니다."
 
-#: src117/port/lan/port_front_lan.cpp:1244
+#: src117/port/lan/port_front_lan.cpp:1246
 msgid "Enter to chat"
 msgstr "Enter로 대화"
 
-#: src117/port/lan/port_front_lan.cpp:1250
-#: src117/port/lan/port_front_lan.cpp:1253
+#: src117/port/lan/port_front_lan.cpp:1252
+#: src117/port/lan/port_front_lan.cpp:1255
 msgid "A match in the room"
 msgstr "방의 경기"
 
-#: src117/port/lan/port_front_lan.cpp:1250
+#: src117/port/lan/port_front_lan.cpp:1252
 msgid "Start Match"
 msgstr "경기 시작"
 
-#: src117/port/lan/port_front_lan.cpp:1251
+#: src117/port/lan/port_front_lan.cpp:1253
 msgid "The seats, the game options and who is in the room come next, then Start Match."
 msgstr "다음으로 자리와 게임 설정, 방의 참가자를 정하고 경기 시작을 누릅니다."
 
@@ -7551,299 +7601,299 @@ msgstr "다음으로 자리와 게임 설정, 방의 참가자를 정하고 경�
 msgid "The server could not start"
 msgstr "서버를 시작할 수 없습니다"
 
-#: src117/port/lan/port_front_lan.cpp:1317
-msgid "Nothing answers at {0}"
-msgstr "{0}에서 응답이 없습니다"
-
-#: src117/port/lan/port_front_lan.cpp:1318
-msgid "A room is joined on port 6112, and found on 6111."
-msgstr "방 참가는 6112 포트, 방 탐색은 6111 포트를 사용합니다."
-
 #: src117/port/lan/port_front_lan.cpp:132
 msgid "Another room or game on this machine has its port. Close it, then start the server."
 msgstr "이 컴퓨터의 다른 방이나 게임이 해당 포트를 사용 중입니다. 먼저 닫은 뒤 서버를 시작하십시오."
 
-#: src117/port/lan/port_front_lan.cpp:1348
+#: src117/port/lan/port_front_lan.cpp:1336
+msgid "Nothing answers at {0}"
+msgstr "{0}에서 응답이 없습니다"
+
+#: src117/port/lan/port_front_lan.cpp:1337
+msgid "A room is joined on port 6112, and found on 6111."
+msgstr "방 참가는 6112 포트, 방 탐색은 6111 포트를 사용합니다."
+
+#: src117/port/lan/port_front_lan.cpp:1367
 msgid "That is not an address"
 msgstr "올바른 주소가 아닙니다"
 
-#: src117/port/lan/port_front_lan.cpp:1349
+#: src117/port/lan/port_front_lan.cpp:1368
 msgid "An address on this network is four numbers, like 192.168.1.20."
 msgstr "이 네트워크의 주소는 192.168.1.20처럼 숫자 네 개로 이루어집니다."
 
-#: src117/port/lan/port_front_lan.cpp:1407
+#: src117/port/lan/port_front_lan.cpp:1426
 msgid "The game, installed here"
 msgstr "이 컴퓨터에 설치된 게임"
 
-#: src117/port/lan/port_front_lan.cpp:1408
+#: src117/port/lan/port_front_lan.cpp:1427
 msgid "{0}, from this PC’s copy"
 msgstr "{0}, 이 PC의 사본에서"
 
-#: src117/port/lan/port_front_lan.cpp:1408
-#: src117/port/lan/port_front_lan.cpp:1553
+#: src117/port/lan/port_front_lan.cpp:1427
+#: src117/port/lan/port_front_lan.cpp:1579
 msgid "StarCraft and Brood War"
 msgstr "스타크래프트와 브루드 워"
 
-#: src117/port/lan/port_front_lan.cpp:1409
+#: src117/port/lan/port_front_lan.cpp:1428
 msgid "A wired network"
 msgstr "유선 네트워크"
 
-#: src117/port/lan/port_front_lan.cpp:1409
+#: src117/port/lan/port_front_lan.cpp:1428
 msgid "Wi-Fi works, with more delay"
 msgstr "Wi-Fi도 되지만 지연이 큽니다"
 
-#: src117/port/lan/port_front_lan.cpp:1410
+#: src117/port/lan/port_front_lan.cpp:1429
 msgid "A graphics card that makes video"
 msgstr "영상을 인코딩할 수 있는 그래픽 카드"
 
-#: src117/port/lan/port_front_lan.cpp:1411
+#: src117/port/lan/port_front_lan.cpp:1430
 msgid "For players in a browser, which is not available yet"
 msgstr "브라우저로 접속하는 플레이어용이며, 아직 사용할 수 없습니다"
 
-#: src117/port/lan/port_front_lan.cpp:1430
+#: src117/port/lan/port_front_lan.cpp:1449
 msgid "Rooms on This Network"
 msgstr "이 네트워크의 방"
 
-#: src117/port/lan/port_front_lan.cpp:1437
+#: src117/port/lan/port_front_lan.cpp:1456
 msgid "No room answers on this network yet. A room appears here a moment after its host starts it."
 msgstr "이 네트워크에서 응답하는 방이 아직 없습니다. 방장이 방을 시작하면 잠시 뒤에 여기에 표시됩니다."
 
-#: src117/port/lan/port_front_lan.cpp:1457
+#: src117/port/lan/port_front_lan.cpp:1480
 msgid "A room"
 msgstr "방"
 
-#: src117/port/lan/port_front_lan.cpp:1462
-#: src117/port/lan/port_front_lan.cpp:1747
+#: src117/port/lan/port_front_lan.cpp:1488
+#: src117/port/lan/port_front_lan.cpp:1773
 msgid "{0} device in the room"
 msgid_plural "{0} devices in the room"
 msgstr[0] "방에 기기 {0}대"
 
-#: src117/port/lan/port_front_lan.cpp:1463
+#: src117/port/lan/port_front_lan.cpp:1489
 msgid "{0} match running"
 msgid_plural "{0} matches running"
 msgstr[0] "진행 중인 경기 {0}개"
 
-#: src117/port/lan/port_front_lan.cpp:1464
+#: src117/port/lan/port_front_lan.cpp:1490
 msgid "asks for a password"
 msgstr "비밀번호 필요"
 
-#: src117/port/lan/port_front_lan.cpp:1480
-#: src117/port/lan/port_front_lan.cpp:1509
-#: src117/port/lan/port_front_lan.cpp:1583
+#: src117/port/lan/port_front_lan.cpp:1506
+#: src117/port/lan/port_front_lan.cpp:1535
+#: src117/port/lan/port_front_lan.cpp:1609
 msgid "Join"
 msgstr "참가"
 
-#: src117/port/lan/port_front_lan.cpp:1483
+#: src117/port/lan/port_front_lan.cpp:1509
 msgid "Can’t join"
 msgstr "참가 불가"
 
-#: src117/port/lan/port_front_lan.cpp:1497
+#: src117/port/lan/port_front_lan.cpp:1523
 msgid "Or an address"
 msgstr "또는 주소 입력"
 
-#: src117/port/lan/port_front_lan.cpp:1518
+#: src117/port/lan/port_front_lan.cpp:1544
 msgid "Two Ways to Play"
 msgstr "두 가지 플레이 방식"
 
-#: src117/port/lan/port_front_lan.cpp:1523
+#: src117/port/lan/port_front_lan.cpp:1549
 msgid "In a browser, streamed"
 msgstr "브라우저로 스트리밍"
 
-#: src117/port/lan/port_front_lan.cpp:1524
+#: src117/port/lan/port_front_lan.cpp:1550
 msgid "Phones, tablets, Macs, Chromebooks, a television: anything with a browser. The host runs that player’s game and sends it as video; nothing is installed and nothing of the game leaves the host. Not available yet."
 msgstr "휴대폰, 태블릿, Mac, Chromebook, 텔레비전 등 브라우저가 있는 기기면 됩니다. 방장이 해당 플레이어의 게임을 실행해 영상으로 보내므로, 설치할 것이 없고 게임 파일도 방장을 벗어나지 않습니다. 아직 사용할 수 없습니다."
 
-#: src117/port/lan/port_front_lan.cpp:1526
+#: src117/port/lan/port_front_lan.cpp:1552
 msgid "Installed, from the host"
 msgstr "설치본으로 방장에 접속"
 
-#: src117/port/lan/port_front_lan.cpp:1527
+#: src117/port/lan/port_front_lan.cpp:1553
 msgid "Windows and Linux PCs, x64 or ARM. Each plays the game itself at its own resolution, and sends its commands through the host."
 msgstr "x64 또는 ARM의 Windows와 Linux PC입니다. 각자 자기 해상도로 직접 게임을 실행하고 명령을 방장을 통해 전달합니다."
 
-#: src117/port/lan/port_front_lan.cpp:1544
+#: src117/port/lan/port_front_lan.cpp:1570
 msgid "Both kinds play in one match: every seat sends its commands through the host, and every seat computes the same game from them."
 msgstr "두 방식이 한 경기에서 함께 플레이합니다. 모든 자리가 방장을 통해 명령을 보내고, 모든 자리가 그 명령으로 같은 게임을 계산합니다."
 
-#: src117/port/lan/port_front_lan.cpp:1546
+#: src117/port/lan/port_front_lan.cpp:1572
 msgid "THIS COPY"
 msgstr "이 사본"
 
-#: src117/port/lan/port_front_lan.cpp:1549
+#: src117/port/lan/port_front_lan.cpp:1575
 msgid "the mod {0}"
 msgstr "모드 {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1550
+#: src117/port/lan/port_front_lan.cpp:1576
 msgid "no mod"
 msgstr "모드 없음"
 
-#: src117/port/lan/port_front_lan.cpp:1552
+#: src117/port/lan/port_front_lan.cpp:1578
 msgid "{0}, {1}, {2}"
 msgstr "{0}, {1}, {2}"
 
-#: src117/port/lan/port_front_lan.cpp:1556
+#: src117/port/lan/port_front_lan.cpp:1582
 msgid "A room plays only with copies that match it: the same version, the same game data ({0}), the same mod."
 msgstr "방은 조건이 일치하는 사본끼리만 플레이할 수 있습니다. 같은 버전, 같은 게임 데이터({0}), 같은 모드여야 합니다."
 
-#: src117/port/lan/port_front_lan.cpp:1560
+#: src117/port/lan/port_front_lan.cpp:1586
 msgid "Rooms are for this network only, and everyone playing needs their own copy of StarCraft."
 msgstr "방은 이 네트워크 안에서만 사용하며, 참가하는 모든 사람이 자기 StarCraft 사본을 가지고 있어야 합니다."
 
-#: src117/port/lan/port_front_lan.cpp:1570
+#: src117/port/lan/port_front_lan.cpp:1596
 msgid "Join {0}"
 msgstr "{0} 참가"
 
-#: src117/port/lan/port_front_lan.cpp:1571
+#: src117/port/lan/port_front_lan.cpp:1597
 msgid "The room asks for its password. The host’s console shows it, under Join This Room."
 msgstr "이 방은 비밀번호가 필요합니다. 방장의 콘솔에서 이 방 참가 항목에 표시됩니다."
 
-#: src117/port/lan/port_front_lan.cpp:1576
+#: src117/port/lan/port_front_lan.cpp:1602
 msgid "the password"
 msgstr "비밀번호"
 
-#: src117/port/lan/port_front_lan.cpp:1620
+#: src117/port/lan/port_front_lan.cpp:1646
 msgid "Couldn’t join {0}"
 msgstr "{0}에 참가할 수 없습니다"
 
-#: src117/port/lan/port_front_lan.cpp:1624
+#: src117/port/lan/port_front_lan.cpp:1650
 msgid "Nothing answers in {0}"
 msgstr "{0} 동안 응답이 없습니다"
 
-#: src117/port/lan/port_front_lan.cpp:1624
+#: src117/port/lan/port_front_lan.cpp:1650
 msgid "The room may have stopped."
 msgstr "방이 종료되었을 수 있습니다."
 
-#: src117/port/lan/port_front_lan.cpp:1631
+#: src117/port/lan/port_front_lan.cpp:1657
 msgid "Joining {0}…"
 msgstr "{0}에 참가하는 중…"
 
-#: src117/port/lan/port_front_lan.cpp:1632
+#: src117/port/lan/port_front_lan.cpp:1658
 msgid "Couldn’t join: {0} {1}"
 msgstr "참가할 수 없습니다: {0} {1}"
 
-#: src117/port/lan/port_front_lan.cpp:1633
+#: src117/port/lan/port_front_lan.cpp:1659
 msgid "Play with others on this network: host a room here, or join one"
 msgstr "이 네트워크의 다른 사람과 플레이합니다. 여기에서 방을 열거나 다른 방에 참가하십시오"
 
-#: src117/port/lan/port_front_lan.cpp:1643
+#: src117/port/lan/port_front_lan.cpp:1669
 msgid "This Network"
 msgstr "이 네트워크"
 
-#: src117/port/lan/port_front_lan.cpp:1650
+#: src117/port/lan/port_front_lan.cpp:1676
 msgid "Not available yet. Online play comes later, on the same connection the network uses."
 msgstr "아직 사용할 수 없습니다. 온라인 플레이는 네트워크와 같은 연결 방식으로 나중에 제공됩니다."
 
-#: src117/port/lan/port_front_lan.cpp:1655
+#: src117/port/lan/port_front_lan.cpp:1681
 msgid "The Original’s Screens"
 msgstr "원작 화면"
 
-#: src117/port/lan/port_front_lan.cpp:1659
+#: src117/port/lan/port_front_lan.cpp:1685
 msgid "The original’s screens"
 msgstr "원작 화면"
 
-#: src117/port/lan/port_front_lan.cpp:1660
+#: src117/port/lan/port_front_lan.cpp:1686
 msgid "StarCraft’s own multiplayer screens, as the original draws them: Local Area Network, its game list and chat room. Hotkey: O"
 msgstr "원작이 그리는 그대로의 StarCraft 멀티플레이어 화면입니다. 로컬 영역 네트워크와 게임 목록, 대화방이 포함됩니다. 단축키: O"
 
-#: src117/port/lan/port_front_lan.cpp:1668
+#: src117/port/lan/port_front_lan.cpp:1694
 msgid "Host a Room"
 msgstr "방 만들기"
 
-#: src117/port/lan/port_front_lan.cpp:1669
+#: src117/port/lan/port_front_lan.cpp:1695
 msgid "This machine hosts. Everyone else on the network joins with Hyperion installed, from Join a Room."
 msgstr "이 컴퓨터가 방장이 됩니다. 네트워크의 다른 사람들은 Hyperion을 설치한 뒤 방 참가에서 들어옵니다."
 
-#: src117/port/lan/port_front_lan.cpp:1670
+#: src117/port/lan/port_front_lan.cpp:1696
 msgid "Your room is running: H opens its console."
 msgstr "방이 실행 중입니다. H를 누르면 콘솔이 열립니다."
 
-#: src117/port/lan/port_front_lan.cpp:1671
+#: src117/port/lan/port_front_lan.cpp:1697
 msgid "Installed players cost the host next to nothing; as many as the network holds."
 msgstr "설치본 플레이어는 방장에게 거의 부담이 없으므로 네트워크가 허용하는 만큼 참가할 수 있습니다."
 
-#: src117/port/lan/port_front_lan.cpp:1678
+#: src117/port/lan/port_front_lan.cpp:1704
 msgid "{0} room found on this network"
 msgid_plural "{0} rooms found on this network"
 msgstr[0] "이 네트워크에서 방 {0}개 발견"
 
-#: src117/port/lan/port_front_lan.cpp:1679
+#: src117/port/lan/port_front_lan.cpp:1705
 msgid "Join a Room"
 msgstr "방 참가"
 
-#: src117/port/lan/port_front_lan.cpp:1680
+#: src117/port/lan/port_front_lan.cpp:1706
 msgid "Play in a room on this network. Pick one below, or type its address. This copy plays there itself, as one of the room’s installed players."
 msgstr "이 네트워크의 방에서 플레이합니다. 아래에서 고르거나 주소를 입력하십시오. 이 사본은 방의 설치본 플레이어로 직접 참가합니다."
 
-#: src117/port/lan/port_front_lan.cpp:1682
+#: src117/port/lan/port_front_lan.cpp:1708
 msgid "{0}, {1} this copy can join"
 msgstr "{0}, 이 사본이 참가할 수 있는 방 {1}개"
 
-#: src117/port/lan/port_front_lan.cpp:1746
+#: src117/port/lan/port_front_lan.cpp:1772
 msgid "Hosted on {0}"
 msgstr "{0}에서 운영 중"
 
-#: src117/port/lan/port_front_lan.cpp:1757
+#: src117/port/lan/port_front_lan.cpp:1783
 msgid "The Lobby"
 msgstr "대기실"
 
-#: src117/port/lan/port_front_lan.cpp:1760
+#: src117/port/lan/port_front_lan.cpp:1786
 msgid "The lobby"
 msgstr "대기실"
 
-#: src117/port/lan/port_front_lan.cpp:1761
+#: src117/port/lan/port_front_lan.cpp:1787
 msgid "The host seats you in a match; its lobby opens then."
 msgstr "방장이 경기에 자리를 배정하면 대기실이 열립니다."
 
-#: src117/port/lan/port_front_lan.cpp:1766
+#: src117/port/lan/port_front_lan.cpp:1792
 msgid "Leave Room"
 msgstr "방 나가기"
 
-#: src117/port/lan/port_front_lan.cpp:1770
+#: src117/port/lan/port_front_lan.cpp:1796
 msgid "Matches"
 msgstr "경기"
 
-#: src117/port/lan/port_front_lan.cpp:1773
+#: src117/port/lan/port_front_lan.cpp:1799
 msgid "No match yet. The host opens one, and seats the room’s people in it."
 msgstr "아직 경기가 없습니다. 방장이 경기를 열고 방의 사람들을 자리에 배정합니다."
 
-#: src117/port/lan/port_front_lan.cpp:1787
+#: src117/port/lan/port_front_lan.cpp:1813
 #: src117/port/lan/port_front_lanhost.cpp:543
 msgid "Choosing a map"
 msgstr "지도 선택 중"
 
-#: src117/port/lan/port_front_lan.cpp:1788
+#: src117/port/lan/port_front_lan.cpp:1814
 msgid "in its lobby"
 msgstr "대기실에 있음"
 
-#: src117/port/lan/port_front_lan.cpp:1789
+#: src117/port/lan/port_front_lan.cpp:1815
 #: src117/port/lan/port_front_lanhost.cpp:545
 msgid "starting"
 msgstr "시작 중"
 
-#: src117/port/lan/port_front_lan.cpp:1790
+#: src117/port/lan/port_front_lan.cpp:1816
 msgid "playing for {0}"
 msgstr "{0} 동안 진행 중"
 
-#: src117/port/lan/port_front_lan.cpp:1791
+#: src117/port/lan/port_front_lan.cpp:1817
 #: src117/port/lan/port_front_lanhost.cpp:546
 msgid "ended"
 msgstr "종료됨"
 
-#: src117/port/lan/port_front_lan.cpp:1792
+#: src117/port/lan/port_front_lan.cpp:1818
 #: src117/port/lan/port_front_lanhost.cpp:547
 msgid "ended: {0}"
 msgstr "종료됨: {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1809
+#: src117/port/lan/port_front_lan.cpp:1835
 #: src117/port/lan/port_front_lanhost.cpp:503
 msgid "Watch this match"
 msgstr "이 경기 관전"
 
-#: src117/port/lan/port_front_lan.cpp:1812
+#: src117/port/lan/port_front_lan.cpp:1838
 msgid "From this machine, {0} s behind the players, with the replay player’s camera."
 msgstr "이 컴퓨터에서 플레이어보다 {0}초 늦게, 리플레이 플레이어의 카메라로 관전합니다."
 
-#: src117/port/lan/port_front_lan.cpp:1818
+#: src117/port/lan/port_front_lan.cpp:1844
 msgid "In the Room"
 msgstr "방 안"
 
@@ -7857,32 +7907,34 @@ msgstr "방이 아직 열려 있습니다"
 msgid "This console is back in it."
 msgstr "이 콘솔이 다시 방으로 돌아왔습니다."
 
-#: src117/port/lan/port_front_lan.cpp:1945
+#: src117/port/lan/port_front_lan.cpp:1971
 msgid "The Match Did Not Come"
 msgstr "경기를 받지 못했습니다"
 
-#: src117/port/lan/port_front_lan.cpp:1945
+#: src117/port/lan/port_front_lan.cpp:1971
 msgid "The room sent nothing of it. It may have ended."
 msgstr "방이 경기 정보를 보내지 않았습니다. 경기가 끝났을 수 있습니다."
 
-#: src117/port/lan/port_front_lan.cpp:2093
+#: src117/port/lan/port_front_lan.cpp:2119
 msgid "The server stopped"
 msgstr "서버가 중지되었습니다"
 
-#: src117/port/lan/port_front_lan.cpp:2093
+#: src117/port/lan/port_front_lan.cpp:2119
 msgid "Nobody can join until it starts again."
 msgstr "서버를 다시 시작할 때까지 아무도 참가할 수 없습니다."
 
-#: src117/port/lan/port_front_lan.cpp:2100
+#: src117/port/lan/port_front_lan.cpp:2126
 msgid "The match did not start"
 msgstr "경기가 시작되지 않았습니다"
 
-#: src117/port/lan/port_front_lan.cpp:2110
+#: src117/port/lan/port_front_lan.cpp:2139
+#: src117/port/lan/port_front_lan.cpp:2148
+#: src117/port/lan/port_front_lan.cpp:2162
 msgid "The match could not start here"
 msgstr "이 컴퓨터에서 경기를 시작할 수 없습니다"
 
 #: src117/port/lan/port_front_lan.cpp:345
-#: src117/port/lan/port_front_lan.cpp:1178
+#: src117/port/lan/port_front_lan.cpp:1180
 #: src117/port/lan/port_front_lanhost.cpp:366
 #: src117/port/lan/port_front_lanhost.cpp:371
 msgid "This machine"
@@ -7927,9 +7979,9 @@ msgid "Playing {0}"
 msgstr "{0} 플레이 중"
 
 #: src117/port/lan/port_front_lan.cpp:423
-#: src117/port/lan/port_front_lan.cpp:1799
+#: src117/port/lan/port_front_lan.cpp:1825
 #: src117/port/lan/port_front_lanhost.cpp:578
-#: src117/port/lan/port_lanlobby.cpp:104
+#: src117/port/lan/port_lanlobby.cpp:108
 msgid "a computer"
 msgid_plural "{0} computers"
 msgstr[0] "컴퓨터 {0}명"
@@ -7972,7 +8024,7 @@ msgid "Getting the game from the host"
 msgstr "방장에게서 게임을 받는 중"
 
 #: src117/port/lan/port_front_lan.cpp:437
-#: src117/port/lan/port_front_lan.cpp:1198
+#: src117/port/lan/port_front_lan.cpp:1200
 #: src117/port/lan/port_front_landevices.cpp:30
 #: src117/port/lan/port_front_landevices.cpp:300
 #: src117/port/lan/port_front_lanhost.cpp:921
@@ -8196,7 +8248,7 @@ msgid "By time in the room"
 msgstr "방 참가 시간순"
 
 #: src117/port/lan/port_front_landevices.cpp:335
-#: src117/port/lan/port_lanroom_proto.cpp:688
+#: src117/port/lan/port_lanroom_proto.cpp:742
 msgid "That match is not being played now."
 msgstr "이 경기는 현재 진행 중이 아닙니다."
 
@@ -8344,10 +8396,6 @@ msgstr "수신 포트"
 #: src117/port/lan/port_front_lanhost.cpp:1233
 msgid "games on {0}, found on {1}"
 msgstr "게임은 {0}, 탐색은 {1}"
-
-#: src117/port/lan/port_front_lanhost.cpp:1235
-msgid "This network"
-msgstr "이 네트워크"
 
 #: src117/port/lan/port_front_lanhost.cpp:1235
 msgid "The internet"
@@ -8885,60 +8933,60 @@ msgstr "각 카드에 이유가 표시됩니다"
 msgid "Nobody has joined yet. The join card on the right says how."
 msgstr "아직 아무도 참가하지 않았습니다. 오른쪽 참가 안내를 확인하십시오."
 
-#: src117/port/lan/port_lanclient.cpp:241
+#: src117/port/lan/port_lanclient.cpp:248
 msgid "Another version"
 msgstr "다른 버전"
 
-#: src117/port/lan/port_lanclient.cpp:243
+#: src117/port/lan/port_lanclient.cpp:250
 msgid "Its host plays {0}, and this copy is {1}: the two compute the game differently."
 msgstr "방장은 {0}, 이 사본은 {1}입니다. 두 쪽의 게임 계산 방식이 다릅니다."
 
-#: src117/port/lan/port_lanclient.cpp:245
+#: src117/port/lan/port_lanclient.cpp:252
 msgid "Its host's page offers its version to install beside this one."
 msgstr "방장 페이지에서 이 사본과 별도로 해당 버전을 설치할 수 있습니다."
 
-#: src117/port/lan/port_lanclient.cpp:247
+#: src117/port/lan/port_lanclient.cpp:254
 msgid "Needs a mod"
 msgstr "모드 필요"
 
-#: src117/port/lan/port_lanclient.cpp:249
+#: src117/port/lan/port_lanclient.cpp:256
 msgid "This copy has the mod {0} active, and the room plays without one."
 msgstr "이 사본은 모드 {0}을(를) 사용 중이고, 방은 모드 없이 플레이합니다."
 
-#: src117/port/lan/port_lanclient.cpp:250
+#: src117/port/lan/port_lanclient.cpp:257
 msgid "Its host plays the mod {0}, which this copy does not have active."
 msgstr "방장은 모드 {0}을(를) 사용하지만 이 사본은 사용 중이 아닙니다."
 
-#: src117/port/lan/port_lanclient.cpp:251
-#: src117/port/lan/port_lanroom_proto.cpp:368
+#: src117/port/lan/port_lanclient.cpp:258
+#: src117/port/lan/port_lanroom_proto.cpp:411
 msgid "Turn it off under Mods, then join."
 msgstr "모드에서 끈 뒤 참가하십시오."
 
-#: src117/port/lan/port_lanclient.cpp:252
+#: src117/port/lan/port_lanclient.cpp:259
 msgid "Activate {0} under Mods, then join."
 msgstr "모드에서 {0}을(를) 사용으로 설정한 뒤 참가하십시오."
 
-#: src117/port/lan/port_lanclient.cpp:254
+#: src117/port/lan/port_lanclient.cpp:261
 msgid "Other game data"
 msgstr "다른 게임 데이터"
 
-#: src117/port/lan/port_lanclient.cpp:256
+#: src117/port/lan/port_lanclient.cpp:263
 msgid "Its game data is not this copy's (fingerprint {0})."
 msgstr "게임 데이터가 이 사본과 다릅니다(지문 {0})."
 
-#: src117/port/lan/port_lanclient.cpp:257
+#: src117/port/lan/port_lanclient.cpp:264
 msgid "Its host's page has the game data to install."
 msgstr "방장 페이지에서 해당 게임 데이터를 설치할 수 있습니다."
 
-#: src117/port/lan/port_lanclient.cpp:260
+#: src117/port/lan/port_lanclient.cpp:267
 msgid "Plays here"
 msgstr "참가 가능"
 
-#: src117/port/lan/port_lanclient.cpp:390
+#: src117/port/lan/port_lanclient.cpp:397
 msgid "The host removed you from the room."
 msgstr "방장이 나를 방에서 내보냈습니다."
 
-#: src117/port/lan/port_lanclient.cpp:392
+#: src117/port/lan/port_lanclient.cpp:399
 msgid "The room has closed."
 msgstr "방이 닫혔습니다."
 
@@ -8962,64 +9010,64 @@ msgstr "{0} · {1}초 늦음"
 msgid "L goes back to {0} s behind"
 msgstr "L을 누르면 {0}초 늦은 지점으로 돌아갑니다"
 
-#: src117/port/lan/port_lanlobby.cpp:110
+#: src117/port/lan/port_lanlobby.cpp:114
 #: src117/port/platform/port_discord.cpp:615
 msgid "{0}, {1}"
 msgstr "{0}, {1}"
 
-#: src117/port/lan/port_lanlobby.cpp:180
+#: src117/port/lan/port_lanlobby.cpp:184
 msgid "A match"
 msgstr "경기"
 
-#: src117/port/lan/port_lanlobby.cpp:409
+#: src117/port/lan/port_lanlobby.cpp:699
 msgid "Starting the match"
 msgstr "경기 시작 중"
 
-#: src117/port/lan/port_lanroom_proto.cpp:322
+#: src117/port/lan/port_lanroom_proto.cpp:365
 msgid "The host's web\\play folder is from another build of Hyperion; play streamed meanwhile."
 msgstr "방장의 web\\play 폴더가 다른 Hyperion 빌드의 것입니다. 그동안은 스트리밍으로 플레이하십시오."
 
-#: src117/port/lan/port_lanroom_proto.cpp:353
+#: src117/port/lan/port_lanroom_proto.cpp:396
 msgid "The room is not taking anyone now."
 msgstr "지금은 방에 참가할 수 없습니다."
 
-#: src117/port/lan/port_lanroom_proto.cpp:354
+#: src117/port/lan/port_lanroom_proto.cpp:397
 msgid "Ask the host to start the server."
 msgstr "방장에게 서버를 시작해 달라고 요청하십시오."
 
-#: src117/port/lan/port_lanroom_proto.cpp:357
+#: src117/port/lan/port_lanroom_proto.cpp:400
 msgid "Choose another name."
 msgstr "다른 이름을 선택하십시오."
 
-#: src117/port/lan/port_lanroom_proto.cpp:359
+#: src117/port/lan/port_lanroom_proto.cpp:402
 msgid "The room asks for its password."
 msgstr "이 방은 비밀번호가 필요합니다."
 
-#: src117/port/lan/port_lanroom_proto.cpp:359
+#: src117/port/lan/port_lanroom_proto.cpp:402
 msgid "That is not the room's password."
 msgstr "방의 비밀번호가 아닙니다."
 
-#: src117/port/lan/port_lanroom_proto.cpp:360
+#: src117/port/lan/port_lanroom_proto.cpp:403
 msgid "The host's console shows it, under Join This Room."
 msgstr "방장의 콘솔에서 이 방 참가 항목에 표시됩니다."
 
-#: src117/port/lan/port_lanroom_proto.cpp:364
+#: src117/port/lan/port_lanroom_proto.cpp:407
 msgid "The host's page offers the room's version to install."
 msgstr "방장 페이지에서 방과 같은 버전을 설치할 수 있습니다."
 
-#: src117/port/lan/port_lanroom_proto.cpp:368
+#: src117/port/lan/port_lanroom_proto.cpp:411
 msgid "Activate it under Mods, then join."
 msgstr "모드에서 사용으로 설정한 뒤 참가하십시오."
 
-#: src117/port/lan/port_lanroom_proto.cpp:371
+#: src117/port/lan/port_lanroom_proto.cpp:414
 msgid "The host's page has the game data to install."
 msgstr "방장 페이지에서 게임 데이터를 설치할 수 있습니다."
 
-#: src117/port/lan/port_lanroom_proto.cpp:541
+#: src117/port/lan/port_lanroom_proto.cpp:587
 msgid "The room has a new password."
 msgstr "방의 비밀번호가 바뀌었습니다."
 
-#: src117/port/lan/port_lanroom_proto.cpp:558
+#: src117/port/lan/port_lanroom_proto.cpp:612
 msgid "The server stops after the last match; nobody new can join."
 msgstr "마지막 경기가 끝나면 서버가 중지되며, 새로 참가할 수 없습니다."
 
