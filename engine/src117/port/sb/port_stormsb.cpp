@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <algorithm>
 #include <chrono>
 #include <deque>
 #include <string>
@@ -128,7 +129,23 @@ BOOL SbLeaveGame(DWORD dwReason)
 }
 BOOL SbDropPlayer(DWORD dwPlayer, DWORD dwFlags)
 {
-  return Fail(NET_BAD_PROVIDER);
+  // The relay's authority decides a synced drop: the request goes to it and
+  // the confirmation is the EV_LEAVE event for the slot, which the game's
+  // network code already turns into the leave. Until the relay answers, the
+  // player stays in the game (and the authority may refuse).
+  if (g_session == NULL)
+    return Fail(NET_BAD_PROVIDER);
+  if (static_cast<BYTE>(dwPlayer) == NO_PLAYER || static_cast<BYTE>(dwPlayer) == g_bLocal)
+    return Fail(NET_INVALID);
+  if (g_bLocal == NO_PLAYER)
+    return Fail(NET_NOT_IN_GAME);
+  if (!IsPlayer(dwPlayer))
+    return Fail(NET_NO_PLAYER);
+  const int rc = rp_request_drop(g_session, static_cast<uint32_t>(dwPlayer));
+  Log("SbDropPlayer(%u, 0x%X): the relay's synced drop was asked (rc %d)", dwPlayer, dwFlags, rc);
+  if (rc == 0)
+    g_qwDropAsked[static_cast<BYTE>(dwPlayer)] = PortNowMs();
+  return rc == 0;
 }
 BOOL SbDisconnectAll(DWORD dwFlags)
 {
@@ -136,11 +153,43 @@ BOOL SbDisconnectAll(DWORD dwFlags)
 }
 BOOL SbGetNumPlayers(int *pnFirst, int *pnLast, int *pnActive)
 {
-  return FALSE;
+  // 1.17's leave handler queries the roster live, so this must answer with the
+  // players still in the game (the LAN provider's shape).
+  if (pnFirst)
+    *pnFirst = -1;
+  if (pnLast)
+    *pnLast = -1;
+  if (pnActive)
+    *pnActive = 0;
+  if (!InGame())
+    return FALSE;
+  int nFirst = -1, nLast = -1, nActive = 0;
+  for (int i = 0; i < kPlayers; ++i)
+    if (g_players[i].bIn) {
+      if (nFirst < 0)
+        nFirst = i;
+      nLast = i;
+      ++nActive;
+    }
+  if (pnFirst)
+    *pnFirst = nFirst;
+  if (pnLast)
+    *pnLast = nLast;
+  if (pnActive)
+    *pnActive = nActive;
+  return TRUE;
 }
 BOOL SbGetPlayerName(DWORD dwPlayer, char *pszBuffer, DWORD cchBuffer)
 {
-  return FALSE;
+  if (!pszBuffer || !cchBuffer)
+    return Fail(NET_INVALID);
+  pszBuffer[0] = '\0';
+  if (!InGame())
+    return FALSE;
+  if (!IsPlayer(dwPlayer))
+    return Fail(NET_NO_PLAYER);
+  SStrCopy(pszBuffer, g_players[static_cast<BYTE>(dwPlayer)].szName, cchBuffer);
+  return TRUE;
 }
 BOOL SbGetPlayerNames(char **ppszNames)
 {
@@ -297,7 +346,29 @@ std::vector<uint8_t> g_turnsOut[kPlayers];                     // stable pointer
 std::vector<uint8_t> g_messageOut;
 std::vector<uint8_t> g_pollBuf;  // rp_poll's scratch
 DWORD g_dwSent, g_dwRead;        // this player's turns sent, and steps read
+
+// The LAN provider's per-step checksum trace (HYPERION_SB_TRACE), for lockstep
+// forensics: a step's line shows each in-step player's turn as
+// slot:bytes:checksum, so two seats' traces diverge at the first step their
+// sims read differently.
+static uint32_t StepChecksum(const std::vector<uint8_t> &v)
+{
+  uint32_t h = 0x811C9DC5u;
+  for (const uint8_t b : v)
+    h = (h ^ b) * 0x01000193u;
+  return h;
+}
 DWORD g_dwLatency = 2;           // the relay's current buffer depth (BufferDirective events)
+// When each peer's link last went down (0 while up), and when this seat last
+// asked the relay for its synced drop. The relay stamps every member's link
+// state, so a dead seat shows down here without the dead seat's cooperation;
+// its drop requests below the hold's unlock floor are refused, so the ask is
+// retried (the relay caps request rate, generously).
+uint64_t g_qwLinkDown[kPlayers] = {0};
+uint64_t g_qwDropAsked[kPlayers] = {0};
+// Per-slot turns handed to the game (its reads): reported to the bridge, whose
+// synced-leave tracker compares the relay's final_turn_count against these.
+DWORD g_dwSlotConsumed[kPlayers] = {0};
 const size_t kTurnSlack = 2048;  // zeros after a turn handed to the game (SbReceiveTurns)
 
 BOOL Fail(DWORD dwErr)
@@ -477,6 +548,13 @@ bool Pump()
         ReadU32(p, end, reason);
         if (slot < kPlayers && g_players[slot].bIn) {
           g_players[slot].bIn = false;
+          // The relay applied the drop at this step: the slot stops gating
+          // steps from here on, and a join event still pending for it is moot.
+          g_bInStep[slot] = false;
+          g_slotTurns[slot].clear();
+          g_pendingJoins.erase(std::remove(g_pendingJoins.begin(), g_pendingJoins.end(),
+                                           static_cast<BYTE>(slot)),
+                               g_pendingJoins.end());
           g_events.push_back({EVENT_LEAVE, slot,
                               std::vector<uint8_t>(reinterpret_cast<const uint8_t *>(&reason),
                                                    reinterpret_cast<const uint8_t *>(&reason) + 4)});
@@ -493,6 +571,26 @@ bool Pump()
           p += len;
         }
         break;
+      case RP_EV_CONNECT: {
+        uint8_t up = 0;
+        ReadU32(p, end, slot);
+        if (p + 1 > end)
+          p = end;
+        else
+          up = *p++;
+        if (slot < kPlayers && slot != g_bLocal) {
+          if (up) {
+            if (g_qwLinkDown[slot] != 0) {
+              Log("player %u's link is back", slot);
+              g_qwLinkDown[slot] = 0;
+            }
+          } else if (g_qwLinkDown[slot] == 0) {
+            Log("player %u's link went down", slot);
+            g_qwLinkDown[slot] = PortNowMs();
+          }
+        }
+        break;
+      }
       case RP_EV_LOBBY:
         ReadU32(p, end, slot);
         ReadU32(p, end, len);
@@ -511,7 +609,15 @@ bool Pump()
                 g_gameData.assign(p + 5, p + len);
                 Log("the game's init data arrived from slot %u (%u bytes)", slot, cb);
               } else if (kind == 2 && g_szStats[0] == '\0') {
-                SStrCopy(g_szStats, reinterpret_cast<const char *>(p + 5), TEXT_MAX);
+                // Bounded at the payload: the creator sends strlen bytes (the
+                // string's trailing CR, no NUL), and SStrCopy would run past
+                // the payload into the poll buffer's next events, which
+                // Txt2GameData then reads as the string's tail (it requires
+                // the byte after the map name's CR to be a NUL). The copy is
+                // the payload alone, NUL-terminated.
+                const size_t cbCopy = cb < TEXT_MAX - 1 ? cb : TEXT_MAX - 1;
+                memcpy(g_szStats, p + 5, cbCopy);
+                g_szStats[cbCopy] = '\0';
                 Log("the game's stat string arrived from slot %u (%u bytes)", slot, cb);
               }
               p += len;
@@ -529,6 +635,25 @@ bool Pump()
     }
   }
   FireEvents();
+  // A peer whose link stays down past the grace period gets a drop request:
+  // the relay's authority confirms it as a synced leave (EV_LEAVE) and the
+  // game carries on with the remaining players. The grace tolerates a relay
+  // blip and a short reconnect without shedding anyone. The relay refuses a
+  // request until the target's hold stands past its unlock floor (30 s), so
+  // the ask is retried every few seconds until the leave arrives.
+  {
+    const uint64_t qwNow = PortNowMs();
+    for (DWORD i = 0; i < kPlayers; ++i) {
+      if (i == g_bLocal || !g_players[i].bIn || g_qwLinkDown[i] == 0)
+        continue;
+      if (qwNow - g_qwLinkDown[i] >= 10000 && qwNow - g_qwDropAsked[i] >= 5000) {
+        g_qwDropAsked[i] = qwNow;
+        const int rc = rp_request_drop(g_session, static_cast<uint32_t>(i));
+        Log("player %u's link has been down for %llu ms; the relay's synced drop was asked (rc %d)", i,
+            static_cast<unsigned long long>(qwNow - g_qwLinkDown[i]), rc);
+      }
+    }
+  }
   return rp_status(g_session) == RP_STAT_RUNNING;
 }
 
@@ -616,6 +741,16 @@ bool SbLaunchHeader(BYTE *pbSubCategory, BYTE *pbScenarioFlag, BYTE *pbLadderGam
     *pbScenarioFlag = g_gameData[0x0C];
   if (pbLadderGame)
     *pbLadderGame = g_gameData[0x12];
+  return true;
+}
+
+bool SbLaunchParams(void *pvParams, size_t cbParams)
+{
+  if (pvParams == NULL || cbParams == 0)
+    return false;
+  if (g_gameData.size() < cbParams)
+    return false;
+  memcpy(pvParams, g_gameData.data(), cbParams);
   return true;
 }
 
@@ -1024,6 +1159,7 @@ BOOL SbSendTurn(const void *pvData, DWORD cbData)
     SessionGone();
     return FALSE;
   }
+  Trace("send %u: %u:%08X", g_dwSent, static_cast<unsigned>(t.size()), StepChecksum(t));
   ++g_dwSent;
   g_slotTurns[g_bLocal].push_back(std::move(t));  // the relay never echoes our own turn
   TraceCall("SendTurn", TRUE, false);
@@ -1066,15 +1202,30 @@ BOOL SbReceiveTurns(DWORD nFirst, DWORD nPlayers, const void **ppvData, DWORD *p
     if (g_bInStep[i]) {
       g_turnsOut[i] = std::move(g_slotTurns[i].front());
       g_slotTurns[i].pop_front();
+      ++g_dwSlotConsumed[i];
+      rp_turn_consumed(g_session, static_cast<uint32_t>(i),
+                       static_cast<uint64_t>(g_dwSlotConsumed[i]));
       if (i == g_bLocal) {
         if (g_dwRead == 0)
           Log("the game's first step was read (lockstep is under way)");
+        else if (g_dwRead % 600 == 0)
+          Log("the game has read %u steps", g_dwRead);
         ++g_dwRead;
       }
       // zeros after the turn: the classic walker reads a cut-off last command whole
       // before it finds it cut off, and every seat reads the same
       g_turnsOut[i].resize(g_turnsOut[i].size() + kTurnSlack, 0);
     }
+  {
+    std::string line = "step " + std::to_string(g_dwRead) + ":";
+    for (DWORD i = 0; i < kPlayers; ++i)
+      if (g_bInStep[i]) {
+        char sz[48];
+        snprintf(sz, sizeof sz, " %u:%u:%08X", i, static_cast<unsigned>(g_turnsOut[i].size() - kTurnSlack), StepChecksum(g_turnsOut[i]));
+        line += sz;
+      }
+    Trace("%s", line.c_str());
+  }
   for (DWORD i = nFirst; i < nFirst + nPlayers && i < kPlayers; ++i) {
     if (!g_bInStep[i])
       continue;
