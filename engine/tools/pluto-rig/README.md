@@ -160,3 +160,49 @@ the obs builder completes and dump/ captures begin.
   {next, a..e} at 0x63fb0130). Next: measure the record format from the serializer's
   disassembly + the client object, then the schema is complete and the Hyperion-side
   sender can be written.
+
+
+## State 2026-11-01 (session 3)
+
+The obs path is now mapped end to end; the schema extraction is one gate away.
+
+- The writer runs with a real writable view: a 1 MB buffer seeded with the bot's .data
+  page, instead of the .data page itself. The writer writes the obs at
+  view+0xC0..+0x85F1C, past .data's end (base+0x54678) into read-only .rdata, which
+  crashed it before.
+- The writer's this is the shm client at base+0x54160 (view +0x18, send flag +0x1C,
+  a frame counter +0x20); its three args are the obs objects: the local build
+  ([arg1+0x54] = N units), a second object (W/H at +0x18/+0x1C), and the global at
+  base+0x73254.
+- The obs layout the writer produces: the request header at view+0xC0 (N, W, H, then
+  zeros), then fixed-offset spans: +0xC100, +0x79100, +0x79500, +0x79900, +0x79940,
+  +0x79A40, +0x79F00, +0x81F00, +0x85F00 — each a (begin,end) span copied from the
+  obs objects.
+- The build is gated by three globals, all read by the driver at base+0xD01B..0xD04E:
+  base+0x72654 (dword, the next obs frame), base+0x72658 (byte, already sent) and
+  base+0x72661 (byte, engine ready). The driver builds the obs, walks the record list
+  (the walk, base+0x30130) and calls the writer (base+0x34960); the writer's success
+  sets "already sent", and the engine's reply pump clears it in a real game.
+- The record node shape, from the walk's disassembly: {next(+0), b(+4), c(+8), d(+0xC),
+  e(+0x10), f(+0x14), g(+0x18)} — 28 bytes; the obs unit entry is the six fields
+  {b..g}, 24 bytes, appended by base+0x2E110.
+- The walk's this is the obs-state object: a static at base+0x73120, and a copy owned
+  by the module object (a tap caught the module at 0x7B20202C walking its copy at
+  0x7B203120, module+0x10F4). The record-list head field is +0x1EC in both.
+- The per-unit obs-entry writer (base+0x307F0/0x30850, floats written to [esi]) reads
+  the unit record at ecx: position x/y scaled by the map size, an id, and more.
+- The harness now has: the writable view buffer, the BSS zero-fill tail made writable
+  (Wine maps it read-only; base+0x72000..0x74000 covers the gates and the static
+  obs-state), fault logging with the fault address and code, and guard-page taps
+  (PAGE_GUARD + the vectored handler) on the driver, walk and writer pages that log
+  every execution with the full register context.
+
+Open (next session):
+
+- Read the module-owned obs-state (module+0x10F4) instead of the static: its +0x1EC
+  head is the real record list; in the rig the static's head reads 0x0F000009 and the
+  module's walker runs with edi=0x0F000009 without faulting, so the head's
+  representation is the last unknown (a tagged pointer, or a field read one word off).
+- Once the head is pinned down, the walk completes, the writer's header (view+0xC0)
+  fills with N, and dump/ captures the observation; the differential scenarios
+  (move a unit, change resources) then name every field.
