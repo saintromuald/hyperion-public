@@ -1,0 +1,219 @@
+//! The serve loop's timer and signal arms: the maintenance flush that keeps a
+//! quiet link's acks and retransmits moving, the pre-start conditions sampler,
+//! and the two shutdown signals a slot can be woken by.
+
+use super::*;
+
+use std::sync::atomic::Ordering;
+
+use super::inbound::{log_link_closed, sample_slot_conditions, send_packet};
+
+/// The fixed-cadence maintenance flush.
+pub(super) fn maintenance_flush(link: &mut Link, ctx: &mut SlotLinkCtx) -> ControlFlow<()> {
+    // The fixed-cadence maintenance flush. When a forwarded turn is
+    // unacked or we owe acks, send an ack-only packet: it re-carries
+    // unacked turns oldest-first (its full budget has room the near-MTU
+    // forwarded packets did not) and folds in any acks owed. This is what
+    // retransmits a forwarded turn the fresh stream can't re-carry, and
+    // what acks a client with no return traffic; it stays silent when
+    // nothing is unacked and nothing is owed.
+    // A link set up before its session had a decision-maker picks up the shared
+    // count here, off the per-packet path.
+    if ctx.turns_complete.is_none() {
+        ctx.turns_complete = ctx.decision_makers.turns_complete_handle(&ctx.key);
+    }
+    if ctx.acks_owed || link.payloads_in_flight() > 0 {
+        let stamp = ctx.turns_complete_stamp();
+        if let Err(error) = send_packet(link, None, &ctx.flight_counters, stamp) {
+            log_link_closed(&ctx.key, ctx.slot, &error);
+            return ControlFlow::Break(());
+        }
+        ctx.acks_owed = false;
+    }
+    ctx.flush_deadline = Instant::now() + FLUSH_INTERVAL;
+    ControlFlow::Continue(())
+}
+
+/// The pre-start conditions sampler's tick.
+pub(super) fn resample_pre_start(link: &Link, ctx: &mut SlotLinkCtx) {
+    // Pre-start conditions sampler. Lobby traffic rides the reliable
+    // control stream, so no datagram arrives to drive the receive-path
+    // sampler until the game starts — this keeps each slot's link stats
+    // current so the authority's initial-depth computation at coverage
+    // reflects live conditions. It stops once the session starts; the
+    // receive-driven sampler covers the running game, so nothing is
+    // double-sampled.
+    if ctx.decision_makers.is_started(&ctx.key) {
+        ctx.pre_start_sampling = false;
+    } else {
+        let sample = sample_slot_conditions(link, ctx.slot, ctx.connection_epoch).conditions;
+        if crate::mesh::publish_conditions(&ctx.conditions, &ctx.key, ctx.slot, sample) {
+            let _ = ctx
+                .decision_makers
+                .ingest_local_condition(&ctx.key, &sample);
+        }
+        ctx.pre_start_deadline = Instant::now() + PRE_START_SAMPLE_INTERVAL;
+    }
+}
+
+/// Answers the roster's shutdown signal: log and close with the code the
+/// signaler's stamped reason picks.
+pub(super) fn handle_shutdown(link: &mut Link, ctx: &SlotLinkCtx, close_reason: &AtomicU8) {
+    // Something asked for this slot's link to end. Close it and leave;
+    // deregistration below then frees the slot, only now that this task is
+    // actually gone. The reason the signaler stamped picks the close code:
+    // a silenced or desync-evicted slot's link was healthy, so saying
+    // "isolated" for it would send whoever reads the client's log after the
+    // wrong problem.
+    teardown::settle_link_evidence(
+        &ctx.sessions,
+        &ctx.mesh_for_teardown,
+        &ctx.key,
+        ctx.slot,
+        ctx.connection_epoch,
+        ctx.leave_announced.then_some(SlotCloseReason::SlotDeparted),
+    );
+    match SlotCloseReason::from_raw(close_reason.load(Ordering::Acquire)) {
+        // The eviction is committed here, by the task that owns this connection and
+        // before teardown frees the slot's seat, so no re-dial is admitted ahead of
+        // it. The decision is whether the connection was still open when this task
+        // closed it: one already closed ended on its own, and ends as the ordinary
+        // disconnect that makes it, resumable. The transport offers no atomic
+        // check-and-close, so the check runs immediately before the close and
+        // everything else after it. A close the transport makes in between —
+        // the client's own close as it gives up a failed link to re-dial, or an
+        // idle close after a stall of seconds in this task or the watch — still
+        // evicts, and that client's re-dial is refused. That is accepted as the
+        // rare cost of an eviction that needs the transport's evidence at all.
+        SlotCloseReason::SilentSlot => {
+            let open = link.connection().close_reason().is_none();
+            if open {
+                link.connection().close(
+                    VarInt::from_u32(close_codes::SILENT_SLOT),
+                    b"slot stopped producing turns",
+                );
+                ctx.decision_makers.mark_silence_evicted(&ctx.key, ctx.slot);
+                ctx.decision_makers.flight_recorder().record(
+                    &ctx.key,
+                    crate::observability::flight_recorder::FlightEvent::SlotEvictedSilent {
+                        slot: ctx.slot.0,
+                    },
+                );
+                tracing::info!(
+                    tenant = ctx.key.tenant.as_ref(),
+                    session = ctx.key.session.0,
+                    slot = ctx.slot.0,
+                    "slot stopped producing turns; evicted and closed its connection",
+                );
+            } else {
+                tracing::info!(
+                    tenant = ctx.key.tenant.as_ref(),
+                    session = ctx.key.session.0,
+                    slot = ctx.slot.0,
+                    "silent slot's connection had already closed; ending it as a disconnect",
+                );
+            }
+        }
+        // Marks nothing, so only the recording depends on the open check: a
+        // connection the transport already closed is not reported as the watch's.
+        SlotCloseReason::QuietLink => {
+            if link.connection().close_reason().is_none() {
+                ctx.decision_makers.flight_recorder().record(
+                    &ctx.key,
+                    crate::observability::flight_recorder::FlightEvent::SlotQuietLinkClosed {
+                        slot: ctx.slot.0,
+                    },
+                );
+                tracing::info!(
+                    tenant = ctx.key.tenant.as_ref(),
+                    session = ctx.key.session.0,
+                    slot = ctx.slot.0,
+                    "silent slot's link received nothing past the transport idle timeout; \
+                     closing it as a lost connection",
+                );
+            } else {
+                tracing::info!(
+                    tenant = ctx.key.tenant.as_ref(),
+                    session = ctx.key.session.0,
+                    slot = ctx.slot.0,
+                    "quiet silent slot's connection had already closed; ending it as a disconnect",
+                );
+            }
+        }
+        SlotCloseReason::DesyncEvicted => {
+            tracing::info!(
+                tenant = ctx.key.tenant.as_ref(),
+                session = ctx.key.session.0,
+                slot = ctx.slot.0,
+                "slot's game state diverged from the session's; closing connection",
+            );
+            link.connection().close(
+                VarInt::from_u32(close_codes::DESYNC_EVICTED),
+                b"game state diverged",
+            );
+        }
+        SlotCloseReason::LobbyViolation => {
+            tracing::warn!(
+                tenant = ctx.key.tenant.as_ref(),
+                session = ctx.key.session.0,
+                slot = ctx.slot.0,
+                "slot violated the lobby policy; closing connection",
+            );
+            link.connection().close(
+                VarInt::from_u32(close_codes::LOBBY_VIOLATION),
+                b"lobby policy violation",
+            );
+        }
+        SlotCloseReason::Revoked | SlotCloseReason::SlotDeparted => {
+            tracing::info!(
+                tenant = ctx.key.tenant.as_ref(),
+                session = ctx.key.session.0,
+                slot = ctx.slot.0,
+                "closing slot after terminal directive"
+            );
+        }
+        SlotCloseReason::Unspecified | SlotCloseReason::LaggingSlot => {
+            tracing::info!(
+                tenant = ctx.key.tenant.as_ref(),
+                session = ctx.key.session.0,
+                slot = ctx.slot.0,
+                "isolating lagging slot; closing connection",
+            );
+        }
+    }
+}
+
+/// Answers the provisional-admission reap signal.
+pub(super) fn handle_provisional_reap(link: &mut Link, ctx: &SlotLinkCtx) {
+    teardown::settle_link_evidence(
+        &ctx.sessions,
+        &ctx.mesh_for_teardown,
+        &ctx.key,
+        ctx.slot,
+        ctx.connection_epoch,
+        ctx.leave_announced.then_some(SlotCloseReason::SlotDeparted),
+    );
+    // This session was admitted with no applied descriptor and its
+    // provisional deadline passed with none arriving. Close with a
+    // distinct code so a redialing client can tell this apart from a
+    // terminal refusal -- a fresh dial re-admits with its own new
+    // provisional window.
+    tracing::info!(
+        tenant = ctx.key.tenant.as_ref(),
+        session = ctx.key.session.0,
+        slot = ctx.slot.0,
+        "provisional admission expired with no applied descriptor; closing connection",
+    );
+    link.connection().close(
+        VarInt::from_u32(close_codes::PROVISIONAL_EXPIRED),
+        b"provisional admission expired",
+    );
+    // The teardown below announces (journals) an ordinary
+    // dropped departure, exactly like any other link death: the
+    // journal is append-only and survives the reap, so if the
+    // slot redials (this close is retryable) the drain-time
+    // reclaim check stands the stale drop down, and if it never
+    // does, the departure drains truthfully once a descriptor
+    // arrives — or is retained with the journal, whose retention
+    // rule no local fact can safely cut short.
+}

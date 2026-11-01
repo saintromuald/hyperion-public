@@ -1,0 +1,1812 @@
+syntax = "proto3";
+
+// buf:lint:ignore PACKAGE_DIRECTORY_MATCH
+// buf:lint:ignore PACKAGE_VERSION_SUFFIX
+package rally_point.wire;
+
+// One QUIC datagram's worth on a single link (client <-> relay or relay <-> relay).
+// Carries redundant payloads plus the ack state for the peer's packets on this
+// link. Recovery is app-level, not QUIC's: unacked payloads are repacked into
+// later packets until a packet carrying them is acked.
+//
+// netcode v2 replaces Storm's UDP transport wholesale (Seq1/Seq2/resend/checksum
+// are gone, not tunneled): the game hooks at the turn/command layer, so these
+// fields + QUIC take over sequencing, acks, integrity, and recovery. Datagrams
+// carry the command stream — both lobby and in-game commands behave the same way
+// (sequence-ordered, lockstep). Truly reliable side-channels (chat, resync, and
+// possibly lobby setup) ride reliable QUIC streams with their own schema.
+message Packet {
+  // This packet's sequence number on this link. Resets each QUIC connection
+  // (which is per-game), so the magnitude stays small.
+  uint32 seq = 1;
+
+  // The seq of the most recent packet seen from the peer on this link. Absent
+  // until at least one packet has been received from the peer.
+  optional uint32 ack = 2;
+
+  // Bitfield of older acked packets: if bit N is set, packet (ack - N - 1) has
+  // been received. Only meaningful when `ack` is present.
+  fixed32 ack_bits = 3;
+
+  // The freshly-produced payload plus redundant still-unacked ones. Empty for an
+  // ack-only packet (one sent purely to carry acks).
+  repeated Payload payloads = 4;
+
+  // On a packet a relay sends its own client in a rollback session: how many of
+  // every in-game slot's turns (observers' included) the relay has received
+  // without a gap. A client waiting on a turn below this count lacks it only
+  // because its own downlink hasn't delivered it yet; above it, the session is
+  // waiting on whoever hasn't sent theirs. Absent outside rollback sessions,
+  // before the relay has any, on mesh packets, and on packets clients send.
+  optional uint64 turns_complete = 5;
+}
+
+// One mesh datagram on a relay ↔ relay link. A relay-pair shares one QUIC
+// connection across every game both relays jointly serve, so each datagram
+// names the session it belongs to; the peer demultiplexes to that session's
+// per-session transport state (its own AckManager + Dedup). The per-link
+// transport runs unchanged per session — the origin `(slot, seq)` identity is
+// unambiguous within a session's instance, so no key grows to include the
+// session.
+//
+// Kept a distinct message from `Packet` (not an optional field on it) so the
+// client edge, which carries one game per connection by nature, has no
+// `session` field to set or mis-set: a client crate that never references
+// `MeshPacket` cannot produce one. Client ↔ relay datagrams are `Packet`;
+// relay ↔ relay datagrams are `MeshPacket`.
+//
+// A relay wraps only turns received from its own home clients and sends a
+// direct copy to every session peer. A receiving relay unwraps the payloads,
+// delivers them to its local clients, and never sends them onto another mesh
+// link. Every payload therefore crosses at most one relay-to-relay hop.
+//
+// `conditions` is an optional sidecar carrying the sender relay's home-client
+// link stats to the peer relay, so the latency-buffer decision-maker can see
+// the whole game's network conditions. It rides at the envelope level — never
+// inside a `Payload` — because conditions are per-link and per-moment: a
+// redundantly re-carried payload would carry stale conditions, but a fresh
+// envelope sample is always current. Absent on ack-only flushes (no turn to
+// attach fresh conditions to is the common case, and reserving room for it
+// would steal redundancy budget — the protocol's whole point). A proto3
+// optional field is wire-compatible with a `1` peer that does not know it, so
+// the mesh ALPN does not bump for this addition.
+message MeshPacket {
+  // The game this datagram belongs to. Combined with `tenant`, names the
+  // session uniquely: session ids are assigned per tenant, not globally, so
+  // two different tenants' sessions can share the same numeric id here. A `0`
+  // session is malformed and rejected by the reader (sessions are 1-indexed),
+  // so the field is effectively required despite proto3 having no `required`
+  // keyword. Carried as a `uint64` to match `SessionId` in the domain types
+  // (which the token also carries as a u64); varint encoding keeps a small
+  // session id the same width as a `uint32`, so there is no per-datagram cost
+  // in practice.
+  uint64 session = 1;
+
+  // The per-link transport packet for this session, unchanged from the
+  // client-edge framing. The mesh wraps it; it does not alter it.
+  Packet packet = 2;
+
+  // Per-client network conditions the sender relay observed on its own home
+  // clients this datagram, for the latency-buffer decision-maker. Absent
+  // when the sender has nothing to report (an ack-only flush, or no local
+  // clients). See `LinkConditions`.
+  optional LinkConditions conditions = 3;
+
+  // The tenant `session` belongs to, so a session id that two different
+  // tenants both happen to use resolves to two independent sessions instead
+  // of colliding: the receiver demultiplexes by the full `(tenant, session)`
+  // pair when this is present. The sender always stamps its own session's
+  // tenant; absent only when the sender predates this field (mesh peers
+  // exchange this cert-authenticated relay-to-relay, so that means a rolling
+  // deploy in progress, not an untrusted source) — the receiver then falls
+  // back to demultiplexing by the bare session id alone, exactly as before
+  // this field existed. Additive: a peer that does not know this field
+  // ignores it on the wire and keeps working off the bare session id, so no
+  // mesh ALPN bump is needed for it.
+  optional string tenant = 4;
+}
+
+// Per-client network conditions a relay gathered from its own home-client QUIC
+// connections, attached to each mesh datagram it forwards so the peer relay —
+// and ultimately the priority-ordered decision-maker — sees the whole game's
+// network picture. Each relay directly observes only its own home clients'
+// links (loss, RTT), so those stats travel with the turns across the mesh.
+//
+// This is the data the latency-buffer control law decides on: loss rate and
+// latency per client, combined into a game-wide view by the decision-maker
+// relay. The fields are cumulative counters the decision-maker differences
+// between consecutive samples (a delta gives the loss rate over that interval),
+// plus an instantaneous RTT — mirroring what QUIC measures per connection.
+message LinkConditions {
+  // One entry per home client (slot) the sender relay serves for this session.
+  // Only the sender's own slots appear — a relay reports its local clients'
+  // links, not conditions it received from other peers (those ride their own
+  // origin relay's datagrams). Repeated rather than a map because slot counts
+  // are tiny (≤8) and a scan is cheaper than hashing.
+  repeated SlotConditions slots = 1;
+}
+
+// One home client's link conditions, as the relay's QUIC stack observes them.
+message SlotConditions {
+  // The slot these conditions belong to. Matches the `slot` on each `Payload`,
+  // so the decision-maker attributes loss/latency to the right player.
+  uint32 slot = 1;
+
+  // The connection's smoothed round-trip time in microseconds. QUIC's path
+  // estimator already de-noises this, so it is directly usable. A relay with no
+  // recent RTT sample (a one-way sender that has received nothing back yet)
+  // sends 0, which the decision-maker reads as "no measurement," not "zero
+  // latency."
+  uint32 rtt_us = 2;
+
+  // Packets QUIC declared lost on this connection since the start (cumulative).
+  // The decision-maker differences consecutive samples to get a loss rate over
+  // the interval between them; a cumulative counter is idempotent under
+  // re-delivery (a late conditions sample can't under-count).
+  uint64 lost_packets = 3;
+
+  // Packets sent on this connection since the start (cumulative) — the
+  // denominator for the loss rate. Paired with `lost_packets` so the
+  // decision-maker computes `lost/sent` over the delta, never relying on a
+  // separately-sampled denominator that could mismatch the numerator's window.
+  uint64 sent_packets = 4;
+
+  // Identifies the home-client QUIC connection these cumulative counters came
+  // from. A reconnect starts a fresh QUIC counter namespace, so relays use this
+  // epoch together with the reliable `SlotConnectivity{connected: true}` frame
+  // to reject delayed datagrams from the previous connection. Absent only for a
+  // sender that predates connection-epoch fencing; receivers retain the legacy
+  // behavior until they observe a present epoch for this slot.
+  optional fixed64 connection_epoch = 5;
+}
+
+// One command packet from one slot — a unit of the lockstep command stream,
+// mirroring Storm's native model (a per-peer sequence that ticks upward; a peer
+// missing a seq stops and waits for it, which our redundancy/ack accelerates).
+//
+// `(slot, seq)`, not a game-frame number, is the dedup/retirement identity: each
+// slot carries its own monotonic seq space starting at 0 (two slots both have a
+// seq 0), so seq alone never identifies a turn. Storm itself keys on a per-peer
+// seq; frames don't advance during a pause; lobby commands have no frame at all;
+// and a fan-out link muxes multiple slots.
+message Payload {
+  // Monotonic per-slot origin seq — the turn's transport identity, assigned once
+  // by the sending client and preserved end-to-end across every hop (never
+  // restamped per link). Independent of game state. Stays below 2^63 (the sequence
+  // buffer reserves the top bit).
+  uint64 seq = 1;
+
+  // The slot these commands belong to. The relay binds it to the sender's token
+  // slot on ingress and does not trust a client-sent value; a relay -> client
+  // fan-out packet may mux several slots.
+  uint32 slot = 2;
+
+  // Native SC:R command-stream bytes (lobby or in-game). The relay parses and
+  // bounds-checks these against the command-length table but forwards the
+  // bytes verbatim.
+  bytes commands = 3;
+
+  // The SC:R game frame these commands belong to — the runtime consensus
+  // coordinate, not a transport identity. This is what latency-buffer and
+  // player-leave decisions key on so every client applies them at the same
+  // simulated step, and what the flight recorder tags turns by. It is carried
+  // here as an annotation and the transport ignores it for delivery, dedup, and
+  // retirement — those key on (slot, seq), above. The relay preserves it
+  // verbatim across the seam, like seq: a forwarded turn carries the sender's
+  // frame, never a relay-stamped one.
+  //
+  // Absent on payloads that are not for a specific simulation step — lobby
+  // commands have no frame, and a 0 is a valid in-game frame, so the field is
+  // optional rather than defaulting to 0. The consensus engine and flight
+  // recorder treat a missing frame as "no consensus coordinate" (lobby turns
+  // don't participate in apply-at-turn-N decisions).
+  optional uint32 game_frame_count = 4;
+
+  // Absolute native checksum-generation ordinal for the first 0x37 checksum
+  // command in this payload. This is origin-claimed observation metadata,
+  // independent of transport seq and send-time game_frame_count. It may repeat
+  // on extra flushes or skip when the game shrinks its buffer. Relays preserve
+  // it verbatim across forwarding, retransmission, oversize delivery, and
+  // resume; it is not forwarding or deduplication control. Absent for legacy
+  // senders and payloads without a sync command. The all-ones value is reserved
+  // as invalid/unknown; clients use it to fail closed when coverage is unavailable.
+  optional uint64 sync_generation = 6;
+
+  // A latency-buffer change the decision-making relay is broadcasting, if this
+  // forwarded turn carries one. The relay that holds buffer authority stamps
+  // this onto every turn it forwards until the whole session has passed the
+  // directive's apply frame, so the instruction reaches every client riding the
+  // turn stream they already receive — a client never gets its own turns back,
+  // so it picks the change up off a peer's turn, and a client whose turns
+  // aren't flowing yet is covered because the game (and so the apply frame)
+  // can't advance without it. It is envelope metadata, never part of
+  // `commands`: the game applies it outside command processing, so the SC:R
+  // command bytes stay exactly what the sending client produced. The transport
+  // ignores it for delivery, dedup, and retirement — the carrying turn is
+  // deduped by (slot, seq) as usual, and the directive rides along for the
+  // ride. A relay that is not the authority preserves an incoming stamp while
+  // delivering the turn to its local clients; only the authority ever sets or
+  // replaces this field.
+  //
+  // Idempotent by design: copies of the same directive (a re-stamped turn, a
+  // redundant re-carry, or reconnect/resume overlap) all carry the same `decision_seq`,
+  // and a client keeps only the highest `decision_seq` it has seen. Absent
+  // outside the window between a decision and its apply frame — the vast
+  // majority of turns.
+  optional BufferDirective buffer_directive = 5;
+
+  // A hash of the sending client's simulation state after one of its steps whose inputs it has
+  // all received, in a session that rolls back instead of running lockstep. Such a client
+  // simulates ahead on predicted inputs, so native 0x37 checksums would hash predictions; it
+  // strips them and reports hashes of confirmed steps here instead, for the authority relay to
+  // compare across slots. Origin-claimed, like `sync_generation`. Relays preserve it on the mesh
+  // but never forward it to clients, so no client can copy another's hash before its own is due.
+  // Absent on most turns.
+  optional StateHashReport state_hash = 7;
+
+  // NOTE: player-leaves are deliberately NOT on the turn envelope. A drop stalls
+  // every remaining player (lockstep), which stops the turn stream — so an
+  // envelope stamp could never be delivered when it is needed. Leaves ride the
+  // reliable control stream instead (see `ControlFrame.leave_directive`). The
+  // buffer directive keeps the envelope because buffer changes happen while turns
+  // are still flowing.
+}
+
+// A client's hash of its simulation state once it has run every slot's first `step` turns
+// (pipe-seed turns included), in a session that rolls back. Counting turns rather than frames
+// lets a relay tell when every slot's turns for the step have been forwarded without trusting a
+// client's frame stamp, and a paused game takes turns without advancing frames. Clients report
+// every 8th step, from step 8.
+message StateHashReport {
+  uint64 step = 1;
+  fixed64 hash = 2;
+}
+
+// One message on the client ↔ relay reliable control stream — the channel for
+// what the datagram path deliberately cannot carry. Each side opens one
+// bidirectional QUIC stream after the auth handshake and writes length-prefixed
+// `ControlFrame`s on it (see `proto::control_stream` for the framing and its
+// size cap); the peer reads the stream it accepted.
+//
+// The first resident is the oversize turn: a turn too large to ever fit a
+// datagram cannot ride redundancy (no bundle could carry it), so it travels
+// here — same `Payload`, same `(slot, seq)` identity, folded back into the
+// per-slot ordered stream on arrival exactly as if a datagram had delivered
+// it. QUIC's stream reliability replaces the redundancy/ack machinery for
+// these: nothing to re-carry, nothing to retire. The head-of-line blocking a
+// reliable stream brings is confined to the rare oversize turn that chose it.
+//
+// A oneof so chat/resync/lobby-control can join later without a wire break: a
+// frame whose kind a peer predates decodes with the oneof unset, and the
+// reader skips it rather than tearing the stream down.
+message ControlFrame {
+  oneof kind {
+    // A turn too large for the datagram path, validated and forwarded like
+    // any other turn. Client → relay carries the client's own turn; relay →
+    // client carries a peer's forwarded turn (which may bear the envelope
+    // stamps every forwarded turn can: frame annotation, buffer directive).
+    Payload oversize_turn = 1;
+
+    // A synced player-leave the relay pushes DOWN to a surviving client (relay →
+    // client only). It rides the reliable stream, not the turn envelope, because
+    // a drop stalls every survivor and stops the turn stream — so this is the
+    // only channel that still reaches them. The relay sends one per surviving
+    // client when it decides a leave; the client feeds it to its leave tracker
+    // and applies it at `apply_at_frame`, clearing the departed slot and
+    // unstalling. See `LeaveDirective`.
+    LeaveDirective leave_directive = 2;
+
+    // A client announcing its own clean departure UP to the relay (client →
+    // relay only), sent after the client has flushed its final turns and is
+    // about to disconnect. See `LeaveIntent`.
+    LeaveIntent leave_intent = 3;
+
+    // A client's end-of-game result report UP to the relay (client → relay
+    // only). The bytes are opaque to the relay — it stamps arrival against its
+    // own timeline and forwards the report up the coordinator pipeline without
+    // parsing it. Unlike a leave intent, this rides out mid-game the moment the
+    // game produces it, ahead of any final-turn drain. See `GameResult`.
+    GameResult game_result = 4;
+
+    // A native lobby setup/request command one session member authored, carried
+    // between members before the game starts. Client → relay the `slot` is
+    // IGNORED — the relay stamps the authenticated connection's slot, never a
+    // client-asserted value. Relay → client the `slot` is relay-stamped and
+    // authoritative, naming WHICH member authored the bytes so the receiving
+    // game attributes them to that member's lobby turn. See `LobbyCommand`.
+    LobbyCommand lobby_command = 5;
+
+    // An in-game chat message one session member authored, carried between
+    // members over the reliable stream rather than the datagram turn path: chat
+    // has no simulated step to key a turn on, and unlike a lobby command it must
+    // still flow mid-game, after the lobby channel has fallen silent. Client to
+    // relay the `slot` is IGNORED -- the relay stamps the authenticated
+    // connection's slot, never a client-asserted value, mirroring
+    // `LobbyCommand`. Relay to client it is relay-stamped and authoritative,
+    // naming WHICH member authored the text. See `GameChat`.
+    GameChat game_chat = 6;
+
+    // The session-start directive (relay → client only): every slot the
+    // coordinator listed as expected has connected somewhere in the session's
+    // mesh, so the game may begin. The relay fans it to every local slot over
+    // the reliable stream the moment the session's authority relay observes full
+    // presence, replacing the tenant app server's out-of-band start signal. The
+    // client applies it idempotently -- the relay may deliver it more than once
+    // (a re-push on a late/reconnecting slot, a duplicate across an authority
+    // handoff). See `SessionStart`.
+    SessionStart session_start = 7;
+
+    // A slot's link-connectivity change (relay → client only): a session member
+    // either lost its link (`connected` false) or (re)registered one
+    // (`connected` true). Best-effort and purely informational — the relay fans
+    // it to every local slot the moment it learns of the change, so a surviving
+    // client can show a "player X disconnected" overlay ~instantly, while the
+    // synced player-leave that actually removes the slot from lockstep is decided
+    // separately (and, for a disconnect, only when a surviving member requests the
+    // drop, never automatically). Carries no delivery guarantee beyond the reliable
+    // stream's own, no ordering against the leave path, and no replay: a receiver
+    // treats an unknown slot as a no-op and may ignore a pre-start frame entirely.
+    // See `SlotConnectivity`.
+    SlotConnectivity slot_connectivity = 8;
+
+    // A surviving member's manual request that a disconnected slot be dropped
+    // (client → relay only). A disconnection never removes a player on its own —
+    // a dropped slot stalls the game in lockstep until a human decides to remove
+    // it — so once a slot has been gone long enough, any single surviving member
+    // may ask for it to be dropped, and the session's authority relay honors the
+    // request only past an unlock floor. `slot` names the disconnected slot the
+    // requester wants dropped. The requester itself is never carried up from the
+    // client — the relay binds it to the authenticated connection the frame
+    // arrived on, exactly as it stamps a `LobbyCommand` or `GameChat` author, so
+    // a client cannot attribute a request to another member. Fire-and-forget:
+    // there is no ack, the `LeaveDirective` that arrives when the drop is honored
+    // is the only confirmation, and a refused request can simply be sent again.
+    // See `RequestDrop`.
+    RequestDrop request_drop = 9;
+
+    // One session member's opaque cosmetic-skin blob, broadcast once near game
+    // start so every other member can render that member with the cosmetics it
+    // chose. Client → relay the `slot` is IGNORED — the relay stamps the
+    // authenticated connection's slot, never a client-asserted value, mirroring
+    // `LobbyCommand` and `GameChat`. Relay → client it is relay-stamped and
+    // authoritative, naming WHICH member the blob describes. Delivered as a
+    // latest-blob-per-slot map the relay replays on member register — a member
+    // whose stream comes up late or that reconnects still receives every other
+    // member's current blob — with a re-send REPLACING the sender's previous blob
+    // and the author never echoed its own. Bounded by the same size and rate caps
+    // `GameChat` carries, both dropping the frame rather than closing the link.
+    // See `PlayerSkin`.
+    PlayerSkin player_skin = 10;
+
+    // The session's relay → region-label map (relay → client only), released
+    // only after a stretch of real gameplay has elapsed. Every serving relay
+    // learns the map from its own session descriptor and holds it back until
+    // its own clock says the release delay has passed since it latched the
+    // session started; before that no client can obtain it at all. It is
+    // declarative and idempotent — each frame carries the complete map, so a
+    // client keeps whatever the newest frame says — and delivered at least once
+    // per client: fanned to every local slot when the gate opens, pushed
+    // straight to a slot that connects afterwards, and re-fanned if a later
+    // descriptor changes the map. See `RegionLabels`.
+    RegionLabels region_labels = 11;
+
+    // A relay-authored instruction to shift this client's send phase (relay →
+    // client only): hold each outbound turn's *wire* handoff by a fixed delay so
+    // the client's turns arrive at the relay in phase with the other slots'.
+    // Aligning arrival phases is what makes a one-turn latency buffer actually
+    // stall-free — with zero slack, a peer whose sends sit a few milliseconds
+    // later in the turn cycle than a client's own poll boundary costs that
+    // client a micro-stall nearly every turn, even though every slot's send
+    // *rate* is identical. Absolute and idempotent: each frame carries the
+    // client's entire commanded delay (not an increment), the newest frame
+    // wins, and the relay re-pushes the current value to a slot that connects
+    // after one was issued. See `PhaseDirective`.
+    PhaseDirective phase_directive = 12;
+
+    // A client acknowledging that it adopted a send-phase directive (client →
+    // relay only), echoing the delay it now slews toward. Releases the
+    // relay's per-slot command fence: the phase controller never issues a
+    // slot a further command while its previous one is unacknowledged, so a
+    // client whose directives are delayed, lost, or ignored parks after a
+    // single bounded step instead of accumulating a large delay it might
+    // later apply all at once. Client-asserted by design and safe that way:
+    // it can release only the sender's own fence, and a client
+    // misrepresenting adoption can only advance its own command — send
+    // timing it already controls outright. See `PhaseApplied`.
+    PhaseApplied phase_applied = 13;
+
+    // A client's announcement that its game loop has begun running (client →
+    // relay only): the match's data is loaded and the simulation is stepping,
+    // so the tenant can mark the slot loaded rather than inferring it from a
+    // load-deadline timeout. Like `game_result` it rides up the reliable stream
+    // opaque of any client-asserted identity — the relay binds it to the
+    // authenticated connection's slot, never a slot named in the frame — and
+    // the relay stamps arrival against its own timeline before forwarding the
+    // fact up the coordinator pipeline. Accepted at most once per slot per
+    // link; a repeat is dropped without closing the link. See `GameStarted`.
+    GameStarted game_started = 14;
+
+    // A relay-authored fence probe on this client's control stream (relay →
+    // client only), asking the client to acknowledge the stream's current
+    // position. The relay sends one before it answers the coordinator's
+    // load-state question for a slot that has connected but not yet reported
+    // its game loop running, and waits for the matching
+    // `LoadStateProbeAck` before it snapshots. Because this stream is ordered,
+    // a `GameStarted` the client had already queued (or writes on receiving the
+    // probe) is on the wire ahead of the ack, so an ack proves the relay is not
+    // about to be told something the snapshot claims never happened. Carries no
+    // load state of its own and is never surfaced to the game: the only thing
+    // asked of the client is the ack. A client that predates the frame skips it
+    // and never acks, which the relay reads as an unfenced slot rather than as
+    // a fenced one. See `LoadStateProbe`.
+    LoadStateProbe load_state_probe = 15;
+
+    // A client's acknowledgement of a `LoadStateProbe` (client → relay only),
+    // echoing the probe's id so the relay matches it to the probe it sent and
+    // ignores one for a probe it no longer holds. The client writes it on the
+    // same stream the probe arrived on, AFTER any `GameStarted` it owes, which
+    // is the whole ordering guarantee the fence rests on. Client-asserted only
+    // in its id: the relay binds the ack to the authenticated connection's
+    // slot, never to a slot named in the frame, exactly as it stamps a
+    // `LobbyCommand` author. See `LoadStateProbeAck`.
+    LoadStateProbeAck load_state_probe_ack = 16;
+
+    // How early or late this client's turns have been reaching its home relay
+    // against the session clock (relay → client only, rollback sessions only).
+    // The client paces its game from these reports instead of from a clock of
+    // its own, so a player's link sets only that player's input delay and
+    // rollback. Relay-authored: the relay stamps the arrivals itself, and the
+    // only client input is each turn's seq. See `LeadReport`.
+    LeadReport lead_report = 17;
+
+    // A rollback client's own statistics for the game so far (client → relay
+    // only, rollback sessions only): how much it predicted, rolled back and
+    // stalled, and what its frames cost. Cumulative from the end of the game's
+    // lockstep start, so any two snapshots can be differenced. Sent every half
+    // minute or so and once more at game end, ahead of the leave intent. Purely
+    // for the relay's flight recording: nothing decides on it, and the relay
+    // binds it to the authenticated connection's slot, never to anything the
+    // frame carries. Rate-limited and size-bounded by the relay, which drops a
+    // frame over either limit without closing the link. A relay that predates
+    // it skips the frame. See `RollbackStats`.
+    RollbackStats rollback_stats = 18;
+  }
+}
+
+// A relay-authored instruction to change the latency buffer at an agreed future
+// game frame. The latency buffer is the lockstep cushion that absorbs network
+// jitter; the deciding relay resizes it as conditions shift and every client
+// must apply the change at the *same* simulated step, or they desync. This
+// message is how that change reaches the clients: it rides the `Payload`
+// envelope of turns the relay forwards (see `Payload.buffer_directive`), so it
+// travels the turn stream clients already consume without a separate channel or
+// a forged command.
+//
+// It is deliberately not a native latency command in the `commands` byte stream:
+// those cap the buffer at the game's built-in range and would have to be forged
+// into a specific slot's turn. Carried here instead, the buffer is a plain turn
+// count with no ceiling, and the game applies it out of band — reading it off
+// the turn it arrives on, not parsing it as a command.
+message BufferDirective {
+  // The latency buffer to apply, in whole turns of added dispatch delay. Not
+  // capped at the game's native latency range: the deciding relay may widen the
+  // cushion further when conditions demand it, and every client applies the same
+  // count so lockstep stays in step.
+  uint32 buffer_turns = 1;
+
+  // The game frame at which every client applies `buffer_turns`. Chosen a
+  // horizon ahead of the slowest frame the relay has observed — wide enough to
+  // cover the spread between the slowest and fastest client plus delivery — so
+  // the instruction reaches every client before that frame arrives. A client
+  // that receives it for a frame already in its past applies nothing — the
+  // change is moot by then, and the next decision will carry a fresh future
+  // frame.
+  uint32 apply_at_frame = 2;
+
+  // Orders decisions within a session. The authority increments this for every
+  // decision it broadcasts, so the turn stream's out-of-order delivery and
+  // redundant re-carries can interleave a superseded directive's copies with
+  // its replacement's without ambiguity. The client rule is: keep the
+  // directive with the highest `decision_seq` seen so far, apply it at its
+  // `apply_at_frame`, and ignore everything with a lower seq. On an EQUAL
+  // seq, `authority_relay_id` below breaks the tie.
+  uint32 decision_seq = 3;
+
+  // The deciding relay's own id — the deterministic tie-break for two
+  // directives that land on the same `decision_seq`. Each relay's
+  // `decision_seq` count starts fresh from where it takes buffer authority,
+  // so during the brief window where two relays can both believe they hold
+  // it (an acknowledged staggered-handoff race, not a steady-state
+  // condition), each can independently mint the same seq with a different
+  // `buffer_turns` — without this field a client keeps whichever equal-seq
+  // copy happens to arrive first, so two clients can converge on different
+  // buffers. On an equal seq, the client keeps the directive with the
+  // HIGHER `authority_relay_id` — deterministic, and needs no extra
+  // coordination, since relay ids are already globally unique and known to
+  // the deciding relay at stamp time. `optional` (rather than a plain
+  // `uint64` defaulting to 0) so a directive from a relay running code that
+  // predates this field is distinguishable from one that genuinely has id
+  // 0: absent always loses a tie to a directive that sets it, so a
+  // partially-upgraded fleet degrades no worse than the old arrival-order
+  // tie-break, never worse.
+  optional uint64 authority_relay_id = 4;
+}
+
+// A relay-authored instruction to apply a synced player-leave at an agreed
+// future game frame. When a player leaves or drops, every remaining client must
+// register the leave at the *same* simulated step, in the same per-slot order
+// with the same synced-RNG state — including clients that never observed the
+// drop locally — or the game desyncs. This message carries that agreement: the
+// deciding relay picks the frame and **pushes it down each surviving client's
+// reliable control stream** (see `ControlFrame.leave_directive`), because a drop
+// stops the turn stream and only the reliable stream still reaches the survivors.
+//
+// The apply frame is chosen minimally — one past the departing slot's last
+// observed frame — because remaining clients stall the instant that slot owes a
+// turn it will never send, so the leave is what unstalls them, applied at the
+// top of the receive step before the readiness check. Clients dedup by slot (a
+// slot leaves once), so `leave_seq` only orders/labels leaves for the relay.
+message LeaveDirective {
+  // The slot that left. Relay-authoritative (the relay knows which client's link
+  // ended, or validated a drop request), never a client-asserted value. Every
+  // client writes this slot's native leave reason and stops requiring its turns.
+  uint32 slot = 1;
+
+  // The native SC:R `pending_leave_reason` value to write for the departing
+  // slot: `0x40000006` == dropped (shows "player was dropped"), any other
+  // nonzero == left (shows "player left"). Carried so every client shows the
+  // same outcome; it does not affect determinism (all clients get the one value
+  // the relay chose).
+  uint32 reason = 2;
+
+  // The game frame at which every client applies the leave. One past the
+  // departing slot's last observed frame, so remaining clients apply it exactly
+  // at the step they would otherwise stall waiting on that slot. A client cannot
+  // advance past this frame without applying the leave — the departed slot gates
+  // the step until then — so unlike a buffer change, a leave can never be "too
+  // late," and there is no moot case.
+  uint32 apply_at_frame = 3;
+
+  // Orders and dedups leaves within a session, in a seq space *separate* from
+  // `BufferDirective.decision_seq`. Because leaves are cumulative — one slot
+  // leaving never obsoletes another slot's leave — this only dedups redundant
+  // copies of the *same* leave (the relay stamps it onto many turns) and keeps
+  // numbering continuous across an authority handoff so a promoted relay's
+  // re-broadcast outranks stale copies. It never retires a *different* leave.
+  uint32 leave_seq = 4;
+
+  // The exact number of the departing slot's turns every client consumes before
+  // applying the leave — the departed slot's home-authored gap-free
+  // forwarded-turn count at the departure (the session-level forward gate's
+  // prefix, never any one connection's receive state or a client-claimed resume
+  // anchor), past which the home forwards nothing (see
+  // `SlotDeparted.final_turn_count`). This, not `apply_at_frame`,
+  // is the synchronization point a client that understands it must use: turn
+  // counts are relay-authored and client-verifiable (each client consumes the
+  // identical forwarded set in per-slot order), so every client reaches the
+  // count at the same simulated step, with no trust in client-stamped frames.
+  // `apply_at_frame` remains for clients that predate this field; its
+  // survivor-reachability clamp can place it at a frame clients have already
+  // passed, which such clients then apply on arrival rather than in lockstep —
+  // the imprecision this field exists to remove.
+  //
+  // Carried for a CLEAN leave (`reason` != dropped), or for a dropped leave
+  // whose count was home-finalized (`finalized`). The count is sound only
+  // when nothing past it can ever reach a client. The clean-leave intent has
+  // that structurally: the home relay's serve task — the slot's single
+  // ingress — derives the count and stops forwarding in the same step, and a
+  // decided leave refuses readmission. A dropped slot has no such cut on its
+  // own (it can be mid-reconnect, pushing turns past any recorded count while
+  // a drop-decide races it), so an UNFINALIZED drop always schedules by
+  // `apply_at_frame`; finalization recreates the cut explicitly — the home
+  // marks the slot's generation terminal (refusing future admission and
+  // fencing its turn ingress) and only then snapshots this count. Also absent
+  // from directives re-derived from a departure record that predates the
+  // field, or authored by a home with no gap-free forwarded knowledge.
+  optional uint64 final_turn_count = 5;
+
+  // Whether `final_turn_count` on a DROPPED leave was derived through the
+  // home-side finalization handshake (see `FinalizeDrop`) — the proof that
+  // distinguishes it from a count authored by code predating the
+  // clean-leaves-only rule. Receivers strip a dropped count that does not
+  // carry this proof (and outside sessions whose descriptor enables
+  // finalized drops). Meaningless on a clean leave. Default false, so every
+  // legacy sender reads as unproven.
+  bool finalized = 6;
+}
+
+// A client's announcement that it is leaving cleanly (client → relay only),
+// sent on the reliable control stream after the client has flushed its final
+// turns and before it disconnects. Deliberately fieldless: the relay already
+// knows which slot is departing from the authenticated connection the frame
+// arrived on, and the reason is implicitly "left" — a client that got this far
+// wasn't dropped, it is announcing its own departure. On receipt the relay
+// decides an immediate synced leave for that slot with the "left" reason (see
+// `LeaveDirective`) and pushes it down every surviving client, rather than
+// waiting for the link to go idle and reason it as "dropped". There is no ack:
+// the client's confirmation that the relay processed this is the relay closing
+// the link, not a reply frame.
+message LeaveIntent {}
+
+// A client's report that its game loop has started (client → relay only), sent
+// on the reliable control stream. Deliberately fieldless, for the same reason
+// `LeaveIntent` is: the relay already knows which slot is reporting from the
+// authenticated connection the frame arrived on, and the fact itself carries no
+// further detail — the relay's own arrival stamp and frame coordinates are what
+// place it in the session's timeline. The relay accepts one per slot per link
+// lifetime and drops a repeat without closing the link, the same structural-only
+// validation it gives a `GameResult`.
+message GameStarted {}
+
+// A relay's fence probe on a client's reliable control stream (relay → client
+// only): "acknowledge where this stream is right now."
+//
+// The relay sends one to each slot it homes that has connected but not yet
+// reported its game loop running, immediately before it answers a coordinator
+// load-state question, and waits for the matching `LoadStateProbeAck`. The
+// probe carries nothing but its id, and the client's only obligation is to
+// write any `GameStarted` it owes and then the ack, both on this same ordered
+// stream. That ordering is the point: a report the game had already handed its
+// client cannot still be behind the ack, so a snapshot taken after the ack
+// cannot claim that slot never started while its report is queued in the
+// client.
+message LoadStateProbe {
+  // The relay's correlation id for this probe, fresh per probe and echoed back
+  // on the ack. Fixed-width because it is an opaque handle rather than a small
+  // counted quantity, so varint compaction buys nothing.
+  fixed64 probe_id = 1;
+}
+
+// A client's acknowledgement of a `LoadStateProbe` (client → relay only).
+//
+// The relay treats it as proof of stream position and nothing else: it names no
+// slot (the relay binds the ack to the authenticated connection) and carries no
+// load state (the relay reads that from what the stream delivered ahead of it).
+// An ack for a probe the relay no longer holds — a repeat, or one from a probe
+// whose fence already timed out — is dropped without closing the link.
+message LoadStateProbeAck {
+  // The probe's id, echoed verbatim.
+  fixed64 probe_id = 1;
+}
+
+// A surviving member's manual request that the session drop a disconnected slot,
+// carried client -> relay and then relay -> relay across the mesh. A
+// disconnection is never resolved into a player removal on its own: a dropped
+// slot stalls the game in lockstep until a human decides to remove it. Any
+// single surviving member may make that decision by sending this -- naming the
+// disconnected `slot` it wants dropped -- and the session's authority relay
+// honors it only once that slot has been held undecided past an unlock floor, so
+// a momentary blip cannot be turned into a permanent drop while a genuinely
+// sustained disconnection can always be escaped.
+//
+// `requester` is relay-stamped, never client-asserted. On the client -> relay
+// frame it is left unset: the relay binds the request to the authenticated
+// connection's slot the frame arrived on, exactly as it stamps a `LobbyCommand`
+// or `GameChat` author, so a client cannot attribute a request to another
+// member. The origin relay stamps `requester` before it broadcasts the request
+// across the mesh, where the field rides purely for logging and abuse
+// attribution -- the honor decision keys only on `slot` and the authority
+// relay's own hold state, never on who asked.
+//
+// Fire-and-forget: there is no ack frame. The `LeaveDirective` the authority
+// broadcasts when it honors the request is the only confirmation, and a request
+// that is refused -- sent before the unlock floor, or received by a relay that
+// is not the session authority -- is simply dropped; the requester can send
+// another.
+message RequestDrop {
+  // The disconnected slot the requester wants removed from the game. The relay
+  // validates it against the slot's departure/hold state; a request naming a
+  // slot that is not disconnected is ignored.
+  uint32 slot = 1;
+
+  // The slot that authored the request, relay-stamped at the origin's client
+  // edge. Unset (0) on the client -> relay frame -- the relay never trusts a
+  // client-asserted requester -- and meaningful only on the mesh-carried copy,
+  // where it rides for logging and abuse attribution. The honor decision never
+  // reads it.
+  uint32 requester = 2;
+}
+
+// A client's end-of-game result report (client → relay only), sent on the
+// reliable control stream. The relay never parses `payload`: it is the tenant's
+// own serialized result, opaque here exactly as `external_ref` is an opaque
+// correlation string. The relay validates only structurally (a size cap, one
+// report per slot per session), stamps arrival against its own timeline, and
+// forwards it up the coordinator pipeline. The reporting slot is the
+// authenticated connection's slot, never a value carried in the bytes.
+message GameResult {
+  // The tenant's opaque serialized result. Bounded by the relay's own cap; a
+  // payload over it is dropped without closing the link.
+  bytes payload = 1;
+}
+
+// One native SC:R lobby command a session member authored, carried on the
+// reliable control stream so every other member receives and applies it before
+// the game starts. During setup the host's game generates the lobby's setup
+// commands — slot and color assignments, the game-init that seeds the synced
+// RNG — as bare command bytes, and every other member must apply that exact
+// byte stream, in the exact order the host emitted it, or their pre-game state
+// diverges before the first turn. Members also author their own small requests
+// (a join, a ready toggle, a race change) that must reach the host and the
+// other members. This is the lobby-phase counterpart to the datagram turn
+// stream: once the game starts commands move to the datagram path, and this
+// channel falls silent.
+//
+// It rides the reliable control stream, not a datagram, because a lobby has no
+// lockstep turn clock to pace redundancy against and no frame to key a turn on
+// — there is nothing to re-carry a lost setup command against and no later turn
+// to fold it back into. QUIC's stream reliability carries it instead, exactly
+// as an oversize turn chooses the stream because no bundle could re-carry it.
+//
+// `slot` names the member that authored the bytes, and its authority differs by
+// direction, matching `GameResult`'s convention. Client → relay the field is
+// IGNORED: the relay binds the command to the authenticated connection's slot,
+// never a value the client asserts, so a client cannot forge another member's
+// lobby command. Relay → client the field is relay-stamped and authoritative:
+// the receiving game needs to know WHICH member authored the bytes to attribute
+// them to that member's lobby turn, and a mesh copy carries the origin relay's
+// stamp already (the origin stamps before the command ever leaves its client
+// edge).
+//
+// Delivery is a per-session ordered log the relay replays to late arrivals, not
+// a fire-and-forget fan-out, because setup runs while members are still dialing
+// in with real clock skew: the host's lobby machine can emit its setup commands
+// before a given member's link exists, and nothing back-pressures it (the
+// host's local turn barrier is already satisfied). So the relay appends every
+// lobby command it delivers to a per-session log and, when a member's control
+// stream comes up after commands already flowed, replays the log to that member
+// in arrival order before it begins tailing live commands — every member ends
+// up with the identical ordered sequence regardless of when it joined. A member
+// never receives its own authored command back (the relay never echoes to the
+// author; the game applies its own locally), and the replay/live handoff is
+// exact: each command reaches a member's control stream exactly once, in order.
+// A member that reconnects registers again and replays the whole log again, so
+// the receiving client drops what it already handed its game (see `seq`).
+//
+// A control-stream write carries no acknowledgment, so a command written onto
+// a connection whose path has silently died is lost with it. The authoring
+// client therefore keeps every command it authored and writes them all again,
+// oldest first, on each new control stream (paced inside the relay's rate cap),
+// and `seq` is what makes that repeat safe: every relay that already accepted
+// an author's command drops a copy whose `seq` it has seen, so the re-send
+// fills only the gap. A relay also re-shares its log with a peer relay whose
+// mesh link (re)joins the session, so a command lost between relays is
+// recovered the same way. The guarantee this buys is that every authored
+// command reaches every member at most once, eventually; NOT that re-sent
+// commands keep the author's order. A command recovered by a re-send lands
+// after whatever the author wrote behind it. The channel's one consumer needs
+// no more: a ShieldBattery game applies only the host's single game-init
+// record and drops every other lobby command.
+message LobbyCommand {
+  // The session slot that authored the command bytes. Client → relay this is
+  // ignored and the relay overwrites it with the authenticated connection's
+  // slot; relay → client it is the relay-stamped, authoritative author, so the
+  // receiving game attributes the bytes to that member's lobby turn.
+  uint32 slot = 1;
+
+  // The opaque native SC:R lobby command bytes, carried verbatim. The relay
+  // frames nothing of its own around them beyond this message and forwards them
+  // byte-for-byte — like a `GameResult` payload, they are the game's own bytes,
+  // not something the relay parses. Bounded by the control frame's size cap;
+  // lobby commands are tens of bytes in practice.
+  bytes payload = 2;
+
+  // The authoring client's origin sequence number for this command: 0 for its
+  // first lobby command of the session, one higher for each after, and the same
+  // value on every re-send of the same command. Assigned once by the author and
+  // carried verbatim by every hop, mesh copies included, so `(slot, seq)` names
+  // one command fleet-wide. A relay keeps the set of seqs it accepted from each
+  // author: one already in it is a re-send, neither logged nor forwarded; any
+  // other is accepted whenever it arrives, so a command the rate cap or a
+  // policy refused before is judged afresh on its next re-send, and nothing
+  // behind it ever waits on it. A receiving client likewise drops one whose seq
+  // it already handed its game.
+  //
+  // Absent from a client that predates it: such a command has no identity to
+  // dedupe on and is forwarded and logged exactly as it always was. A relay
+  // that predates the field skips it as unknown, so a re-send through one is
+  // delivered again, and the copies it forwards no longer carry it.
+  optional uint64 seq = 3;
+}
+
+// One in-game chat message a session member authored, carried on the reliable
+// control stream so every other member receives it before the game's in-game
+// chat UI shows it. Unlike `LobbyCommand`, this is the channel's *mid-game*
+// counterpart: it stays live once the game starts and the lobby channel falls
+// silent, and it carries a small amount of structure -- a scope hint -- rather
+// than opaque bytes.
+//
+// It rides the reliable control stream, not a datagram, for the same reason an
+// oversize turn and a lobby command do: chat has no simulated step to key a
+// turn on and no later turn to fold a lost message back into, so there is
+// nothing for the datagram path's redundancy to re-carry it against. QUIC's
+// stream reliability delivers it instead.
+//
+// `slot` names the member that authored the message, with the same
+// direction-dependent authority as `LobbyCommand` and `GameResult`: client to
+// relay the field is IGNORED (the relay binds it to the authenticated
+// connection's slot, never a client-asserted value, so a client cannot forge a
+// message from another member); relay to client it is relay-stamped and
+// authoritative; and a mesh copy already carries the origin relay's stamp,
+// applied before the message ever left its client edge.
+//
+// Delivery is a bare fan-out, not an ordered replay log like `LobbyCommand`'s:
+// chat is ephemeral, so a member whose control stream comes up after a message
+// already flowed simply never sees it -- there is no pre-game setup state a
+// missed message could leave incomplete, so there is nothing worth replaying.
+// The relay does not echo a message back to its own author (the sender's own
+// chat UI echoes locally) and fans a client-authored message to every other
+// local member plus every peer relay serving the session; a mesh-received
+// message is fanned to this relay's local members only (not re-broadcast
+// across the mesh -- the origin already sent a copy to every link serving the
+// session).
+//
+// The relay also enforces two caps on a client-authored message before
+// forwarding it: `text` may not exceed the control frame's opaque-payload
+// convention (rejected, not truncated, past a size cap far more generous than
+// any real chat line), and an authoring slot is rate-limited (a token bucket
+// allowing short bursts) so a misbehaving client cannot flood the channel. Both
+// caps drop the offending frame without closing the connection -- a chat
+// message is not correctness-critical the way a turn or a lobby command is, so
+// losing one costs nothing more than a dropped line.
+message GameChat {
+  // The session slot that authored the message. Client → relay this is ignored
+  // and the relay overwrites it with the authenticated connection's slot; relay
+  // → client it is the relay-stamped, authoritative author, so the receiving
+  // game attributes the text to that member's chat line.
+  uint32 slot = 1;
+
+  // A scope hint for which members should display this message: 0 = all, 1 =
+  // allies (of the author), 2 = observers, 3 = a single named player (see
+  // `target_slot`). The relay does NOT interpret this field -- it fans the
+  // message out to every other local member and across the mesh regardless of
+  // scope, and each receiving client decides locally whether to display the
+  // line. This mirrors native SC:R's own channel-based chat, where scope
+  // filtering has always been receiver-side: a modified client can already
+  // choose to display every channel it receives, so server-side filtering
+  // would add complexity without closing a real trust boundary. The relay
+  // carries the hint verbatim in both directions and across a mesh hop.
+  uint32 target_kind = 2;
+
+  // The recipient slot a `target_kind` of 3 (a single named player) names.
+  // Meaningless for every other `target_kind` and left at 0 in that case,
+  // exactly as `Payload.game_frame_count`'s absence-vs-zero distinction is
+  // drawn elsewhere with an `optional` field -- but here 0 is always a valid
+  // "unused" sentinel because a `target_kind` other than 3 makes the receiving
+  // client ignore this field entirely, so no ambiguity with a real slot 0
+  // arises. Carried verbatim like `target_kind`; the relay never reads it.
+  uint32 target_slot = 3;
+
+  // The chat line's text, UTF-8, carried verbatim. Bounded by the relay's own
+  // size cap (well under the control frame's own cap) -- an over-cap message is
+  // dropped, not truncated, so no member ever sees a different message than the
+  // one another member sent by seeing a silently shortened copy of it.
+  string text = 4;
+}
+
+// One session member's opaque cosmetic-skin blob, carried on the reliable
+// control stream so every other member can render that member with the
+// cosmetics it chose. The bytes are the game's own serialized skin state,
+// carried verbatim; the relay never parses them. Cosmetic and non-synced: a
+// member that never receives another's blob shows a wrong cosmetic, never a
+// wrong simulation, so a lost blob costs nothing but appearance -- unlike a
+// turn or a lobby command, which are correctness-critical.
+//
+// It rides the reliable control stream, not a datagram, for the same reason a
+// `LobbyCommand`, a `GameChat`, and an oversize turn do: there is no simulated
+// step to key a turn on and no later turn to fold a lost blob back into, so the
+// datagram path's redundancy has nothing to re-carry it against. QUIC's stream
+// reliability delivers it instead.
+//
+// `slot` names the member that authored the blob, with the same
+// direction-dependent authority as `LobbyCommand`, `GameChat`, and `GameResult`:
+// client → relay the field is IGNORED (the relay binds it to the authenticated
+// connection's slot, never a client-asserted value, so a client cannot forge
+// another member's skin); relay → client it is relay-stamped and authoritative,
+// naming WHICH member the blob describes so the receiving game applies it to
+// that member; and a mesh copy already carries the origin relay's stamp, applied
+// before the blob ever left its client edge.
+//
+// Delivery is a latest-blob-per-slot map the relay replays on member register --
+// neither the ephemeral fan-out `GameChat` uses nor the append-only ordered log
+// `LobbyCommand` uses. A skin is one-shot *state*, not a stream of events: a
+// member whose control stream comes up late, or that reconnects, must still end
+// up with every other member's current blob, so the relay keeps the latest blob
+// each slot authored and replays the whole map to a member as it registers
+// (before any live blob), the way the lobby log replays to a late joiner. But
+// unlike that log, a re-sent blob from the same slot REPLACES that slot's map
+// entry rather than appending -- a late joiner replays only the newest blob per
+// slot, and receivers apply a blob idempotently, so a replayed duplicate a
+// reconnect produces is harmless. The relay never echoes a member its own blob
+// back (its own game already has it); it fans a client-authored blob to every
+// other local member plus every peer relay serving the session, and a
+// mesh-received blob is stored and fanned to that relay's local members only,
+// never re-broadcast across the mesh (the origin already sent a copy to every
+// link serving the session).
+//
+// The relay enforces two caps on a client-authored blob before forwarding it,
+// exactly like `GameChat`: `payload` may not exceed a size cap far above any
+// real blob (rejected, not truncated), and an authoring slot is rate-limited (a
+// token bucket allowing a small burst) so a misbehaving client cannot flood the
+// channel or grow the relay's per-slot map without bound. Both caps drop the
+// offending frame without closing the connection -- a lost cosmetic is not
+// correctness-critical the way a turn or a lobby command is.
+//
+// Additive on both control streams: `player_skin` is a new arm of the
+// `ControlFrame` and `MeshControlFrame` oneofs, so a peer that predates it
+// decodes the frame with the oneof unset and skips it (the reader tears nothing
+// down), exactly as `MeshPacket.tenant` is ignored by a peer that predates that
+// field. No ALPN bump is needed for either stream.
+message PlayerSkin {
+  // The session slot that authored the blob. Client → relay this is ignored and
+  // the relay overwrites it with the authenticated connection's slot; relay →
+  // client it is the relay-stamped, authoritative author, so the receiving game
+  // applies the blob to that member.
+  uint32 slot = 1;
+
+  // The opaque cosmetic-skin blob, carried verbatim. The relay frames nothing
+  // of its own around it and forwards it byte-for-byte — like a `GameResult` or
+  // `LobbyCommand` payload, these are the game's own bytes, not something the
+  // relay parses. Bounded by the relay's own size cap (well under the control
+  // frame's own cap).
+  bytes payload = 2;
+}
+
+// The session's relay → region-label map, as one serving relay releases it to
+// its own local clients. The labels place every member geographically (a client
+// can tell which relay each player homes on from the turn stream's origin
+// slots, so a relay's region is that player's region), which is why they are
+// withheld rather than sent at dial: a client that could read them before real
+// gameplay had elapsed could see its opponents' regions and abandon the match
+// while the game had barely begun. Every relay serving a session receives the
+// whole map on its own `SessionDescriptor`, so no relay ↔ relay exchange
+// carries it and there is no mesh counterpart to this frame.
+//
+// **The release is timed on the sending relay's own clock**, measured from when
+// that relay latched the session started, and reads nothing a client sends. A
+// turn's `game_frame_count` is a client-asserted claim that propagates to every
+// relay serving the session, so keying the release on one would let a single
+// client unseal the labels fleet-wide — including at its opponents' home relays.
+//
+// Declarative, not incremental: each frame carries the complete map as the
+// sending relay currently knows it, so a receiver replaces rather than merges
+// and a repeat costs nothing. Delivery is at least once per client — fanned to
+// every local slot when the relay's gate opens, pushed directly to a slot that
+// connects after it opened, and re-fanned when a later descriptor changes the
+// map (a re-home names a different relay) — so a client applies it
+// idempotently. A session that ends before its relay's delay elapses simply
+// never receives one, which is the intended outcome, not a failure.
+message RegionLabels {
+  // Every relay the sending relay has a region label for, in the order its
+  // descriptor listed them. A relay the coordinator never tagged with a region
+  // is absent rather than present with an empty string, so "unlabeled" and
+  // "labeled with nothing" are not confusable.
+  repeated RegionLabel labels = 1;
+}
+
+// One relay's region label within a `RegionLabels` frame.
+message RegionLabel {
+  // The relay's coordinator-assigned id — the same id a client already knows
+  // for its own home relay, and the join key against the origin relay of the
+  // turns a client receives.
+  uint64 relay_id = 1;
+
+  // The coordinator-assigned region the relay enrolled in, an opaque display
+  // label (e.g. `us-east`). The relay never interprets it; it carries the
+  // string its descriptor named verbatim.
+  string region = 2;
+}
+
+// A relay-authored instruction to shift one client's send phase: delay every
+// outbound turn's wire handoff by `delay_us` before it leaves for the relay.
+//
+// Why this exists: lockstep clients all send at the same *rate* (one turn per
+// turn interval) but at uncorrelated *phases* within the interval. At a
+// one-turn latency buffer there is zero slack, so a client stalls on whichever
+// peer's turns arrive just after its own poll boundary — a rotating ring of
+// micro-stalls that per-slot arrival *pacing* can never reveal, because every
+// slot's pacing is individually clean. The client's home relay measures each
+// local slot's arrival phase within the turn cycle and issues these directives
+// to pull the phases together; once arrival phases align at the relay, a
+// buffer of one turn is stall-free whenever each client's own relay round trip
+// fits inside one turn interval — a per-client condition the relay's buffer
+// law already measures. Measurement is exclusively relay-side arrival timing:
+// no client-asserted input feeds another client's correction.
+//
+// The delay applies to the network handoff only. A client keeps consuming its
+// own commands locally on its own schedule — this shifts when turns *leave*
+// for the wire, never when the game runs — and the commanded delay is bounded
+// under one turn interval, so a turn is always sent before the next one is
+// produced. The client moves toward a newly commanded delay gradually (a
+// bounded slew, never a step) so its arrival pacing at the relay stays smooth
+// while the shift is underway.
+//
+// Absolute and idempotent, like `RegionLabels`: each frame carries the whole
+// commanded delay, a newer frame replaces an older one, a repeat is harmless,
+// and the relay re-pushes the current value to a slot that connects after one
+// was issued. Best-effort: a lost frame costs an unaligned phase (some
+// micro-stall exposure), never correctness. Additive on the `ControlFrame`
+// oneof — a client that predates it skips the frame, keeps its natural send
+// phase, and simply doesn't benefit.
+message PhaseDirective {
+  // The total delay to hold each outbound turn's wire handoff by, in
+  // microseconds from the moment the game hands the turn over. Always under
+  // one turn interval — the issuing relay works modulo the turn cycle, so a
+  // larger shift is expressed as its in-cycle equivalent. A client clamps
+  // defensively rather than trusting the bound.
+  uint32 delay_us = 1;
+
+  // How fast the client may move from its currently applied delay toward
+  // `delay_us`, in microseconds of delay change per second of wall clock. The
+  // cap keeps the client's inter-send gaps within a fraction of a percent of
+  // the turn interval during the shift, so the relay's own pacing statistics
+  // (and its buffer law) never see the slew as jitter. Zero means "use the
+  // client's own default".
+  uint32 slew_us_per_s = 2;
+}
+
+// A client's acknowledgement that it adopted a send-phase directive (see
+// `PhaseDirective`): the delay echoed back verbatim, sent the moment the
+// directive becomes the client's slew target. The relay releases the sender's
+// command fence only when the echoed delay matches the currently commanded
+// one, so a stale acknowledgement — an older directive's echo arriving after
+// a newer command — releases nothing. The sending slot is never carried: the
+// relay binds the acknowledgement to the authenticated connection it arrived
+// on, exactly as it stamps a `LobbyCommand` author.
+message PhaseApplied {
+  // The commanded total delay the client adopted as its slew target, echoed
+  // verbatim from the directive it acknowledges.
+  uint32 delay_us = 1;
+}
+
+// How early or late a client's turns have been reaching its home relay,
+// against the session clock of a rollback session (see `ControlFrame.lead_report`).
+//
+// The session clock makes step `n` due at the relay a fixed step length after
+// step `n - 1`, from the moment the session's lockstep start ended, and stops
+// while the whole session is stalled (a drop wait, an outage). Each player's
+// home relay measures every turn's first arrival against that clock and sends
+// the player its own figures every few steps. Lateness is positive: a turn that
+// arrived after its step was due. The client moves its pacing so its turns make
+// the deadline, and sets how much of its own lateness to cover with input delay
+// rather than rollback.
+//
+// Absolute, like `PhaseDirective`: each report restates the whole window, a
+// newer one replaces an older one, and the relay re-sends the current one to a
+// client that connects. A client that predates it skips the frame.
+message LeadReport {
+  // The newest step whose arrival the window covers. A turn is measured only
+  // once the clock's deadline for it is final, so this can trail the newest
+  // turn the relay has.
+  uint64 through_step = 1;
+
+  // The median and the 90th percentile of the lateness of the window's turns,
+  // in microseconds (negative when early).
+  sint32 median_us = 2;
+  sint32 p90_us = 3;
+
+  // How many turns the window holds. Zero before any turn has been measured:
+  // the report then only carries `pause_us`, and `median_us` and `p90_us`
+  // mean nothing.
+  uint32 samples = 4;
+
+  // How long the session clock has spent stopped so far, in microseconds. It
+  // grows exactly when the whole session waited on turns that weren't coming,
+  // so a client moves its pacing later by any increase at once rather than
+  // racing to make up time the session never ran. A stop sends the client a
+  // report at once. Every turn is measured against a deadline no later stop
+  // moves, so the figures read the same on either side of a change.
+  uint64 pause_us = 5;
+}
+
+// A rollback client's statistics for one game, cumulative from the end of the
+// game's lockstep start until `through_turn` (see `ControlFrame.rollback_stats`).
+// Counts are of game loop ticks, steps, frames or turns as each field says;
+// every duration is in microseconds. A field a sender predates reads as zero
+// and an empty histogram as absent, so a reader treats zero as "not reported"
+// wherever a real zero would be implausible.
+message RollbackStats {
+  // The layout version of these statistics, 1. Bumped when a field's meaning
+  // changes; a field added later just takes a new number.
+  uint32 version = 1;
+  // The turn the statistics run through.
+  uint32 through_turn = 2;
+  // The client's rollback target setting, in frames.
+  uint32 rollback_target = 3;
+  // The client's prediction limit, in frames.
+  uint32 prediction_limit = 4;
+  // Game loop ticks counted.
+  uint32 ticks = 5;
+  // Ticks by how far the shown frame was past the newest fully known turn:
+  // entry `i` counts ticks `i` frames ahead for `i` up to 10, and entry 11
+  // counts 11 or more.
+  repeated uint32 rollback_histogram = 6;
+  // Ticks by this client's own input delay in turns: entry `i` counts ticks
+  // at `i` turns for `i` up to 13, and entry 14 counts 14 or more.
+  repeated uint32 pipe_histogram = 7;
+  // Ticks stalled at the prediction limit.
+  uint32 capped_ticks = 8;
+  // Ticks that restored a snapshot.
+  uint32 rollbacks = 9;
+  // Frames simulated again after a restore.
+  uint32 resimulated_frames = 10;
+  // The most frames one rollback simulated again.
+  uint32 deepest_rollback = 11;
+  // Steps that first ran with at least one turn predicted.
+  uint32 predicted_steps = 12;
+  // Predicted turns a late turn contradicted.
+  uint32 mispredicted_turns = 13;
+  // Predicted turns that turned out right.
+  uint32 confirmed_predictions = 14;
+  // Extra frames stepped to catch up with the schedule.
+  uint32 caught_up_frames = 15;
+  // Ticks whose next step was put off because the client was ahead of the
+  // schedule.
+  uint32 held_back_ticks = 16;
+  // Times the client's controller moved its lead.
+  uint32 lead_changes = 17;
+  // Lead reports that moved the client's schedule.
+  uint32 schedule_corrections = 18;
+  // The net effect of those corrections (negative is earlier).
+  sint64 schedule_corrected_us = 19;
+  // Stall holds undone because the stall turned out to be this client's alone.
+  uint32 holds_undone = 20;
+  // The session clock's total stopped time, as the client last heard it.
+  uint64 clock_stopped_us = 21;
+  // Lead reports received.
+  uint32 lead_reports = 22;
+  // The highest p90 lateness any lead report carried.
+  sint32 lead_p90_max_us = 23;
+  // The sum of the lead reports' p90 lateness; divided by `lead_reports` it
+  // is their mean.
+  sint64 lead_p90_sum_us = 24;
+  // The longest tick that wasn't stalled, start to end.
+  uint64 worst_tick_us = 25;
+  // Ticks that weren't stalled and took over 4 ms.
+  uint32 slow_ticks = 26;
+  // Total time spent restoring snapshots.
+  uint64 restore_us = 27;
+  // Total time spent taking snapshots.
+  uint64 snapshot_us = 28;
+  // Total time spent in logic steps.
+  uint64 step_us = 29;
+}
+
+// One message on the relay ↔ relay reliable mesh control stream — the channel a
+// relay-pair uses for what its datagram path cannot carry: synced player-leave
+// propagation and oversize-turn divert. Each mesh link carries one
+// bidirectional QUIC stream on which both relays write length-prefixed
+// `MeshControlFrame`s (same framing and size cap as `ControlFrame`; see
+// `proto::control_stream`) and read the peer's.
+//
+// A leave that a relay's own home client triggers must reach the *other* relays'
+// local survivors too — a drop stalls every player in the game, including those
+// on peer relays — and it must reach the session's decision authority so it can
+// author the one synced `LeaveDirective` every client applies at the same frame.
+// The datagram path cannot carry that: a drop stops the turn stream the datagram
+// sidecars ride. So it rides this reliable stream, like presence does. An
+// oversize turn rides here for the same reason it rides the client-edge control
+// stream: no datagram bundle could ever carry (or re-carry) it.
+//
+// A oneof so more relay ↔ relay control kinds can join later without a wire
+// break: a frame whose kind a peer predates decodes with the oneof unset, and the
+// reader skips it rather than tearing the stream down. An unset kind is also the
+// empty stream-establishment/keepalive frame the dialer writes right after
+// opening the stream so the acceptor's `accept_bi` completes promptly (QUIC does
+// not surface an opened bidirectional stream to the peer until its opener writes).
+message MeshControlFrame {
+  // The game this frame belongs to, scoped within the tenant the mesh link
+  // authenticated for — exactly like `MeshPacket.session`. A `0` is malformed
+  // (sessions are 1-indexed) and the receiver skips it; it is also the value the
+  // empty establishment frame carries, so a zero-session frame is always
+  // ignorable. The receiver resolves the bare id to a tenant-scoped key through
+  // the same per-link joined-sessions state the datagram path uses.
+  uint64 session = 1;
+
+  oneof kind {
+    // A home client of the sending relay departed the game. Every relay records
+    // the departure (for authority-handoff robustness); the session's decision
+    // authority additionally authors the synced `LeaveDirective` from it. The
+    // receiving authority dedups by slot, so a duplicate `SlotDeparted` (e.g. a
+    // re-announce on a redialed link) never double-decides.
+    SlotDeparted slot_departed = 2;
+
+    // A synced player-leave the session's authority authored, propagated to the
+    // other relays so each pushes it down its own local survivors' reliable
+    // control streams. A relay that receives this caches it (dedup by slot) and
+    // fans it out to its local clients; it does not re-broadcast it across the
+    // mesh, so there is no echo. See `LeaveDirective`.
+    LeaveDirective leave_directive = 3;
+
+    // A turn too large for any mesh datagram, diverted here by the relay whose
+    // home client produced it — the same `Payload`, same `(slot, seq)` identity
+    // as the client-edge `ControlFrame.oversize_turn`, validated at the origin's
+    // client edge like every mesh-carried turn. The receiver folds it back into
+    // its normal turn path (session-level duplicate gate, then local fan-out)
+    // but does not re-broadcast it to other mesh links: the origin relay already
+    // diverted a copy to every link serving the session, so re-flooding would
+    // only echo.
+    Payload oversize_turn = 4;
+
+    // A lobby command one member authored, propagated to the other relays so
+    // each fans it out to its own local members. The origin relay stamps the
+    // authoring `slot` onto the `LobbyCommand` before it ever leaves that relay's
+    // client edge, so a mesh copy already carries the authoritative slot, and it
+    // keeps the author's `seq`. A relay that receives this drops it if it already
+    // accepted that `(slot, seq)` — an author that moved relays re-sends what
+    // its old relay already forwarded here — and otherwise appends it to its
+    // own per-session lobby log — so its late-dialing local members still get
+    // it on replay — and fans it out to its local members, but does not
+    // re-broadcast it across the mesh: the origin already sent a copy to every
+    // link serving the session, so re-flooding would only echo (mirroring the
+    // oversize-turn divert). When a mesh link (re)joins a session, each side
+    // re-shares its whole sequenced lobby log down it in these frames, so a copy
+    // lost with a dead link still arrives. See `LobbyCommand`.
+    LobbyCommand lobby_command = 5;
+
+    // A game-chat message one member authored, propagated to the other relays
+    // so each fans it out to its own local members. The origin relay stamps the
+    // authoring `slot` before the message ever leaves that relay's client edge,
+    // so a mesh copy already carries the authoritative slot. A relay that
+    // receives this fans it out to its local members, but appends it to no log
+    // (chat is ephemeral, unlike a lobby command) and does not re-broadcast it
+    // across the mesh: the origin already sent a copy to every link serving the
+    // session, so re-flooding would only echo. See `GameChat`.
+    GameChat game_chat = 6;
+
+    // One of the sending relay's home clients registered for the session — a
+    // slot-presence announcement. Every relay accumulates the reported slots
+    // into a per-session live-slot set; the session's authority relay fires the
+    // one `SessionStart` once that set covers the descriptor's expected slots. A
+    // duplicate (a re-announce on a redialed link) is idempotent — the set is a
+    // set. See `SlotPresent`.
+    SlotPresent slot_present = 7;
+
+    // The session-start directive the authority decided, propagated to the other
+    // relays so each fans it down its own local slots. A relay that receives this
+    // latches the session started (so its own late-registering slots still get
+    // it) and fans it to its local slots; it does not re-broadcast it across the
+    // mesh — the authority already sent it to every relay — so there is no echo.
+    // See `SessionStart`.
+    SessionStart session_start = 8;
+
+    // A slot's link-connectivity change one relay observed on its own home
+    // client, propagated so every relay can inform its local slots. The origin
+    // relay broadcasts it the moment a home client's link dies (`connected`
+    // false) or (re)registers (`connected` true); a relay that receives this fans
+    // it to its own local slots and does NOT re-broadcast it across the mesh (the
+    // origin already sent a copy to every peer, so re-flooding would only echo).
+    // Best-effort and informational, exactly like its client-edge sibling — no
+    // log, no delivery guarantee beyond the reliable stream, unknown slots are
+    // no-ops. See `SlotConnectivity`.
+    SlotConnectivity slot_connectivity = 9;
+
+    // A manual drop request one relay's surviving member authored, propagated so
+    // the session's authority relay -- which may be a peer, not the origin -- can
+    // honor it. The origin relay stamps the authoring `requester` slot onto the
+    // `RequestDrop` before it leaves that relay's client edge (for logging and
+    // abuse attribution), then broadcasts it to every peer. A relay that receives
+    // this acts on it only if it is the session authority and the target slot's
+    // drop is past the unlock floor; it does NOT re-broadcast it -- the origin
+    // already sent a copy to every peer, so re-flooding would only echo, the same
+    // no-echo rule `SlotDeparted` and `GameChat` follow. See `RequestDrop`.
+    RequestDrop request_drop = 10;
+
+    // One destination client's end-to-end delivered-through cursors, shipped by
+    // its home relay to the session's other relays so the authority can track
+    // FINAL delivery (origin turns reaching the destination client) rather than
+    // only per-link acks. The cursors are the ones the destination itself pushes
+    // up its ack-beacon stream -- client-claimed truth, re-shared, never
+    // measured anew. Declarative: each frame carries the destination's complete
+    // per-origin cursor map, so a single frame fully (re)syncs a fresh or
+    // reconnected link and a lost frame is corrected by the next one.
+    // Push-on-advance with a per-destination minimum interval, so it stays off
+    // the hot path's budget. A relay that receives this does NOT re-broadcast
+    // it -- the home relay sent a copy to every session peer, the same no-echo
+    // rule the other kinds follow.
+    DeliveryCursors delivery_cursors = 11;
+
+    // One relay's per-session resume cursors for the mesh datagram path: for
+    // each origin slot this session has ever forwarded a turn for, the next
+    // seq this relay's forward-gate still needs. Sent once by each side after
+    // its link (re)establishes and Join/reconcile completes -- turns flow
+    // both directions on a pair, so each side answers for itself, never for
+    // the peer. The receiver replays only turns that originated at ITS OWN
+    // client edge -- never a turn it itself received from the mesh -- so a
+    // reply can never echo something back onto the mesh. Not re-broadcast:
+    // each side answers only the peer that asked.
+    //
+    // An origin slot absent from `cursors` means one of two things, told
+    // apart by `resuming`:
+    //
+    // - `resuming` false: an ordinary first Join with neither forward-gate
+    //   history nor a coordinator assignment to resume an already-running
+    //   session. An absent slot asks for no replay.
+    // - `resuming` true: the sender has forwarding history, or a resumed
+    //   assignment whose clients may need turns produced before this relay
+    //   joined. An absent slot asks for every retained local-origin turn;
+    //   the sender's dedup absorbs overlap. A fresh replacement must ask even
+    //   before its first client turn creates a forward-gate entry.
+    //
+    // A resuming Join repeats its ask on the peer's first presence, because
+    // a peer that has not joined yet cannot answer. A resumed assignment
+    // learned between Join and that presence also triggers the repeat.
+    MeshResumeCursors mesh_resume_cursors = 12;
+
+    // The sending relay's per-slot delivered-through cursors for THIS mesh
+    // link's own datagram transport -- the mesh-link counterpart of the
+    // client-edge ack-beacon. Each cursor is the top of the contiguous run of
+    // turns this relay's link-level transport has received from the peer for
+    // one slot; the peer force-advances that slot's unacked window past it,
+    // exactly as `Link::retire_through` does for a client-edge link. Carried
+    // on this stream (rather than a dedicated uni-stream, as the client edge
+    // uses) because one mesh connection multiplexes many sessions' transport
+    // state behind a single QUIC datagram path -- this frame's `session`
+    // field is what a bare per-slot cursor cannot supply on its own. Declared
+    // over reverse-path acks specifically: it rescues a window that is stuck
+    // only because the peer's acks were lost, not one stuck by a genuine
+    // forward gap (the peer truly hasn't received the turns) -- that case is
+    // the hard cap's job, not this frame's. Push-on-advance, like every other
+    // cursor share here. Not re-broadcast -- each side answers only for its
+    // own receive state.
+    MeshAckCursors mesh_ack_cursors = 13;
+
+    // A cosmetic-skin blob one member authored, propagated to the other relays
+    // so each stores it and fans it out to its own local members. The origin
+    // relay stamps the authoring `slot` before the blob ever leaves that relay's
+    // client edge, so a mesh copy already carries the authoritative slot. A relay
+    // that receives this stores it in its own per-session latest-blob-per-slot
+    // map -- so its late-dialing or reconnecting local members still get it on
+    // register -- and fans it out to its local members, but does NOT re-broadcast
+    // it across the mesh: the origin already sent a copy to every link serving the
+    // session, so re-flooding would only echo (the same no-echo rule
+    // `LobbyCommand` and `GameChat` follow). See `PlayerSkin`.
+    PlayerSkin player_skin = 14;
+
+    // The session authority asks the departed slot's home relay to finalize a
+    // drop: atomically verify no live connection generation exists for the
+    // slot, seal future admission and turn ingress terminally, and snapshot
+    // the slot's gap-free forwarded-turn count. Broadcast to every session
+    // peer; the relay whose descriptor strictly homes the slot self-selects
+    // and answers with `FinalizeDropResult` (also broadcast). Idempotent —
+    // re-sent on every honored drop request until a result decides the leave.
+    FinalizeDrop finalize_drop = 15;
+
+    // The home relay's answer to `FinalizeDrop`. A `FINALIZED` outcome
+    // carries the sealed count; the authority stamps it (with the finalized
+    // proof) into the slot's departure record and decides the leave. Any
+    // rejection leaves the drop undecided — never a frame-scheduled fallback,
+    // which is exactly the unsoundness finalization exists to remove.
+    FinalizeDropResult finalize_drop_result = 16;
+
+    // One of the sending relay's home clients reported that its game loop is
+    // running. The report itself rides that client's own reliable control
+    // stream, so it only ever reaches the slot's home relay; this shares it so
+    // every relay serving the session knows the slot has left loading behind.
+    // A receiving relay records it in its own session state ONLY -- the home
+    // alone reports the slot up its coordinator connection, so a shared report
+    // never double-counts a load. Not re-broadcast (the origin already sent a
+    // copy to every peer, the same no-echo rule the other kinds follow), and
+    // idempotent: the accumulated set is a set, so the join reconcile and a
+    // re-announce on a redialed link cost nothing. See `SlotStarted`.
+    SlotStarted slot_started = 17;
+
+    // The session authority's rollback-state comparison named a slot as the one at fault: its
+    // state hash disagreed with the majority's, or it went on sending turns without reporting
+    // one. The game goes on without it. Broadcast to every session peer; the relay whose
+    // descriptor strictly homes the slot marks it evicted (refusing every later dial for it) and
+    // only then closes its link, and once that link is down finalizes the drop and answers with
+    // an unprompted `FinalizeDropResult`, so the authority decides a leave carrying the exact
+    // count. Every other relay ignores it, as does a relay that predates this kind. Not
+    // re-broadcast. See `EvictSlot`.
+    EvictSlot evict_slot = 18;
+
+    // A relay's copy of a rollback session's clock, so every relay measures its
+    // own players' turns against the same deadlines. Each frame carries the
+    // copy's whole state, and the receiver merges it into its own: for every
+    // step it hasn't made final, the later of the two deadlines. Every relay
+    // sends its copy every quarter second, to a relay that joins after the
+    // anchor, and after an authority change; the authority also sends it when
+    // it anchors the clock and when a stop ends. Not re-broadcast. See
+    // `SessionClock`. Tag 19 carried an earlier shape that only grew a total
+    // stopped time; a relay that predates this tag skips it.
+    SessionClock session_clock = 20;
+  }
+
+  reserved 19;
+}
+
+// One destination client's end-to-end delivered-through cursors: for each
+// origin slot, the highest turn seq the destination has confirmed received
+// (via its ack-beacon stream to its home relay). See
+// `MeshControlFrame.delivery_cursors` for the sharing discipline.
+message DeliveryCursors {
+  // The destination slot these cursors describe -- a home client of the
+  // sending relay.
+  uint32 dest_slot = 1;
+
+  // The destination's per-origin delivered-through cursors, complete as of
+  // this frame.
+  repeated DeliveryCursor cursors = 2;
+}
+
+// One origin's delivered-through cursor within a `DeliveryCursors` frame.
+message DeliveryCursor {
+  // The origin slot whose turns the cursor covers.
+  uint32 origin_slot = 1;
+
+  // The highest origin seq the destination has confirmed received. Monotonic
+  // per (destination, origin): a receiver ignores a regressing value.
+  uint64 delivered_seq = 2;
+}
+
+// One relay's per-session resume cursors for the mesh datagram path. See
+// `MeshControlFrame.mesh_resume_cursors` for the sharing discipline and the
+// two `resuming`-dependent meanings an absent slot carries.
+message MeshResumeCursors {
+  // The sender's per-origin-slot resume cursors, complete as of this frame.
+  repeated MeshResumeCursor cursors = 1;
+
+  // Whether the sender is recovering forwarding history or has a coordinator
+  // assignment to resume an already-running session. An absent origin asks
+  // for every retained local-origin turn when true, and nothing when false.
+  // Defaults to false, so peers predating this field request no absent origins.
+  bool resuming = 2;
+
+  // The sender accepts recent turns before older retained turns. Its receive
+  // window preserves the trailing RECEIVE_WINDOW sequences when live traffic
+  // advances the window during replay, so older turns within that range remain
+  // deliverable. Its consensus history also retains the latest sequences
+  // independently of arrival order. The responder may reverse a snapshot only
+  // when every origin's sequence span fits that window. Defaults to false for
+  // peers that require recording order; peers unaware of this field ignore it.
+  bool prefer_recent = 3;
+}
+
+// One origin slot's resume cursor within a `MeshResumeCursors` frame.
+message MeshResumeCursor {
+  // The origin slot this cursor covers.
+  uint32 origin_slot = 1;
+
+  // The next seq the sender's forward-gate still needs from `origin_slot`.
+  // Every earlier seq has already reached the sender's locals through a direct
+  // link from the origin's home (possibly this peer, or a previous home peer
+  // before re-home), or through the client edge while the slot was homed here,
+  // and must not be replayed again.
+  uint64 next_seq = 2;
+}
+
+// One relay's per-slot delivered-through cursors for one mesh link's own
+// datagram transport. See `MeshControlFrame.mesh_ack_cursors` for the sharing
+// discipline.
+message MeshAckCursors {
+  // The sender's per-slot cursors, complete as of this frame (declarative,
+  // like `MeshResumeCursors` -- a lost frame is corrected by the next one).
+  repeated MeshAckCursor cursors = 1;
+}
+
+// One slot's delivered-through cursor within a `MeshAckCursors` frame.
+message MeshAckCursor {
+  // The slot this cursor covers.
+  uint32 slot = 1;
+
+  // The top of the contiguous run of turns this relay's mesh-link transport
+  // has received from the peer for `slot`. Monotonic per (link, slot); the
+  // receiver's `retire_through` guard rejects a non-advancing value.
+  uint64 delivered_through = 2;
+}
+
+// A relay's announcement to its mesh peers that one of its home clients has
+// departed the game (its link ended, or it sent a clean leave-intent). Carried
+// in a `MeshControlFrame`. Every relay records the departure so a later
+// authority promotion can re-derive the leave; the current authority turns it
+// into the one synced `LeaveDirective` all clients apply.
+message SlotDeparted {
+  // The slot that departed, authoritative at its home relay (never a
+  // client-asserted value — the home relay knows which connection ended).
+  uint32 slot = 1;
+
+  // The departing slot's last observed game frame at its home relay — the basis
+  // for the leave's apply frame (`last_frame + 1`; the authority falls back to
+  // its session frame only when this is absent, never to a max of the two —
+  // survivors' stamped frames run ahead of the departed slot's before they
+  // stall, so a max could schedule the leave past the frame stalled survivors
+  // are pinned at). Absent when the slot never produced a framed turn (a
+  // lobby/pre-game departure, which the game handles natively): there is no
+  // frame basis, matching how the decision authority holds a leave with no
+  // frame to schedule against. A present `0` is a valid in-game frame, so the
+  // field is `optional` rather than defaulting to 0 — the same distinction
+  // `Payload.game_frame_count` draws.
+  optional uint32 last_frame = 2;
+
+  // The native SC:R `pending_leave_reason` value the departure carries
+  // (`0x40000006` == dropped, else left), so the authority authors the leave with
+  // the reason the home relay observed. See `LeaveDirective.reason`.
+  uint32 reason = 3;
+
+  // The reachability ceiling for the leave's apply frame: the highest game frame
+  // every *surviving* slot has provably executed, computed by the departing
+  // slot's home relay from its own view of the survivors' framed turns (counted
+  // in turns, not frames — a turn stamped `frame` is provably executed once the
+  // session advanced `buffer_max` turns past it). The authority clamps
+  // `apply_at_frame = min(last_frame, reachable_frame) + 1`, so a client that
+  // inflates its own `game_frame_count` before leaving cannot schedule the leave
+  // past a frame the survivors can reach (which would strand them). Home-authored
+  // and carried verbatim so every relay — including one promoted mid-handoff —
+  // derives the identical clamped apply frame from the shared departure record.
+  // Absent when no surviving slot has framed history yet (lobby / the game's very
+  // first turns), in which case the authority applies no clamp — matching the
+  // held/`last_frame`-only path. A present `0` is a valid ceiling, so the field
+  // is `optional`, like `last_frame`.
+  optional uint32 reachable_frame = 4;
+
+  // The end-of-game result the departing slot reported before it departed, if
+  // any. Home-authored: only the departing slot's home relay fills these — it
+  // received the report on that client's control stream and retained it — and
+  // every relay folds the identical result into its departure record
+  // (first-non-empty wins, exactly like `reachable_frame`). A result can never
+  // be recorded after its slot's departure (reports ride only the live link, and
+  // the serve loop closes at the intent/link death), so an embedded result is
+  // final. Empty `result_payload` means the slot departed without ever reporting
+  // — a real report is never zero bytes — so the payload's presence gates the
+  // whole echo, and the three stamps below are meaningless without it.
+  bytes result_payload = 5;
+
+  // Relay wall-clock (unix epoch milliseconds) when the home relay received the
+  // result report. `0` when there is no result (empty `result_payload`).
+  uint64 result_arrival_ms = 6;
+
+  // The session's consensus frame (the slowest slot's observed frame) when the
+  // result arrived. Absent when there is no result, or the report predated any
+  // framed turn — the same distinction `last_frame` draws.
+  optional uint32 result_session_frame = 7;
+
+  // The reporting slot's own newest observed frame when the result arrived.
+  // Absent when there is no result, or the report predated any framed turn.
+  optional uint32 result_slot_frame = 8;
+
+  // The home-client connection that departed. This is the same epoch carried
+  // by that connection's `SlotConditions` and `SlotConnectivity` frames, so a
+  // delayed departure from an old connection cannot retire a newer reconnect's
+  // live decision-maker state. Absent for a legacy sender.
+  optional fixed64 connection_epoch = 9;
+
+  // The number of the departing slot's turns in its home relay's gap-free
+  // forwarded prefix at the departure — the count of turns (seqs `0..count`,
+  // contiguous) the home had validated and fanned out, and will ever forward;
+  // anything past it is cut, so no client anywhere can consume beyond this
+  // count. Home-authored from the session-level forward gate — state that
+  // survives the slot's connection replacements and that no client-claimed
+  // resume anchor can advance, unlike any one connection's receive cursor — and
+  // carried verbatim, like `reachable_frame`, so the authority — including one
+  // promoted mid-handoff — stamps the identical
+  // `LeaveDirective.final_turn_count`. The contiguous prefix, not the newest
+  // forwarded seq: a turn past a gap can never be consumed by any client
+  // (per-slot ordering holds it behind the gap, and the departed slot can no
+  // longer fill it), so a count past the gap would name a point no client can
+  // reach. Home-authored only for a CLEAN leave — the intent handler is the
+  // one origin whose ingress cut makes a count sound (see
+  // `LeaveDirective.final_turn_count`); a drop always carries none. Also
+  // absent from a sender that predates the field, and from a home with no
+  // gap-free knowledge to author it from (nothing ever forwarded, or a
+  // re-homed slot whose earlier turns the fresh home never carried) — clients
+  // then fall back to `apply_at_frame`.
+  optional uint64 final_turn_count = 10;
+
+  // Whether `final_turn_count` was derived through home-side drop
+  // finalization (see `FinalizeDrop` and `LeaveDirective.finalized`).
+  // Default false, so every legacy sender reads as unproven and receivers
+  // strip the dropped count.
+  bool finalized = 11;
+}
+
+// A relay's directive that a session may begin: every slot the coordinator
+// listed in `SessionDescriptor.expected_slots` (its players and observers) has
+// connected to some relay serving the session. The session's authority relay is
+// the one component that observes every client's dial + authentication — its own
+// registrations plus its peers' `SlotPresent` announcements — so it authors this
+// once the accumulated live-slot set covers the expected set, and it is fanned
+// to every client over the reliable control stream, replacing the tenant app
+// server's out-of-band start signal.
+//
+// It also carries the session's computed initial latency-buffer depth in
+// `initial_buffer_turns` when the authoring authority sized one: that relay
+// accumulates its home clients' pre-start link stats, runs the buffer control
+// law's target over them (folded with a session-create latency hint and a
+// mesh-hop cushion), clamps to the session bounds, and stamps the result here so
+// the game starts at the right depth from frame 0 instead of the tenant minimum.
+// The field is absent when the authoring relay sized no depth — an authority
+// that predates the field, or a resumed (re-home) relay re-pushing into an
+// already-running game, where a stale initial depth must never resize the live
+// buffer — and the receiver then keeps whatever buffer it already seeded.
+//
+// Identity is the connection (on the client edge) or the framed session id (on
+// the mesh). Delivered at least once — a late or reconnecting slot is re-pushed
+// on register, and an authority handoff can re-fire — so the client dedups
+// (applying it a second time is a no-op) and applies the depth only in its
+// single pre-start step, so a redundant re-delivery never resizes a running game.
+message SessionStart {
+  // The computed initial latency-buffer depth, in whole turns, or absent when
+  // the authoring relay sized none (an authority that predates the field, or a
+  // resumed re-home re-push into a running game). `optional` (not a `0` default)
+  // so "no depth, keep the seeded buffer" stays distinct from a genuine 0-turn
+  // depth — the same absence-vs-zero distinction `Payload.game_frame_count`
+  // draws. Old peers skip this unknown field, exactly as they do
+  // `BufferDirective.authority_relay_id`.
+  optional uint32 initial_buffer_turns = 1;
+}
+
+// A relay's announcement to its mesh peers that one of its home clients has
+// registered for the session — its authenticated connection joined the relay's
+// roster. Carried in a `MeshControlFrame`. Every relay accumulates the reported
+// slots into a per-session live-slot set; the session's authority relay turns
+// full coverage of the descriptor's expected slots into the one `SessionStart`.
+// A duplicate (a re-announce on a redialed link) is idempotent — the accumulated
+// set is a set.
+message SlotPresent {
+  // The slot that registered, authoritative at its home relay (never a
+  // client-asserted value — the home relay binds it to the authenticated
+  // connection's token slot).
+  uint32 slot = 1;
+}
+
+// A relay's announcement to its mesh peers that one of its home clients
+// reported its game loop running. Carried in a `MeshControlFrame`.
+//
+// A client's game-started report reaches only the relay that homes it, but the
+// relay-side judgement that needs it -- the silent-slot watch, which must not
+// weigh the forwarded turns of a slot that may still be flushing lobby traffic
+// through its load -- runs on every relay serving the session. The home
+// therefore shares each report, at the moment it records one and again for
+// every started home slot whenever a mesh link (re)joins, so a peer that
+// arrives late or replaces another still converges on the full set.
+//
+// Additive: a peer that predates this frame ignores it, and its silent-slot
+// watch simply has no start report for another relay's slots, which stands that
+// watch down for the cross-relay session rather than misjudging it.
+message SlotStarted {
+  // The slot that reported, authoritative at its home relay. Never a
+  // client-asserted value: the client's report carries no slot at all, and the
+  // home binds it to the authenticated connection it arrived on.
+  uint32 slot = 1;
+}
+
+// A slot's link-connectivity change: a session member's link to a relay either
+// died or came up. It rides the client-edge `ControlFrame` (relay → the local
+// slots) and the relay ↔ relay `MeshControlFrame` (origin relay → its peers, so
+// every relay can inform its own local slots). Purely informational: it lets a
+// surviving client show WHO disconnected the instant the link dies — well before
+// the synced player-leave that actually removes the slot from lockstep, which is
+// decided separately and, for a disconnect, only when a surviving member requests
+// the drop, never automatically.
+//
+// Best-effort by design. There is no replay log and no delivery guarantee beyond
+// the reliable stream it rides: a client whose stream comes up after a change
+// simply never sees that change, exactly like `GameChat`. A receiver treats a
+// slot it does not recognize as a no-op, and may ignore a frame that arrives
+// before the session has started (a `connected` true at initial dial is such a
+// pre-start frame). The frame carries no game frame and keys nothing on
+// determinism — every client acting on it or ignoring it stays in lockstep,
+// because the leave that changes simulation state is the separate, synced one.
+message SlotConnectivity {
+  // The slot whose connectivity changed, authoritative at its home relay (never
+  // a client-asserted value — the home relay knows which connection died or
+  // registered). A receiver that does not recognize the slot ignores the frame.
+  uint32 slot = 1;
+
+  // The new connectivity: `false` when the slot's link died (a deregister
+  // without a clean leave — a disconnect), `true` when the slot registered a
+  // link (its initial dial, or a future re-register). A slot can flip more than
+  // once over a game; the newest frame reflects the current state, and there is
+  // no ordering guarantee against the synced-leave path, so a client uses this
+  // only for its own connectivity display.
+  bool connected = 2;
+
+  // The home-client connection whose state changed. A `connected: true` frame
+  // establishes this epoch over the reliable control stream; condition
+  // sidecars and later teardown for any other epoch are stale. Absent for a
+  // legacy sender, preserving rolling compatibility.
+  optional fixed64 connection_epoch = 3;
+}
+
+// The authority's request that a dropped slot's home finalize the drop — see
+// the `finalize_drop` oneof arm. Generation-bound: `connection_epoch` names
+// the departed generation the authority observed, so a home that has since
+// admitted a newer generation rejects rather than sealing the wrong one.
+message FinalizeDrop {
+  // The dropped slot to finalize.
+  uint32 slot = 1;
+
+  // The departed connection generation the authority is finalizing, from its
+  // departure record. Absent in legacy mode (no generation observed).
+  optional fixed64 connection_epoch = 2;
+}
+
+// The authority's order that a slot leave the game because its rollback state diverged — see the
+// `evict_slot` oneof arm.
+message EvictSlot {
+  // The slot to evict.
+  uint32 slot = 1;
+
+  // The state hash step whose verdict named the slot, carried so the home's own record of the
+  // eviction says which comparison it rested on.
+  uint64 sync_ordinal = 2;
+}
+
+// A relay's copy of a rollback session's clock — see the `session_clock` oneof
+// arm and `LeadReport`. The authority makes the stops; every relay merges the
+// copies it gets into its own.
+//
+// The turn with seq `n` is due `n - anchor_step` steps after the anchor, plus
+// the stopped time of every stop at a step before `n`. The clock stops only
+// at `final_through`, which only grows, so a relay treats the deadline of
+// every step up to it as final: it measures a turn against the clock only once
+// a frame's `final_through` has reached it, and never moves such a deadline
+// afterwards (a stop it learns of later, before that step, it takes in at its
+// own `final_through` instead).
+//
+// Relays share no timebase, so the anchor travels as an age: the receiving
+// relay places the anchor that long before it received the frame, less half
+// the mesh round trip the frame took. Stops travel by step, so which turns a
+// stop moves never depends on when a relay learned of it.
+message SessionClock {
+  // The step the clock was anchored at: the newest step the authority could
+  // confirm when the session's lockstep start ended.
+  uint64 anchor_step = 1;
+
+  // How long before the authority wrote this frame it anchored the clock, in
+  // microseconds of wall clock. Stopped time is not taken out of it.
+  uint64 since_anchor_us = 2;
+
+  // The newest step whose deadline is final: the farthest the clock may run
+  // past the newest step the authority can confirm for every player. The
+  // clock stands still here whenever it reaches this step's deadline before
+  // the next step becomes confirmable.
+  uint64 final_through = 3;
+
+  // Stops at steps before `base_step` are carried only as their sum,
+  // `base_pause_us`. No relay measures a turn that far behind, and a turn at
+  // or after `base_step` is moved by every one of them.
+  uint64 base_step = 4;
+
+  // The stopped time of every stop at a step before `base_step`, in
+  // microseconds.
+  uint64 base_pause_us = 5;
+
+  // Every finished stop at or after `base_step`, in step order.
+  repeated ClockStop stops = 6;
+}
+
+// One finished stop of a rollback session's clock — see `SessionClock.stops`.
+message ClockStop {
+  // The step the clock stood at: this step's deadline is unmoved, and every
+  // later step's is moved by `pause_us`.
+  uint64 step = 1;
+
+  // How long the clock stood still, in microseconds.
+  uint64 pause_us = 2;
+}
+
+// The home's answer to `FinalizeDrop` — see the `finalize_drop_result` oneof
+// arm.
+message FinalizeDropResult {
+  // The slot the outcome describes.
+  uint32 slot = 1;
+
+  // The generation the request named, echoed for the authority's validation.
+  optional fixed64 connection_epoch = 2;
+
+  // What happened. 1 == FINALIZED: the generation is sealed terminal and
+  // `final_turn_count` carries the gap-free forwarded count. 2 ==
+  // REJECTED_LIVE: the slot has a live (reconnected) generation — the drop
+  // must not be decided. 3 == REJECTED_NO_CURSOR: the home holds no gap-free
+  // forwarded prefix for the slot (a collapsed sparse window, or a
+  // post-rehome home with no cursor continuity) — the drop stays undecided
+  // rather than falling back to frame scheduling. 0/unknown values are
+  // ignored.
+  uint32 outcome = 3;
+
+  // The sealed gap-free forwarded-turn count, present exactly when `outcome`
+  // is FINALIZED.
+  optional uint64 final_turn_count = 4;
+}

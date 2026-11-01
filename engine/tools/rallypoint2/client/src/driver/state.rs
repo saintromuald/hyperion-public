@@ -1,0 +1,345 @@
+//! The state a session runs on: the reconnect tuning constants, the driver's
+//! half of the game seam, and the per-session state that must survive a
+//! reconnect.
+
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::time::Duration;
+
+use rally_point_proto::ids::SlotId;
+use rally_point_proto::messages::{LeadReport, LeaveDirective, Payload, RollbackStats};
+use tokio::sync::{mpsc, watch};
+use tokio::time::Instant;
+
+use crate::leave_announcer::LeaveAnnouncer;
+use crate::phase::{PhaseSlew, PhaseStatus};
+
+use super::connectivity::ConnectivityFence;
+use super::lobby::{LobbyOutbox, LobbyReceipts};
+use super::reorder::SlotReorder;
+use super::retention::RetentionRing;
+
+use super::{
+    CHAT_CHANNEL_CAPACITY, ChatOut, DriverTiming, GAME_STARTED_CHANNEL_CAPACITY,
+    LEAVE_CHANNEL_CAPACITY, LEAVE_INTENT_CHANNEL_CAPACITY, LOBBY_CHANNEL_CAPACITY,
+    REQUEST_DROP_CHANNEL_CAPACITY, RESULT_CHANNEL_CAPACITY, SKIN_CHANNEL_CAPACITY, TurnChannels,
+};
+
+/// The first reconnect backoff delay, doubled each attempt up to
+/// [`RECONNECT_BACKOFF_CAP`].
+pub(super) const RECONNECT_BACKOFF_INITIAL: Duration = Duration::from_millis(500);
+
+/// The ceiling on the reconnect backoff delay.
+pub(super) const RECONNECT_BACKOFF_CAP: Duration = Duration::from_secs(5);
+
+/// Per-attempt bound on one reconnect dial. Short enough that several attempts fit
+/// well inside the window before a survivor could request the drop, so a
+/// recoverable drop reconnects before the slot could be decided departed.
+pub(super) const RECONNECT_DIAL_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// Ceiling on turns buffered while the link is down. Under lockstep the game stalls
+/// within a couple turns of losing the link — it can't advance without its peers'
+/// turns — so this is a safety bound, not a tuned depth; past it the oldest buffered
+/// turn is dropped (with a warning) rather than let the buffer grow without bound.
+pub(super) const OUTAGE_OUTBOUND_BUFFER_CAP: usize = 256;
+
+/// How long a run of failed same-relay re-dials must persist before the driver
+/// escalates to coordinator-mediated failover (asking the [`RehomeProvider`] where
+/// to move). A cert/pin rejection — a restarted relay serving a fresh cert —
+/// escalates immediately instead, since no same-relay retry can ever succeed.
+///
+/// **Timing budget.** BW's native transport drops a silent peer after roughly 45s
+/// of stall, so a re-home must complete — coordinator round-trip plus a
+/// [`RECONNECT_DIAL_TIMEOUT`]-bounded dial — inside that window or the game gives up
+/// on the slot. The timed path spends ~10s here before the first escalation, then
+/// the provider's own HTTP timeout (embedder-owned — the DLL sizes it to cover the
+/// coordinator call), then a ≤3s dial: comfortably inside 45s. The cert/pin path
+/// skips the 10s wait entirely. The one way to blow the budget is a genuine
+/// "no live relay yet" stretch, where [`ESCALATE_RETRY`] re-asks every ~15s until
+/// one appears — there is nothing to re-home *to*, so the stall-drop is unavoidable.
+pub(super) const ESCALATE_AFTER: Duration = Duration::from_secs(10);
+
+/// How often the driver re-escalates while the provider keeps answering
+/// `Unavailable` (no relay can take the session over yet) or a re-home dial keeps
+/// failing — the coordinator may gain a relay, so the driver re-asks on this
+/// cadence while continuing its same-relay backoff in between. Kept below the ~45s
+/// BW native stall-drop budget (see [`ESCALATE_AFTER`]) so a transiently-unavailable
+/// coordinator is re-asked at least twice before the game would give up on the slot.
+pub(super) const ESCALATE_RETRY: Duration = Duration::from_secs(15);
+
+/// The driver's own bound on one [`RehomeProvider::rehome`] ask. The provider is
+/// embedder code doing an app-server/coordinator round-trip and is expected to
+/// enforce its own HTTP timeout well under this — the driver's bound exists so a
+/// provider that hangs anyway (a stuck app-server call, a lost response) cannot
+/// freeze reconnection, teardown observation, and the outage-buffer cap with it.
+/// A timed-out ask is treated exactly as [`RehomeOutcome::Unavailable`]: resume
+/// the same-relay backoff and re-ask on the [`ESCALATE_RETRY`] cadence. Sized to
+/// fit the ~45s BW stall-drop budget ([`ESCALATE_AFTER`]'s doc): 10s to the first
+/// escalation + this bound + a ≤3s dial still leaves budget for one retry ask.
+pub(super) const REHOME_PROVIDER_DEADLINE: Duration = Duration::from_secs(20);
+
+/// The driver's half of the game seam: the channels a [`LinkDriver`] owns to
+/// exchange turns and control with the game thread. Bundled so a session runs over
+/// them by reference and they outlive a reconnect that swaps the underlying link.
+pub(super) struct GameSeam {
+    /// Turns from the game thread to send to the relay.
+    pub(super) outbound: mpsc::Receiver<Payload>,
+    /// Turns received from the relay to hand to the game thread.
+    pub(super) inbound: mpsc::Sender<Payload>,
+    /// Synced player-leaves the relay pushed down the control stream, to hand to
+    /// the game thread's leave tracker.
+    pub(super) leaves: mpsc::Sender<LeaveDirective>,
+    /// The game thread's signal that it is departing intentionally.
+    pub(super) leave_intent: mpsc::Receiver<()>,
+    /// The game thread's end-of-game result report, to send up the control
+    /// stream as soon as it arrives.
+    pub(super) result: mpsc::Receiver<Vec<u8>>,
+    /// The game thread's signal that its loop has begun running, to announce up
+    /// the control stream once.
+    pub(super) game_started: mpsc::Receiver<()>,
+    /// Lobby commands the game authored, to send up the control stream.
+    pub(super) lobby_out: mpsc::Receiver<Vec<u8>>,
+    /// Lobby commands other members authored (relay-stamped with their author
+    /// slot), to hand to the game thread.
+    pub(super) lobby_in: mpsc::Sender<(SlotId, Vec<u8>)>,
+    /// Chat messages the game authored, to send up the control stream.
+    pub(super) chat_out: mpsc::Receiver<ChatOut>,
+    /// Chat messages other members authored (relay-stamped with their author
+    /// slot), to hand to the game thread.
+    pub(super) chat_in: mpsc::Sender<(SlotId, ChatOut)>,
+    /// The game's own cosmetic-skin blob, to send up the control stream.
+    pub(super) skin_out: mpsc::Receiver<Vec<u8>>,
+    /// Skin blobs other members authored (relay-stamped with their author slot),
+    /// to hand to the game thread.
+    pub(super) skin_in: mpsc::Sender<(SlotId, Vec<u8>)>,
+    /// Manual drop requests the game authored, to send up the control stream as
+    /// `RequestDrop` frames.
+    pub(super) request_drop: mpsc::Receiver<SlotId>,
+    /// The relay-driven session-start directive, to hand to the game thread when
+    /// the relay pushes a `SessionStart` down the control stream. Carries the
+    /// session's computed initial latency-buffer depth (`None` when the authoring
+    /// relay sized none).
+    pub(super) session_start: mpsc::Sender<Option<u32>>,
+    /// Slot-connectivity changes, to hand to the game thread when the relay
+    /// pushes a `SlotConnectivity` down the control stream.
+    pub(super) connectivity: mpsc::Sender<(SlotId, bool)>,
+    /// The session's relay → region labels, to hand to the game thread when the
+    /// relay releases a `RegionLabels` down the control stream.
+    pub(super) region_labels: mpsc::Sender<Vec<(u64, String)>>,
+    /// The send-phase state to publish to the game thread as directives arrive
+    /// and the applied delay slews (see [`TurnChannels::phase_status`]).
+    pub(super) phase_status: watch::Sender<PhaseStatus>,
+    /// The newest lead report, to hand to the game thread (see
+    /// [`TurnChannels::lead_report`]).
+    pub(super) lead_report: watch::Sender<Option<LeadReport>>,
+    /// The highest `turns_complete` stamp received, to hand to the game thread (see
+    /// [`TurnChannels::turns_complete`]).
+    pub(super) turns_complete: watch::Sender<u64>,
+    /// The game's newest rollback statistics snapshot, to write up the control
+    /// stream (see [`TurnChannels::rollback_stats`]).
+    pub(super) rollback_stats: watch::Receiver<Option<RollbackStats>>,
+}
+
+impl GameSeam {
+    /// Wires both halves of the game seam — the driver's and the game thread's
+    /// — with `capacity` on each turn channel, handing back the result-expected
+    /// flag they share. The one place the channels are paired up, so one added
+    /// here cannot reach a half and not the other.
+    ///
+    /// Nothing about the seam needs a connection, so a test exercising only the
+    /// waits that keep servicing it builds one without standing up a link.
+    pub(super) fn with_capacity(capacity: usize) -> (Self, TurnChannels, Arc<AtomicBool>) {
+        let (outbound_tx, outbound_rx) = mpsc::channel(capacity);
+        let (inbound_tx, inbound_rx) = mpsc::channel(capacity);
+        // Leaves are rare (one per departing peer); a small channel is ample.
+        let (leaves_tx, leaves_rx) = mpsc::channel(LEAVE_CHANNEL_CAPACITY);
+        // The game signals its own departure at most once.
+        let (leave_intent_tx, leave_intent_rx) = mpsc::channel(LEAVE_INTENT_CHANNEL_CAPACITY);
+        // The game hands over its result report at most once.
+        let (result_tx, result_rx) = mpsc::channel(RESULT_CHANNEL_CAPACITY);
+        let result_expected = Arc::new(AtomicBool::new(false));
+        // The game announces its loop starting at most once.
+        let (game_started_tx, game_started_rx) = mpsc::channel(GAME_STARTED_CHANNEL_CAPACITY);
+        // Lobby commands flow in both directions during pre-game setup.
+        let (lobby_out_tx, lobby_out_rx) = mpsc::channel(LOBBY_CHANNEL_CAPACITY);
+        let (lobby_in_tx, lobby_in_rx) = mpsc::channel(LOBBY_CHANNEL_CAPACITY);
+        // Chat flows in both directions for the whole game, unlike lobby.
+        let (chat_out_tx, chat_out_rx) = mpsc::channel(CHAT_CHANNEL_CAPACITY);
+        let (chat_in_tx, chat_in_rx) = mpsc::channel(CHAT_CHANNEL_CAPACITY);
+        // Skin blobs flow in both directions near game start (and again on the
+        // relay's reconnect replays), like chat.
+        let (skin_out_tx, skin_out_rx) = mpsc::channel(SKIN_CHANNEL_CAPACITY);
+        let (skin_in_tx, skin_in_rx) = mpsc::channel(SKIN_CHANNEL_CAPACITY);
+        // Manual drop requests flow game → driver only, for the whole game.
+        let (request_drop_tx, request_drop_rx) = mpsc::channel(REQUEST_DROP_CHANNEL_CAPACITY);
+        // The session-start directive arrives at most a handful of times (the
+        // fire, plus any re-push on late register or authority handoff).
+        let (session_start_tx, session_start_rx) = mpsc::channel(LEAVE_CHANNEL_CAPACITY);
+        // Connectivity changes are rare (a slot flips a small number of times over
+        // a game); the leave-sized channel is ample.
+        let (connectivity_tx, connectivity_rx) = mpsc::channel(LEAVE_CHANNEL_CAPACITY);
+        // Region labels arrive at most a handful of times (the release, plus any
+        // re-send on reconnect or a re-home that changes the map); the leave-sized
+        // channel is ample.
+        let (region_labels_tx, region_labels_rx) = mpsc::channel(LEAVE_CHANNEL_CAPACITY);
+        // Send-phase state is latest-wins display information; a watch cell
+        // holds exactly the newest value with nothing to drain.
+        let (phase_status_tx, phase_status_rx) = watch::channel(PhaseStatus::default());
+        // Lead reports each restate the whole window, so the newest is the only
+        // one the game needs.
+        let (lead_report_tx, lead_report_rx) = watch::channel(None);
+        // The relay's count only matters at its newest, and only grows.
+        let (turns_complete_tx, turns_complete_rx) = watch::channel(0);
+        // Rollback statistics are cumulative, so the game's newest snapshot is
+        // the only one worth sending.
+        let (rollback_stats_tx, rollback_stats_rx) = watch::channel(None);
+        let seam = Self {
+            outbound: outbound_rx,
+            inbound: inbound_tx,
+            leaves: leaves_tx,
+            leave_intent: leave_intent_rx,
+            result: result_rx,
+            game_started: game_started_rx,
+            lobby_out: lobby_out_rx,
+            lobby_in: lobby_in_tx,
+            chat_out: chat_out_rx,
+            chat_in: chat_in_tx,
+            skin_out: skin_out_rx,
+            skin_in: skin_in_tx,
+            request_drop: request_drop_rx,
+            session_start: session_start_tx,
+            connectivity: connectivity_tx,
+            region_labels: region_labels_tx,
+            phase_status: phase_status_tx,
+            lead_report: lead_report_tx,
+            turns_complete: turns_complete_tx,
+            rollback_stats: rollback_stats_rx,
+        };
+        let channels = TurnChannels {
+            outbound: outbound_tx,
+            inbound: inbound_rx,
+            leaves: leaves_rx,
+            leave_intent: leave_intent_tx,
+            result: result_tx,
+            result_expected: Arc::clone(&result_expected),
+            game_started: game_started_tx,
+            lobby_out: lobby_out_tx,
+            lobby_in: lobby_in_rx,
+            chat_out: chat_out_tx,
+            chat_in: chat_in_rx,
+            skin_out: skin_out_tx,
+            skin_in: skin_in_rx,
+            request_drop: request_drop_tx,
+            session_start: session_start_rx,
+            connectivity: connectivity_rx,
+            region_labels: region_labels_rx,
+            phase_status: phase_status_rx,
+            lead_report: lead_report_rx,
+            turns_complete: turns_complete_rx,
+            rollback_stats: rollback_stats_tx,
+        };
+        (seam, channels, result_expected)
+    }
+}
+
+/// The driver state that must persist across a reconnect so a re-dialed session
+/// resumes rather than restarts.
+pub(super) struct LoopState {
+    /// Turns received but not yet handed to the game, held per slot until they
+    /// can be released in seq order, and the per-slot delivery cursor a resume
+    /// is read back from. Preserved across a reconnect so turns received but
+    /// not yet released aren't re-asked-for or lost.
+    pub(super) reorder: SlotReorder,
+    /// The client's own outbound payload seq counter. An origin identity every hop
+    /// honors, so it is monotonic across reconnects and never rewinds.
+    pub(super) next_outbound_seq: u64,
+    /// The client's clean-departure announcer, persisted so a leave signaled before
+    /// a drop is still honored after the reconnect.
+    pub(super) announcer: LeaveAnnouncer,
+    /// Turns the game produced while the link was down, flushed in order when the
+    /// next session comes up.
+    pub(super) outbound_buffer: VecDeque<Payload>,
+    /// Whether the game has announced that its loop is running. Retained here
+    /// rather than per-connection because it is a fact about the session, not
+    /// about one link: once set, every control stream the driver opens re-asserts
+    /// it, so an announcement whose write raced a link drop still reaches the
+    /// relay. The relay latches one report per link and the coordinator dedups per
+    /// slot, so re-asserting costs nothing beyond the frame.
+    pub(super) game_started_announced: bool,
+    /// Whether the relay's `SessionStart` directive has passed through the driver —
+    /// the game has started. Gates escalation to coordinator-mediated failover: the
+    /// driver only ever re-homes an in-game session, never a still-forming lobby.
+    /// Latched once and kept across reconnects.
+    pub(super) game_started: bool,
+    /// A ring of this client's own recently-sent turns, retained for re-injection
+    /// after a **re-home** so a replacement relay's empty turn ring still fans them
+    /// out to peers — independent of ack retirement (a turn the old relay acked is
+    /// dropped from the unacked window but stays here). Persisted across reconnects.
+    pub(super) retention: RetentionRing,
+    /// Retained turns a resume deferred to the fresh connection's reliable
+    /// control stream: turns too large to ride any datagram, staged here
+    /// because re-injecting them into the unacked window would strand them
+    /// there forever (the redundancy pass always skips a payload that can't
+    /// fit a lone packet). A re-home stages them via [`reinject_retention`];
+    /// a same-relay resume stages every still-retained oversize turn too
+    /// ([`redivert_oversize_retention_on_same_relay_resume`]) — a
+    /// control-stream write carries no acknowledgment, so a drop between the
+    /// local write succeeding and the relay processing it is otherwise
+    /// invisible. [`session`](Driver::session) drains this onto the control
+    /// stream it opens on the new connection — the same divert path an
+    /// oversize turn takes when first sent — and it empties on each drain.
+    pub(super) pending_control_redivert: Vec<Payload>,
+    /// Every lobby command this client authored, seq-stamped, written again on
+    /// each new control stream (a write onto a connection that silently died is
+    /// otherwise lost with nothing to report it), and the pacing all those
+    /// writes share.
+    pub(super) lobby_outbox: LobbyOutbox,
+    /// The newest origin seq of each member's lobby commands already handed to
+    /// the game, so a relay's replay of its log after this client reconnects
+    /// does not deliver them twice.
+    pub(super) lobby_receipts: LobbyReceipts,
+    /// Which relay-stamped connectivity changes may still move the game's
+    /// display of a member, and whose departure is already final. Kept across
+    /// this client's own reconnects.
+    pub(super) connectivity: ConnectivityFence,
+    /// The send-phase delay this client is applying under the relay's
+    /// `PhaseDirective`s: the newest commanded target and the applied value
+    /// slewing toward it. Persisted across a reconnect — the delay is part of
+    /// the session's phase alignment, not the connection's state — and the
+    /// relay restates the current directive on register anyway.
+    pub(super) phase_slew: PhaseSlew,
+    /// Outbound turns held for their send-phase delay, oldest first, each with
+    /// the deadline its wire handoff waits for. Deadlines are monotonic (a
+    /// turn never overtakes an earlier one, even across a delay decrease), and
+    /// turns here are unstamped — seq assignment happens at actual send, so
+    /// the seq stream stays in production order. Persisted so a link failure
+    /// cannot drop a held turn: the next session flushes these first, before
+    /// any outage-buffered turns, keeping that order.
+    pub(super) held: VecDeque<(Instant, Payload)>,
+    /// The waiting windows this session times itself against. Carried here
+    /// because they belong to the driver, not to any one connection: a re-dialed
+    /// session must run on the same windows the first one did.
+    pub(super) timing: DriverTiming,
+}
+
+impl LoopState {
+    pub(super) fn new(result_expected: Arc<AtomicBool>, timing: DriverTiming) -> Self {
+        Self {
+            reorder: SlotReorder::default(),
+            next_outbound_seq: 0,
+            announcer: LeaveAnnouncer::new(result_expected),
+            outbound_buffer: VecDeque::new(),
+            game_started_announced: false,
+            game_started: false,
+            retention: RetentionRing::default(),
+            pending_control_redivert: Vec::new(),
+            lobby_outbox: LobbyOutbox::new(Instant::now()),
+            lobby_receipts: LobbyReceipts::default(),
+            connectivity: ConnectivityFence::default(),
+            phase_slew: PhaseSlew::new(Instant::now()),
+            held: VecDeque::new(),
+            timing,
+        }
+    }
+}

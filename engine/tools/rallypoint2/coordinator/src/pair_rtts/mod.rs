@@ -1,0 +1,404 @@
+//! The backbone-RTT pair table: the coordinator's aggregate of the region-to-region
+//! round-trips relays measure and report on their heartbeats.
+//!
+//! Each relay pings the always-up ping beacons of the *other* regions the coordinator
+//! told it about and reports its latest median round-trip to each on every heartbeat
+//! (see [`rally_point_proto::control::RegionRttReport`]). The coordinator folds those
+//! reports into this store and serves the aggregate on `GET /regions`, where a
+//! consumer reads it in place of a hand-maintained latency table.
+//!
+//! # Canonical pairs, per-direction storage
+//!
+//! A pair is unordered: `(a, b)` and `(b, a)` are the same backbone link, and both
+//! ends measure it. Keys are canonicalized to `a <= b` by id string
+//! ([`canonical_pair`]), so both ends collapse to one key — but the value keeps the
+//! two ends apart, in two directional slots: the round-trip measured *from* `a` and
+//! the one measured *from* `b`, each present once its end has reported.
+//!
+//! The two ends do not measure the same number. A backbone path is often
+//! persistently asymmetric — the route `a → b` takes and the route `b → a` takes can
+//! differ by more than measurement noise (tens of milliseconds on a real link), and
+//! that difference does not average away over time; it is a property of the routing.
+//! A single stored value per pair cannot hold both: the two ends' heartbeats would
+//! overwrite each other every beat, each flip counting as a change and costing a log
+//! line and a ledger write. A slot per direction makes a cross-direction overwrite
+//! impossible by construction.
+//!
+//! Within one direction, aggregation is last-write-wins beyond a small dead-band
+//! (`deadband_ms`): a direction's own reporters — the relays in its origin region —
+//! measure independently and repeat their medians every heartbeat, agreeing only to
+//! within noise, so a report within the band of the stored value keeps it (noise from
+//! one origin does not thrash its slot or the ledger) while a real shift — a re-route
+//! — passes through. The band absorbs same-origin noise; it is deliberately not asked
+//! to absorb the cross-direction asymmetry, which the separate slots handle instead.
+//!
+//! The value served on `GET /regions` is the round-half-up average of the present
+//! directions (a lone present direction serves as-is), stamped with the newer of the
+//! two directions' ages. Averaging yields one representative number for the link
+//! without biasing it toward either end: the mean is the honest midpoint for a
+//! consumer sizing a jitter buffer, where neither direction's figure alone is more
+//! correct than the other.
+//!
+//! A same-region report (`a == b`) is rejected: the round-trip to a region's own
+//! beacon is zero by definition, and relays skip their own region already, so the
+//! guard is defensive.
+//!
+//! # Concurrency
+//!
+//! A [`parking_lot::Mutex`] over the map, the same idiom as the presence and relay
+//! registries: every critical section is a short, await-free map edit or scan, never
+//! held across I/O. The handle clones cheaply (an `Arc`), so the HTTP state and every
+//! relay control connection share one table.
+
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+
+use parking_lot::Mutex;
+use rally_point_proto::control::RegionId;
+use serde::Serialize;
+
+/// The floor of the measurement dead-band, in milliseconds — see [`deadband_ms`].
+const RTT_DEADBAND_MIN_MS: u32 = 5;
+
+/// How far a reported round-trip may sit from a direction's stored value and still
+/// count as the same measurement: 5% of the stored value, floored at
+/// [`RTT_DEADBAND_MIN_MS`]. One direction's reporters — the relays in its origin
+/// region — measure it independently and repeat their medians on every heartbeat,
+/// and medians of one backbone path agree only to within noise that scales loosely
+/// with the path (single-digit milliseconds nearby, proportionally more
+/// trans-oceanic). A real backbone shift — a re-route — moves that direction well
+/// beyond the bound. The band absorbs the noise so a direction's alternating
+/// heartbeats cannot thrash its slot or the ledger, and passes real shifts through
+/// unchanged. It is not meant to absorb the difference *between* the two directions
+/// — that asymmetry is real, and the separate slots keep it apart.
+fn deadband_ms(stored_rtt_ms: u32) -> u32 {
+    RTT_DEADBAND_MIN_MS.max(stored_rtt_ms / 20)
+}
+
+/// One direction of a pair's measured backbone round-trip: the latest median an
+/// origin region reported, and when the coordinator recorded it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DirectionRtt {
+    /// The latest reported median round-trip for this direction, in milliseconds.
+    rtt_ms: u32,
+    /// When this value was recorded, in Unix seconds — stamped by the coordinator at
+    /// ingest, not measured by the relay.
+    measured_at: u64,
+}
+
+/// A canonical pair's two directional measurements, one per end. `from_a` is the
+/// round-trip measured from region `a`, `from_b` the one measured from region `b`
+/// (the pair's own `a <= b` ordering). Either is absent until its end has reported; a
+/// stored pair always holds at least one.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct PairDirections {
+    /// The round-trip measured from region `a`, once `a`'s relays have reported it.
+    from_a: Option<DirectionRtt>,
+    /// The round-trip measured from region `b`, once `b`'s relays have reported it.
+    from_b: Option<DirectionRtt>,
+}
+
+impl PairDirections {
+    /// The value to serve for this pair: the round-half-up average of the present
+    /// directions, stamped with the newer of their ages; a lone present direction
+    /// serves as-is. `None` only when neither direction is present, which a stored
+    /// pair never is.
+    fn served(&self) -> Option<DirectionRtt> {
+        match (self.from_a, self.from_b) {
+            (Some(a), Some(b)) => Some(DirectionRtt {
+                // Round-half-up mean of two u32s, summed in u64 so it cannot overflow;
+                // `div_ceil` rounds the exact half up. The mean never exceeds the larger
+                // input, so the cast back to u32 is lossless.
+                rtt_ms: (u64::from(a.rtt_ms) + u64::from(b.rtt_ms)).div_ceil(2) as u32,
+                measured_at: a.measured_at.max(b.measured_at),
+            }),
+            (Some(one), None) | (None, Some(one)) => Some(one),
+            (None, None) => None,
+        }
+    }
+}
+
+/// One canonically-ordered region pair (`a <= b`) and the round-trip served for it —
+/// the snapshot row the serve path returns.
+///
+/// Serializes as `{"a", "b", "rtt_ms", "measured_at"}`, the shape `GET /regions`
+/// nests under `backbone_rtts`. `rtt_ms` is the average of the pair's present
+/// directions and `measured_at` the newer of their ages (see [`PairRttStore::snapshot`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PairRttEntry {
+    /// The lexicographically-smaller region id of the pair.
+    pub a: RegionId,
+    /// The lexicographically-larger region id of the pair.
+    pub b: RegionId,
+    /// The round-trip served across the pair, in milliseconds.
+    pub rtt_ms: u32,
+    /// When the served value was recorded, in Unix seconds — stamped by the
+    /// coordinator at ingest. Informational: it exposes a value's age to consumers and
+    /// operators, and is `0` when the coordinator's clock read pre-epoch at ingest
+    /// (age is advisory, so an unusable clock degrades it rather than failing the
+    /// record).
+    pub measured_at: u64,
+}
+
+/// One direction of a canonical pair's measured backbone round-trip, tagged with the
+/// origin region that measured it — the row the startup ledger load supplies to
+/// [`PairRttStore::seed`], and the shape the ledger persists (one row per pair per
+/// origin). `origin` is one of `a` or `b`; it selects which directional slot the row
+/// fills.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DirectionRttRow {
+    /// The lexicographically-smaller region id of the pair.
+    pub a: RegionId,
+    /// The lexicographically-larger region id of the pair.
+    pub b: RegionId,
+    /// The region that measured this direction — one of `a` or `b`.
+    pub origin: RegionId,
+    /// The latest reported median round-trip for this direction, in milliseconds.
+    pub rtt_ms: u32,
+    /// When this direction's value was recorded, in Unix seconds.
+    pub measured_at: u64,
+}
+
+/// The map key: a region pair ordered `a <= b`, so either direction of a link maps to
+/// one entry.
+type PairKey = (RegionId, RegionId);
+
+/// The coordinator's backbone-RTT table: canonical region pair -> its two directional
+/// measurements. A plain (non-async) mutex, the same idiom as the presence store; the
+/// handle clones cheaply so the HTTP state and every control connection share one map.
+#[derive(Clone, Default)]
+pub struct PairRttStore {
+    pairs: Arc<Mutex<HashMap<PairKey, PairDirections>>>,
+}
+
+impl PairRttStore {
+    /// Creates an empty backbone-RTT table (a coordinator that has aggregated no
+    /// measurements yet).
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Folds one relay's measured round-trip for a pair into the table, stamping it
+    /// `now_unix`. The pair `(relay_region, reported_region)` is canonicalized; the
+    /// relay's own region is the direction's origin, so the value lands in the
+    /// `from_a` slot when the relay is the pair's `a` end and the `from_b` slot when
+    /// it is the `b` end. Within that one slot the value is last-write-wins beyond a
+    /// small dead-band; the other direction's slot is never touched.
+    ///
+    /// The dead-band exists because a direction's reporters — the relays in its origin
+    /// region — measure it independently and repeat their own median on every
+    /// heartbeat: two medians of one backbone path agree only to within noise, so
+    /// without it the slot would flip between readings on every beat, each flip a
+    /// change costing a ledger write. A report within `deadband_ms` of the slot's
+    /// stored value therefore refreshes `measured_at` but keeps the stored round-trip;
+    /// a real backbone shift (a re-route moves a path by tens of milliseconds) lands
+    /// unchanged. The band is not asked to absorb the difference between the two
+    /// directions — that asymmetry is real and lives in the separate slots.
+    ///
+    /// Returns whether *this direction's* stored `rtt_ms` changed — `true` for a
+    /// direction's first report or a value beyond its dead-band, `false` otherwise
+    /// (with `measured_at` still refreshed) — so the caller writes through to the
+    /// ledger only when that direction actually changed, and steady-state re-reports
+    /// every heartbeat cost no persistence. A same-region report
+    /// (`relay_region == reported_region`) is rejected: nothing is stored and `false`
+    /// is returned.
+    pub fn record(
+        &self,
+        relay_region: &RegionId,
+        reported_region: &RegionId,
+        rtt_ms: u32,
+        now_unix: u64,
+    ) -> bool {
+        if relay_region == reported_region {
+            return false;
+        }
+        let (a, b) = canonical_pair(relay_region, reported_region);
+        let key = (a.clone(), b.clone());
+        // The reporting relay's own region is the origin, so the report fills the
+        // `from_a` slot when the relay is the pair's `a` end, else the `from_b` slot.
+        let origin_is_a = relay_region.as_ref() == a.as_ref();
+        let mut pairs = self.pairs.lock();
+        let directions = pairs.entry(key).or_default();
+        let slot = if origin_is_a {
+            &mut directions.from_a
+        } else {
+            &mut directions.from_b
+        };
+        match slot {
+            Some(existing) => {
+                if existing.rtt_ms.abs_diff(rtt_ms) <= deadband_ms(existing.rtt_ms) {
+                    existing.measured_at = now_unix;
+                    false
+                } else {
+                    existing.rtt_ms = rtt_ms;
+                    existing.measured_at = now_unix;
+                    true
+                }
+            }
+            None => {
+                *slot = Some(DirectionRtt {
+                    rtt_ms,
+                    measured_at: now_unix,
+                });
+                true
+            }
+        }
+    }
+
+    /// The whole table as canonically-ordered rows, sorted by pair (`a` then `b`), so
+    /// the serve path returns a deterministic order. Each row's `rtt_ms` is the
+    /// round-half-up average of the pair's present directions (a lone present
+    /// direction serves as-is), and its `measured_at` is the newer of the two.
+    pub fn snapshot(&self) -> Vec<PairRttEntry> {
+        let mut entries: Vec<PairRttEntry> = {
+            let pairs = self.pairs.lock();
+            pairs
+                .iter()
+                .filter_map(|((a, b), directions)| {
+                    directions.served().map(|served| PairRttEntry {
+                        a: a.clone(),
+                        b: b.clone(),
+                        rtt_ms: served.rtt_ms,
+                        measured_at: served.measured_at,
+                    })
+                })
+                .collect()
+        };
+        entries.sort_by(|x, y| (x.a.as_ref(), x.b.as_ref()).cmp(&(y.a.as_ref(), y.b.as_ref())));
+        entries
+    }
+
+    /// Every present direction of every stored pair as its own row, tagged with
+    /// the origin region that measured it, in an unspecified order. Unlike
+    /// [`snapshot`](Self::snapshot), which averages a pair's two directions into
+    /// one served value, this keeps the directions apart — one row per measured
+    /// direction — so a caller can expose each direction separately.
+    /// A scrape-time census of the measured directions: `(origin, target,
+    /// milliseconds)`, sorted by origin then target so an exposition built from
+    /// it is deterministic. The origin is one end of the stored canonical pair
+    /// and the target is the other — the direction, flattened, which is what a
+    /// per-direction series needs.
+    pub fn metrics_census(&self) -> Vec<(RegionId, RegionId, u32)> {
+        let mut rows: Vec<(RegionId, RegionId, u32)> = self
+            .direction_snapshot()
+            .into_iter()
+            .map(|row| {
+                let target = if row.origin == row.a { row.b } else { row.a };
+                (row.origin, target, row.rtt_ms)
+            })
+            .collect();
+        rows.sort_by(|left, right| {
+            (left.0.as_ref(), left.1.as_ref()).cmp(&(right.0.as_ref(), right.1.as_ref()))
+        });
+        rows
+    }
+
+    pub fn direction_snapshot(&self) -> Vec<DirectionRttRow> {
+        let pairs = self.pairs.lock();
+        let mut rows = Vec::new();
+        for ((a, b), directions) in pairs.iter() {
+            if let Some(dir) = directions.from_a {
+                rows.push(DirectionRttRow {
+                    a: a.clone(),
+                    b: b.clone(),
+                    origin: a.clone(),
+                    rtt_ms: dir.rtt_ms,
+                    measured_at: dir.measured_at,
+                });
+            }
+            if let Some(dir) = directions.from_b {
+                rows.push(DirectionRttRow {
+                    a: a.clone(),
+                    b: b.clone(),
+                    origin: b.clone(),
+                    rtt_ms: dir.rtt_ms,
+                    measured_at: dir.measured_at,
+                });
+            }
+        }
+        rows
+    }
+
+    /// The served round-trip from `region` to every other region it has a stored pair
+    /// with, keyed by the other region, taken in one locked pass. Each value is the
+    /// same one [`snapshot`](Self::snapshot) serves for the pair: the average of its
+    /// present directions, so a pair only the far end has measured still answers.
+    /// Values carry no age cutoff: backbone round-trips are set by geography and
+    /// routing and stay stable for days, and relays deliberately re-measure only once
+    /// per lifetime, so an old value is the expected state, not a suspect one.
+    pub fn rtts_from(&self, region: &RegionId) -> HashMap<RegionId, u32> {
+        let pairs = self.pairs.lock();
+        pairs
+            .iter()
+            .filter_map(|((a, b), directions)| {
+                let other = if a == region {
+                    b
+                } else if b == region {
+                    a
+                } else {
+                    return None;
+                };
+                directions
+                    .served()
+                    .map(|served| (other.clone(), served.rtt_ms))
+            })
+            .collect()
+    }
+
+    /// The set of region pairs that currently hold a value in at least one direction,
+    /// as canonical keys (`a <= b`). The reconcile loop's coverage bootstrap diffs
+    /// this against the configured region pairs to find backbone links still lacking
+    /// any measurement; taking it in one locked pass keeps that check to a set lookup
+    /// per pair.
+    pub fn covered_pairs(&self) -> HashSet<PairKey> {
+        self.pairs
+            .lock()
+            .iter()
+            .filter(|(_, directions)| directions.from_a.is_some() || directions.from_b.is_some())
+            .map(|(key, _)| key.clone())
+            .collect()
+    }
+
+    /// Loads directional `rows` into the table, canonicalizing each pair and filling
+    /// the slot its `origin` selects — the startup load from the ledger, so
+    /// last-known per-direction values survive a coordinator restart or a
+    /// scale-to-zero. A later row for the same (pair, origin) overwrites an earlier
+    /// one.
+    pub fn seed(&self, rows: impl IntoIterator<Item = DirectionRttRow>) {
+        let mut pairs = self.pairs.lock();
+        for row in rows {
+            let (a, b) = canonical_pair(&row.a, &row.b);
+            let origin_is_a = row.origin.as_ref() == a.as_ref();
+            // A row whose origin is neither end of its pair is corrupt — the ledger
+            // only ever writes an origin that is one of the pair's regions — so skip it
+            // rather than force it into an arbitrary slot.
+            if !origin_is_a && row.origin.as_ref() != b.as_ref() {
+                continue;
+            }
+            let key = (a.clone(), b.clone());
+            let directions = pairs.entry(key).or_default();
+            let slot = if origin_is_a {
+                &mut directions.from_a
+            } else {
+                &mut directions.from_b
+            };
+            *slot = Some(DirectionRtt {
+                rtt_ms: row.rtt_ms,
+                measured_at: row.measured_at,
+            });
+        }
+    }
+}
+
+/// Orders a region pair canonically (`a <= b` by id string) — the ordering the store
+/// keys on and the ledger stores, so either direction of a link resolves to one row.
+pub fn canonical_pair<'a>(x: &'a RegionId, y: &'a RegionId) -> (&'a RegionId, &'a RegionId) {
+    if x.as_ref() <= y.as_ref() {
+        (x, y)
+    } else {
+        (y, x)
+    }
+}
+
+#[cfg(test)]
+mod tests;
