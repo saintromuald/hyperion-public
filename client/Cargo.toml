@@ -1,0 +1,40 @@
+[package]
+name = "rally-point-client"
+description = "Portable netcode v2 client transport (noq datagrams + reliable control + forward recovery), consumed by the ShieldBattery game DLL."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+rally-point-proto = { workspace = true }
+rally-point-transport = { workspace = true }
+# Ed25519 signing of the relay's connection-binding challenge. Reuses ring — the
+# pinned QUIC crypto provider — so the 32-bit client build pulls in no second
+# curve25519 backend and still needs no C/NASM toolchain.
+ring = { workspace = true }
+# Builds the dual-stack UDP socket the default client endpoint dials relays from.
+socket2 = { workspace = true }
+thiserror = { workspace = true }
+# Correlated diagnostics (a diverted oversize turn, a dead control stream).
+tracing = { workspace = true }
+# Bounds the dial with a deadline so a stalled relay can't hang the launch path,
+# and drives the turn-carrying link loop (select over send/recv/ack-flush). The
+# game DLL already drives this crate's futures on a tokio runtime.
+tokio = { workspace = true }
+
+[dev-dependencies]
+# The shared loopback fixtures (self-signed cert, a connected QUIC pair) both
+# the driver's tests and the real-relay suite bring a link up with. Dev-only:
+# the feature pulls rcgen in, and the 32-bit game build must never see it.
+rally-point-transport = { workspace = true, features = ["test-util"] }
+# The C–S–C loopback test drives real clients against a real relay.
+rally-point-relay = { workspace = true }
+# Hand-builds out-of-order wire packets to test the driver's in-order delivery.
+prost = { workspace = true }

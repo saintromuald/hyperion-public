@@ -1,0 +1,221 @@
+use super::*;
+
+#[test]
+fn relay_to_coordinator_flight_upload_request_roundtrips_json() {
+    let message = RelayToCoordinator::FlightUploadRequest {
+        request: 7,
+        tenant: TenantId("sb-staging".to_owned()),
+        session: SessionId(42),
+        desynced: true,
+        bytes: 4096,
+    };
+    let json = serde_json::to_string(&message).unwrap();
+    assert!(json.contains("\"type\":\"flight_upload_request\""));
+    let back: RelayToCoordinator = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, message);
+}
+
+#[test]
+fn the_one_field_flight_upload_frames_roundtrip_json() {
+    // `FlightUploadDone` (up) and `FlightUploadRefused` (down) are the same
+    // shape — a tag and the correlation id that pairs them with a request — so
+    // the only thing to pin is that each keeps its own tag and carries the id.
+    let done = RelayToCoordinator::FlightUploadDone { request: 9 };
+    let json = serde_json::to_string(&done).unwrap();
+    assert_eq!(json, r#"{"type":"flight_upload_done","request":9}"#);
+    assert_eq!(
+        serde_json::from_str::<RelayToCoordinator>(&json).unwrap(),
+        done
+    );
+
+    let refused = CoordinatorToRelay::FlightUploadRefused { request: 7 };
+    let json = serde_json::to_string(&refused).unwrap();
+    assert_eq!(json, r#"{"type":"flight_upload_refused","request":7}"#);
+    assert_eq!(
+        serde_json::from_str::<CoordinatorToRelay>(&json).unwrap(),
+        refused
+    );
+}
+
+#[test]
+fn coordinator_to_relay_flight_upload_grant_roundtrips_json() {
+    // The presigned URL is the whole point of the frame: its query string must
+    // survive serde untouched, or the relay uploads to an unsigned URL.
+    let message = CoordinatorToRelay::FlightUploadGrant {
+        request: 7,
+        url: "https://bucket.example/desync/sb-staging/42/3.json.zst?X-Amz-Signature=abc"
+            .to_owned(),
+    };
+    let json = serde_json::to_string(&message).unwrap();
+    assert!(json.contains("\"type\":\"flight_upload_grant\""));
+    assert!(json.contains("X-Amz-Signature=abc"));
+    let back: CoordinatorToRelay = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, message);
+}
+
+#[test]
+fn load_state_request_roundtrips_json() {
+    let message = CoordinatorToRelay::LoadStateRequest {
+        tenant: TenantId("sb-staging".to_owned()),
+        session: SessionId(42),
+        request_id: 9,
+        settle_lobby: false,
+    };
+    let json = serde_json::to_string(&message).unwrap();
+    assert!(json.contains("\"type\":\"load_state_request\""));
+    let back: CoordinatorToRelay = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, message);
+}
+
+#[test]
+fn an_empty_load_state_snapshot_roundtrips_and_omits_its_absent_fields() {
+    // The "I hold nothing for this session" attestation: every optional list
+    // stays off the wire, so it is byte-cheap to answer for a session the relay
+    // does not hold — and still decodes to the empty sets that say so.
+    let message = RelayToCoordinator::LoadStateSnapshot {
+        request_id: 1,
+        state: SessionPresence {
+            evidence_history: Vec::new(),
+            periodic_evidence: Vec::new(),
+            evidence: vec![],
+            tenant: TenantId("sb-staging".to_owned()),
+            session: SessionId(1),
+            slots: vec![],
+            ever_connected: vec![],
+            started: vec![],
+            forwarded: vec![],
+            started_at_ms: None,
+            lobby_violations: vec![],
+        },
+        fenced: false,
+        fenced_live: false,
+        closed_slots: vec![],
+        setup_settled: false,
+        reports_turns: false,
+    };
+    let json = serde_json::to_string(&message).unwrap();
+    assert!(!json.contains("ever_connected"));
+    assert!(!json.contains("fenced_live"));
+    assert!(!json.contains("closed_slots"));
+    assert!(!json.contains("started_at_ms"));
+    assert!(!json.contains("fenced"));
+    assert!(!json.contains("setup_settled"));
+    assert!(!json.contains("lobby_violations"));
+    assert!(!json.contains("forwarded"));
+    assert!(!json.contains("reports_turns"));
+    let back: RelayToCoordinator = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, message);
+
+    // A populated snapshot puts every field it does hold on the wire under the
+    // key names the coordinator reads.
+    let populated = RelayToCoordinator::LoadStateSnapshot {
+        request_id: 9,
+        state: SessionPresence {
+            evidence_history: Vec::new(),
+            periodic_evidence: Vec::new(),
+            evidence: vec![],
+            tenant: TenantId("sb-staging".to_owned()),
+            session: SessionId(42),
+            slots: vec![SlotId(1)],
+            ever_connected: vec![SlotId(0), SlotId(1)],
+            started: vec![SlotId(1)],
+            forwarded: vec![SlotId(0), SlotId(1)],
+            started_at_ms: Some(1_700_000_000_000),
+            lobby_violations: vec![SlotId(1)],
+        },
+        fenced: false,
+        fenced_live: true,
+        closed_slots: vec![
+            ClosedSlot {
+                slot: SlotId(0),
+                link_epoch: Some(u64::MAX),
+            },
+            ClosedSlot {
+                slot: SlotId(2),
+                link_epoch: None,
+            },
+        ],
+        setup_settled: true,
+        reports_turns: true,
+    };
+    let json = serde_json::to_string(&populated).unwrap();
+    assert!(json.contains("\"fenced_live\":true"));
+    // The epoch is exact on this Rust-to-Rust hop; an unrecorded one stays off the wire.
+    assert!(json.contains(&format!(
+        "\"closed_slots\":[{{\"slot\":0,\"link_epoch\":{}}},{{\"slot\":2}}]",
+        u64::MAX
+    )));
+    assert!(json.contains("\"type\":\"load_state_snapshot\""));
+    assert!(json.contains("\"ever_connected\":[0,1]"));
+    assert!(json.contains("\"setup_settled\":true"));
+    assert!(json.contains("\"lobby_violations\":[1]"));
+    assert!(json.contains("\"forwarded\":[0,1]"));
+    assert!(json.contains("\"reports_turns\":true"));
+    assert_eq!(
+        serde_json::from_str::<RelayToCoordinator>(&json).unwrap(),
+        populated
+    );
+}
+
+#[test]
+fn a_snapshot_from_a_relay_predating_the_fence_decodes_unfenced() {
+    // The additive field's whole point: a relay that never ran a fence omits it,
+    // and must never be read as having claimed one.
+    let json = r#"{"type":"load_state_snapshot","request_id":3,"state":{"tenant":"sb-staging","session":7,"slots":[]}}"#;
+    let back: RelayToCoordinator = serde_json::from_str(json).unwrap();
+    let RelayToCoordinator::LoadStateSnapshot {
+        fenced,
+        fenced_live,
+        closed_slots,
+        ..
+    } = back
+    else {
+        panic!("decodes as a snapshot");
+    };
+    assert!(!fenced);
+    // Nor the live half of one: an older relay can never claim more than it ran.
+    assert!(!fenced_live);
+    assert!(closed_slots.is_empty());
+}
+
+#[test]
+fn settlement_fields_default_false_for_pre_settlement_peers() {
+    let request =
+        r#"{"type":"load_state_request","tenant":"sb-staging","session":7,"request_id":3}"#;
+    let CoordinatorToRelay::LoadStateRequest { settle_lobby, .. } =
+        serde_json::from_str::<CoordinatorToRelay>(request).unwrap()
+    else {
+        panic!("decodes as a load-state request");
+    };
+    assert!(!settle_lobby);
+
+    let snapshot = r#"{"type":"load_state_snapshot","request_id":3,"state":{"tenant":"sb-staging","session":7,"slots":[]}}"#;
+    let RelayToCoordinator::LoadStateSnapshot {
+        state,
+        setup_settled,
+        ..
+    } = serde_json::from_str::<RelayToCoordinator>(snapshot).unwrap()
+    else {
+        panic!("decodes as a load-state snapshot");
+    };
+    assert!(!setup_settled);
+    assert!(state.lobby_violations.is_empty());
+}
+
+#[test]
+fn a_snapshot_from_a_relay_predating_turn_evidence_reports_no_turns() {
+    // An older relay omits the turn set and the flag. The empty set alone would
+    // read as "forwarded nothing from anyone"; the flag defaulting false is what
+    // keeps the coordinator from taking that silence for a statement.
+    let json = r#"{"type":"load_state_snapshot","request_id":3,"state":{"tenant":"sb-staging","session":7,"slots":[1],"started":[1]}}"#;
+    let RelayToCoordinator::LoadStateSnapshot {
+        state,
+        reports_turns,
+        ..
+    } = serde_json::from_str::<RelayToCoordinator>(json).unwrap()
+    else {
+        panic!("decodes as a load-state snapshot");
+    };
+    assert!(!reports_turns);
+    assert!(state.forwarded.is_empty());
+}

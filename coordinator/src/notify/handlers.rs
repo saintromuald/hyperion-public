@@ -1,0 +1,612 @@
+//! The notice handlers: one `handle_*` function per relay-reported notice
+//! kind, each following the same shape — claim the dedup entry, resolve the
+//! tenant's notify config and correlation ids via [`resolve_or_drop`], build
+//! the notice's `*Webhook` body, and hand it to [`enqueue_dispatch`] for
+//! ordered delivery. Grouped separately from `payloads` and `dispatch` because
+//! this is the one piece of logic that actually varies per notice kind — and
+//! what does *not* vary (the resolution, and the three ways a notice goes no
+//! further) is factored into [`resolve_or_drop`] so a new kind spells out only
+//! its own key, its own body, and nothing else.
+
+use std::time::Instant;
+
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use bytes::Bytes;
+use rally_point_proto::control::{
+    DepartureNotice, DesyncNotice, DivergedSlot, LobbyViolationNotice, ResultNotice,
+    SessionStartedNotice, SlotConnectedNotice, SlotStartedNotice, TenantId,
+};
+use rally_point_proto::ids::SessionId;
+use serde::Serialize;
+
+use super::*;
+use crate::lifecycle::{Lifecycle, NoticeKey};
+use crate::session::SessionSetup;
+use crate::tenant::NotifyConfig;
+
+/// Everything a handler needs after the shared resolution succeeded: where to
+/// POST, the gameId to embed, and this coordinator's stored session record for
+/// whatever per-slot reference resolution the kind still does itself.
+struct ResolvedNotice {
+    config: NotifyConfig,
+    external_id: String,
+    /// Boxed for the same reason [`NoticePrefix::Resolved`] boxes it: the
+    /// per-relay cert map makes `SessionRefs` far larger than everything else
+    /// here.
+    stored: Box<Option<SessionRefs>>,
+}
+
+impl ResolvedNotice {
+    /// The stored per-slot correlation ref for `slot`, if this coordinator
+    /// still holds the session's record. The fallback behind every notice's
+    /// own `external_ref`: notice-carried first, stored second, so a
+    /// coordinator restart that wiped the session store still names whom the
+    /// notice itself named.
+    fn stored_slot_ref(&self, slot: SlotId) -> Option<String> {
+        (*self.stored)
+            .as_ref()
+            .and_then(|refs| refs.slots.get(&slot).cloned())
+    }
+}
+
+/// The shared opening of every handler: resolve the tenant's notify config and
+/// the notice's gameId, or debug-log why this notice goes no further and return
+/// `None`.
+///
+/// The three ways a notice stops here — a duplicate, a tenant with no notify
+/// config, and no gameId from either the notice or a stored session — are each
+/// a deliberate, best-effort drop rather than an error: the webhook feed is an
+/// optimization, so silence is correct. `kind` names the notice in those log
+/// messages (`departure`, `slot-connected`, …) and `key` decides which
+/// event-specific field they correlate on.
+fn resolve_or_drop(
+    setup: &SessionSetup,
+    tenant: &TenantId,
+    session: SessionId,
+    key: NoticeKey,
+    kind: &str,
+    notice_external_id: Option<String>,
+    is_new: bool,
+) -> Option<ResolvedNotice> {
+    let reason = match resolve_notice_prefix(setup, tenant, session, notice_external_id, is_new) {
+        NoticePrefix::Resolved {
+            config,
+            external_id,
+            stored,
+        } => {
+            return Some(ResolvedNotice {
+                config,
+                external_id,
+                stored,
+            });
+        }
+        NoticePrefix::Duplicate => format!("duplicate {kind} notice; already handled"),
+        NoticePrefix::NoNotifyConfig => format!("no notify config for tenant; dropping {kind}"),
+        NoticePrefix::NoExternalId => {
+            format!("no gameId ref from the notice or a stored session; dropping {kind}")
+        }
+    };
+    key.debug(tenant, session, &reason);
+    None
+}
+
+/// Handles one relay's departure notice.
+///
+/// First sight of a `(tenant, session, slot)` resolves its correlation ids and
+/// the tenant's notify config and spawns a webhook dispatch. A duplicate
+/// (another relay reporting the same leave), a tenant with no notify config, or
+/// a departure with no gameId ref from any source are each a debug-logged drop
+/// — the notification is best-effort, so silence there is correct, not an error.
+///
+/// **Correlation ids: notice-carried first, the stored session as fallback.**
+/// The relay stamps `external_id`/`external_ref` into the notice itself (from
+/// the coordinator descriptor it applied), so those survive a coordinator
+/// restart that wipes the in-memory session-refs store — this is the case the
+/// fallback exists to fix: a restarted coordinator with an empty session store
+/// still delivers a correct webhook as long as the notice carries its own refs.
+/// Each field falls back independently to the stored session (for a notice
+/// from a relay that predates the fields, or one whose descriptor never carried
+/// them) rather than requiring the whole pair from one source. An unresolved
+/// *session* is not a hard drop on its own — only the absence of a `gameId`
+/// (`external_id`) from *both* sources is, since a webhook naming no game is
+/// useless to the consumer regardless of whether a player ref is available.
+///
+/// The dedup entry is claimed before the later lookups, so those terminal
+/// drops are not re-processed by a later duplicate either.
+pub(crate) fn handle_departure(
+    setup: &SessionSetup,
+    dedup: &DepartureDedup,
+    lifecycle: &Lifecycle,
+    notice: DepartureNotice,
+) {
+    let is_new = dedup
+        .lock()
+        .insert((notice.tenant.clone(), notice.session, notice.slot));
+
+    let Some(resolved) = resolve_or_drop(
+        setup,
+        &notice.tenant,
+        notice.session,
+        NoticeKey::Slot(notice.slot),
+        "departure",
+        notice.external_id.clone(),
+        is_new,
+    ) else {
+        return;
+    };
+
+    let external_ref = notice
+        .external_ref
+        .clone()
+        .or_else(|| resolved.stored_slot_ref(notice.slot));
+
+    let payload = DepartureWebhook {
+        event: "departure",
+        tenant: notice.tenant.as_ref().to_owned(),
+        session: notice.session.0,
+        external_id: Some(resolved.external_id),
+        slot: notice.slot.0,
+        external_ref,
+        kind: notice.kind,
+        reason: notice.reason,
+        leave_seq: notice.leave_seq,
+        result: notice.result.map(ResultEchoWebhook::from),
+    };
+
+    enqueue_dispatch(
+        lifecycle,
+        notice.tenant,
+        notice.session,
+        resolved.config,
+        &payload,
+        "departure",
+    );
+}
+
+/// Handles one relay's desync notice.
+///
+/// A sibling of [`handle_departure`]: first sight of a
+/// `(tenant, session, sync_ordinal)` resolves the session's `external_id` and the
+/// tenant's notify config, then spawns a signed webhook. A duplicate (an
+/// at-least-once redelivery of the same event), a tenant with no notify config,
+/// or a desync with no `gameId` ref from any source are each a debug-logged drop.
+///
+/// Correlation ids come notice-first, stored-session as fallback — the same rule
+/// as departures, so a coordinator restart that wiped the session store still
+/// delivers a correct webhook from the notice's self-stamped refs. Each diverged
+/// or missing slot's `externalRef` resolves independently (notice ref, else the stored
+/// per-slot ref), so a partially-ref'd notice still names whom it can.
+///
+/// A desynced-session mark is recorded first of all, before the dedup and
+/// notify-config/gameId gates that can drop the webhook: the flight-recorder sink
+/// pins a session's recordings on the desync FACT, which holds regardless of whether
+/// a webhook is ever delivered for it.
+pub(crate) fn handle_desync(
+    setup: &SessionSetup,
+    dedup: &DesyncDedup,
+    marks: &DesyncMarks,
+    lifecycle: &Lifecycle,
+    notice: DesyncNotice,
+) {
+    mark_session_desynced(marks, notice.tenant.clone(), notice.session, Instant::now());
+
+    let is_new = dedup
+        .lock()
+        .insert((notice.tenant.clone(), notice.session, notice.sync_ordinal));
+    if is_new {
+        // Counted behind the dedup so an at-least-once redelivery of the same
+        // event (a relay resending an unacked notice across a reconnect) can't
+        // inflate the desync count.
+        crate::metrics::desync(&notice.tenant);
+        // Every dedup entry inserted above must correspond to a lifecycle
+        // state that will eventually retire it -- otherwise a notice this
+        // coordinator can never resolve (dropped below as `NoNotifyConfig`
+        // or `NoExternalId`, which never reaches `enqueue_dispatch`, the
+        // path that would normally supply that state) leaks the entry for
+        // the life of the process. See `Lifecycle::ensure_orphan_tracked`.
+        lifecycle.ensure_orphan_tracked(notice.tenant.clone(), notice.session);
+    }
+
+    let Some(resolved) = resolve_or_drop(
+        setup,
+        &notice.tenant,
+        notice.session,
+        NoticeKey::SyncOrdinal(notice.sync_ordinal),
+        "desync",
+        notice.external_id.clone(),
+        is_new,
+    ) else {
+        return;
+    };
+
+    let to_webhook = |slots: &[DivergedSlot]| -> Vec<DivergedSlotWebhook> {
+        slots
+            .iter()
+            .map(|d| DivergedSlotWebhook {
+                slot: d.slot.0,
+                external_ref: d
+                    .external_ref
+                    .clone()
+                    .or_else(|| resolved.stored_slot_ref(d.slot)),
+            })
+            .collect()
+    };
+    let diverged = to_webhook(&notice.diverged);
+    let missing = to_webhook(&notice.missing);
+
+    let payload = DesyncWebhook {
+        event: "desync",
+        tenant: notice.tenant.as_ref().to_owned(),
+        session: notice.session.0,
+        external_id: Some(resolved.external_id),
+        sync_ordinal: notice.sync_ordinal,
+        game_frame: notice.game_frame,
+        detected_at_ms: notice.detected_at_ms,
+        no_majority: notice.no_majority,
+        diverged,
+        missing,
+    };
+
+    enqueue_dispatch(
+        lifecycle,
+        notice.tenant,
+        notice.session,
+        resolved.config,
+        &payload,
+        "desync",
+    );
+}
+
+/// Handles one relay's result notice.
+///
+/// A sibling of [`handle_departure`]: first sight of a `(tenant, session, slot)`
+/// resolves the reporting slot's correlation ids and the tenant's notify config,
+/// base64-encodes the opaque payload, then spawns a signed webhook. A duplicate
+/// (an at-least-once redelivery, or a second relay that somehow saw the report),
+/// a tenant with no notify config, or a result with no `gameId` ref from any
+/// source are each a debug-logged drop — the notification is best-effort.
+///
+/// Correlation ids come notice-first, stored-session as fallback — the same rule
+/// as departures, so a coordinator restart that wiped the session store still
+/// delivers a correct webhook from the notice's self-stamped refs. The payload
+/// bytes are never parsed here; they are relayed straight through as base64.
+pub(crate) fn handle_result(
+    setup: &SessionSetup,
+    dedup: &ResultDedup,
+    lifecycle: &Lifecycle,
+    notice: ResultNotice,
+) {
+    let is_new = dedup
+        .lock()
+        .insert((notice.tenant.clone(), notice.session, notice.slot));
+
+    let Some(resolved) = resolve_or_drop(
+        setup,
+        &notice.tenant,
+        notice.session,
+        NoticeKey::Slot(notice.slot),
+        "result",
+        notice.external_id.clone(),
+        is_new,
+    ) else {
+        return;
+    };
+
+    let external_ref = notice
+        .external_ref
+        .clone()
+        .or_else(|| resolved.stored_slot_ref(notice.slot));
+
+    let payload = ResultWebhook {
+        event: "result",
+        tenant: notice.tenant.as_ref().to_owned(),
+        session: notice.session.0,
+        external_id: Some(resolved.external_id),
+        slot: notice.slot.0,
+        external_ref,
+        payload: BASE64_STANDARD.encode(&notice.payload),
+        arrival_ms: notice.arrival_ms,
+        session_frame: notice.session_frame,
+        slot_frame: notice.slot_frame,
+    };
+
+    enqueue_dispatch(
+        lifecycle,
+        notice.tenant,
+        notice.session,
+        resolved.config,
+        &payload,
+        "result",
+    );
+}
+
+/// Resolves an arriving slot's correlation ids and tenant configuration, then
+/// queues its signed webhook after lifecycle accounting has recorded the arrival.
+/// Legacy arrivals notify once per slot: repeating the same arrival fact adds no
+/// information. Evidence-bearing arrivals can describe a different connection on
+/// each reconnect or rehome, so they instead use the lifecycle's activation high
+/// water to suppress duplicates without losing changed observations.
+///
+/// Correlation ids come from the notice first, with the stored session as fallback,
+/// so a self-describing arrival can still reach the tenant after coordinator state
+/// was lost. The load-state pull retains facts independently of webhook delivery.
+pub(crate) fn handle_slot_connected(
+    setup: &SessionSetup,
+    dedup: &SlotConnectedDedup,
+    lifecycle: &Lifecycle,
+    notice: SlotConnectedNotice,
+) {
+    let first = dedup
+        .lock()
+        .insert((notice.tenant.clone(), notice.session, notice.slot));
+    let is_new = notice.evidence.is_some() || first;
+
+    let Some(resolved) = resolve_or_drop(
+        setup,
+        &notice.tenant,
+        notice.session,
+        NoticeKey::Slot(notice.slot),
+        "slot-connected",
+        notice.external_id.clone(),
+        is_new,
+    ) else {
+        return;
+    };
+
+    let external_ref = notice
+        .external_ref
+        .clone()
+        .or_else(|| resolved.stored_slot_ref(notice.slot));
+
+    let payload = SlotConnectedWebhook {
+        evidence: notice.evidence.map(Into::into),
+        event: "slotConnected",
+        tenant: notice.tenant.as_ref().to_owned(),
+        session: notice.session.0,
+        external_id: Some(resolved.external_id),
+        slot: notice.slot.0,
+        external_ref,
+        resumed: notice.resumed,
+        connected_at_ms: notice.connected_at_ms,
+    };
+
+    enqueue_dispatch(
+        lifecycle,
+        notice.tenant,
+        notice.session,
+        resolved.config,
+        &payload,
+        "slotConnected",
+    );
+}
+
+/// Handles the authority relay's session-started notice.
+///
+/// A sibling of [`handle_departure`] keyed on `(tenant, session)` alone — a
+/// session starts once. Only the authority reports the latch, so a duplicate here
+/// is an at-least-once redelivery or a second authority's report after a
+/// promotion, both of which describe the same start.
+///
+/// The `external_id` comes notice-first, stored-session as fallback — the same
+/// rule as departures.
+pub(crate) fn handle_session_started(
+    setup: &SessionSetup,
+    dedup: &SessionStartedDedup,
+    lifecycle: &Lifecycle,
+    notice: SessionStartedNotice,
+) {
+    let is_new = dedup.lock().insert((notice.tenant.clone(), notice.session));
+
+    let Some(resolved) = resolve_or_drop(
+        setup,
+        &notice.tenant,
+        notice.session,
+        NoticeKey::Session,
+        "session-started",
+        notice.external_id.clone(),
+        is_new,
+    ) else {
+        return;
+    };
+
+    let payload = SessionStartedWebhook {
+        event: "sessionStarted",
+        tenant: notice.tenant.as_ref().to_owned(),
+        session: notice.session.0,
+        external_id: Some(resolved.external_id),
+        started_at_ms: notice.started_at_ms,
+        initial_buffer_turns: notice.initial_buffer_turns,
+    };
+
+    enqueue_dispatch(
+        lifecycle,
+        notice.tenant,
+        notice.session,
+        resolved.config,
+        &payload,
+        "sessionStarted",
+    );
+}
+
+/// Handles one relay's slot-started notice — a client's report that its game loop
+/// is running.
+///
+/// A sibling of [`handle_result`] with the same `(tenant, session, slot)` dedup
+/// key (a slot reports one game-loop start), the same notice-first correlation-id
+/// resolution, and the same best-effort drops.
+pub(crate) fn handle_slot_started(
+    setup: &SessionSetup,
+    dedup: &SlotStartedDedup,
+    lifecycle: &Lifecycle,
+    notice: SlotStartedNotice,
+) {
+    let is_new = dedup
+        .lock()
+        .insert((notice.tenant.clone(), notice.session, notice.slot));
+
+    let Some(resolved) = resolve_or_drop(
+        setup,
+        &notice.tenant,
+        notice.session,
+        NoticeKey::Slot(notice.slot),
+        "slot-started",
+        notice.external_id.clone(),
+        is_new,
+    ) else {
+        return;
+    };
+
+    let external_ref = notice
+        .external_ref
+        .clone()
+        .or_else(|| resolved.stored_slot_ref(notice.slot));
+
+    let payload = SlotStartedWebhook {
+        event: "slotStarted",
+        tenant: notice.tenant.as_ref().to_owned(),
+        session: notice.session.0,
+        external_id: Some(resolved.external_id),
+        slot: notice.slot.0,
+        external_ref,
+        arrival_ms: notice.arrival_ms,
+        session_frame: notice.session_frame,
+        slot_frame: notice.slot_frame,
+    };
+
+    enqueue_dispatch(
+        lifecycle,
+        notice.tenant,
+        notice.session,
+        resolved.config,
+        &payload,
+        "slotStarted",
+    );
+}
+
+/// Handles one relay's lobby-violation notice — a slot evicted for sending a lobby
+/// command its session's lobby policy doesn't admit.
+///
+/// A sibling of [`handle_slot_started`] with the same `(tenant, session, slot)`
+/// dedup key (a slot is evicted once). Its correlation ids are deliberately
+/// coordinator-recorded only: unlike ordinary restart-tail notices, this
+/// security event is accepted only while the coordinator can prove the
+/// reporter homes its slot, so relay-carried ids must not choose whom the
+/// tenant sees as violating.
+pub(crate) fn handle_lobby_violation(
+    setup: &SessionSetup,
+    dedup: &LobbyViolationDedup,
+    lifecycle: &Lifecycle,
+    notice: LobbyViolationNotice,
+) {
+    let is_new = dedup
+        .lock()
+        .insert((notice.tenant.clone(), notice.session, notice.slot));
+
+    let Some(resolved) = resolve_or_drop(
+        setup,
+        &notice.tenant,
+        notice.session,
+        NoticeKey::Slot(notice.slot),
+        "lobby-violation",
+        None,
+        is_new,
+    ) else {
+        return;
+    };
+
+    let external_ref = resolved.stored_slot_ref(notice.slot);
+
+    let payload = LobbyViolationWebhook {
+        event: "lobbyViolation",
+        tenant: notice.tenant.as_ref().to_owned(),
+        session: notice.session.0,
+        external_id: Some(resolved.external_id),
+        slot: notice.slot.0,
+        external_ref,
+        arrival_ms: notice.arrival_ms,
+    };
+
+    enqueue_dispatch(
+        lifecycle,
+        notice.tenant,
+        notice.session,
+        resolved.config,
+        &payload,
+        "lobbyViolation",
+    );
+}
+
+/// Serializes `payload` and enqueues its webhook onto the session's ordered
+/// dispatch queue ([`Lifecycle`]), so lifecycle notices for one `(tenant, session)` are
+/// delivered in the order they were enqueued — a notice's retry loop blocks the ones
+/// behind it. This is what lets a delivered `sessionClosed` guarantee no earlier
+/// lifecycle notice for the session is still in flight. Periodic evidence uses
+/// an independent best-effort path and may arrive later. `kind` labels delivery logs.
+fn enqueue_dispatch(
+    lifecycle: &Lifecycle,
+    tenant: TenantId,
+    session: SessionId,
+    config: NotifyConfig,
+    payload: &impl Serialize,
+    kind: &'static str,
+) {
+    let body = match serde_json::to_vec(payload) {
+        Ok(bytes) => Bytes::from(bytes),
+        Err(error) => {
+            tracing::error!(%error, kind, "serializing a webhook body failed; dropping");
+            return;
+        }
+    };
+    lifecycle.enqueue_webhook(tenant, session, config, body, kind);
+}
+
+/// Delivers a fenced periodic observation without recording a connection arrival.
+#[cfg(test)]
+pub(crate) fn handle_slot_evidence(
+    setup: &SessionSetup,
+    notice: rally_point_proto::control::SlotEvidenceNotice,
+) {
+    let historical = notice.historical_admission.is_some();
+    handle_slot_evidence_summary(setup, notice, historical, None);
+}
+
+pub(crate) fn handle_slot_evidence_summary(
+    setup: &SessionSetup,
+    notice: rally_point_proto::control::SlotEvidenceNotice,
+    historical: bool,
+    failure_count: Option<u32>,
+) {
+    let Some(resolved) = resolve_or_drop(
+        setup,
+        &notice.tenant,
+        notice.session,
+        NoticeKey::Slot(notice.slot),
+        "slot-evidence",
+        notice.external_id.clone(),
+        true,
+    ) else {
+        return;
+    };
+    let external_ref = notice
+        .external_ref
+        .or_else(|| resolved.stored_slot_ref(notice.slot));
+    let payload = SlotEvidenceWebhook {
+        event: "slotEvidence",
+        historical,
+        failure_count,
+        tenant: notice.tenant.as_ref().to_owned(),
+        session: notice.session.0,
+        external_id: Some(resolved.external_id),
+        slot: notice.slot.0,
+        external_ref,
+        observed_at_ms: notice.observed_at_ms,
+        evidence: notice.evidence.into(),
+    };
+    super::periodic::try_dispatch(
+        setup.tenants().clone(),
+        notice.tenant,
+        resolved.config,
+        &payload,
+    );
+}

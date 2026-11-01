@@ -1,0 +1,2215 @@
+# Netcode v2 — Architecture Overview
+
+This is the reference for **how netcode v2 works and why it is shaped this way**. It describes the
+**final design** — the target the implementation is being built toward, not only what runs today.
+
+> **Implementation status — temporary note, delete once complete.** What runs today is the single-relay
+> core end-to-end — `client–relay–client` with the per-link transport, the relay's validating client edge,
+> and the client's forward-recovery driver — plus most of the multi-relay mesh and the coordinator control
+> plane. Built and wired:
+>
+> - **Mesh core.** The mesh-edge connection half (dial / accept with an identity hello, on-demand dialing,
+>   idle teardown + reconnect supervision), session-level turn dedup, and per-session `Join`/`Leave` driven by
+>   coordinator descriptors. Mesh peer certs are now **pinned from the session descriptor** — the coordinator
+>   carries each relay's leaf cert and the dialer trusts exactly that, mirroring how a client pins its
+>   relay's cert — with a fallback to configured roots for a descriptor that predates carrying them.
+> - **Coordinator↔relay control connection.** Each relay holds one persistent, bootstrap-secret-authenticated
+>   connection; it **enrolls itself** over the first frame, **reports liveness** on a heartbeat (a drop or
+>   silence past the deadline deregisters it, made safe against a racing reconnect by a generation fencing
+>   token), and applies the **declarative descriptor set** the coordinator pushes down to drive mesh
+>   membership.
+> - **Latency-buffer consensus.** The per-session decision-maker is wired into the runtime: each relay feeds
+>   its home clients' link stats (and peer relays' stats off the mesh) into it, and the **authority** relay —
+>   first in the coordinator-assigned order still serving live players, with handoff **presence-driven** over
+>   reliable mesh streams and no coordinator round-trip — stamps a `buffer_directive` onto the turns it
+>   forwards, applied out of band, not a command in the byte stream. The client-side `DirectiveTracker`
+>   collapses the redundant out-of-order stamp stream into at-most-one change at its apply frame; the
+>   remaining seam is the game-side owner in `shieldbattery/game/` that resizes the real turn buffer.
+> - **Relay-side desync detection.** The authority relay compares clients' `0x37` sync checksums off the same
+>   turn stream and reports a divergence, hardened so a malicious client can only get its own game disputed,
+>   never frame an honest player (see [Relay-side desync detection](#relay-side-desync-detection)).
+> - **Synced player-leaves.** A clean quit sends a leave-intent up the reliable control stream; the authority
+>   decides a `LeaveDirective` at a survivor-reachable apply frame — a departing client cannot inflate its own
+>   leave past what survivors can reach — broadcast to clients and propagated across the mesh so every client
+>   applies the same leave at the same simulated step (see [Synced player-leaves](#synced-player-leaves)).
+> - **Reliable control stream, both edges.** Client↔relay and relay↔relay (one bidirectional stream per side,
+>   extensible length-prefixed frames). A turn too large to ever ride a datagram diverts onto it end-to-end
+>   and rejoins the ordered turn stream at the receiver — the mesh divert is now built, no longer
+>   dropped-with-a-warning. Chat/resync are future frame kinds on the same channel.
+> - **Coordinator control plane.** The relay registry, per-tenant connection-bound **token** issuance, session
+>   setup + descriptor assignment, and the tenant-facing HTTP API. The API now **authenticates inbound tenant
+>   requests** with a per-tenant Ed25519 signature (fail-closed), a **coordinator→tenant webhook** leg reports
+>   player departures, desyncs, and game results (signed with the tenant's key, deduped, retried), and a
+>   **session-lifecycle** layer emits a final `sessionClosed` and reaps dangling sessions (see
+>   [Control plane](#control-plane-the-coordinator)).
+>
+> - **Relay-death failover (coordinator-mediated re-home).** In-game, whole-group failover onto a
+>   replacement relay: the coordinator's tenant-authenticated, app-server-mediated `POST /session/rehome`
+>   moves every slot homed on a dead relay to one live relay and rebuilds the serving relays' descriptors as
+>   **resumed** (seeding the already-decided departures so a fresh relay resumes rather than waits), and the
+>   client driver escalates a dead home relay to an embedder-supplied re-home provider (which reaches the
+>   coordinator through the tenant's app server — clients never call the coordinator directly), re-dials the
+>   replacement with its existing token + resume cursors, and re-injects a retained ring of its own sent turns
+>   so the new relay's empty turn ring still fans them out (see [Failover and reconnect](#failover-and-reconnect)).
+>
+> - **Coordinator restart adoption.** A ledger-backed coordinator persists every live session (setup
+>   state + accumulated lifecycle facts) and restores it at startup, so a restarted or redeployed
+>   coordinator re-syncs each reconnecting relay to the descriptor set it already holds and its games run
+>   to completion (see [Session lifecycle and reaps](#session-lifecycle-and-reaps)).
+>
+> Still designed but not built: coordinator **hot standby** (one restart-tolerant instance is the HA
+> posture), and **ECS-metadata address discovery** (dual-stack advertise is built — explicit flags carry
+> the address set; deriving it from the cloud substrate is what remains).
+
+> **Read this before "fixing" the transport.** The data plane is deliberately **not** a standard
+> reliable-ordered protocol (TCP, QUIC streams). Reviewers — human and automated — repeatedly
+> pattern-match it against one and flag intentional choices (out-of-order delivery, no relay-side
+> reordering, ack-only handling, no retransmit-on-timeout) as bugs, pushing toward something that
+> *looks* correct but breaks lockstep. See [Why not a standard protocol](#why-not-a-standard-reliable-ordered-protocol).
+
+## The shape
+
+```
+  game (BW) ─┐                                            ┌─ game (BW)
+             │  turns                                turns │
+        ┌────▼─────┐  QUIC datagrams   ┌────────┐   ┌──────▼───┐
+        │ client   │══════════════════▶│ home   │◀══│ client   │
+        │ (driver) │◀══════════════════│ relay  │══▶│ (driver) │
+        └──────────┘                   └───┬────┘   └──────────┘
+                                           │ S===S (mesh)
+                                       ┌───▼────┐
+                                       │ relay  │
+                                       └────────┘
+```
+
+Each arrow is one **link**: an independent unreliable QUIC connection with its own packet loss. The
+client has one link to its home relay; relays mesh to each other across the backbone. The same per-link
+transport machinery runs at both ends of every link.
+
+## Payloads and packets
+
+Two units, often conflated — keeping them straight is the key to the whole design.
+
+- A **payload** is the unit of meaning: one slot's command bytes for one turn, plus an origin `seq`
+  (its transport identity, assigned by the sending client and preserved end-to-end, used for dedup
+  and retirement) and the source `slot`. Payloads are what the game produces and consumes.
+- A **packet** is a transport envelope — exactly one per QUIC datagram. It carries a packet `seq`, the
+  ack state for the peer's packets (`ack` + a 32-bit `ack_bits` history), and a list of payloads.
+
+**A packet's `seq` is only an ack handle.** It names which payloads a packet carried so that, when the
+peer acks that packet, we know which payloads to retire. It is *not* an ordering key and imposes no
+in-order delivery: packets may arrive in any order, and that is fine. (The per-payload `seq` is the
+identity that matters; the packet `seq` is bookkeeping for acks.)
+
+> **Why our own `seq` and acks, not QUIC's?** QUIC's datagram extension is deliberately
+> fire-and-forget: a datagram carries no application-visible sequence number, and noq surfaces no
+> per-datagram delivery receipt. QUIC does ack at its own *packet-number* level for congestion control
+> and loss detection, but that isn't exposed — and it would be the wrong granularity anyway, because we
+> retire *payloads* and a payload rides several packets via redundancy. So the payload identity (`seq`)
+> and the selective acks (`ack` + `ack_bits`) are ours by nature: QUIC gives us the encrypted,
+> congestion-controlled, MTU-aware *unreliable* pipe, and nothing it could ack would map to our
+> payloads.
+
+## Loss recovery is redundancy, not retransmission
+
+Recovery is **ours, layered on QUIC's unreliable datagrams** — QUIC supplies encryption, congestion
+control, MTU sizing, migration, and a loss signal, but no per-datagram delivery receipt for our
+redundantly-packed payloads.
+
+- Each packet carries a **fresh** payload plus **still-unacked ones**, so a dropped packet's payloads
+  ride the *next* packets automatically. How much a packet spends on that is governed by the send-side
+  **re-carry policy** (`RecarryPolicy`, default: 384-byte redundancy budget, two dense carries then
+  geometric spacing capped at 8 packets) — see the settled-decisions entry below for why the refill
+  must be bounded and how the parameters were chosen. The fresh payload is always exempt: the current
+  turn is never squeezed out.
+- There is **no retransmit-on-timeout**. We never wait a round-trip to notice a gap and resend — the
+  redundancy already covers it. Turns are tiny, so the bandwidth cost is negligible; the latency saved
+  is a whole RTT per loss, which lockstep cannot spend.
+- **Acks retire payloads.** A packet acks the peer's recent packet seqs; each acked packet's payloads
+  are dropped from the re-send set. An **ack-only** packet (no payloads) carries acks alone — it needs
+  no ack in return, so receiving one must *not* schedule another (or two idle links would trade
+  ack-only packets forever).
+- A **maintenance flush** retransmits during the gaps the fresh stream can't cover: when an outbound
+  turn re-carries unacked payloads (the common case) the flush timer is pushed out and never fires, so
+  it costs no extra packets; it fires only when a near-MTU turn left no room for redundancy, or the
+  link is idle, and re-carries the unacked payloads then — all of them the byte budget allows, since
+  the carry spacing gates only packets that carry a fresh payload.
+- Under *sustained* loss where redundancy can't keep up, the unacked window is **capped** rather than
+  grown without bound. Two mechanisms keep it bounded, each for a distinct failure:
+
+  - The **ack-beacon** side-channel handles *reverse*-path loss — the peer received the turns (redundancy
+    kept up) but the acks riding the datagrams back were lost. Each side opens one outbound reliable
+    uni-stream and pushes its monotonic `delivered_through` cursor for a slot whenever it advances; the
+    peer reads it and force-retires (`retire_through`) everything up to that cursor **for that slot**.
+    The cursor is per-slot because each slot carries its own monotonic seq space starting at 0 — a
+    single global cursor would retire one slot's seqs against another's. The cursor advances exactly
+    when the peer is keeping up, so the beacon retires the turns the peer confirmed it got — never the
+    ones it didn't. Push-on-advance, not a timer: a healthy link with a static receive prefix sends
+    nothing.
+  - A **hard cap** (`UNACKED_WINDOW_CAP`) handles *forward*-path sustained loss — the peer genuinely
+    receives slower than the local endpoint produces, so even with the beacon the window grows (the
+    beacon can only retire what the peer *got*). When `payloads_in_flight` crosses the cap the driver
+    trips (`UnackedWindowExhausted` on the client, slot isolation on the relay) rather than let seqs
+    race ahead until the peer's receive window rejects them and drops the link. Surfacing the condition
+    is the buildable half; the resync it triggers (reconnect + replay-from-cursor) is gated on the open
+    failover design (see [Failover](#failover-and-reconnect)).
+
+  The beacon's read half runs in a dedicated task that assembles complete `(slot, cursor)` frames over
+  an `mpsc` channel — a `read_exact` dropped mid-frame inside a `select!` would desync the framing and
+  hand a garbage cursor to `retire_through`, so it never crosses the `select!` boundary. `retire_through`
+  is guarded monotonically per slot as a second line of defense. The datagram path itself stays
+  best-effort-fast by design.
+
+## The link transport
+
+The `transport` crate is the per-link machinery, shared by `client` and `relay` (one instance per
+link). It owns no I/O — a driver pulls a built packet from it and sends it, and feeds every received
+packet back in.
+
+- `send(payload)` packages the fresh payload + redundancy into a packet sized to the live
+  `max_datagram_size()`, and reports how many unacked payloads it re-carried (so a driver knows whether
+  recovery is already riding the stream). A turn too large to ever fit a datagram is rejected up front
+  rather than tracked as un-sendable.
+- `recv()` folds in the packet's acks, dedups (each payload is delivered exactly once even though
+  redundancy means it arrives several times), and reports whether the packet carried any payloads.
+- It does **not** reassemble a globally-ordered stream. Each `recv()` returns one packet's new payloads
+  in their own seq order, but successive calls follow arrival order. Putting turns back in game order is
+  a concern of the layer above (the client).
+
+## The relay
+
+The relay is a **validating** relay, not a dumb forwarder. For each turn a client sends:
+
+1. **Validate** (attacker-facing, fuzzed): bind the turn to the slot the client's token authorizes
+   (never the slot on the wire), bounds-check every command against the command-length table, and strip
+   control commands a live turn may not carry.
+2. **Forward immediately, with no inbound reordering.** A validated turn is fanned out to the session's
+   other slots the moment it arrives — a peer must hold a turn *before* it simulates that game step, so
+3. **Re-package.** Each peer's link buffers that peer's unacked payloads and builds its **own** packets
+   re-carrying them — its own packet seqs, multiple payloads each. The payload's `(slot, seq)` origin
+   identity is preserved verbatim across the seam (assigned by the sending client and honored by every
+   hop); the receiver knows whose commands these are from `slot` and dedups by `(slot, seq)`. (The
+   per-client send buffer is bounded so a stuck client can't grow it without limit.)
+
+Because the relay forwards in arrival order and preserves each payload's origin seq, the order a peer
+receives turns in per slot is the relay's forward order for that slot — which matches the original
+order in the common case (redundancy plus per-packet sorting keep the relay receiving each slot's
+turns in order). The rare reordering that slips through (a client at near-MTU whose datagrams reorder
+past what redundancy covers) is a known edge: the common case is correct, and a higher-layer resync
+would also recover it (see [Failover](#failover-and-reconnect)) — the per-hop transport doesn't
+try to guarantee order.
+
+## The client
+
+The `client` crate is the portable endpoint linked into the game DLL (so it stays `unsafe`-free and
+target-agnostic across the targets the DLL ships for).
+
+- It dials the home relay, proves possession of its per-session key with a challenge bound to the TLS
+  channel, and wraps the connection as a transport link.
+- A **link driver** owns that link on a Tokio task: it sends the turns the game produces, delivers the
+  peers' turns the relay forwards, and runs the forward recovery above. It is the Tokio half of the game
+  seam; the game DLL bridges its lock-free BW-thread ⇄ Tokio-thread handoff onto the driver's channels.
+- **Ordering is restored here, per slot.** The relay→client stream is gapless but can arrive out of
+  order across packets, so the driver buffers received turns by `(slot, seq)` and hands the game only
+  the contiguous prefix *per slot* — the game never sees a later turn before an earlier one for the
+  same slot. Each slot's seq space is independent (the sending client assigns its own slot's seqs), so
+  one slot's gap never head-of-line-blocks another. This is the "client restores game order" the rest
+  of the system relies on.
+
+## Why not a standard reliable-ordered protocol
+
+The game is **lockstep**: every player advances only as fast as the slowest turn, because a client
+cannot simulate game step *N* until it has every slot's turn for *N*. Against that, the two guarantees a
+reliable-ordered stream provides are actively harmful:
+
+- **In-order delivery → head-of-line blocking.** One lost packet would stall every later turn behind it.
+  In lockstep that freezes *all* players, not just the one who lost a packet.
+- **Reliable delivery → retransmit-on-timeout.** Recovering each loss costs a round-trip to detect the
+  gap and resend — added directly to the turn latency every other player is waiting on.
+
+So the design forwards ASAP (no reordering latency) and recovers by redundancy (no retransmit RTT),
+spending a little bandwidth — turns are only tens of bytes — to never spend that latency. The choices
+that read as bugs to a standard-protocol eye are the whole point:
+
+| Looks like a bug | Why it's intentional |
+|---|---|
+| Turns can be delivered out of order across packets | Packet order is only for acks; the client restores game order |
+| The relay doesn't reorder incoming turns before forwarding | A peer needs each turn ASAP; reordering adds latency |
+| Ack-only packets aren't themselves acked | They carry no payloads to confirm; acking them would ping-pong forever |
+| There's no retransmit timer | Redundancy re-carries unacked payloads; a timeout would cost an RTT |
+
+## Beyond one relay
+
+A single relay is the simplest topology. The full design spans several relays and a control plane
+around them, without changing the core above. These parts are less settled than the data plane; where
+a mechanism is still open, it says so.
+
+### The mesh (relay ↔ relay)
+
+When a game's players span regions, each client connects to its own nearby relay rather than everyone
+routing through one. Those relays mesh over the cloud backbone (`S===S`): a turn a relay receives from
+a local client is fanned out both to its own local clients and to its peer relays, and each peer relay
+forwards it on to *its* local clients. There is **one QUIC connection per relay-pair** (separate streams
+don't isolate datagram congestion). A mesh-received turn stops at that relay: it is delivered to local
+clients and is **never re-forwarded to another relay**. Thus every turn crosses at most one relay-to-relay
+link, and the peer it arrived from is its origin slot's home relay. A session-level `(slot, seq)` gate
+still protects local delivery against connection replacement, resume replay, and slot re-home overlap;
+the per-link transport dedup independently handles redundant copies within one connection.
+
+Delivery-hop inference relies on that one-hop rule. Treat it as a fleet-wide session boundary during
+deployment: a live session must not span this implementation and an older relay that still re-forwards
+mesh-origin turns, because then an arrival peer is no longer guaranteed to be the origin slot's home.
+
+The mesh edge's **connection half** runs in the relay binary: each `--relay-id` + `--mesh-peer ADDR#ID`
+pair dials (the lower-id side, via a `should_dial_mesh` tie-break) or accepts (the higher-id side), and
+each established connection spawns a `run_mesh_link` driver. The `--relay-id`/`--mesh-peer` CLI args are
+a **dev/loopback** escape hatch (two relays on one machine); in production the coordinator pushes peer
+topology at runtime — relays churn under scale-to-zero (D3), so the peer set is unknowable at startup,
+and the dial side needs the peer's id *before* connecting (the tie-break is a pre-connect local
+decision). The dialer knows whom it dialed, but the acceptor only sees an inbound connection from an
+ephemeral port, so right after connecting the dialer sends a one-way identity hello (`MeshHello`) and
+the acceptor reads it; each established link is then **labeled with its peer's id**. This is labeling,
+not the tie-break — it carries no authority and doesn't decide the dial. The hello also carries the
+dialer's protocol version, and the **acceptor enforces negotiation** on it: an incompatible version is
+refused with a QUIC application close (a named protocol-mismatch code) before the link driver ever
+spawns, so an incompatible relay-pair never half-establishes. The hello being one-way is enough — every
+pair has exactly one acceptor, so one side enforcing covers the pair; the dialer's reconnect supervision
+just redials on its ordinary delay (naming the refusal in its logs), and the coordinator's descriptors
+stop pairing the two relays once the fleet converges on one version.
+
+The labeled links feed a **`MeshControl` Join source**: it holds each peer's `MeshCommand` sender keyed
+by id, and turns a coordinator `SessionDescriptor` into targeted `MeshCommand::Join`/`Leave` on the link
+to each peer the descriptor names — never a broadcast. It records *desired* membership, so a descriptor
+that names a peer whose link hasn't established yet joins the moment that link registers (and vice
+versa), making it robust to link-vs-descriptor arrival order. The descriptors arrive over the
+relay's **control connection** to the coordinator (see [The control connection](#the-control-connection-coordinator--relay));
+a relay run without a coordinator URL (pure dev/loopback) instead has its `Join`s driven directly by
+the integration test on the command senders (and through `apply_descriptor`).
+
+**On-demand dialing.** Nothing lists mesh peers at startup in production — the coordinator's descriptors
+do, at runtime. So the *dial* side of the connection half is driven by the Join source: `MeshControl`
+republishes a **desired-peer set** (the union of every current session's mesh peers, with addresses) as
+it changes, and an **on-demand dialer** keeps one dial supervisor alive per peer this relay should dial
+(the higher-id peers — lower-id peers dial *us* and arrive on the accept side). When a descriptor names a
+peer with no link — a fresh pairing, or one whose link had idled out — the dialer establishes it; when a
+peer is no longer named, its link idles out and its supervisor stops. This is what makes idle teardown
+safe rather than stranding: a torn-down link comes back on demand the next time a session needs the pair.
+(`--mesh-peer` stays the dev/loopback path — a static dial at startup with no coordinator to push
+topology.)
+
+**Mesh-link idle teardown.** A `run_mesh_link` driver tears down its connection when it has been
+session-less for long enough — but only *after* it has served at least one session. The idle timer is
+armed on the transition from "has sessions" to "none" (the last `Leave`), not on establishment: a
+never-joined link stays parked indefinitely, ready for the coordinator's `Join` source (the
+binary holds its command sender for exactly this). Tearing an idle link down doesn't strand the pair:
+the reconnect supervisor leaves an intentional teardown alone, but the on-demand dialer re-establishes the
+link when a later descriptor names the peer again. Re-`Join`ing before the timer
+fires cancels it. This is *app-level* idle teardown, distinct from QUIC's own idle timeout (10s, on the
+mesh dial side via keepalive PINGs): QUIC tears down a *dead* connection (keepalive stops
+round-tripping); this tears down a *live but unused* one so a churned-out relay-pair's connection
+doesn't linger forever. The driver returns a `MeshLinkExit` (`Idle` vs. `ConnectionFailed` vs.
+`CommandChannelClosed`) so the dial side's **reconnect supervisor** can tell an intentional wind-down
+from a dropped connection: it redials a failed connection (after a short delay, re-registering the fresh
+link so the Join source re-syncs its sessions onto it) and leaves an idle teardown or a
+relay-initiated shutdown alone.
+
+**Mesh trust.** A relay's identity is the **SHA-256 fingerprint of the self-signed certificate it already
+serves both clients and peers with** — there is no certificate authority, and none is needed. Every relay
+mints its own leaf cert; the coordinator's job is only to tell the fleet *which* fingerprint currently
+belongs to *which* `relay_id`, not to vouch for a broader chain of trust. Pinning by fingerprint (rather
+than pre-distributing every relay's cert to every potential peer) is what makes this workable at all under
+scale-to-zero, where relays churn constantly and the peer set isn't knowable ahead of time.
+
+Fingerprint pinning runs in **both mesh directions**. Dialing: the coordinator carries each relay's leaf
+cert in the session descriptor, and the dialer trusts exactly that cert for the connection — the same way
+a game client pins `RelayEndpoint::cert_der` for its own relay dial. Accepting: `mesh_client_config` now
+presents a client certificate too (mutual TLS), and the acceptor pins it against the
+coordinator-distributed **fleet set** — every enrolled relay's `(relay_id, cert fingerprint)` pair, pushed
+down each relay's control connection and replaced wholesale on every fleet change — refusing a peer whose
+presented cert doesn't match its claimed id's enrolled fingerprint. A descriptor that predates carrying
+peer certs, or a peer the fleet set hasn't named yet, falls back to the configured mesh roots (the
+dev/loopback default) or is refused outright under `--require-mesh-peer-auth`.
+
+What makes a pinned fingerprint trustworthy in the first place is **enrollment** (see
+[Auth](#the-control-connection-coordinator--relay)): the coordinator only ever distributes a fingerprint
+for a relay that proved, at enroll time, it holds the private key behind the certificate it presented —
+not just a copy of the cert's public bytes — and only one live connection may claim a given `relay_id` at
+once. Mesh datagrams also carry an additive **tenant tag** on the wire, so two tenants independently
+assigned the same numeric session id can share a mesh link between the same relay pair without ever
+cross-delivering.
+
+Clients pin their relay's certificate from the session response, with no CA in between. On a
+coordinator-managed relay, authorization also requires an installed session descriptor. The coordinator
+waits for installation acknowledgements from every assigned relay advertising `descriptor_ack_v1`
+before returning create details, including idempotent retries. New-target rehome responses require only
+the current replacement relay to be ready: another disconnected home must not prevent this group from
+reconnecting. The target is resolved again on each check so concurrent moves cannot release an obsolete
+assignment. Other homes converge through asynchronous descriptor and mesh updates. The five-second
+response deadline returns `503` without discarding committed session state. For create, a descriptor
+wait timeout or persistence failure includes `Retry-After: 1` (integer seconds) to identify a committed
+request worth retrying. Capacity refusals (`NoRelaysAvailable` or `SessionCeilingReached`) and a session
+retired during the wait return an unmarked `503`: callers must fail promptly rather than amplify load
+shedding. A create caller retries only a marked `503`, after at least the hinted delay and within its
+bounded retry budget. It must resend identical body bytes with a fresh request signature and a nonempty
+`external_id`, preserving its session and tokens; requests without that key cannot be safely retried.
+Unmarked failures from older coordinators fail promptly during a gradual rollout. Rehome keeps its
+existing client-driven retry behavior. Older relays bypass this wait immediately. New relays acknowledge
+only explicitly requested `ack_id` fields on full or delta descriptor frames, so older coordinators need no change.
+
+Acknowledgements prove synchronous local installation, not mesh-link establishment. Their ids are
+cumulative on one ordered control connection, fenced by its enrollment generation, and never persisted.
+A reconnect must acknowledge its full resync. The coordinator checks exact current descriptors, keeps
+unchanged sessions ready through unrelated updates, and refreshes response topology under the assignment
+lock after waiting. Capability-only reenrollment wakes waiters even when mesh identities did not change.
+
+Relay admission still handles an older coordinator or a relay restart after acknowledgement: its
+handshake waits for installation within the existing five-second authorization deadline and shared
+handshake cap. An already-installed descriptor is read immediately, including on ordinary same-relay
+reconnects, and a retired session is refused immediately. The relay does not register or activate the
+client while waiting: the descriptor supplies admission policy for all its traffic, whereas journaling
+turns alone would leave side channels and connection reports unguarded. Managed startup leaves
+provisional admission and its journal disarmed. Standalone relays, which have no descriptor source,
+keep descriptor-free admission.
+
+### Failover and reconnect
+
+A relay dying mid-game stalls lockstep for every client it serves, so failover moves the affected clients to
+another relay and recovers the turns they missed. The design is **coordinator-mediated re-home**: the
+coordinator, which already knows relay liveness from the control connections, authoritatively picks the
+replacement, and the clients themselves are the turn log — so nothing needs a replicated relay-side turn
+store. Scope is **in-game, whole-group** failover: every slot homed on the dead relay moves together to one
+replacement.
+
+**The clients are the turn log.** Each client already holds every turn it sent (it generated them) and every
+turn it received (it executed them), so a replacement relay never needs a persisted log — it asks the
+returning clients to replay. Recovery combines that client replay with surviving relays' retained history:
+
+- **Resume cursors** (the same infrastructure a same-relay reconnect uses): on re-dial the client presents,
+  per peer slot, the seq it next needs, and the relay replays from its turn ring at or past it. A peer the
+  client has never received a turn from has no cursor to present, and the relay replays such a peer from
+  the start of what its ring holds: those are exactly the turns that went down the link that just died,
+  and no other path will carry them again (the client dedups the overlap). A fresh
+  replacement relay's ring is empty, so this alone recovers nothing from it — which is what the retention
+  ring below is for. Every re-dial also presents an **own-slot resume anchor** among the cursors. The relay
+  builds a brand-new receive-side dedup on *every* connection (a same-relay resume or a re-home alike), which
+  would base that slot's window at seq 0 — and since a resuming client keeps counting its seq stream across
+  the drop, the resumed stream is rejected as out-of-window the instant its seq passes the window (~4096
+  turns, ~3 min in), dropping the link. Because every slot in a group crosses the window at the same absolute
+  seq, that tears the whole group down at once. The client heads it off by naming, as its own-slot cursor,
+  the lowest seq its re-send can make **contiguous** — the anchor is a promise that every seq above it will
+  arrive and close the window's prefix, and selective packet acks make the unacked window *sparse*, so the
+  bare oldest-unacked seq cannot honor it alone. On a **same-relay resume** the anchor is the oldest seq
+  the resume will re-send over EITHER of its paths — the datagram redundancy's oldest still-unacked seq,
+  min'd with the oldest retained oversize turn the resume restages onto the fresh control stream (an
+  oversize turn never enters the unacked window, and the relay's dedup gates its control-delivered retry
+  exactly as it gates a datagram, so an anchor above it would discard the retry as a duplicate) — and it
+  is presented even at 0, since its presence is what requests the seeding below. The **relay closes the
+  acked holes itself**: it seeds the fresh window (`Link::seed_delivered`) from the two session-lifetime
+  stores that together hold every receipt it has ever acknowledged for the slot, at any point in the
+  session's life and across any connection churn. Those are the forward gate's seen registry
+  (every turn that passed the gate, pre-start included — unlike the bounded replay ring, it never evicts;
+  its sparse-cap collapse already treats swallowed gaps as delivered, so seeding from a collapsed prefix
+  mirrors the gate's documented failure direction rather than adding one) and, when explicitly armed by
+  an embedding, the provisional journal (managed startup leaves it disarmed). Its receipts are read
+  before the gate, so a descriptor drain moving entries from journal to gate cannot hide one from both
+  reads. A journal overflow seals its slot against readmission, so no resumable slot ever lost an entry
+  to it. "Session-lifetime" is enforced
+  against every reconnect-admission token, not just a live roster: a never-started session's emptying
+  closes immediately but keeps the undecided drop hold that admits a quick re-dial, so the emptied-session
+  teardown retains the seen state (and replay ring) for as long as a surviving hold still promises a
+  reconnect this relay would admit — a reconnect re-opens the close latch and the next emptying
+  re-evaluates, and descriptor retirement sweeps a retained pair terminally if the reconnect never comes,
+  the same retained-until-retirement rule the provisional journal follows. On a **re-home** the replacement
+  relay seeds from the same stores (its gate may hold mesh-forwarded receipts for the slot), but has no
+  first-hand ack history, so the anchor itself carries the contract: the retention front extended downward
+  only through *contiguously* unacked seqs (`contiguous_replayable_anchor`). Unacked seqs below the first
+  acked hole are still replayed but land below the window's base and are discarded — acceptable, because a
+  hole can only age out of retention while turn production continues past it, which (by the game's lockstep
+  production, an assumption of the game model rather than a transport-enforced invariant) means no peer was
+  wedged beneath it and the old relay had already fanned those turns.
+  The relay reads the own-slot cursor (a slot never replays its own turns) as the window's base, so the
+  resumed stream is accepted and the delivered prefix advances from there. The own-slot cursor rides the
+  existing resume-cursor frame — additive, no handshake or frame-count change.
+- **The outbound retention ring.** Each client retains a ring of *its own* recently-sent turns (capped at 512
+  turns / 256 KiB), independent of ack retirement — a turn the dead relay had already acked is dropped from
+  the unacked window but kept here. On a re-home dial (only), the client re-injects the retained turns as
+  unacked into the fresh link, so the replacement relay's empty ring re-carries them to peers, which dedup by
+  origin `(slot, seq)`. This closes the window where the dead relay acked a turn but died before fanning it
+  out. An oversize retained turn (one that rides the reliable control streams end to end, never datagrams) is staged for the fresh connection's reliable control
+  stream and kept staged until its send succeeds, so a mid-drain stream failure retries it on the next
+  session rather than losing it. An undecided drop-hold at relay death is deliberately lost — survivors
+  re-wait the fresh 30s floor on the new relay.
+
+**Destination resume cursors are queue floors.** Each returning client's peer cursors are installed
+with its routing entry. Forwarded turns below a destination's next-needed cursor are already
+received there, so recovery skips them before charging that destination's bounded queue.
+
+**A fresh replacement also recovers survivor turns across the mesh.** The replacement's Join asks
+surviving peers for their retained local-origin turns whenever the coordinator assigned a resumed
+session, even with no forwarding history of its own. Otherwise a survivor that stalled during the
+outage has no new turns to carry the missing tail to the replacement. The first peer presence
+repeats the ask because a peer may have discarded it before joining. An ordinary fresh session
+still asks for no history; a resumed assignment learned before that presence enables the retry.
+
+A resume request can opt into newest-first recovery. The receiver advertises this only when
+its mesh receive window preserves delayed turns behind advancing live traffic and its frame
+history retains the highest sequences independently of arrival order. Missing opt-in keeps
+oldest-first delivery, so mixed relay versions remain compatible. The sender also keeps
+oldest-first delivery if any slot's retained sequence range spans a whole receive window:
+the ring's session-wide capacity does not guarantee a small range for each individual slot.
+For ordinary lockstep histories, newest-first delivers the missing tail before draining the
+older retained turns that returning clients already hold.
+
+Mesh recovery runs in bounded batches between the link's receive and control events, with
+round-robin service across recovering sessions. A per-session in-flight watermark pauses replay
+while awaiting receipts, leaving live turns on their immediate path. This prevents a retained
+history burst from growing the redundancy-selection window or occupying the shared pair loop
+until the entire replay finishes. Repeated requests coalesce while a replay is pending; the
+pending work is bounded by the full turn-ring count and byte budgets and removed on session
+Leave. A replay that makes no progress for the stream-write timeout resets the link. Receiving
+payload-bearing packets schedules a packet ACK even when the receiver has no outgoing turns
+and no contiguous receive prefix; duplicate payloads also need receipts. ACK-only packets do
+not schedule another ACK, so one-way recovery works without an acknowledgement loop.
+
+**Lobby commands across any reconnect are re-sent and deduped by origin seq.** A lobby command rides the
+control stream, and a control-stream write carries no acknowledgment: one written onto a connection whose
+path silently died succeeds locally and is lost when the connection idles out, and the members waiting on
+it (a host's game-init) wait forever. So each client stamps its lobby commands with an origin `seq` (0, 1,
+... per session, never rewound), keeps its whole history for the session (it stops authoring at the
+relay's session log ceiling, 1024 commands / 256 KiB, past which no relay accepts one), and writes all of
+it again, oldest first, on every new control stream, same-relay resume and re-home alike. Retention never
+ends early because nothing the client sees proves delivery: its own loop can start before a game-init it
+wrote reached anyone, and `SessionStart` only says everyone connected. Every relay keeps, beside its lobby
+log and for as long, the set of seqs it accepted from each author (bounded by the log's own ceiling): a
+seq already in the set is a repeat, dropped (checked before the rate cap, so a re-send spends no budget on
+it) and, being refused inside the log's own `deliver`, neither logged nor fanned locally nor forwarded
+across the mesh; any other seq is accepted whenever it arrives, subject to the rate cap and lobby policy
+as before. A command the rate cap or a policy refused is simply absent from the set, so its next re-send
+is judged afresh and nothing authored after it ever waits on it. Mesh copies keep the `seq` and are judged
+the same way. Because a command crosses the mesh only once, when its origin accepts it, a copy lost with a
+dying mesh link is recovered by the relays instead: when a link (re)joins a session, each side re-shares
+its whole sequenced log down it (alongside the other Join-time reconciles, and again on the peer's first
+presence), and the peer keeps what it lacks. Receiving clients keep the same per-author set and drop
+repeats, which also absorbs the relay re-playing its whole log each time a member's stream registers. The
+guarantee is **at most once per member, eventually, not in the author's order**: a command recovered by a
+re-send lands after whatever its author wrote behind it. That is all the channel's one consumer needs, a
+ShieldBattery game applying only the host's single game-init record and dropping every other lobby
+command. Every client write, first send and re-send alike, still goes through one session-long pacer at
+half the relay's per-slot burst and rate (32 burst, one per 200 ms), so a relay that has seen none of a
+history admits all of it without a rate drop through up to 6.4 s of path jitter; a drop past that margin
+costs only a wait for the next re-send. The limits live in `rally_point_proto::lobby`, shared by both
+ends. On a new stream the client writes its game-started re-assertion before the lobby re-send, so a relay
+meeting a started slot for the first time drops, rather than evicts over, a command its policy never
+admitted. A command with no `seq` (a client that predates it) is forwarded exactly as before and never
+re-shared. A relay that predates the field skips it, so a new client's re-send through an old relay is
+delivered again: **deploy relays before clients.**
+
+**Coordinator `POST /session/rehome`.** Tenant-authenticated and app-server-mediated — clients never talk to
+the coordinator directly. The re-home is authenticated exactly like `POST /session/create`: the tenant's app
+server signs the request with its client key, and the coordinator verifies that request signature (the
+domain-separated `rp2-request-v1:<ts>:<METHOD>:<path>:<body>` scheme) before doing anything. The request body
+is snake_case `{ "tenant", "session", "dead_relay_id" }`; the `tenant` must match the tenant the signature
+verifies under, and `session` + `dead_relay_id` are the app server's trusted assertion about one of its own
+sessions. A missing/invalid signature, a stale timestamp, or an unenrolled tenant all `401`; a lenient
+per-`(tenant, session)` rate limit `429`s a caller that re-asks too fast. Because the session lookup is
+tenant-keyed, a `session` owned by another tenant simply finds no serving set and returns `unavailable`,
+leaking nothing. The decision: a relay **still enrolled *and* still in this session's serving set** → `stay`
+(the coordinator overrules a genuine false alarm); **dead** → move the whole group to a replacement — the live
+relay nearest the dead relay's region by backbone round-trip (one in that region first), with a relay already
+serving the session winning when it is within a small margin of the nearest; when nothing can be ranked (an
+untagged dead relay, no pair data), a live relay already serving the session (earliest in the authority order),
+else the lowest-id live relay; else `unavailable` — updating the serving set (which is also the descriptors'
+authority order) in place,
+rebuilding every serving relay's descriptor as **resumed**, and pushing R_new's first so it is staged before
+the response returns (the client's backoff absorbs the residual descriptor/dial race). The response is
+snake_case `{ "decision", "relay"? }`, where `relay` (present only when `decision` is `newTarget`) is
+`{ "relay_id", "relay_addr", "cert_der" }` with the cert DER as a JSON byte array (serde_bytes under serde_json).
+The decision is idempotent per `(session, dead_relay)`, so concurrent or repeated asks return the same target
+without re-mutating — and this recorded-target lookup runs *before* the stay check, so a dead relay that has
+since restarted and re-enrolled under a fresh cert does not flip an already-re-homed straggler (still pinned to
+the old cert, which the re-enrolled relay's new cert can never satisfy) into a `stay` it would wedge on; it
+still gets the recorded replacement. Only a relay that is both re-enrolled *and* still serving this session
+(never re-homed away) reads as a false-alarm `stay`. An unknown session (a coordinator restart wiped its
+membership) is `unavailable`.
+
+**Resumed descriptors.** A `resumed` descriptor additionally carries the session's already-decided
+`departed_slots` (slot + left/dropped kind, seeded from the coordinator's lifecycle accounting). A fresh relay
+taking over has no mesh peer to replay `SlotDeparted` records from, so it seeds these as decided leaves — its
+desync comparator, coverage check, and any later promotion re-broadcast then treat a coordinator-seeded
+departure exactly like a mesh-learned one — and latches the session **started**, so it never waits on the full
+expected set (which still lists the departed slots that will never dial) and never re-fires the session-start
+machinery session-wide. Both fields are additive with serde defaults, so an old descriptor still parses.
+
+**Client-side escalation.** The link driver's reconnect loop retries the same relay first, and escalates to an
+embedder-supplied `RehomeProvider` only once the game has started (it tracks the relay's `SessionStart`
+itself) and the relay stays unreachable — immediately on a TLS cert/pin rejection (a restarted relay serves a
+fresh cert, which no same-relay retry can pass), otherwise after ~10s of failed attempts. The **driver owns
+the current relay id**: it is seeded from the reconnect config, passed to `RehomeProvider::rehome(dead_relay_id)`
+as the relay the driver believes is dead, and advanced to the replacement's id only on a *successful* re-home
+dial — never on a guess and never on a failed dial, so the provider can never name a live replacement as dead
+and get wedged on a `Stay`. The provider is where the embedder does the coordinator round-trip and builds a
+fresh endpoint pinning the replacement relay's cert — the driver never touches certs. `Stay` resumes same-relay
+backoff; `Unavailable` keeps it and re-escalates periodically; `Departed` (the embedder learned the slot's
+departure is already recorded) ends the loop as a slot-departed refusal, for a client that can't reach the
+relay to be refused by it; `NewTarget` re-dials the replacement with the
+same identity, resume cursors, and own-slot window anchor, rebinds the link in place (preserving the receive
+dedup so the re-home is a resume, not a restart), re-injects the retention ring, and points subsequent drops
+(and the owned relay id) at the new relay. This same reconnect infrastructure also covers a client's own
+transient disconnects (a same-relay resume, no re-home).
+
+**Fresh ports for re-dials.** The first re-dial after a drop goes out from the session's own UDP port; every
+re-dial after a failed one rebinds the endpoint to a fresh ephemeral port first. A NAT can keep translating a
+live flow to the public address it had before an IP change, so the client's datagrams still reach the relay
+while every reply is lost, and the client's own re-dials keep that stale mapping alive indefinitely. A new
+source port is a new flow the NAT maps from scratch. The relay authenticates a slot by its token, never by
+source address, so the port change costs nothing. Embedders pinning the port for port-filtering tools turn
+this off, since a fresh port would escape the filter.
+
+### Latency buffer
+
+How much turn buffer the game runs with — the latency cushion that absorbs jitter — is not fixed; it has
+to move as network conditions shift over the course of a game. Changing it is a decision every client
+must apply *identically*, so one party decides and the rest obey. The relays are placed in a fixed
+**priority order**, and the highest one still in the game (still serving live players) is the
+**decision-maker**: it picks the buffer size and broadcasts it by **stamping it onto the turns it
+forwards** — an envelope `buffer_directive` (not a command in the game's byte stream) naming the new
+buffer, the exact future frame to apply it at, and a **decision seq** ordering it, so every client applies
+it identically at the same simulated step, out of band from command processing. A command in the byte
+stream was the alternative, rejected because a native latency command caps the buffer at the game's
+built-in range and a client applies one turn per remote player per step, so an extra command can't just be
+handed over; riding the envelope, the directive mechanism itself has no ceiling — though the game's
+own sync validation still imposes one (see the end of this section) — and the turn it stamps is one
+the client already receives. The relay stamps **every turn it forwards until the whole session has passed the apply
+frame**: a client picks the change up off a peer's turn (it never receives its own turns back), and a
+client whose peers aren't producing turns yet is covered automatically, because lockstep — and so the
+apply frame — can't advance without it. Copies are idempotent; when decisions come quickly, the higher
+decision seq tells every client which one wins, even with copies of both interleaved on the out-of-order
+wire. Relays that are not the authority forward stamps untouched. The frame the whole scheme keys on is
+the **slowest** per-slot frame observed from validated turns — a hostile client inflating its own
+`game_frame_count` moves nothing but its own observation. If the deciding relay drops out — its players
+have all left — the authority falls to the next relay in the order, with no coordinator round-trip; the
+per-session decision-maker follows the coordinator's descriptor on every push, so bounds and the
+authority verdict track the relay set as players come and go. **How a relay knows who still serves
+players:** its own slot roster directly, and its peers via per-session live-player counts exchanged on a
+reliable uni-stream per mesh-link direction (the dialer appends them to the identity-hello stream it
+already opened; the acceptor opens one of its own). Presence rides a reliable stream, not the datagram
+path, because the transition it reports is exactly when the sender's datagrams dry up: a relay whose
+players all left forwards nothing, so a datagram sidecar would stop flowing at the one moment it
+matters. Counts are pushed on change (reconciled against the roster on the mesh flush cadence), and a
+relay that has *never* reported players is assumed live — descriptors usually land before any client has
+connected, and assuming live makes every relay independently crown the same first-in-order relay
+instead of each skipping the silent others. That includes the zero every relay sends when it joins a
+session's mesh before its own client has dialed: only a zero that follows a positive count is a departure,
+the same rule a relay applies to itself (it counts itself live until its own roster empties). Read as a
+departure, that initial zero would give the session two authorities while the first-in-order relay's
+client was still connecting, and both would fire session start with their own initial depths. The
+other half of the rule is that a peer must always be able to tell "left" from "not yet": a relay whose
+players have come and gone sends a positive count ahead of the zero whenever the peer may not have seen
+them. That covers players who connect and leave between two flush samples, and every Join and Join
+rendezvous, which restate presence in full because the peer drops reports for a session it has not joined
+yet. A peer that already knew sees one brief handoff that ends where it started. Without this, a relay
+that stepped down would stay in contention on its peers and the session would have no authority. The coordinator's only role here is to assign the **order**
+(home relay first) and set the **bounds** the decision-maker stays within; it makes no per-adjustment
+decision, so a running game is unaffected by a coordinator outage.
+
+The decision also carries an **end-to-end delivery input** — per-link RTT/loss cannot see a turn that
+clears one hop and stalls on the next, and chained per-link stalls blow the latency budget with no single
+link looking bad. The final-delivery truth already exists: each client pushes per-origin-slot
+`delivered_through` cursors up its ack-beacon stream, and its home relay reads them for ack retirement.
+The relay taps that same cursor, ships each destination's complete cursor map to its session peers over
+the mesh control stream (`DeliveryCursors`, push-on-advance with a ~250ms per-destination floor), and the
+authority folds per-`(origin, dest)` **lag** (newest origin seq it has seen minus the destination's
+cursor — one seq is one turn) and infers **hop count** with no extra wire (turns are never re-forwarded
+relay-to-relay, so the source a slot's fresh turns arrive by *is* its home; same home ⇒ 1 relay hop,
+cross ⇒ 2). These feed the buffer as a **clamped additive cushion** on the control law's target — one
+turn per hop beyond the first, plus a shallow lag-responsive term capped at a few turns — inside the
+existing bounds clamp; the law itself is unchanged. The inputs are client-claimed, so a malicious client
+can only *understate its own* delivery — the same bounded push-the-buffer-up lever as inflating its own
+link loss — and the cap plus bounds contain it; it can never stall anyone or frame another player. The
+same per-session worst-lag and hop-count view rides the flight recorder's sample rows.
+
+**The game imposes the real depth ceiling.** The directive mechanism escaped the *native latency
+command's* cap, but not the game's sync validation: StarCraft checks every sync command a client
+executes against a 16-entry ring of locally recorded snapshots, addressed by a 4-bit index in the
+command's own bytes with no sequence number or wraparound detection. A sync executed 16+ turns
+after its snapshot silently aliases onto a newer entry, fails validation, and drops its sender on
+every client at once — a session past the boundary collapses, it doesn't degrade. Buffer fills
+(the session-start seed, a raise directive) are the sharp edge: the game issues all injected turns
+within one step, sharing one snapshot whose ring slot expires for all of them together. With the
+observed one-turn skew between issue and execution, depth 15 is fatal and 14 is the zero-margin
+structural ceiling — `GAME_SYNC_SAFE_BUFFER_MAX` in `proto::control`, which the coordinator
+enforces against every tenant's configured `BufferBounds.max` at startup. Policy should sit below
+it with margin (the game's own networking never ran deeper than 12).
+
+A second additive term rides the target the same way: **sustained arrival-interval stretch**, the
+relay-measured form of "the clients are stalling anyway." A stall-bound client produces — and
+therefore sends — turns slower than the turn rate, so persistent client-side misery shows up at the
+relay as its home slots' arrival intervals running past the turn interval, evidence the per-link
+RTT/loss inputs cannot express (the network can look pristine while the sims limp). When the stretch
+has held continuously past a sustain window (a single long hiccup decays out of the interval
+estimate well before it), the target gets one extra turn, releasing when the cadence recovers; the
+shrink floor and edge probation below hold and, if the shrink is disproven, stop re-trying the
+lowered depth exactly as for any other raise. It is capped at one turn on purpose — a client that
+fundamentally cannot produce at the turn rate is not fixed by any depth, so escalating would chase
+an unfixable client into unbounded latency — and it is the automatic replacement for the retired
+user-facing latency setting: the one party that can actually see the evidence makes the call. It is
+computed from the phase controller's estimates (see "Send-phase alignment") but is deliberately
+independent of that controller's give-up latch — a latched session keeps folding estimates, because
+the sessions where alignment gave up are exactly the ones this backstop exists for; and because the
+stretch boundary is the same tolerance as the alignment health gate, the two mechanisms tile the
+severity axis without overlap (a session stretched enough to press is one alignment already refuses
+to touch).
+
+Loss evidence is likewise gated to what a buffer can actually answer. Conditions samples are
+receive-triggered, so a receive gap of a second or more (measured between counter-*moving* samples —
+across the mesh, a quiet slot's cached conditions keep riding its siblings' traffic, so mere arrival
+proves nothing) marks a stall or outage rather than flowing weather — lateness beyond what any depth
+inside the bounds could absorb. The counters that accumulate across such a gap (maintenance flushes
+and probes transmitted into an unreachable link, declared lost only after acks resume) are excluded
+from the loss-rate windows: the windows re-anchor past the gap, and the gap's not-yet-declared sends
+are banked briefly to absorb the late loss declarations so they cannot masquerade as post-resume
+weather. The excluded gap deliberately leaves no burst-term residue: cumulative loss counters cannot
+tie a declaration to the packets that died, so any after-the-fact "was this gap a dead path" verdict
+is unsound — wire pacing fails because a dead path's congestion-collapsed, PTO-throttled send rate
+falls with fade length, and treating absorbed declarations as evidence fails because absorption is
+fungible, letting banked idle credit "materialize" genuine weather losses as an outage on a healthy
+link. A recurring fade is instead priced the moment it manifests on flowing traffic, which the raise
+side of the law already does within about a second. This keeps the response monotonic in outage
+length: an outage past the QUIC idle timeout already resumes with clean windows (the reconnect's
+connection epoch resets them), so a shorter fade must never be priced harsher than a longer one.
+
+To decide well the decision-maker needs the **whole game's** network conditions, but each relay directly
+observes only its *own* home clients' links — loss, RTT, and the like, which QUIC already measures per
+connection. So those per-client conditions travel **with the turns**: a relay attaches its home clients'
+link stats to what it forwards across the mesh, and the decision-maker combines them into the game-wide
+picture (loss rate, latency, …) it decides on. The same conditions flow down to the clients, where they
+can drive an in-game netgraph or other debugging output.
+
+Those counters restart when a client reconnects, so every authenticated client link gets a random
+**connection epoch** derived from its challenge nonce. The epoch rides `SlotConditions`, the reliable
+`SlotConnectivity` level change, and `SlotDeparted`. Relays compare it for equality (it is deliberately not
+an ordered counter): a reliable `connected=true` activates a replacement generation and resets only that
+slot's RTT/loss window, while its validated game-frame history remains continuous; delayed condition
+datagrams, disconnects, departures, and teardown from any other generation are ignored. A `connected=false`
+or departure moves the generation to a terminal Down(E) state: a delayed true(E) cannot resurrect it, and
+only a previously unseen distinct epoch may reopen the slot after its pending reconnect hold is successfully
+claimed. The home relay also fences its conditions registry and decision-maker cleanup with the same epoch,
+closing the local race where an old task finishes after its replacement publishes. Once replaced, every opaque random
+epoch remains tombstoned for the rest of the session. The set is deliberately not age- or count-bounded:
+epochs have equality-only semantics and cross-channel delivery supplies no safe point after which an old
+reliable frame could be reinterpreted as a new generation.
+A client whose link comes up is sent `connected=true(E)` for every other member whose generation E is
+Up at that relay right then, since the live level changes reached only the links registered when they
+happened. The client's own copy of the epoch fence orders this snapshot against any live change racing it.
+
+A fresh mesh link reliably replays every active `connected=true` epoch. Registry mutation and replay enqueue
+are serialized, so the link receives either the old replay followed by the new transition or the new replay;
+this is not a claim that QUIC streams arrive before datagrams. An epoch-bearing conditions sidecar whose
+reliable true has not arrived is ignored and a later sample recovers it naturally. The optional fields
+provide only one-way compatibility: a slot that has remained entirely unfenced accepts legacy epoch-less
+messages, but observing a present epoch permanently rejects later epoch-less messages. This is not a general
+live rolling-upgrade guarantee. Deployments must drain and promptly bounce the relay fleet so an
+epoch-enabled session can never rehome onto an older relay that emits no epoch.
+
+Physical relay-pair replacement has an additional **process-local link generation**. It is a monotonic id
+minted when a dial/accept attempt begins and is never sent on the wire. The current id is tracked per peer;
+claiming a replacement wakes the old driver and gates all of its datagram, control, and presence ingress.
+The same id fences registration into the descriptor-driven mesh control map, so an older slow handshake
+cannot finish late and replace the newer link's command sender.
+
+**The initial depth.** Left to the control law alone, a game *starts* at the tenant-minimum buffer and only
+gets its first correction once framed turns are flowing — roughly ten seconds in, past the opening worker
+split — because the law needs a consensus frame to schedule a directive against and there is none until the
+game begins. So the buffer's opening move is jarring exactly when the game is most sensitive to it. The
+**authority relay sizes an initial depth** instead, once, at the moment it fires the session-start directive
+(when every expected slot has connected), and **stamps it onto that directive** — a new optional field on
+`SessionStart`, not a `buffer_directive` (the decision seq stays untouched; this is a seed, not a decision).
+The game applies it to its turn buffer before the first frame, so it opens at (or near) the right depth. The
+inputs are the pre-start conditions the relay has already gathered for the law: it runs the same target
+formula over them, and — because a client that has only just dialed contributes little more than its
+handshake RTT, and the pre-start window can miss a slow-connecting slot entirely — folds in a
+**session-create latency hint** the tenant supplies (a worst-pairwise *one-way* path estimate in
+milliseconds, computed app-side from each player's region and measured RTT), converting it to turns here in
+the one place that quantity lives. A session that is genuinely **fully observed** — single-relay, with every
+expected slot having produced an RTT sample — trusts what it measured and ignores the hint, since a stale
+estimate must not distort a picture the window actually saw; otherwise it takes the larger of the observed
+target and the hint, plus **one turn of cushion per extra relay hop** (a multi-relay session's per-slot
+conditions never cross the mesh before the game starts, so its observed half is always partial). The result
+is clamped to the same `BufferBounds` as any decision. The authority **adopts** the stamped depth as its own
+current buffer, which matters because the law's one-shot re-affirm at the first framed turn broadcasts
+whatever the buffer *is* — so without the adoption that re-affirm would immediately clobber the seed back to
+the minimum. Peer relays adopt the depth off the mesh copy of the directive (so a later authority promotion
+reasons from the right base); a **resumed** relay taking over an already-running game stamps the field
+**absent** — the running buffer is whatever directives made it, and a stale initial depth must never resize a
+live game — and the client, which applies the depth only in its single pre-start step, ignores a redundant
+re-delivery for the same reason. The honest limitation: loss is essentially unobservable pre-start (there is
+almost no traffic to lose yet) and the last slot to connect is seen only through its handshake, so the seed
+is a *good opening guess*, not the law's steady-state truth — the in-game law's fast-raise still closes any
+remaining gap within the first turns, just from a much better starting point than the tenant minimum.
+
+### Send-phase alignment
+
+The buffer law has a blind spot that is structural, not a bug: lockstep clients all send at the same
+*rate* (one turn per interval) but at uncorrelated *phases* within the interval, and at a one-turn
+buffer there is zero slack — each client micro-stalls a few milliseconds on whichever peer's turns
+land just after its own poll boundary, in a rotating blame ring, while every slot's arrival *pacing*
+looks individually perfect from the relay. The law correctly sees a network that can sustain depth
+one and sits there; the stalls are a phase phenomenon its inputs cannot express. Holding depth two
+would hide them at the cost of a full turn of latency, which is backwards — so phase gets its own
+controller, a sibling of the law, never an input to it.
+
+The fix is relay-side measurement with client-side actuation. Each relay timestamps its **own home
+slots'** turn arrivals at the client edge (packets that first-deliver exactly one turn; catch-up
+bursts time the recovery, mesh copies time another relay's hop, so both are excluded), folds them
+into per-slot **arrival-phase** estimates (an EWMA of the arrival residual against the turn
+interval, kept unwrapped and reduced modulo the interval only at evaluation), and periodically finds
+the tightest cluster of phases on the circle. Everyone is pulled onto the cluster's *latest* phase —
+delay-only, so no client is ever asked to send earlier than its game produced the data, and the
+largest-gap choice minimizes the biggest delay anyone is asked to add. Corrections go down each
+corrected client's reliable control stream as an **absolute** `PhaseDirective` (whole commanded
+delay, newest wins, re-pushed on reconnect), and the client's driver holds each outbound turn's
+*wire handoff* by the applied delay — the game's local echo has already happened, so nothing about
+when the game runs changes — slewing toward a new target at a bounded rate (~2 ms/s, relay-tunable
+per directive, client-clamped) so the relay's pacing statistics never see the shift as jitter.
+
+Why aligning arrival phases *at the relay* is the right objective and not a proxy: the depth-one
+stall-free condition per ordered pair (P feeding C) is `(t_P − t_C) + d_P_up + d_C_down ≤ T`.
+Rewritten against relay-observed arrival phases `a = t + d_up`, it collapses to
+`(a_P − a_C) + d_C_up + d_C_down ≤ T` — so once arrival phases are equal, what remains is each
+client's **own** relay round trip fitting inside one turn, a per-client, phase-free condition that
+is exactly the regime where the law legitimately holds depth one. Heterogeneous path delays drop out
+entirely, which is also why no client-side measurement is needed or wanted: corrections are computed
+from relay-side arrival timestamps alone, no client-asserted value feeds a decision that reaches
+other clients, and a client can drag the shared target only with its actual wire behavior, rate-
+limited by the dead-band (no corrections under a ~3 ms span), the re-evaluation dwell (slew time
+plus settle), and the client-side slew clamp. The loop is closed-loop and self-correcting: measured
+phases already include whatever delay each client applies, so the controller needs no knowledge of
+client state (a rehomed or disobedient client just keeps showing up misaligned and only its own
+correction keeps moving), and an aligned population inside the dead-band is never touched — which
+also kills any ratchet from common-mode drift.
+
+The stability caveat that makes or breaks this controller: a phase is only quasi-static while the
+session actually runs at the nominal turn period. A game client's *production* schedule couples to
+its peers' arrivals — a stalling client produces, and therefore sends, its own turns later — so in
+a stall-bound session, commanded delays feed straight into every peer's production time, the
+effective period stretches past nominal, and residuals measured against the nominal period become
+drifting noise. A controller that keeps correcting in that state chases its own wake (observed
+live before the guards existed: ~42 ms turns inflated to ~70 ms with the sim stalled most of the
+time, corrections re-issuing every dwell, commanded delays ratcheting around the cycle). Synthetic
+load clients never reproduce this — their tickers are rigid, the plant holds still — which is why
+the guards are structural, not tuning: a **health gate** (no evaluation while any active slot's
+inter-arrival interval deviates from the turn interval beyond a small tolerance — churn a
+correction itself causes closes the gate until the session relaxes), a **per-round change cap**
+(bounded steps toward the target, delay-reducing direction preferred when the zero floor allows,
+never a wrap-around slew — large misalignments converge over several gated rounds), and a
+**give-up latch** (repeated correcting rounds that never measure inside the dead-band mean the
+phases are not quasi-static; the controller disables itself for the session rather than stir it),
+and a **per-slot command fence** (a slot is never issued a further command while its previous one
+is unacknowledged — `PhaseApplied`, echoed by the client as it adopts a directive — so delayed,
+lost, or ignored directives park a slot after one bounded step instead of accumulating a large
+delay it might later apply all at once; explicit on purpose, because every reference a relay could
+infer application from drifts with the session, and safely client-asserted, because it releases
+only the sender's own fence — a client misrepresenting adoption can only advance its own command,
+send timing it already controls outright).
+
+Scope is deliberately per-relay: only a slot's home
+relay sees its wire arrivals first-hand, controllers on different relays touch disjoint slots with
+disjoint sensors (no distributed chasing), and cross-relay pairs stay unaligned — that would need a
+shared clock across relays, and mesh sessions carry a hop cushion that keeps them off depth one
+anyway.
+
+### Rollback session clock
+
+A rollback session's clients don't wait for each other's turns: each predicts the turns it lacks
+and rolls back when they arrive, so the question the latency buffer answers for lockstep (how far
+ahead must everyone send) becomes a per-player one. The relays answer it with a **session clock**:
+the turn with seq `n` is due at the relay `STEP_DURATION_US` (42 ms, one game step at Fastest) after
+turn `n - 1`. Each player's home relay measures every turn's first client-edge arrival against it and
+sends that player a `LeadReport` twice a second (the median and 90th percentile of the last second's
+lateness), and the client sets its own pacing and input delay from the reports. A player's link then
+costs only that player: their turns are measured against a clock nobody else moves, and the time
+their turns take to reach everyone else is everyone else's to roll back over within their own
+targets.
+
+- **Anchor.** The authority anchors the clock when the session's lockstep start (the first
+  `LOCKSTEP_START_STEPS`) becomes confirmable. Its last turn is due at the latest instant any
+  player's copy of it reached that player's own relay, where the player is measured: for a player
+  homed elsewhere, its arrival at the authority less the mesh hop, taken as half the least round
+  trip the authority's end of the mesh link to that relay has sampled. A start timed by arrival at
+  the authority would ask every player to be a hop early whenever a remote player's turn completed
+  the start. The player's relay places its copy of the anchor by the same estimate from its own
+  end of the link (half the least round trip it has sampled, before the copy arrived), so a route
+  slower one way than the other cancels out, and a queue that has inflated either end's current
+  estimate moves nothing. What's left is how far the two floors together stray from the two trips
+  together: the player's start lands later by half of however much slower the trips were than the
+  floors, and earlier by half of however much one end's floor exceeds what the trips took. For a
+  copy adopted straight from the authority that is in practice half the difference between the two
+  ends' floors of the same link, a few ms; a relay that first hears of the clock through a third
+  relay places it by its own link to that relay, so the estimates of both links it crossed add to
+  the error. The least round trip is each end's smallest sample of QUIC's smoothed RTT since the link came up, so a
+  replaced link starts over. The start is never moved back more than two steps short of the
+  slack, so the clock can't start at its limit.
+- **Stopping.** The clock may not run more than `STALL_SLACK_STEPS` (6, about where a client
+  stalls: its prediction limit less the couple of steps of rollback it steadily runs behind) past
+  the newest turn the authority can confirm for every player. That step is the clock's *limit*:
+  when the clock reaches the limit's deadline before the next step is confirmable, it stands still
+  there until one is, and the stop `(step, length)` pushes back every later deadline and no earlier
+  one. Past the slack every player is stalled anyway, so that time is the whole session waiting (a
+  drop wait, an outage, a shared hiccup), and no client should race to make it up afterwards. A
+  player whose own turns run later than the slack still measures about that late, since the clock
+  moves on as each of their turns arrives, and keeps getting reports until their pacing catches up.
+- **Final deadlines.** Because the clock only ever stops at its limit, and the limit only grows, a
+  relay treats every deadline up to its limit as final. It measures a turn only once its step is
+  that far; one that arrives earlier (an early turn, or one sent while the clock may still stop)
+  waits in its slot's queue until the limit reaches it. And it never moves a final deadline (see
+  the merge below). So no measurement is ever read against a deadline that moves afterwards, and a
+  stop needs no reset: windows carry on through it, and the client trusts reports on either side
+  of it.
+- **Copies, merged.** Relays share no timebase, and no relay's copy of the clock is the original.
+  Every relay sends its copy's whole state over the mesh (`SessionClock`: the anchor step and age,
+  the limit, and the stops, those older than any relay still measures folded into one base sum)
+  every 250 ms (the limit moves every step, and a relay measures only up to the limit it has heard
+  of), at a join, when a peer proves its join with its first presence report, and after any
+  authority change; the authority also sends it when it anchors the clock and when a stop ends.
+  There is one anchor: the authority that started the session, and has been the authority since,
+  anchors the clock once the lockstep start is confirmable (as above), and every other relay, a
+  newly promoted one included, places that anchor at the first copy's receipt less its age and
+  half the least round trip the link has sampled, once. An authority that didn't start the
+  session anchors the clock itself only after `CLOCK_ANCHOR_QUIET` (1 s) without any copy, when no
+  reachable relay has the clock (and so no stop exists either), with its newest confirmable step
+  due the shortest players' hop before then (zero when it homes a player); a local count of the
+  start is no evidence, since a relay missing a turn of the start can complete it seconds after it completed
+  elsewhere. A relay **merges** every copy it gets: the stopped time before each step
+  becomes the most either copy knows of, so a step's deadline is the later of the two, except that
+  a deadline the relay already holds as final never moves (stopped time the other copy knows of
+  before its limit is taken in at its limit), and its limit becomes the further of the two. The
+  authority's own record of a wait works the same way: the clock having stood at its limit for a
+  while raises the stop there to at least that long, never adds to a stop a merge already took in.
+  Copies only ever gain stopped time, so all of this is order-free and repeatable: frames arriving
+  late, twice, or from two relays both deciding the clock leave every relay on the same deadlines
+  ahead.
+- **Fresh replacements.** A relay created for a resumed session may only receive retained
+  midgame turns, so its complete forwarding prefix can remain at zero. Its clock uses separate,
+  bounded per-player suffix tracking. An accepted peer clock supplies a confirmed baseline:
+  `final_through - STALL_SLACK_STEPS`, excluding the clock's slack. Actual received turns must
+  fill every gap above that baseline. A later peer copy can raise it, and suffixes received
+  before the copy are preserved. The minimum across remaining players moves the clock; observer
+  turns do not hold it back. These counts never certify complete delivery, silence-watch progress,
+  or state-hash completeness. Surviving makers retain their complete-prefix path. Recovery needs
+  a surviving clock copy (or actual from-zero history); arbitrary client sequences cannot
+  reconstruct a clock if every copy and the initial history were lost.
+- **Rehome measurements.** A newly activated home link skips lead measurements for deadlines
+  already final at activation: retained turns replayed after an outage do not describe live
+  arrival timing. If the clock is not yet anchored, measurements wait for the first accepted
+  copy and use its limit before replay advances it. This per-link cutoff stays fixed as the
+  clock moves. The measurement window resets, but dedup and cumulative telemetry survive;
+  zero-sample reports still carry stopped time to release the client's schedule hold. Retained
+  turns above the cutoff can still be measured against their subsequently finalized deadlines.
+  Clock-recovery pending-turn overflow warns once per slot rather than silently losing progress.
+- **Authority changes.** Only the authority makes stops, from what it can confirm, but it merges
+  copies like every other relay. So a new authority decides at once from its own copy, and
+  learns any stop it missed (one a former authority made that reached another relay) from the
+  next heartbeat; a relay that still believes it is the authority while descriptors settle keeps
+  deciding too, and the two copies merge. What this gives: no relay ever moves a deadline it holds
+  as final, no stop is lost while any surviving relay knows of it, and every relay converges on
+  the same deadlines ahead within a heartbeat. What it costs: around an authority change a new
+  authority that is behind can stop the clock where the former one wouldn't have (each relay then
+  takes the stop in at its own limit, so every client shifts together, and nobody sprints), and
+  relays can disagree about a few deadlines already behind them. A new authority also first
+  brings the limit it heard up to the slack past what it has confirmed itself, without a stop,
+  which avoids most such needless stops. A stop goes out at once, and the relays push every
+  measured player a report carrying it, so clients move their pacing by exactly the stop instead
+  of sprinting.
+- **Turns complete.** Every packet a relay sends its own client in a rollback session carries
+  `turns_complete`: the fewest gap-free turns the relay has forwarded of any in-game slot,
+  observers' included (a client's simulation waits on their turns too), and a departed slot's
+  until its leave is decided and, for a counted leave, every turn up to the count is in (a held
+  drop is still required by every client). A
+  client stalled on a turn below it is waiting on its own downlink, which nobody else is; it keeps
+  sending its own turns on schedule, so its stall stays its own instead of stalling the session
+  when its turns stop. A client stalled on a turn above it is waiting on a player who hasn't sent
+  theirs, along with everyone else, and holds. The stamp rides the same downlink as the turns it
+  describes, so it is never staler than they are, but a downlink that goes silent leaves the last
+  stamp standing: the client trusts a stamp only while it keeps advancing, and sends at most a
+  couple of seconds past its pipe, so a dead downlink still ends in the ordinary drop path rather
+  than keeping a player who can see nothing in the game. The newest stamp starts over with each
+  connection, since a re-homed relay can hold less than the last one did.
+- **What it replaces.** In a rollback session the buffer law re-affirms the start's buffer once and
+  then decides nothing (the buffer only seeds the lockstep start), and send-phase alignment never
+  runs: the report sets each client's send timing outright, and a phase delay would only fight it.
+
+### Relay-side desync detection
+
+SC:R's lockstep sim guards against divergence by exchanging a per-turn **checksum** through the
+command stream. A native sync generation is recorded after the game flushes an outgoing buffer, so
+an emitted `0x37` is a staged checksum rather than a counter of outgoing turns: a flush can repeat a
+staged generation, while a buffer shrink can omit a generated checksum from later emission. Natively
+each client compares its peers' checksums and drops a mismatching peer itself - but netcode v2's
+transport is inert under that seam (the relay owns the wire, and the game's own peer-drop path never
+fires), so a desync would be **invisible to everyone** unless something that sees every slot's turns
+compares the checksums. The **authority relay does**, off the same validated turn stream the buffer
+and leave consensus already read: it extracts each slot's `hash16` (the sim-state bytes of the
+`0x37`, not the per-sender fog/vision bytes that legitimately differ), assigns its native-generation
+ordinal, and once every required origin has coverage for that ordinal and the frontier has advanced
+past it, compares the actual checksum reports. A divergence is reported up the coordinator webhook
+leg, keyed on the sync ordinal so a re-detection after an authority handoff isn't counted twice.
+Observers are excluded - they don't reliably emit sync commands, so requiring their checksums would
+stall the cross-check.
+
+Checksum observation orders compact metadata by each origin's full transport sequence, independently
+of gameplay forwarding. Every turn occupies a position, including turns without a checksum. For
+legacy clients, the relay can unwrap the native four-bit ring only when it repeats or advances by one;
+it never guesses a missing wrap or a whole ring cycle. Enhanced clients attach optional
+`sync_generation`: the absolute native generation that created their staged checksum. Their first
+tag must equal the ring (so it anchors within the first 16 generations); every later tag must be
+monotonic, match the ring modulo 16, and advance by at most `GAME_SYNC_SAFE_BUFFER_MAX` (14). A
+bounded advance records the omitted interval as coverage for that **origin only**, with no invented
+checksum vote. The first parsed checksum locks an origin to legacy or enhanced mode; a later mode
+change, unbound tag, malformed tag, or reserved `u64::MAX` tag clears only that origin's ordering
+state. Game-frame claims never determine checksum alignment.
+
+Within the accepted advance range, the ring and previous ordinal determine a unique next ordinal:
+`sync_generation` is an independent client-side cross-check of that inference, not extra resolution
+inside the range. Its purpose is to reject an actual advance outside the range instead of silently
+aliasing it onto a shorter one. For example, advancing 18 generations has the same nibble as advancing
+two. Turns without a checksum can complete the transport prefix without reporting those generations;
+the native depth ceiling bounds snapshot age at execution, not the number of unreported snapshots.
+The tag is still a client claim, not authenticated evidence of its simulation or of an applied shrink.
+
+Only the first `0x37` in a turn contributes metadata. Invalid hash kinds and kinds inconsistent with
+ordinal parity are excluded from voting. Pending metadata is bounded to the transport receive window
+(currently a sequence distance below 4096). Exceeding that window, a legacy ring discontinuity, an
+enhanced-generation violation, or arithmetic overflow clears **only that origin's** pending metadata
+and removes its reports from comparison. Its failure latch survives promotion; every other origin
+retains its independent history and remains comparable. The warning retains the triggering sequence,
+missing next sequence, prior ordinal, ring, and reason. Each origin's first failure also records a
+`sync_ordering_unavailable` flight event with that context, on authority and peer relays, distinct
+from a desync verdict.
+
+The comparator is **attacker-facing**. A client controls its own report contents and can withhold or
+invalidate its own checksum coverage; it cannot shift another origin's ordinal, erase another origin's
+history, or disable comparisons among the remaining eligible players through an ordering failure.
+Reports with uncertain history are not votes and do not identify a diverged player. This is detection
+coverage, not proof of an honest simulation: with fewer than two eligible reports there is no cross-check,
+and a 1v1 loses cross-check coverage when either origin becomes unavailable. Surviving reports cannot
+establish that an excluded player's simulation agreed with them. A skipped entry means only that
+this origin supplies no vote for the interval. It satisfies retirement bookkeeping, not a successful
+checksum comparison, and does not trigger a missing-report eviction warning. Ordered/comparable slot
+counts do not measure the number of intervals actually compared. Repeated claimed omissions can
+therefore reduce detection coverage without producing an ordering failure.
+
+A relay missing an origin's sequence-zero history cannot establish checksum ordering in either mode.
+A later ring index or generation tag cannot replace that missing prefix. This can occur during initial
+mesh attachment as well as rehoming; the mesh does not guarantee complete pre-history delivery. Late
+admission and relay restart have the same limit.
+Periodic coverage samples distinguish waiting origins from unavailable origins, including before the
+ordering window is exhausted. Gameplay continues forwarding immediately regardless of checksum
+coverage. Existing peers with complete history retain comparison continuity when promoted.
+
+`sync_generation` is an additive observation field. Deploy the update to every relay before releasing
+clients that emit it: older home or mesh relays can erase the field when reserializing payloads. Loss
+of the field after enhanced mode begins is an ordering failure; stripping it from the beginning leaves
+the observer in legacy mode with its existing shrink limitation. Upgraded relays continue to accept
+untagged legacy clients.
+
+### Synced player-leaves
+
+When a player leaves mid-game, every *other* client must apply that leave at the **same simulated frame**
+or their sims diverge — the same identical-application problem the latency buffer has, solved the same
+way: one authority decides, and the decision rides the turn stream as envelope metadata, not a forged
+command. Two paths reach a leave. A **clean quit** sends a **leave-intent** up the client's reliable
+control stream before it goes, and the relay decides a leave that renders on peers as "player left." A
+**drop** — the client's link simply ending, whether a quit without intent, network death, or isolation
+for lagging — is decided as "player was dropped." Either way the authority relay emits a **`LeaveDirective`**
+naming the slot, the reason, and the apply frame; it is broadcast to clients (idempotent, ordered by a
+decision seq exactly like the buffer directive) and carried across the mesh in a **`SlotDeparted`** record
+so every relay, and any relay promoted to authority afterward, derives the identical leave.
+
+A drop needs a link death to start from, and a client can stop stepping without one: a hung game thread
+or a suspended process keeps answering keepalives, so its link stays up while lockstep holds every other
+player still behind it, and a drop request against a connected slot is ignored. The relay closes that gap
+with **silent-slot eviction**: a per-relay watch (every 2s) closes the link of the slot it homes that
+stopped feeding the session first, once that link shows the client behind it is still sending.
+
+Naming *which* slot is the whole problem, because every per-slot quantity a client supplies — how many
+turns it sent, what frame they stamp, how far ahead their seqs run — is padding the hostile client
+chooses freely. A client that withholds one required turn while streaming higher ones would, by any of
+those measures, look like the busiest player in the game while its opponents starved on the missing turn,
+and blame would land on them. So the watch reads exactly one thing, and it is the relay's own: **the time
+each slot's gap-free forwarded prefix last advanced** — the forward-once gate's contiguous prefix of turns
+this relay actually delivered to local clients, which moves only when the turns below it genuinely
+arrived. Withholding a turn stops the withholder's own prefix dead at the gap; its opponents keep
+consuming what it already sent until their buffers empty, so their prefixes stop strictly *later*. A
+prefix the gate's sparse-set cap pushed forward over a gap does not count as an advance, and freezes that
+slot's clock from then on, so flooding far-ahead seqs to force one buys nothing.
+
+The verdict rests on **complete knowledge of the session**. Naming a culprit is a claim about every
+participant lockstep still waits on, so each of them must resolve to a stop time the relay can vouch for;
+one it cannot account for is a hole in the evidence, not a non-blocker, and a hole names nobody. Every rule
+below is that principle applied, and each of them fails *closed*.
+
+The participants compared are the **session descriptor's expected roster** — the slots the coordinator said
+this game is played by — not whichever slots the relay happens to hold state for. A roster slot with neither
+live state nor a departure record here has no stop time at all, so no verdict is available while one exists:
+two clients replaying into a resumed session whose third player has yet to connect are stalled by that third
+player, and letting an absent participant contribute nothing would blame whichever of the two stopped first.
+A descriptor that carried no roster (a standalone relay, a dev-injected descriptor) leaves the union of live
+and departed slots as the only participant set there is.
+
+**A participant that has not reported its game loop running is unknown too.** Lobby commands ride
+their own path and never reach the forward gate, but a client's pre-loop seed payloads — the
+initial-buffer turns it flushes right before its loop begins — do, so a slot can advance its forwarded
+prefix before it has simulated a single frame, while the players who finished loading sit waiting for
+its first simulated turn. Such advances measure traffic, not simulation, and from the relay the two are
+indistinguishable. Weighing them would
+make one of the *loaded* players the earliest stopper and close the link of the player who was ready
+first, so a slot with no start report resolves to no stop time at all and blocks, exactly like an
+unregistered roster slot. It is never nameable either: a loader is not a culprit.
+
+The report rides a client's own reliable control stream and so reaches only the relay that homes it,
+while the watch runs on every relay serving the session — so **the home shares that report over the
+mesh** (`SlotStarted`), at the moment it records one and again for every started home slot whenever a
+mesh link (re)joins, so a peer that arrives late or replaces another converges on the full set. A relay
+that receives one records it and stops: it does not re-broadcast (no echo) and it does not report the
+slot up its own coordinator connection, which stays the home's job, so one client's load is never
+attributed twice. The frame is additive, so a peer that predates it simply never learns another relay's
+slots started and stands its own watch down for that cross-relay session — the safe direction.
+
+A **resumed (re-homed) session stands the watch down entirely**. On a fresh relay the forward gate bases
+every slot's prefix at seq 0, while a returning client's retained history legitimately begins above it — its
+retention cap discarded the low seqs long ago. At the gate those two are indistinguishable: an honest client
+with incomplete coverage looks exactly like one withholding its first turns, its prefix never advances, and
+its clock sits at the session start forever. Forward-prefix clocks are simply not evidence after a re-home.
+The principled fix, not yet built (`TODO(rp2-silence-rehome)`), is to base each origin's gate prefix on a
+resumed session at the lowest seq any *other* local client's resume cursor still needs from that origin — a
+client-claimed value taken only in the direction that asks for *more* replay, never less — which would anchor
+the gate where the survivors actually resume and restore eviction there.
+
+A **decided leave stays in the comparison until the survivors have recovered from it**: a departed slot is
+retired only once every live participant's stop time is later than the instant the relay decided (or observed)
+that leave, and never merely because the decision exists. Deciding a leave is not the same as the survivors
+receiving and applying the directive, and until each of them has demonstrably stepped past it, their stalled
+clocks are still the departed slot's doing — retiring it at the decision would hand the blame straight to the
+players it stalled, who by then all sit past the window. Retirement is one-way. The degenerate case is
+accepted deliberately: a survivor that genuinely hangs at the very moment another slot leaves keeps that slot
+in the comparison indefinitely and so is never named, which is the safe direction. A slot held for an
+*undecided* drop was always in the comparison for the same reason — it froze at exactly the moment the
+survivors' stall began.
+
+A verdict is rendered only once the **whole session has sat still for the window**
+(`--silent-slot-window-secs`, default 10s): no participant's prefix has advanced within it. Any advance is an
+unblocking event the survivors may still be answering — a late turn from the slot everyone waited on reaches
+them, they step, and their own turns follow a round-trip later — and in that gap their clocks trail the slot
+that just moved through no fault of their own; judging then would name a survivor for the stall it is in the
+middle of leaving. Among the participants, the slot closed is then the one that stopped
+**strictly earlier than every other participant**. Ties name
+nobody: a session that stopped all at once has no victim, and a slot with no other participant left to be
+earlier than is holding nobody up. Being nameable at all additionally requires that this relay strictly homes
+the slot (only the home owns its link), that its connection is up with no departure or decided leave, that its
+link has been up at least a window, and that it has reported its game loop running at least a window
+ago.
+
+A slot that has forwarded nothing since the session started **stopped when the session started** — the
+earliest stop time there is, so it is the slot named once a window has passed since this relay learned
+its game loop is running.
+That fallback is the relay's own start latch and never anything the slot says about itself: a client can
+withhold its seed payloads entirely and delay reporting its loop, and if its own report dated its silence it
+would carry a stop time *later* than the opponents who seeded and then stalled waiting for it — handing
+them the blame. The started report supplies no timestamp of its own, and an honest client seeds within
+milliseconds of reporting, which moves its clock the only way a clock moves here. The relay does note
+when it first learned of the start — first-hand from its home client or from a peer's mesh
+`SlotStarted`, whichever came first, never restarted by a restated report — but only to owe the slot
+the same time-only grace as a reconnected link (below). A slow loader is exactly this case: everyone
+who finished loading has sat stalled for its first simulated turn, so the moment its report completes
+the evidence it is the unique earliest stopper by a wide margin, with no chance yet to have stepped.
+
+A slot's stop time **never moves except by forwarding**. A reconnected link is owed a full window before
+it can be evicted — it has had no chance to forward anything yet — but its stop time stays where its
+prefix actually stopped. Resetting it on reconnect would be the same mistake as trusting a client-supplied
+count: a client that hangs and redials would look like the freshest slot in the session, and the players
+it stalled — who really did stop earlier — would become the earliest stoppers and be closed in its place.
+The redialing slot is exempt only for the window after its link came up, and is then closed anyway if its
+prefix still has not advanced. A genuinely healthy replacement needs nothing more: its first forwarded
+turn moves its clock on its own, and unblocks the survivors' turns behind it.
+
+A session where anyone is still loading therefore names nobody at all — not by a gate of its own, but
+because an unreported participant has no clock, and the app server's load timeout owns a session that
+never finishes loading.
+
+**Naming a slot is not evicting it.** A slot whose whole network path died stops its turns exactly like
+one whose game hung, and the forwarded-prefix clocks cannot tell the two apart. They differ in what a
+reconnect can do: a client whose path comes back has a running simulation that resumes the game, while a
+hung one would only clear the survivors' hold and restart their countdown on every redial. So the watch
+reads the named slot's link — the relay's own count of frames received on that connection that decrypted
+under its keys, which takes in the transport's keepalive PINGs and ACKs as well as turns — and evicts
+only once that count moves after the naming: frames arriving while turns do not is a live client behind
+a stopped game. A datagram merely addressed to the connection does not count, since anyone who has seen
+its connection ID can send one. A link that receives nothing is left to QUIC's idle timeout, which
+closes it as an ordinary disconnect within seconds (by the time a slot is named, the window has outlasted
+most of the idle timeout), and its client may resume from the drop hold like any lost client. The relay
+advertises that timeout on its accept side too, so a dialer cannot lengthen the advertised value, though
+QUIC's own floor of three probe timeouts can still outlast it on a long or erratic round trip, or for a
+peer that advertises a long ACK delay. A link that outlasts the idle timeout plus slack
+(`TRANSPORT_QUIET_GRACE`) with nothing arriving is ended by the watch itself, as the ordinary lost
+connection it is: no session is ever held on a link nothing will close, and nothing is marked, so the
+client may still resume.
+
+The watch never marks an eviction itself. It signals the exact connection generation it read, and that
+link's own task marks the eviction as it ends the link on the signal — before it frees the slot's roster
+seat, so no re-dial is admitted ahead of the mark, and only if the connection was still open when the
+task closed it. A link that was already tearing down as a disconnect when the verdict landed therefore
+stays an ordinary, resumable one. QUIC offers no atomic check-and-close, so the task checks immediately
+before closing, and the watch acts only on frames that arrived since its previous tick, keeping the
+evidence close to the eviction. A close of the link's own that lands in the gap between the check and the
+close still evicts, and its client's re-dial is refused: a client closing a failed link to re-dial at that
+instant, or an idle close after a stall of seconds in the watch or the task. So, very rarely, a client
+that could have resumed is permanently evicted. That is accepted as the cost of reading the transport's
+evidence at all.
+
+The count is relay-measured and can only push a client toward the disconnect it already gets by going
+quiet, so it gives a hostile client nothing new: a fully suspended game (network stack included) gets the
+ordinary disconnect and resume, the same as pulling its network cable. If its game is still stopped once
+it is back and it keeps that link up, it is named again behind a live link and evicted then. A client
+that instead lets every reconnected link die again before the reconnect window has passed is never
+named; that cycling is possible with any lost-client resume and is bounded only by the survivors' drop
+countdown. Two cases still read as a live client and are evicted, as every silent slot was before this
+evidence was read: a path degraded enough to pass QUIC's small frames but not turns, and a path that
+comes back in the second or two between naming and the idle close, if its first frames land before its
+re-carried turns move the prefix. A hung game is evicted up to a keepalive interval plus a tick later
+than a bare verdict would; the survivors' 30s drop floor dominates that anyway.
+
+An evicted slot's close is manufactured link death and nothing more — the departure record, drop hold,
+survivors' countdown, and honored request are the ordinary path — but it is refused readmission for the
+rest of the session. The close carries its own QUIC code (`SILENT_SLOT_CLOSE`). The flight recording has a
+`slot_silent` event when a slot is first named, carrying how long it had been stopped and by how much it
+led the next-earliest, and the link task records `slot_evicted_silent` only when it commits an eviction,
+or `slot_quiet_link_closed` when it answers the watch's quiet-close request past the grace and finds the
+link still open (QUIC may still close it in the same instant). A named slot followed by neither is
+a dead path the transport ended, or a link that had closed on its own before its task answered. Every
+refused dial for a recorded session lands as `slot_dial_refused` with the close code the client was
+given.
+
+The apply frame is the subtle part. A departing client's own `game_frame_count` cannot be trusted to set
+it — a malicious client could name an unreachable future frame and stall every honest survivor forever — so
+the leave's apply frame is **clamped to a survivor-reachable ceiling**: the highest frame the survivors have
+provably executed, computed on the departing slot's home relay from turns it validated and carried in the
+`SlotDeparted` record so every relay agrees on it, never a frame the departing client merely claimed. On the
+client, a `LeaveTracker` collapses the redundant directive stamps into **at-most-one leave per slot**,
+surfaced at its apply frame — the leave-side mirror of the buffer `DirectiveTracker`.
+
+### Flight recorder
+
+When a desync, dispute, or stall is reported after the fact, someone has to reconstruct what the game's
+network actually did — and by then the session is gone from every live structure. The **flight recorder**
+is each relay's bounded, per-session black box: discrete **events** (slot connects/disconnects and
+resumes, decided leaves with their complete directive, peer-relay leave acceptance, each live or replayed
+leave-control write attempt with its recipient/connection epoch and outcome, connectivity-control writes
+with recipient and subject epochs and outcome, rejected mesh connectivity changes and full recipient
+queues, buffer directives, detected desyncs, drop holds and requests (including edge rejections and
+authority refusals with their reasons and observed hold duration), the session-start directive, a re-home
+landing, the close), periodic
+**link-health samples**
+(the same per-slot QUIC rtt/loss the slot links already publish for the latency-buffer decision-maker,
+folded together with per-slot turn-stream counters — validated/delivered turns, newest seq, dedup drops,
+oversize diverts — by a relay-wide 10s sampling tick).
+
+Sample rows carry three things the decision path never sees. **Redundancy depth** — still-unacked turns
+re-carried to a client — is read against the loss counters: loss says how much a link dropped, redundancy
+says how much forward recovery spent replacing it. **Upstream loss** closes the direction gap: QUIC's path
+stats measure only what an endpoint *sends*, so nothing else observes loss on the way *in* — the direction
+that, for a client link, carries the turns the whole lockstep is waiting on. It is derived from gaps in the
+peer's own packet numbering, counted only once a seq can no longer arrive (a packet reordered behind up to
+31 of its successors still lands as received), which also makes it client-numbered: a peer that skips seqs
+overstates its own loss and nobody else's, so it is recording-only and no decision may read it without the
+client-influenceable treatment the delivery cursors get. **Congestion window and event count** answer
+whether the transport itself is holding turns back: turn traffic is a tiny fixed-rate flow that should sit
+far below any congestion window, so a window near its floor while turns queue points at the controller
+rather than the network. It **observes only**: no decision logic reads it,
+the per-turn hot path bumps pre-fetched atomics (never a lock), and the rings are size-capped with
+oldest-first eviction plus a drop counter, so a flushed blob says exactly what it lost.
+
+A rollback session adds what it takes to audit one afterwards. Each home slot's row carries its **lead
+figures** against the session clock — the interval's measured turns, reports sent and the newest one, the
+interval's highest report p90 and latest single turn, and a cumulative lateness histogram in ten fixed
+buckets (bounds -40, -20, -10, 0, 10, 20, 40, 80 and 160 ms) — and the row carries the clock's total
+stopped time. The clock's anchor (the authority's own, with how far before the event it placed the start
+and the player whose arrival set it, or a peer's adoption) is an event, and so is each
+growth of its stopped time, capped at 32 per session so a session that keeps stopping cannot spend the
+event ring; the rows keep tracking the stopped time past the cap. The clients also report their own
+statistics (`RollbackStats` on the control stream: rollback and input-delay histograms, mispredictions,
+schedule corrections, frame costs), cumulative from the end of the lockstep start, every half minute and
+once more ahead of the leave intent. The home relay binds a report to the link's own slot, drops one over
+two per five seconds or with a histogram past 64 entries (never closing the link), keeps the slot's
+latest on its row, and records the latest once more as an event when the link ends, since a game-end
+report has no sample after it. They are the client's account, recorded as sent; nothing decides on them.
+
+Client-edge drop-request rejection diagnostics have their own per-session, per-requester token
+budget: two immediate events, then one token replenished every two seconds, shared across all targets
+and rejection reasons. It gates both the flight event and its log line; excess rejections are omitted.
+The admission budget is independent, so invalid requests cannot consume a legitimate Drop click's
+allowance, and exhausting admission tokens alone does not suppress a rate-cap rejection diagnostic.
+Both budgets are local to the relay and cleared with the session's requester state.
+
+A successful leave- or connectivity-control write means the local QUIC stream accepted the complete
+frame. It does not claim the client read the frame or that the native game applied it; those later
+boundaries are recorded by the game DLL. Together with the authority decision and peer-acceptance
+events, the write event identifies the last relay-controlled hop without turning observability into
+another consensus input.
+
+A buffer directive carries the **derivation** behind it, not just the depth it landed on: the law's
+own terms (pairwise path, loss risk, burst), the additive cushion and stretch terms folded on top, the
+shrink floor and edge-burn state that bounded how far the buffer could move, and every slot's effective
+RTT as the law weighed it. Without them a recording says a session ran deep but not which slot or which
+term drove it there, and the depth alone cannot distinguish a law that asked for exactly that from one
+whose ask the bounds trimmed — the recorded target sitting above the applied depth is the only evidence
+of the latter. The terms are gathered on the path that queues a directive, not on the per-sample ingests
+that merely evaluate the law, so the cost rides the few dozen decisions a game makes rather than its tens
+of thousands of samples. A directive the law did not author — the one-shot re-affirm of the standing
+buffer — records no derivation rather than an invented one.
+
+**What it never records:** raw turn/command bytes and chat. Summaries only. User identity *does* transit
+a relay — end-of-game result reports ride the turn path as opaque tenant payloads that carry account
+ids — but the relay never parses or persists those bytes, and the recorder never captures payload bytes
+at all, so every blob stays **pseudonymous**: slot-keyed, content-free.
+
+**Flush protocol.** A recording becomes one versioned, self-describing JSON blob (header:
+tenant/session/relay identity, start/flush timestamps, overflow counts; body: events + samples) handed to
+a pluggable sink. Two triggers: **session close** — the same moment the relay reports `SessionClosed` to
+the coordinator — and **drain**, which flushes every live recording concurrently under its own 10s
+deadline inside the drain budget (bounded rings × bounded live sessions ⇒ the flush always fits the 90s
+drain ≤ 120s Fargate stopTimeout; the size caps exist precisely so observability can never wedge a
+shutdown). The dev sink writes `<dir>/<tenant>/<session>/<relay_id>.json` (`--flight-dir`) for loopback
+testing; a coordinator-connected relay ships automatically instead, sending the blob up its control
+connection as a `RelayToCoordinator::FlightRecording` frame carrying the tenant, session, a
+relay-computed `desynced` flag, and the blob JSON itself as an opaque string. The frame carries no relay
+id — the coordinator keys the upload on the identity *this connection* enrolled as, so a relay can only
+ever write under its own key, never another's. Shipping rather than storing directly is what keeps every
+relay credential-free: it never holds an object-store key and never reads a blob back, and the
+coordinator — the sole credential holder — is the one place those credentials live and get rotated. With
+no sink configured (dev) or no store configured (coordinator), the relay still records — cheap, bounded —
+and a flush is a logged discard.
+
+**Storage.** The coordinator persists each shipped blob to a DigitalOcean Spaces bucket over the S3 API,
+at one of two retention-selecting key prefixes: `flight/<tenant>/<session>/<relay_id>.json` (the normal
+class) and `desync/<tenant>/<session>/<relay_id>.json` (the pinned class) — `relay_id` always the
+coordinator's own enrolled id for the shipping connection, never a relay-supplied field. The retention
+class rides the key prefix rather than object metadata because that is what an S3-compatible lifecycle
+rule can filter on: a rule scoped to a key `Prefix` expires everything under it on its own schedule, and
+the two prefixes are disjoint by construction so the two schedules never collide. The tenant-first shape
+inside each prefix carries forward the same read-authorization hook the dev sink's directory layout
+already established. The store itself is named by `--flight-store`/`COORDINATOR_FLIGHT_STORE`, a JSON
+file naming the endpoint, region, bucket, and — like the tenant registry's signing keys — the *names* of
+the environment variables holding the Spaces access and secret keys, never the keys themselves; absent, a
+shipped recording is dropped with a rate-limited warning, and a malformed file or an unset/empty
+credential variable fails coordinator startup outright, the same fail-closed rule the tenant registry
+already follows.
+
+**Pin mechanics.** A recording is stored pinned when either the shipping relay's own `desynced` flag is
+set, or the coordinator's own record of the session already says so. Only the **authority** relay — the
+one running the desync comparator (see [Relay-side desync
+detection](#relay-side-desync-detection)) — ever sets the flag on its own recording, because it is the
+only relay that observes the divergence directly; every other relay in the session ships an unflagged
+blob. The coordinator covers that gap independently: a TTL-pruned mark per `(tenant, session)`, set the
+moment *any* relay's desync notice reaches the coordinator, regardless of which relay's flight blob has
+or hasn't shipped yet. A pinned store also sweeps every blob the session already has sitting under the
+normal prefix into the pinned one (copy, then delete the original) — the convergence a coordinator
+restart can force when a non-authority relay's blob lands before the authority's desync notice does,
+since blob arrival and the desync notice travel independent paths and can reorder. The sweep is
+idempotent and safe under a concurrent pinned store of the same session: every blob just ends up pinned.
+
+**Read path.** Investigating a blob is two tenant-signed `POST`s on the coordinator, authenticated and
+scoped exactly like every other tenant → coordinator request: `POST /flight/blobs` with `{"tenant",
+"session"}` lists the session's stored recordings, one entry per relay (`{"relayId", "pinned", "size",
+"lastModifiedMs"}`, the pinned copy winning the dedup when a relay briefly exists under both prefixes
+mid-sweep), and `POST /flight/blob` with `{"tenant", "session", "relay_id"}` returns that recording's
+stored JSON verbatim, or `404` if neither prefix holds it. The tenant is bound by the signature that
+authenticates the request (Ed25519 over `rp2-request-v1:<unix-ts>:<METHOD>:<path>:<raw body>`,
+`x-rp2-timestamp` + `x-rp2-signature` headers — the same scheme every tenant endpoint uses) — there is no
+tenant in the path to spoof, only the one the signature already committed to, so a request can never
+resolve to another tenant's blobs. Live-game tier: refused only for a revoked tenant, not merely a
+suspended one, since this is forensics on games that may still be running. With no store configured,
+`/flight/blobs` answers an empty list and `/flight/blob` answers `404` — there is simply nothing stored,
+not an error.
+
+**Retention + PII:** blobs are pseudonymous (slot-keyed, no user identity, no payload bytes — see above),
+so user erasure never touches flight data — the session↔user join lives only in the tenant's own records
+and happens tenant-side at read time. Retention: **14 days** via store lifecycle (the durable store is
+**DO Spaces** — S3-compatible, including lifecycle expiration rules; the dev file sink has none — files
+sit until deleted by hand), with an optional **30-day** pin for desync-flagged sessions, for the
+investigations that aren't immediate (a recurring desync analyzed in a batch weeks later).
+
+### Control plane: the coordinator
+
+The coordinator sits off the hot path. It mints per-tenant, connection-bound **tokens**, runs the
+authenticated **relay registry** (relays enroll over their control connection), assigns each player a
+**home relay** and region, and provisions relay capacity. Matchmaking and lobby formation stay in the
+per-tenant app server; the coordinator only finds and spins up relays. Production runs its own isolated
+coordinator, signing key, and relay fleet; staging and external developers share a separate one.
+
+For a session spanning multiple relays, the relay homing the most slots is the primary home and heads the
+authority order. If several relays tie for that maximum, the coordinator rotates the primary among them by
+session id. This leaves every player's regional home unchanged while distributing decision-maker work
+across the fleet; replays return the originally cached topology rather than rotating it again.
+
+### The control connection (coordinator ↔ relay)
+
+Each relay holds **one persistent control connection** open to its coordinator — a WebSocket on the
+coordinator's HTTP server, dialed by the relay. The coordinator pushes the relay's **session
+descriptors** down it (driving mesh `Join`/`Leave`), and the relay reports **liveness** back up the
+same connection (a periodic heartbeat). One channel, authenticated once at the handshake, in both
+directions.
+
+**Enroll over the connection.** A relay's *first* frame is its `Hello` — its id and the addresses clients
+and peer relays reach it at — which enrolls it into the coordinator's registry. So a relay registers
+*and* receives its topology over one authenticated connection, not a phone-home POST plus a separate
+socket; the registry membership and the descriptor stream share a lifecycle and a credential. The
+address contract is **dual-stack**: `relay_addr` stays the primary/back-compat address (the cross-repo
+contract existing consumers keep working against), and an additive `relay_addrs` carries the relay's
+**complete** advertised set in its own preference order — non-empty means the whole set including the
+primary, empty means a single-address relay, and a single-address hello stays byte-identical to the
+pre-dual-stack form. Advertised **order is the relay's preference**: a consumer that knows its
+connectivity picks a family (`addr_for_family`), one that doesn't walks the candidates in order — the
+mesh dialer does exactly that, walking a peer's candidates each attempt until one connects, while a
+*game client's* family choice belongs to the embedder (ShieldBattery picks per client when its infra
+work lands). The relay **asserts** its addresses via repeatable explicit `--advertise-addr` flags (one
+per family, first is primary; defaulting to the listen address as a single-address advertise) — they
+are deliberately *never* observed from the control connection's source IP, since a relay reaches the
+coordinator over one family but must advertise both. For a provisioned relay the coordinator's own
+resolution wins: it reads the task's public IPs off its ENI and overrides the hello's set with them.
+**Extra relay ports** (e.g. UDP/443 beside 14900, for clients whose networks filter UDP to the primary
+port) multiply that set port-major: both families on the primary port, then both on each extra port,
+in config order, so a dialer walking it tries both families on the preferred port before another
+port. One coordinator config list decides both what each relay listens on (passed at launch) and
+what it is advertised at. A relay that cannot bind an extra port logs it and serves without it.
+
+**Version negotiation at the Hello.** The relay and coordinator deploy independently, so the `Hello`
+also carries the relay's protocol **window** — `protocol` (the newest version it implements) plus an
+additive `min_protocol` (the oldest it still speaks; absent on an older relay, collapsing the window to
+the single `protocol`). The coordinator negotiates *before enrolling*: the highest version inside both
+windows wins, which is the **downgrade rule** — a relay one version ahead that still speaks the
+coordinator's newest enrolls at that version rather than being turned away, exactly what a rolling
+deploy needs. No overlap means this coordinator could not drive the relay at any version, so enrolling
+it would only mint sessions it mis-speaks to; instead the coordinator **refuses** with a WebSocket close
+(app close code **4001**, reason naming both windows) and never registers the relay — no enrollment, no
+descriptor push, nothing to clean up. The relay recognizes that close and backs off far longer than a
+normal reconnect: a version mismatch is fixed by a deploy, not a redial, so hot-retrying the refused
+handshake would only re-run it as log noise.
+
+**Deregister on drop.** Registration is connection-lifetime-bound: when a relay's control connection
+drops — or goes silent past the liveness deadline (below) — the coordinator deregisters it, so the
+registry reflects the relays actually reachable rather than every one that ever enrolled. The race this
+has to survive is a relay's *new* connection re-enrolling it while its *old* connection is still tearing
+down: a naïve drop would evict the live entry the reconnect just installed. It is closed with a
+**generation fencing token** — each enroll stamps the entry with a strictly-increasing generation, and a
+dropping connection removes the relay only if its generation still matches the one held, so a stale drop
+racing a reconnect is a no-op.
+
+**Coordinated drain.** A relay must be able to exit on its shutdown signal without racing the coordinator
+into handing it a fresh session it will never serve. When a relay receives `SIGTERM`/Ctrl-C it keeps
+serving — existing games play on — but sends a **`Draining`** frame up the control connection. The
+coordinator marks the relay ineligible for *new* assignments (it stays enrolled and keeps serving what it
+already has), then answers **`DrainAck`** — but only *after* pushing the relay's current descriptor set
+down the same socket. The **set-before-ack** ordering is the contract: a relay that sees an empty
+descriptor set at ack time knows it is *provably unassigned* and can exit at once, while one still holding
+sessions waits them out. The mark is race-closed by an **assignment lock**, the coordinator's outermost
+control-plane lock: `create_session` (and `rehome`) hold it across the whole span from reading the registry
+to pick a relay through staging that relay's descriptors, and the drain mark holds it around setting the
+flag. So the two are mutually exclusive — after the mark lands, every session that will ever name the relay
+has already staged its descriptor in the relay's outbox, and any create still mid-flight re-reads the
+registry under the lock and sees the relay draining. A relay that reconnects mid-drain re-sends `Draining`
+right after its `Hello` (a re-enroll clears the coordinator-side flag deliberately, fenced by the same
+generation token as deregistration, so a stale connection's `Draining` can't mark an entry a live successor
+re-enrolled).
+
+Once acked (or after a short timeout — a coordinator that is down or predates the frame must never wedge
+shutdown), the relay waits until it is **drained-idle** — it holds **no local slot** *and* its
+**last-applied descriptor set is empty** — bounded by a **drain timeout** (default 90s, deliberately under
+Fargate's 120s `stopTimeout` so the drain always finishes before the platform `SIGKILL`s the process). Both
+halves of the predicate are load-bearing. The descriptor half is what makes the set-before-ack contract
+usable: an empty set at ack time means the coordinator's post-mark truth names this relay in no session, so
+the truly-idle scale-in relay exits at once (well under a second). Slot liveness alone would miss the very
+sliver the ordering exists to cover — a session committed to this relay just before the drain mark, whose
+clients haven't dialed yet, holds no slot; exiting then strands those clients dialing a dead relay
+pre-start, which the client driver cannot recover (it escalates to re-home only after `SessionStart`). A
+non-empty set therefore makes the relay wait: the assigned clients dial, register slots, and are served to
+completion. The descriptor half can over-hold — a session whose clients never dial, or a multi-relay
+session whose descriptor lingers while a *peer* relay still serves it after this relay's players left —
+but that costs only a bounded wait: it, like any session still running at the drain timeout, is
+**deliberately abandoned** — the coordinator-mediated re-home (see
+[Failover and reconnect](#failover-and-reconnect)) re-homes its clients onto a live relay, which is exactly
+the mechanism a hard relay death already relies on.
+The drain mark also steers re-home: a draining relay is never chosen as a re-home target (it asked to stop
+taking work), though a draining relay *still serving* a session it is named dead for correctly reads as a
+false-alarm `stay` — drain blocks only new assignments, and a serving relay is alive.
+
+**Max-age retirement.** Placement homes a region's slots on its lowest-id relay, which is its oldest.
+So in a region that never goes quiet, the oldest relay never reaches its idle grace. Left alone, it would
+outlive every deploy and run into the substrate's host maintenance, while the younger relays a surge
+brought up idle out instead. The provisioning loop therefore gives each relay a maximum age, measured from
+its launch (default 12h, jittered ±1/12 per relay id so a surge's relays don't retire together). The
+retirement is make-before-break. An aged relay stops counting toward its region's target, so its
+replacement launches, but it stays placeable until a younger relay has *enrolled* in the region. Marking
+it any sooner would leave the region with nowhere to place a game, and creates would hold or fall back
+cross-region for a launch's worth of time. After that the coordinator marks it draining, under the
+assignment lock, and stops its task once its last session ends. Running games are never cut short.
+Busy relays are left marked rather than spared, unlike a scale-down's race check. The age is re-derived
+every tick from the ledger's launch times, so a coordinator restart, or a reconnect that clears the mark,
+is corrected on the next tick. A region with no demand launches no replacement; its aged relay drains by
+the ordinary idle path.
+
+**Logical push, physical pull.** The coordinator decides a relay's mesh membership and the relay
+applies it — the data flows coordinator→relay. But the relay is what *opens* the connection, rather than
+the coordinator reaching into a relay that churns under scale-to-zero and may sit behind a firewall.
+Reaching out also reuses the coordinator's existing HTTP server and authenticates with an ordinary
+HTTP credential, instead of standing up an inbound control surface on the attacker-facing relay.
+
+**A held connection, not polling.** The connection stays open rather than the relay polling an endpoint.
+That buys three things: the coordinator pushes a change the instant it happens (no poll interval of
+staleness); the connection carries liveness directly — a clean drop is an immediate "this relay is gone"
+signal, and a connection that dies *without* a close (a crashed relay, a half-open TCP, or a peer that
+stopped reading and stalls the coordinator's sends under backpressure) is caught within a bounded window
+by the relay's periodic heartbeat plus a coordinator-side liveness deadline that also bounds the
+descriptor sends — exactly what presence tracking and failover want, instead of inferring death from
+missed polls; and the two directions share one connection instead of two periodic round-trips. It is a
+WebSocket rather than QUIC because the coordinator is deliberately an HTTP service and a low-frequency
+control channel gains nothing from QUIC's congestion control or stream multiplexing — a held TCP
+connection is plenty, and rides the server that already exists.
+
+**Declarative current-state.** The coordinator holds, per relay, that relay's *current* descriptor set
+(the descriptor for every session it should serve) behind a watch. Every connection starts with a
+**full-set re-sync**. Subsequent changes go out as **descriptor deltas** — upserts and explicit removals
+relative to the last successfully sent set — when the negotiated protocol version supports them;
+older relays continue to receive full sets. Each upsert goes through the same idempotent Join source,
+and each removal ends that session's membership. A full set also removes sessions absent from it by
+diffing against the relay's last-applied state, kept across reconnects, so a session removed while the
+relay was disconnected is left when the re-sync arrives. The ordered control connection puts the full
+baseline before every delta, and reconnecting establishes a fresh baseline. The drain handshake also
+sends a full set before its acknowledgement, preserving the relay's post-drain membership view.
+
+**Auth.** The relay presents a coordinator-issued **bootstrap secret** (`Authorization: Bearer …`) on the
+upgrade; a mismatch is rejected before the socket opens (a constant-time compare, so the secret isn't
+probed a byte at a time). It **fails closed**: the coordinator refuses to start with no secret unless an
+explicit insecure opt-in is set, so an unauthenticated control endpoint is never a silent default — the
+open mode exists only for trusted dev/loopback that has consciously asked for it. This authenticates the
+relay *to* the coordinator; the reverse direction (the relay trusting it reached the real coordinator) is
+TLS's job: the connection runs over `wss://` (rustls on this workspace's ring provider, validating against
+the public web PKI), so a publicly-trusted coordinator cert works today, while trusting an internal-CA or
+self-signed *coordinator* cert (a custom root store) is still open — until then a `wss://` coordinator
+needs a public cert or the secret-bearing channel runs on trusted transport as `ws://`.
+
+**Enrollment binds identity, not just possession of the secret.** The bootstrap secret alone only proves
+*fleet membership* — every relay in the fleet holds the same one — so the `Hello`'s enroll additionally
+proves two things the secret can't. A **proof-of-possession nonce** challenge, answered by signing
+`ENROLL_POP_CONTEXT ++ nonce` with the private key backing the certificate the `Hello` presented, binds
+this connection to a certificate it demonstrably holds the key for, not just bytes it copied. An **atomic
+duplicate-id refusal** — checked and inserted under one registry lock — refuses a second connection
+enrolling under a `relay_id` another live connection already holds, closing the race a naive
+check-then-insert would leave for two concurrent enrolls to both pass. Together with the fleet-membership
+secret, this is what a relay's enrolled identity now rests on — the same enrolled `(relay_id, cert
+fingerprint)` pairing the mesh acceptor pins against (see [Mesh trust](#the-mesh-relay--relay)). The
+relay→coordinator heartbeat rides this same channel — it doubles as the keepalive that surfaces a
+connection that died without a close.
+
+**A provisioned-identity ledger (optional) removes the offline-but-claimable state.** Proof of possession
+still lets *any* id be claimed with *any* freshly generated certificate, so a bootstrap-secret holder could
+enroll under an offline relay's id with its own cert. A coordinator started with a **relay ledger** (a small
+local SQLite store, `--relay-ledger`) closes that: it becomes the thing that launches relay tasks, and mints
+each `relay_id` together with a **one-time enroll token** (only the token's SHA-256 is stored — the token
+itself is handed to the launched task and never written down) at launch. At enroll, after the
+proof-of-possession succeeds, an id unknown to the ledger, a retired id, or a missing/expired/already-consumed
+token is refused — all with **one generic close code** (`4005`) and reason, so a probe cannot learn which ids
+exist or whether a token was near-valid; the specific class rides only the coordinator's own logs. A first
+enroll consumes the token and **binds** the id to the certificate the `Hello` presented, in one atomic
+`UPDATE` so two enrolls racing on a token bind at most one cert; every reconnect thereafter must re-present
+that bound certificate (no token), and a retired id is refused forever. An id is therefore only ever
+*launching* (token-guarded), *live* (cert-bound), or *retired* — never offline-but-claimable. Where the
+coordinator recorded a resolved advertise set for a launched id, that set overrides the hello's self-reported
+addresses at enroll (coordinator-sourced addresses win; the hello is the fallback). A coordinator with **no**
+ledger keeps the dev / loopback posture: the id claim in a `Hello` is accepted as presented, and this whole
+authorization step is skipped.
+
+### Tenant → coordinator requests (the app-server API)
+
+The coordinator's tenant-facing HTTP API — `POST /session/create`, `POST /sessions/alive`, and so on — is
+how a tenant's app server drives sessions. Every mutating request is **authenticated by a per-tenant
+Ed25519 signature**, fail-closed. The app server signs an `x-rp2-signature` header over a domain-separated
+message binding the request timestamp, HTTP method, path, and exact body bytes
+(`rp2-request-v1:<ts>:<METHOD>:<path>:<body>`), and the coordinator verifies it against that tenant's
+enrolled request-verifying key before doing any work. A missing, malformed, stale (outside a ±5-minute
+window), or wrong-key signature all map to the same `401`, so a probe learns nothing about which check
+failed, and a tenant with no enrolled key cannot make an authenticated request at all. This is a **separate
+keypair from the tenant's token-signing key**: the app server holds a request-signing seed and the
+coordinator stores only its public half (tenant→coordinator), while the token/webhook key signs the other
+direction (coordinator→tenant). The handler reads the raw body rather than a JSON extractor precisely so
+the signature covers the exact bytes on the wire. A small `GET /tenant/:tenant/pubkey` endpoint serves the
+tenant's token-*verifying* key and its `kid`, so a consumer can key its verifying-key cache by the same
+`kid` a webhook is signed under.
+
+### Coordinator → tenant notifications (webhooks)
+
+The coordinator tells a tenant about the per-game facts its relays report up their control connections — a
+player **departure**, a **desync**, a slot's end-of-game **result**, and the three load-progress facts below —
+by POSTing a signed webhook to the tenant's configured URL. Each POST is **signed with the tenant's own
+key** (the same key that mints tokens, domain-separated `rp2-webhook-v1:`), not a shared secret, so there is
+nothing extra to provision or rotate.
+Because every relay serving a session reports the same fact independently — redundancy against any one
+relay's coordinator link being down — the pipeline **dedups** on first sight; it prefers the correlation
+ids the relay stamped into the notice (from the descriptor it applied) over the coordinator's own in-memory
+session refs, which is what lets a departure webhook survive a coordinator restart that wiped those refs.
+Delivery is **at-least-once with capped-backoff retry** and eventual give-up, because the webhook is an
+**optimization feed, not a correctness signal**: the app server already holds a game's terminal result and
+ignores a departure for a game it has a result for, so a never-delivered webhook degrades to result-based
+behavior, and the idempotent consumer absorbs the duplicate a restart-forgets-the-dedup-set redelivery
+produces.
+
+Three of the events describe a game's **load progress**, so the tenant can say *who* failed to load instead of
+inferring it from its own deadline expiring:
+
+- **`slotConnected`** — a slot's link activated on the relay that homes it: that player's client arrived. The
+  relay reports every activation, reconnects included (the notice's `resumed` says which), because only the
+  relay can see a re-dial at all; the coordinator keeps the ever-connected set and dedups the webhook on
+  `(tenant, session, slot)`, so a later reconnect updates its state without re-firing a notification.
+- **`sessionStarted`** — the session's authority relay observed every expected slot present and fired the
+  start directive, carrying the initial latency-buffer depth it sized. Only the authority reports it (a peer
+  adopting the directive off the mesh does not), so unlike a departure there is no per-relay redundancy here;
+  the dedup key is `(tenant, session)`. A peer that adopts the directive does stamp the adoption instant on
+  its own maker, so that every relay which knows the session started can restate *an* instant on its beat;
+  the coordinator keeps the first it is told, so the authority's earlier stamp wins wherever it arrives and
+  the peer's stands in only when the authority's notice was lost and the authority died before a beat.
+- **`slotStarted`** — a client reported that its own game loop has begun running, on a fieldless `GameStarted`
+  control frame the relay binds to the authenticated connection's slot (never a client-asserted one) and
+  stamps against its own timeline. The client treats "my loop is running" as session state and re-asserts it
+  on every control stream it opens — the initial one and each reconnect's — because nothing acknowledges a
+  control-stream write and the relay's own latch dies with the link that held it. One report per slot per
+  link at the relay; deduped on `(tenant, session, slot)` at the coordinator, so the repeats are absorbed.
+
+Together they distinguish "never connected" from "connected but never finished loading", which is the whole
+point: these are the facts an attribution needs and a timeout cannot supply.
+
+The webhooks are the **fast path**, not the record. A notice is dropped from the relay's queue once its
+WebSocket send succeeds, so a coordinator that dies between receiving one and committing it — or that simply
+restarts — has lost it. What makes the facts durable is that every relay **heartbeat carries the session's
+whole retained load state**: the slots that ever connected there, the slots that ever reported their game
+loop, the home slots whose turns it ever forwarded (see the load-state pull below), and the instant that
+relay learned the session started. The relay retains all of it on the session's
+decision-maker and restates them on every beat, declaratively, exactly as it does the live roster — so a lost
+notice costs at most one beat, and the coordinator merges each beat into the same accumulated sets the pull
+below reads. It merges the entry's *currently connected* slots as ever-connected too: a slot connected now
+necessarily connected at some point, which covers a `slotConnected` notice lost before the relay had a maker
+to retain it. Merging a beat fires no webhook: those facts were notified when they happened, and re-notifying
+them every ten seconds would flood the feed.
+
+A beat names **every session the relay holds a decision-maker for**, not only the occupied ones. A maker
+lives from the descriptor apply that created it until the session retires, which outlasts every local link —
+so a relay whose slots have all disconnected keeps restating what it learned while they were here, which is
+exactly when the coordinator has no other source for it. Such an entry names no connected slot, and an entry
+with no connected slots means precisely what omitting the session means: this relay holds nobody. Presence
+records nothing from it, and the empty-session reap counts it as the same complete-roster proof of
+emptiness, so restating a finished session's record can never keep that session alive.
+
+### Session lifecycle and reaps
+
+The coordinator holds the global picture of a game's end and drives three things off it. **Ordered
+dispatch:** lifecycle webhooks for one `(tenant, session)` drain from a single FIFO queue, one at a time, so a
+delivered `sessionClosed` implies every earlier lifecycle notice was delivered or exhausted. Periodic
+evidence uses a separate process-wide four-request concurrency gate, capped at two active requests per
+tenant, with one bounded attempt per sample and no pending queue or retries. Busy delivery sheds samples; retained-cache recovery can retrieve the
+latest value. Samples may arrive after `sessionClosed` and have no lifecycle effects.
+**`sessionClosed`:** the coordinator assigned each session's serving-relay set, and when every one of them
+has reported `SessionClosed` (its last local slot deregistered), the final `sessionClosed` webhook fires
+and the session state is reaped. **Reaps:** two player-accounting timers keep a session from dangling — a
+**holdout reap** (all-but-one player accounted, the last silent on a live link) and a **linger reap** (all
+accounted but links still open) — each closing the offending slot with a `CloseSlot` directive down the
+relay control connection, which then flows through the normal link-death path. Two slower lifecycle bounds
+cover sessions that cannot enter that path: a never-started session is retired after 15 minutes, and a
+started session whose complete heartbeat rosters prove every assigned relay continuously empty is retired
+after the same grace. The latter is a defense-in-depth path for a lost close notice or an assigned relay
+whose own slot never connected; any occupied, partial, stale, re-homed, disconnected, or new-generation
+roster resets the proof. A relay's `slotConnected` notice also marks a session **started** and disarms the
+never-started reap, exactly as a heartbeat's positive roster does — it is stronger evidence of the same fact,
+since a relay reports it only when a client's link is actually serving. A positive roster or replacement
+process also reopens that relay's earlier
+`SessionClosed` evidence until the whole serving set has closed, preserving the relay's short reconnect
+window. A re-home reopens terminal evidence for both the departed assignment and the resumed target, and
+installs that lifecycle boundary under the assignment lock before publishing resumed descriptors. A close
+therefore belongs wholly to the old or new assignment, never an ambiguous gap. All four paths release
+session membership and therefore let an idle Fargate relay reach an empty descriptor set and scale to zero.
+**Restart survival.** A relay's descriptor set is declarative — every reconnect re-syncs the full set and
+the relay ends any session absent from it — so a coordinator that came back with no memory would end
+every running game the moment its relays redialed, and the tenant's **batch liveness probe** (`POST
+/sessions/alive`, asking which of a set of sessions the coordinator still holds) would then
+force-reconcile them. A ledger-backed coordinator therefore persists each live session into the ledger:
+its setup half (membership, correlation ids, the create-idempotency entry, every relay's staged descriptor
+and pending slot-closes, recorded re-homes) and its lifecycle half (accounting, departure seeds, the
+load-state sets, connection observations and their notification high water, started), plus each relay's last boot id so lineage still judges a relay that restarted
+while the coordinator was down. Only a session live in *both* halves is written — a create registers its
+lifecycle inside its commit, before the response becomes replayable to a concurrent identical create; a
+close removes the lifecycle before it retires membership — so a restart can neither resurrect a closing
+session nor restore one without its accounting, and no answer ever names a session a capture would skip. Timers and
+heartbeat evidence are not kept: restore re-arms every reap from the facts with a fresh grace, and the
+relays' next beats rebuild emptiness evidence. Writes are a diff of the live state against the last flush:
+every second, synchronously before a create or re-home answers (a failed write refuses with a retryable
+`503`, whose retry replays the already-committed answer, so no client ever holds a token or a replacement
+relay a crash would forget), and once more at shutdown, after `SIGTERM` has closed every control connection
+and queued webhooks have had a bounded drain. Each capture reads setup, lifecycle facts, and boot ids under
+one hold of the assignment lock, which enrollment also holds while it records a new boot id and clears the
+completeness claims that boot broke — so no persisted claim can outlive the lineage break it should have
+recorded. A crash loses at most a second of facts, most of which the next beat restates. A restore is all
+or nothing: an unreadable record refuses startup and stays stored, since restoring around it would end that
+game. A coordinator with no ledger keeps the old amnesia: a departure/result webhook for a
+forgotten session still delivers (a webhook-only queue is created lazily) but its `sessionClosed` and
+reaps do not re-arm, and the liveness probe force-reconciles it.
+
+`POST /session/evidence` reads the coordinator's retained latest per-slot observations for a signed
+`{ tenant, session }` request and returns `{ evidence: [...] }`, empty when the session is unknown.
+The latest admission, latest periodic observation, and first/latest retained failures per slot are
+available, at most 64 observations for 16 slots; duplicate samples are returned only once. Historical
+samples carry `historical: true` and the same cumulative `failureCount` for the slot. That count is a
+highwater, not an increment to sum across samples. `observedAtMs` carries the relay's original event
+time when available; absence means an older producer did not retain it, never the time of recovery.
+Accumulated failures survive subsequent admissions
+and rehomes once the coordinator accepts them. This is not an archival log. Intermediate periodic samples that were never received or
+were overwritten cannot be recovered here. Session retirement, including
+normal close, discards observations immediately; there is no post-close recovery grace period.
+It makes no completeness claim, performs no relay exchange or lobby settlement, and uses a separate
+per-tenant budget (burst 200, one token per 100 ms). Background recovery uses this cached read so it
+cannot consume the load-attribution budget or repeatedly fence active clients. A missing endpoint on
+an older coordinator is a `404`; callers defer recovery instead of falling back to load-state.
+
+Beside it sits the **load-state pull** (`POST /session/load-state`), which answers one session's accumulated
+load progress: when it started, which slots ever connected, which ever reported their game loop running, and
+which had turns forwarded by their home relay (`forwardedSlots`, below).
+The tenant consults it when its own load deadline expires and it must decide whom to blame for a game that
+never got going — which makes the three load-progress webhooks an optimization feed and *this* the
+correctness signal, since it reads the coordinator's state directly rather than trusting that every
+notification arrived. Every slot list is an *ever*-set (a slot that arrived and then dropped still appears —
+"who got here at all", not "who is here now", which `POST /presence/query` answers).
+
+The sets are **positive evidence and always safe to merge**, so the pull answers with everything the
+coordinator holds whatever their provenance. What takes qualifying is reading a slot's *absence* as proof it
+never arrived, and `known` gates exactly that.
+
+**Turn evidence.** `startedSlots` is a client's *claim*: a relay records the `GameStarted` frame, but nothing
+it observes backs the frame up, and a client whose link was black-holed can run its loop locally, re-assert
+started on reconnect, and never deliver a turn — so blaming its opponents by their absence from that set lets
+client-sent data hurt other players. `forwardedSlots` is the relay's own observation instead, recorded on the
+decision-maker at the shared delivery choke point, after the forward-once gate, and only for turns from the
+relay's **own home clients** (a peer-homed turn is its home's to record; the coordinator drops any slot a
+reporting relay does not home). It names every slot at least one of whose turns its home relay forwarded.
+That deliberately includes the **pipe seed**, the frameless turns a client flushes the moment its loading
+screen ends and before its loop runs: the seed is the earliest thing a loaded player sends, and a current
+client's lobby traffic never reaches this path (it rides the control stream as `LobbyCommand`s), so a
+forwarded turn is the relay-authored "this player loaded and its uplink delivered". It is also the most an
+honest waiting player can show: a lockstep loop sends nothing after its seed until it can run its first step,
+which needs every player's seed, and a rollback loop may not predict until every peer's first in-loop turn is
+in — so a player whose opponents never finished loading has forwarded its seed and nothing more.
+
+Its absences are gated by `turnsKnown` rather than `known`. It needs every condition `known` does — every
+serving relay answered after the request reached it, the coordinator created the session, relay memory is
+unbroken — except the fence, because the set holds only what each relay itself forwarded: nothing queued in a
+client can be owed to it, and a turn that has not arrived was not forwarded, which is what its absence says.
+It additionally needs every serving relay's snapshot to carry `reports_turns`, the flag a relay build with the
+set always sets: an older relay answers without the set whatever it forwarded, so a session served by one is
+never `turnsKnown`. The set fires no webhook; the heartbeat restates it and the pull is how a tenant reads it.
+
+The read is an **exchange, not a lookup**. On each request the coordinator asks every relay serving the
+session, down the control connection each already holds, what it holds for that session; the relay snapshots
+its retained load state plus its live roster and answers with the request's own correlation id. Because the
+relay builds that snapshot *after* the request reached it, everything it had observed before the caller sent
+the read is in the answer. `known: true` therefore means every serving relay produced a snapshot after this
+request arrived — so an absent slot is a player who never got there — and it says so without any clock on
+either side taking part. That is why the exchange exists rather than a freshness stamp: a heartbeat is
+snapshotted on the relay and received an unknown interval later, so no receipt time the coordinator writes
+can say which side of a caller's deadline a fact fell on, and the comparison would span two hosts' wall
+clocks besides. The heartbeat's restatements remain the durable *repair* path — they recover a dropped notice
+or a coordinator restart within a beat — but they carry no ordering, so they never gate completeness.
+
+Observing the relay is not, on its own, enough. A client's own `GameStarted` travels *its* ordered control
+stream, independently of the coordinator's question, so a relay can honestly snapshot "slot 3 has not
+started" while slot 3's report sits queued in its client's driver, in flight, or parked waiting for the
+stream the driver opens next — and the coordinator would then vouch for a record that is wrong about slot 3.
+So before it snapshots, a relay **fences** the session against its own clients: every slot it homes that has
+connected and not yet started gets a small probe down that slot's control stream, and the relay waits for the
+echoed acknowledgement. The client answers a probe by writing any report it owes *and then* the ack, on that
+same stream; because the stream is ordered, an ack that arrives proves nothing of that slot's is still behind
+it. The snapshot is taken after the acks, since a probe may have delivered a report on the way. The
+coordinator requires a fenced answer from every serving relay before it will say `known`.
+
+A probe answers for one *link*, never for a seat. Every probe is issued against the connection epoch the slot
+held when the roster was read, delivered only to that connection, and accepted only from it — a client that
+reconnects takes its slot back on a fresh stream whose queue of owed reports the old stream's ack says
+nothing about. So the relay reads the roster again after the acks and answers `fenced: true` only when every
+probe it issued was acked inside its (deliberately shorter than the coordinator's) wait, every slot still
+live and not started acked on the epoch it *still* holds, and no slot it has ever seen connect is away. Any
+membership change across the fence therefore withholds the claim: a client that dials in mid-fence is live
+and unprobed, and one that reconnects after acking is live on an epoch nothing answered for. Both would
+otherwise slip through looking fenced while holding a report. The answer's facts are unaffected either way —
+only the licence to read its absences as proof — and the tenant's next read simply asks again.
+
+Two kinds of slot never get probed, for opposite reasons. A slot that has connected here and is disconnected
+now has no stream to probe and a client that may be holding a report for the stream it opens next, so it can
+never be fenced — its presence in the ever-connected set with no live link is itself enough to withhold the
+claim. A slot that has *never* connected to this relay holds nothing to fence: no client ever opened a stream
+to it for that slot, so there is nothing anywhere that could be queued, and its absence is attestable exactly
+as it stands. That asymmetry is what keeps the read useful — the common answer a tenant wants is "these
+players never arrived at all", and it is precisely the never-arrived case that needs no fence.
+
+The verdict therefore goes up in two halves. `fenced_live` covers the probes and the live links; `closed_slots`
+names the slots that connected and are now neither live nor started; `fenced` is the first with the second
+empty. A departed slot then costs only the claim about itself: the coordinator answers `closedKnown` (every
+serving relay fenced its live slots, each closed slot taken only from its home, plus everything `turnsKnown`
+needs) beside `known`, so a tenant can still blame the one player who closed their game mid-setup while
+everyone else is vouched for. It answers `liveSlots` from the same snapshots, each slot again taken only from
+its home, so a tenant can tell a player who stayed from one who reported starting and then left too — the
+latter is in neither set. Each closed slot carries the connection epoch of the link whose closure left it
+disconnected, so two reads naming one slot closed on the same epoch saw one unbroken disconnection — a reconnect
+in between would have activated a new link — and reads, being answered only from rounds that began after they
+arrived, order that disconnection against who was live in the later read. Turn evidence is required because a closed slot's own start report may still be
+parked in its client, and the forwarded set — which needs no fence — is the only word on how far that slot got.
+Setup finality rests on the live half too: once every home relay settles the lobby, any lobby command a
+departed client delivers when it dials back in is dropped without a violation, so its unreachable client
+cannot add to the evidence that finality vouches for.
+
+Two further conditions ride with the answers. The coordinator must have held the session **since it created
+it** (a restarted process's sets start wherever it came up, not at the session's beginning), and the relay
+memory covering the session must be unbroken. Retained load state lives in a relay process; when a serving
+relay is replaced by a re-home, or comes back as a new process, whatever it saw and had not yet restated is
+gone, and no later snapshot can vouch for that interval. The coordinator watches for the second case with a
+`boot_id` on the relay hello — a value drawn once per relay process — so a control connection redialing (same
+value, memory intact) is told apart from a restart (a different value, or none at all, which an older relay
+build sends and which can therefore never claim continuity). Either kind of break clears the session's
+completeness claim permanently; nothing restores it, because nothing can recover what was lost.
+
+`known: false` — a relay that did not answer inside the request's short deadline, a relay holding no control
+connection, a relay that could not fence one of its slots, a coordinator that restarted and forgot, a reaped
+session, a re-homed or restarted serving relay — is no information *about who is missing*. It is never proof
+that nobody arrived, and the facts the answer carries alongside it are as real as any other. Every snapshot
+that does arrive is merged and returned whether or not the set completes, so one silent or unfenced relay
+costs the claim and never its peers' facts. The read is cheap to repeat, so a caller with time left may
+simply ask again.
+
+The exchange is **bounded on every side**, because one read is fleet-wide work a tenant can ask for at will.
+It is rate-limited per **tenant** (a small burst over a thirty-a-minute refill, answered `429` with
+`Retry-After` when spent) rather than per session, since the cost is the fanout and not the session named.
+Concurrent reads of one session **share a round of questions**: the first leads, later ones await its
+outcome — and a caller whose read arrived *after* that round began asking waits it through and takes the next
+one instead, because a round that started before a caller asked answers an older question than the one it
+asked. The instant a round is judged by is taken **before its first question goes out**, not after its last:
+a relay asked early can snapshot and answer while the round is still fanning out to the rest of the fleet, so
+an instant stamped at the end of the fan-out can postdate a read that arrived after the earliest snapshot was
+already taken, and that read would then accept a round blind to the interval it asked about. Stamped before
+the first question, the instant is a lower bound on every snapshot the round collects, which is exactly what
+the joiner's comparison needs. Sharing costs at most one extra wait and keeps a burst of reads to two rounds
+rather than one each. Every queue the questions travel is bounded and non-blocking: a coordinator-side
+channel to a relay whose writer is behind, and the relay-side channel from its reader to its writer, both
+shed the question rather than queue it, and a shed question reads exactly like a silent relay. The relay caps
+the fences it runs at once as well, taking a seat before it starts one and holding it until that fence ends —
+the ask channels bound questions *queued*, but a fence occupies a task for as long as its clients take to
+reply, so only a seat bounds the probing itself; an ask that finds none is shed like any other. On both sides the load-state arms sit
+*below* liveness and lifecycle traffic in the writers' priority order — a delayed heartbeat or descriptor
+costs a relay correctness, while a delayed read costs a caller a retry — and the coordinator drops a queued
+question outright once the read waiting on it has gone. The relay likewise answers off its control
+connection's writer rather than on it, since fencing waits on game clients and no tenant's read may park the
+connection the fleet's own health rides.
+
+### Active-player presence
+
+App servers need to ask "is user U in a live game right now" — to block an in-game player from
+re-queueing — and the coordinator is the one place that can answer it: relays see connections, the tenant
+sees its own session bookkeeping, but only the coordinator holds both the fleet's live view and the
+slot→user refs the tenant supplied at session creation. Presence **rides the heartbeat** the relay already
+sends: each beat carries the relay's live roster — the slots connected right now, on the entry for each
+session the relay holds — rather than standing up a new channel, because the beat is already the relay's
+periodic liveness signal on
+an off-hot-path connection, and piggybacking means presence can never be alive while liveness is dead (or
+vice versa). Each beat carries the **whole current roster** (declarative, like the descriptor sets going
+the other way): a lost or reordered beat is corrected by the next one, and the payload is bounded by the
+relay's sessions and their slots. An entry naming no connected slot contributes no presence at all — it is
+there for the load state it restates, and says the same thing about occupancy that omitting the session
+says. A `roster_complete` marker distinguishes an authoritative full snapshot from a legacy
+or coordinator-truncated roster. Its absence decodes as false, so a rolling deploy can still consume
+positive presence from an older relay without treating omitted sessions as proof of emptiness; older
+coordinators ignore the additive marker.
+
+The coordinator's store maps `(tenant, session, slot)` to the reporting relay + connection **generation** +
+last-seen time. Applying a beat is a per-relay **replace** fenced by the same generation token that fences
+enrollment: a stale connection's late beat (or its teardown, racing a reconnect) can neither wipe nor
+overwrite what the relay's newer connection reports. Freshness is two-tier: a **control-connection drop
+clears its entries immediately** — the prompt "queueable again" signal for the common case — and a **35s
+TTL** (3.5× the 10s heartbeat, so two lost beats never flap an in-game player to queueable; ≥ the 30s
+connection liveness deadline, so per-entry expiry never fires before the wholesale on-drop clear would)
+covers a connection that is up but silent. Expiry is lazy at query time; nothing sweeps, because the
+replace and the on-drop clear already bound the map by live slots.
+
+The tenant asks over `POST /presence/query` (request-signature authed like `/session/create`), naming its
+own user refs; the coordinator resolves them against the fresh entries through the stored session refs and
+answers per user. The endpoint is deliberately **fail-open**: absence of evidence is `in_game: false`. A
+coordinator restart wipes the store (one heartbeat interval repopulates it), a relay flap clears its
+entries — and in every such window, letting an in-game player queue briefly is today's status quo, while
+locking a legitimate player out of matchmaking is strictly worse. Presence means "connected to a relay
+now": a just-created session whose clients haven't dialed is the tenant's own knowledge, not presence's.
+The PII boundary holds throughout — the wire and the relay carry only tenant/session/slot; user identity
+exists solely in the coordinator's tenant-supplied refs, resolved at query time.
+
+## Components
+
+| Crate | Role |
+|---|---|
+| `proto` | Frozen wire contracts: `Packet`/`Payload` framing, control-plane messages, tokens, protocol version, the SC:R command table. Anything crossing a component boundary is defined here first. |
+| `transport` | The per-link redundancy + ack + dedup machinery above, shared by `client` and `relay`. |
+| `client` | Portable client endpoint + link driver: per-slot ordering restoration and the buffer/leave directive trackers; linked into the game DLL. |
+| `relay` | Validating client edge + per-session routing, the relay mesh (dial/accept, on-demand dialing, one-hop forwarding, session-level dedup, presence), and the authority-relay consensus off the turn stream — latency-buffer decision-maker, desync detection, and synced leaves — plus the per-session flight recorder (bounded events/samples/counters, flushed on close and drain). (A replicated turn log is planned, not yet built.) |
+| `coordinator` | Multi-tenant control plane: per-tenant token issuance + inbound request-signature auth, the relay registry and descriptor push, session setup, region assignment/provisioning, and the tenant-notification (webhook) + session-lifecycle layer. |
+
+## Settled decisions (do not re-chase)
+
+Choices that were weighed deliberately and closed. They are recorded here — with the *why* — so a
+later review or design pass starts from the reasoning instead of re-deriving (or re-litigating) it.
+Entries marked **(SB-side)** bind the ShieldBattery integration rather than a crate in this repo.
+
+- **The two-directional tenant credential design is final.** The tenant's request-signing key
+  (app-server-held private) and the coordinator's per-tenant signing key (coordinator-held private)
+  are mirror images on purpose — a literal single shared credential would let either party forge as
+  the other — and the coordinator's key also mints the player tokens relays verify (same keypair as
+  webhook signing, domain-separated). "One credential" already means: one tenant identity, one
+  keygen run, one registry entry.
+- **Client pubkeys are per-queue-episode, submitted at queue/lobby-join (SB-side).** The app holds a
+  pending keypair copied (never moved) onto each launched game — matchmaking requeue reuses the
+  join-time pubkey with no new client request, so the private half must survive the episode;
+  orphaned pending keys are deliberately never cleaned up (harmless by construction). No long-lived
+  client keypair without a security review. A multi-human load missing a pubkey fails fast by
+  design.
+- **`mx` (Querétaro) ships with no GameLift beacon, deliberately, zero code:** clients rank it by
+  TCP-connect fallback; backbone mx pairs fill one-directionally from mx relays' outbound sweeps
+  (served value = average of present directions; coverage counts either); the formulaic dead
+  hostname auto-upgrades to UDP if AWS ever ships the beacon (invariant also documented in
+  `infra/terraform/README.md`).
+- **Monitoring shape:** coordinator `/metrics` is plaintext on a second listener reachable only via
+  the box's tailscale sidecar (never published; the public listener is untouched); relays are never
+  scrape targets (scale-to-zero makes them transient) — fleet health exports coordinator-side; no
+  alerting until production baselines exist.
+- **No auto-drop of disconnected players.** Holds are decided only by a survivor's `RequestDrop`
+  (30s relay floor) or the 45s abandoned-session force-decide. Silent-slot eviction does not change
+  this: it manufactures the *disconnect* for a connected slot that stopped producing turns while its
+  link kept carrying packets, and the hold it leaves behind is decided exactly as any other. A slot
+  whose link carries nothing is not evicted at all; the transport's idle timeout disconnects it and
+  its client may resume. The slot it names is chosen from
+  relay-authored evidence alone — the order in which slots' forwarded prefixes stopped advancing. No
+  client-supplied count, frame stamp, or seq may pick a victim: each is padding the hostile client
+  chooses (see "silent-slot eviction").
+- **The silence verdict requires complete knowledge, and every gap in it blocks.** The participants
+  compared are the descriptor's expected roster; a roster slot the relay holds no state for, a
+  participant with no game-started report (shared home-to-peer over the mesh so every relay has the
+  same set), a decided leave the survivors have not yet visibly resumed past, and every slot on a
+  re-homed session all block the verdict rather than counting for nothing. Each of the three false-eviction paths this
+  closed came from the opposite default — a state the relay could not see silently reading as "not a
+  blocker" — so a future "the watch is too quiet" fix belongs in *widening what the relay can vouch
+  for* (the re-home gate anchor of `TODO(rp2-silence-rehome)`), never in letting an unknown pass.
+- **Buffer-one micro-stalls are fixed by send-phase alignment, not buffer depth.** Holding depth
+  two costs a full turn of latency to hide a few-millisecond phase artifact; the phase controller
+  (see "Send-phase alignment") removes the artifact at depth one. Client stall telemetry stays
+  local diagnostics, never a law input (no client-asserted value may feed a relay decision that
+  affects other clients) — the law's backstop for persistent stalls alignment cannot fix is the
+  relay-measured arrival-interval stretch term (additive on the target like the delivery cushion,
+  capped at one turn; see "Latency buffer"), which replaced the user-facing latency setting. Phase
+  scope is per-relay by design: only the home relay sees a slot's wire arrivals first-hand, and
+  cross-relay alignment would need a shared inter-relay clock for a regime (mesh sessions,
+  hop-cushioned off depth one) that barely benefits — don't re-chase it without that clock.
+- **Turns are sent at the game's tick rate — no duplicate-turn rate doubling.** A proposed 48pps
+  mode (each turn sent again in a second packet half an interval later, to smooth loss/jitter and
+  shrink the buffer) was researched and declined. The piggyback redundancy already gives every
+  unacked payload fresh delivery attempts one and two intervals later, and multiplayer relay
+  fan-out is already sub-interval-dense; measured internet loss is bursty — conditional loss is
+  roughly two orders of magnitude elevated a half-interval after a drop — so the duplicate tends
+  to die with its original exactly when it would matter; jitter spikes are shared-fate FIFO
+  queueing that a duplicate sent into the same queue cannot overtake; and doubling packet rate
+  roughly doubles relay CPU. Shipped lockstep games universally piggyback at tick rate rather
+  than duplicate. If evidence ever demands more, the shape is a staleness-triggered mid-interval
+  flush (the hedged-request pattern: send early only when the ack is already late), gated on
+  flight-recorder data — not blanket duplication.
+- **Game clients never talk to the coordinator.** Re-home is app-server-mediated (the client
+  authenticates to its app server exactly as for result submission; the app server makes the
+  tenant-signed coordinator call).
+- **Nothing sits in front of the coordinator or the relays** — no proxy, LB, or NAT anywhere: the
+  enrollment ledger gates on transport peer addresses, and the coordinator resolves relay addresses
+  from the task ENI. A proxy would replace every peer with itself; re-design the gate before ever
+  adding one. (This also settled ECS-metadata self-discovery: provisioned relays never
+  self-advertise at all.)
+- **Relay IPs are stable per task and fresh per launch** — no per-game rotation machinery; the DDoS
+  baseline is natural per-task churn plus the platform's default network protections. The trigger
+  for anything stronger (Shield Advanced / Spectrum-style fronting) is deliberately undefined until
+  targeted attacks materialize.
+- **Coordinator HA is a single restart-tolerant instance** (container restart policy). Running
+  games survive an outage — relays run the live game, and an idle+unenrolled relay reaps itself —
+  while create/re-home/presence pause until restart and relays re-enroll. The restarted process
+  **adopts** its fleet from the sessions it persisted to the ledger rather than letting relays drain
+  their games out first: adoption keeps re-home, the liveness probe, results and `sessionClosed`
+  working for those games, which a drain-out would not. A failed or partial restore (any unreadable
+  record) refuses startup — a down coordinator leaves running games alone, an amnesiac one ends
+  them — and a create/re-home whose state cannot be persisted is refused (`503`) rather than
+  answered: restart safety outranks accepting new work on a broken store. Hot standby stays a
+  documented future option.
+- **A 1v1 checksum divergence voids** (no-majority by construction — and deliberately
+  unattributable, since a loss-dodger could self-desync); team games discard the diverged minority
+  and resolve from the majority. Client-originated desync/result reports may only void or dispute,
+  never claim a win; departure time/order arbitrates nothing. **(SB-side debug surface:)**
+  `forceUnsyncedLeave` on the caller's own slot is an ordinary drop and scores normally;
+  `forceDesync` is THE desync trigger — testing tools, never a way to end a game that needs a
+  scored result.
+- **Presence fail-open (35s TTL):** locking players out of queueing on infra flap is strictly worse
+  than the status quo (see the presence section above for the full argument).
+- **Lobby-command delivery is paced re-send plus origin-seq set dedupe, at most once and unordered,
+  not acknowledgment:** a client re-sends every lobby command it authored on each new control stream
+  for the whole session, paced inside the relay's rate cap; relays (and receiving clients) drop a
+  `(slot, seq)` they already accepted and accept any other whenever it arrives, re-sharing their
+  logs on every mesh rejoin. An ack would only move the same "was it processed?" question onto
+  another unacknowledged write. Per-author ordering was tried and dropped: any rule that holds a
+  later command for an earlier one turns one refused command (rate cap, lobby policy) into a stall
+  of everything behind it, and ShieldBattery's lobby channel carries one meaningful command per game
+  (the host's game-init), so order buys nothing. Unsequenced commands stay forwarded as-is for old
+  clients.
+- **The relay-side coordinator-notice buffer is unbounded by deliberate choice** (delivery over
+  memory); the coordinator's own per-session webhook queues are bounded (128) with a drop counter
+  on `/metrics`. Relay-reported webhook events take precedence over coordinator-derived ones by
+  design, for restart survival. μs-seeded session ids stay in JS safe-integer range until ~2255.
+- **Session responses wait for descriptor installation on capable relays.** `descriptor_ack_v1`
+  opts a relay into requested full/delta acknowledgements. Legacy relays bypass the response barrier;
+  a new relay sends no acknowledgement to an old coordinator. Proof is connection-scoped and covers
+  the exact current descriptor, with bounded memory and timeout. Create and new-target rehome retries
+  recheck readiness and current topology; ordinary same-relay client reconnects never contact the
+  coordinator. Relay admission retains its local descriptor check across restart and rollout races.
+- **Coordinator-managed client admissions wait for the session descriptor.** Both client-edge
+  protocol versions share the authorization deadline and admission cap while waiting. An absent
+  descriptor cannot establish whether a slot requires evidence, so no routing state or readiness
+  acknowledgement is created before it arrives. Installed descriptors have no waiting period; retirement
+  wakes pending admissions to refuse immediately. Managed startup leaves the provisional path disarmed.
+  Standalone relays retain optional descriptor-free admission. An empty homed set remains unenforced once
+  the descriptor is known.
+- **Connection evidence is optional unless the tenant requires it for a slot.** The negotiated
+  client-edge ALPN selects whether the bounded frame follows resume cursors; legacy connections
+  have no evidence. Required sessions are placed and rehomed only on capable relays. Reports carry
+  an assignment revision and a relay-process sequence so delayed notices and snapshots cannot
+  replace evidence from a newer connection or a different home assignment. Missing required evidence
+  is retryable because a provider can be temporarily unavailable; a supplied signature that fails
+  verification is terminal. Only valid evidence retains its body. A capability downgrade moves affected
+  sessions to a capable relay or retires them if no replacement exists, leaving unrelated sessions served.
+- **Periodic evidence is opt-in and cannot gate gameplay.** Client-edge `rp2/3` retains the initial
+  handshake stream for bounded challenge/response frames, with `rp2/2` and `rp2/1` fallbacks. A tenant
+  requests periodic collection explicitly; descriptors enable it only on relays advertising support.
+  Relays wait for session start and either a slot's start report or its relay-observed forwarded turns,
+  then jitter the first request by 35-65 seconds and subsequent requests by 60-90 seconds. An optional
+  slot whose admission supplied no evidence is not sampled; its missing admission remains visible.
+  A fixed full-image check uses a fresh nonce and nonzero challenge ID, signed with the connection,
+  session, slot, and assignment revision. Exchanges have a three-second deadline and share 32
+  relay-wide permits; a busy relay skips work. Clients share a 30-second cooldown and one blocking-
+  provider permit across reconnects. Timed-out running providers retain their permit until they return,
+  so reconnect admission can temporarily produce retryable missing evidence while a slow callback runs.
+  Qualify both frame impact and reconnect latency on slow supported clients before enabling collection.
+
+  The relay registers an exact outstanding obligation before sending a challenge. Disconnect or
+  replacement settles an unanswered obligation as missing; a late completion cannot overwrite it.
+  Missing samples distinguish no answer, timeout, connection closure, replacement, evidence-stream
+  closure, silence eviction, desync eviction, lagging isolation, lobby violation, and normal slot
+  departure. Shutdown causes are stamped before transport closure and fenced by the connection epoch. Assignment revocation, policy disablement, and session retirement cancel outstanding
+  checks without recording a client failure. These administrative cancellations do not enter history.
+  Normal departures remain current `slot_departed` samples but do not increment failure counts or
+  replace first/latest failures. Legacy summaries may already include departures and cannot be
+  retrospectively reclassified.
+  Each slot retains its first and latest failure with their original admissions and a saturating
+  cumulative count. Reconnects preserve that count; a subsequent valid answer does not erase it.
+
+  Historical pairs never establish current ownership. Live notices and heartbeat pairs require the
+  current assignment; independent reports may also use a retired assignment's authority. Rehome
+  retains the old slot, relay, process boot, and revision for ten minutes, bounded to four retired
+  assignments per slot and 64 per session. These records survive coordinator persistence; a legacy
+  persisted assignment without its process identity cannot grant historical authority, even for a
+  current-home report. The authenticated control generation and original process must still match.
+  Per-source count highwaters prevent retries, reconnects, and overlapping retired/current reports
+  from double-counting. Highwaters remain while their authority records remain; the slot's aggregate
+  survives their removal. Aggregate latest selection uses observation time, so an older old-home
+  report can increase its source's count without replacing a newer event. Equal times retain the
+  existing event; cross-host clock skew limits this ordering's precision.
+  This trusts the relay's report, not cryptographic proof that measurement
+  preceded revocation.
+
+  Failed or unanswered samples synchronously update a process-local relay outbox. Reports coalesce
+  per assignment; each update carries the complete first/latest/count summary. The outbox outlives
+  descriptors and control connections, retains at most 1,024 reports and 8 MiB of accounted encoded
+  data, and expires reports ten minutes after their last new failure. Snapshots never recreate a
+  removed report. Overflow preserves older entries and counts/logs losses. Selection rotates fairly
+  through up to 16 reports each second, with at least ten seconds between attempts per entry, including
+  after updates. Receipts match both the latest sample identity and cumulative count, so an older
+  receipt cannot delete a newer summary. Neither challenge issuance nor rehome waits for reporting.
+
+  Authenticated reports receive terminal dispositions for acceptance, already-covered reports,
+  closed sessions, or exhausted capacity. Closed-session receipts use an exact-authority tombstone
+  retained in memory for at most ten minutes, bounded to 4,096 sessions and 65,536 assignments; they
+  never restore evidence or acknowledge an unknown reporter. Invalid or unauthorized reports receive
+  no receipt. Receipts promise neither webhook delivery nor a durable write: a coordinator crash
+  before its normal persistence flush can lose acknowledged history, and relay process loss can lose
+  an unacknowledged outbox. Normal session close still removes evidence; tombstones authorize only
+  dropping reports. This is bounded first/latest history and repetition counts, not a sample journal.
+  Older peers retain their first-only behavior; cumulative counts and terminal dispositions require
+  updated peers. An older coordinator's receipt cannot clear a newer cumulative summary, which can
+  therefore expire during mixed-version operation. Interrupted challenges also occur on ordinary
+  network failure and are not themselves proof of cheating.
+
+  Unrecognized evidence verdicts or interruption causes decode to `Unrecognized` and discard only
+  their observation; heartbeat presence and lifecycle arrivals remain usable. Restoring a snapshot also drops unsupported
+  observations; a history containing an unknown value in any retained observation or source counter
+  is discarded as a whole because its contribution cannot be safely subtracted from the total.
+  Other lifecycle facts and known histories retain their counters. An unrecognized receipt disposition
+  retains the report for bounded retry rather than guessing whether handling was terminal. Unknown coordinator
+  message kinds are skipped with a warning and do not establish enrollment acceptance. Malformed known
+  messages end the connection so a full descriptor resync precedes further acknowledged deltas.
+  Producers can add enum variants without dropping control frames on readers with these catch-alls;
+  older readers still
+  require rollout order tenant ingestion, coordinator, then relay to avoid lost observations.
+  Coordinators with an older closed reason enum reject the whole control frame containing an unknown
+  variant, including a heartbeat, so they must be upgraded before relays emit these labels. Do not
+  roll back a coordinator beneath relays still emitting unsupported variants.
+
+  Collection never closes or fences gameplay. Current samples retain the registration, assignment,
+  control connection, relay process, and admission fences and cannot trigger load-progress callbacks.
+  Changed observations wake a coalesced writer; paired notices run below lifecycle and load-state work.
+  Each control connection sends each retained sample once as a notice and once in bounded heartbeat
+  recovery attachments. Heartbeats always carry the complete roster and rotate through at most 512 KiB
+  of attachments. A new control connection restates retained pairs; unchanged bodies are omitted from
+  subsequent beats. Webhook delivery has independent tenant/global budgets and outcome counters.
+  The global descriptor-change notification still wakes live samplers; per-session notification is a
+  scaling optimization, not a collection prerequisite.
+- **Empty sessions cannot pin the relay fleet indefinitely.** After observing any local or peer player
+  live, a relay uses its authoritative local roster plus explicit zero reports from every peer, so even an
+  assigned relay whose own slot never connected runs the ordinary close once the session transitions to
+  globally empty. A positive local report that beats its descriptor is retained until the order arrives.
+  Requiring actual prior activity is load-bearing because mesh joins exchange initial zeroes before clients
+  dial. Never-fully-started sessions close immediately after that live-to-empty signal
+  (nothing force-decides their holds, so deferral would be unbounded), while their holds still survive a
+  quick re-dial. The coordinator independently retires a session after 15 minutes if clients never
+  connect, or if complete generation-fenced heartbeats prove every assigned
+  relay continuously empty. Silence and legacy/partial rosters are unknown, never evidence of emptiness.
+- **Player tokens are finite (default 6h) and checked only at (re)connect;** mid-game expiry is
+  harmless. Escape hatch if marathon games ever matter: mint fresh tokens on the rehome response
+  (noted, not built).
+- **Rollout rollback = fix forward (SB-side).** The platform's user base is small enough that a bad
+  client rollout is corrected by shipping a fix, not by reverting the client; no formal rollback
+  gate (no signal/threshold/owner). Revisit only if the user base grows enough that a botched
+  rollout would be costly.
+- **Downlink coalescing (if ever built) must define its recovery-window vs byte budget at
+  implementation time** — low-stakes: the window is small and coalescing is weak-downlink-only.
+- **Re-carry redundancy is bounded by policy — a per-packet byte budget plus per-payload carry
+  spacing — never an unbounded window refill.** The unacked window scales with the path's round-trip
+  time (a payload stays in it until an ack returns), so an every-packet full-window refill spends the
+  most bytes exactly when a squeezed path can least afford them: a last-mile fade inflates RTT, the
+  window grows with it, bundles grow with the window, and the extra bytes deepen the very queue that
+  inflated RTT. The two bounds hold in different regimes and neither substitutes for the other. At a
+  **capacity-edge fade** (path throughput squeezed near the turn stream's own byte rate — the shape a
+  crushed congestion window over a bufferbloated last mile produces), the *spacing* is what keeps the
+  system stable: it converts window growth into flat redundancy load, where even a budget-capped
+  every-packet refill feeds the feedback loop until delivery runs seconds behind. The transport sim
+  tips into runaway at three dense carries and damps at two — the margin is thin, which is why the
+  dense phase is the minimum that still recovers an isolated loss on the very next packet. Below the
+  fresh stream's own byte rate (an outage-grade fade, where lockstep must stall regardless), spacing's
+  aggregate no longer converges — the due set grows with the window — and the *budget* is what still
+  bounds every bundle. **Liveness is load-bearing, and it is an ordering guarantee, not a fixed cadence:** a packet's
+  first redundancy element is exempt from the policy budget (a payload wider than the budget must
+  still be re-carryable — lockstep can never drop a turn), and when the due backlog outgrows what
+  the budget can serve per packet, the constrained refill serves the *longest-waiting* carry first.
+  That ranking key grows for a candidate that gets passed over, so every payload is served while any
+  redundancy flows at all — a ranking on any static property starves here, because continuous fresh
+  traffic introduces new better-ranked candidates every packet, parking an outranked payload below
+  the budget cutoff indefinitely while its seq gates the peer's delivered prefix. (A payload with no
+  recorded carry at all — a refused build, a re-home re-inject, a reset survivor — waits from its
+  registration instead of its last carry, so the same monotone key covers it: a *recurring* stream
+  of never-carried arrivals each starts its wait at zero and cannot indefinitely outrank a payload
+  whose wait keeps growing.) The head of that line gates the whole refill: when even the datagram
+  budget cannot fit the most overdue payload (a wide turn sharing a packet with a fresh one), the
+  packet carries **no redundancy at all**, because both drivers arm their maintenance flush exactly
+  when a send re-carries nothing, and the flush's fresh-free packet is the one place the wide
+  payload always fits — packing smaller candidates around a blocked head would reset that flush
+  from packets the head can never ride, stranding it behind continuous traffic. (The flush serves
+  it within one flush interval on the client edge and the relay's client-facing links; the mesh
+  checks per-session flush deadlines on a link-global maintenance pass serviced at the **top of
+  every driver-loop iteration** — not merely as a low-priority branch of its biased select, which
+  a saturated link's continuously-ready data branches could otherwise starve indefinitely — so its
+  healthy expectation is roughly two intervals even under sustained traffic. A stalled reliable
+  control stream can still hold one maintenance pass through its deadline-bounded writes — two in
+  sequence (presence, then ack cursors), each with a ten-second timeout, so a slow-but-successful
+  pair can approach twenty seconds — after which a timed-out write resets the link and the
+  reconnect path re-carries.) That flush always having room is itself guaranteed statically:
+  datagram payloads are admitted against a **fixed floor budget** (`GUARANTEED_DATAGRAM_BUDGET`),
+  never the live discovered `max_datagram_size()` — noq's black-hole detector shrinks the live
+  value back to the 1200-byte MTU floor under loss bursts, exactly the weather redundancy exists
+  for, and a payload admitted against a discovered budget could out-size every later packet,
+  flushes included, and strand silently. Each link type derives its admission number from the
+  floor: the client edge also pins the peer's advertised datagram limit (a handshake constant that
+  may legally be smaller than the floor, and which `payload_fits` and `send` must judge
+  identically — a fits-then-refused skew silently drops the fresh turn), and the mesh reserves the
+  wrapper costs riding every one of a session's packets, the `MeshPacket` overhead and the
+  session's tenant framing included. The pre-registration guards enforce **only** these stable
+  floors, never a re-sampled live budget: noq's connection driver can shrink the live value
+  between a caller's preflight and its send with no await between them, and a refusal there is
+  consumed as a recoverable race — so a floor-admitted payload whose transient envelope (a full
+  conditions sidecar on a fallen-back path) outgrows the datagram registers anyway, fails the
+  *datagram* send unrecorded, and rides the next sidecar-free flush. Payloads over the applicable
+  floor divert to the reliable control streams, which carry any size. Admission holds for a
+  connection's whole life because **every establishment path refuses an under-floor peer outright**
+  (`verify_datagram_budget`, run by the client dial, the relay's client accept, and both mesh
+  establishment directions): a peer whose advertised datagram limit undercuts the guaranteed floor
+  is an unsupported configuration, and refusing it at the door is strictly better than partially
+  serving it — a payload admitted on one connection could outgrow a later one, stranding it in an
+  unacked window whose link can no longer replay it. With the floor enforced at establishment,
+  every payload ever admitted for datagram carriage fits every packet of every connection the
+  session will use, rebinds included, so no rebind-time reclassification exists. On the mesh, the
+  floor check runs BEFORE the attempt claims the peer's link slot (`claim_verified_mesh_link`):
+  claiming supersedes and wakes the peer's current driver, so a refusal ordered after it would
+  kill a healthy mesh link and leave nothing serving the peer. Under saturation the wait scales with the backlog (bounded by the unacked-window cap)
+  rather than the spacing cap — a fixed cadence is impossible when redundancy service runs at or
+  below backlog growth, and most-overdue-first is also the right priority there, approximating the
+  oldest-first order the lockstep prefix actually needs. The delivery guarantee, stated
+  precisely: **while its session lives, every payload keeps being retried on a bounded cadence
+  over a path that can carry it** — datagram payloads by the refill and the flushes, oversize
+  turns by the reliable control streams — with retirement only ever peer-confirmed. Two scoped
+  qualifications. A re-home anchor's below-the-hole replays are discarded under conditions where
+  no peer still needs them (see the resume-anchor contiguity rules in the reconnect section). And
+  an oversize turn's cross-connection retry rides the retention ring, which is bounded (512 turns
+  / 256 KiB, drop-oldest) — so "while its session lives" holds for it only as far as the ring
+  reaches. That an evicted oversize turn is never one a peer still needs is a game-model fact,
+  not a transport invariant: lockstep stalls turn production behind an undelivered turn, so the
+  ring can only rotate hundreds of turns past one that every peer has already consumed.
+  Accepted trade:
+  burst-loss worst-case tails roughly double (a payload whose dense carries all died waits the
+  backoff before its next try) and a blackout's backlog drains over a few packets instead of one —
+  both priced by the buffer law's loss terms. The spacing counts turn-rate packets, so it gates only
+  packets carrying a fresh payload; a maintenance flush carries whatever the budget allows. A sender
+  stalled behind its own lost turns sends nothing but flushes, and gating them would stretch its
+  oldest lost turn's re-carry cadence to `max_spacing` flush intervals (1.2 s) after the path
+  recovers, while every peer waits on exactly that turn. Parameters live in
+  `RecarryPolicy::default`; the bench
+  for any retune is `transport/src/recarry_sim/`, which drives real `AckManager` pairs through
+  fade/burst/blackout scenarios and prints the comparison tables
+  (`cargo test -p rally-point-transport recarry_sim -- --ignored --nocapture`).
+- **Relay regions reach clients, but only after real play has elapsed, and the gate is wall-clock.**
+  Regions are placement state the control plane also publishes: the coordinator carries the whole
+  session's relay → region map down every serving relay's descriptor, and each relay releases it to
+  its own local clients as a `RegionLabels` control frame — but not until `REGION_LABEL_RELEASE_DELAY`
+  (10s) has elapsed **on that relay's own clock**, measured from when it latched the session started.
+  The gate is the entire point, not an optimization: the labels place every member geographically,
+  so a modified client able to read them earlier could see its opponents' regions and abandon the
+  match while it had barely begun. Nothing a client receives at dial or during lobby setup carries
+  a region.
+  **The gate must not be openable by any client-controllable input, which is why it is not measured
+  in game frames.** A turn's `game_frame_count` is a client-asserted claim, and the relay evaluates
+  the gate where it delivers turns — including turns that arrived over the mesh from *other* relays.
+  A frame-based gate would therefore let one client inflating its own claim unseal the labels on
+  every relay serving the session, its opponents' home relays included. It also would not be
+  rescued by assuming a fast departure gets scored: that is the app server's reconciliation policy,
+  not this repo's, and the gate exists to hold up even where an instant quit reconciles as a void.
+  Time-since-start on each relay's own clock has neither weakness, and is equally proof against the
+  opposite abuse — it is not tied to the session's slowest slot, so no one slot can withhold the
+  labels longer than it can withhold the visibly-stalled game.
+  Accepted trade-off: a re-home replacement relay latches started when it adopts the session, so it
+  re-conceals for one delay period. Clients keep the map they already hold, so the only cost is that
+  a map *changed* by the re-home lands one delay later — cheaper than trusting an inherited start
+  time a fresh relay cannot verify. No mesh frame carries the map: every serving relay already has
+  it from its own descriptor.

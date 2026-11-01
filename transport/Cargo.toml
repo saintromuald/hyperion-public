@@ -1,0 +1,55 @@
+[package]
+name = "rally-point-transport"
+description = "Per-link reliable delivery over unreliable QUIC datagrams (ack manager + sequence buffer), shared by the client and relay."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+rally-point-proto = { workspace = true }
+# Used to measure the encoded size of wire messages when sizing a datagram's
+# redundancy bundle, and for the `Message` trait on the generated types.
+prost = { workspace = true }
+thiserror = { workspace = true }
+# The QUIC stack the per-link transport runs on, plus its TLS config. Pinned to
+# the ring crypto provider so this (and the client that links it) builds for the
+# 32-bit game DLL without a C/NASM toolchain.
+noq = { workspace = true }
+rustls = { workspace = true }
+# Only for the `RttEstimator` type the congestion controller wrapper in `quic`
+# forwards to noq's Cubic (noq doesn't re-export it).
+noq-proto = { workspace = true }
+# Only for `quic::cert_fingerprint` (the SHA-256 the mesh-accept path pins a
+# dialing peer's certificate against). Already compiled into this crate
+# transitively as rustls's pinned crypto provider (see the provider note
+# below); this just gives our own code an explicit edge to call it.
+ring = { workspace = true }
+# The beacon side-channel's read-loop task and channel. Needed by the shared
+# `beacon` module used by both the client and relay drivers.
+tokio = { workspace = true }
+# Structured logging in the beacon read loop (malformed-frame diagnostics).
+tracing = { workspace = true }
+# Self-signed certs for the `test-util` loopback fixtures dependents' tests use.
+rcgen = { workspace = true, optional = true }
+
+[features]
+# Exposes `test_util` (self-signed certs + loopback QUIC pairs) and the
+# harness-only helpers scattered through the crate to dependents' tests. Never
+# enabled by a production build.
+test-util = ["dep:rcgen"]
+
+[dev-dependencies]
+# Self-signed certs for the loopback QUIC tests.
+rcgen = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "hot_paths"
+harness = false

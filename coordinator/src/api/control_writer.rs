@@ -1,0 +1,722 @@
+//! The writer half of a relay control connection: every coordinator→relay send.
+//!
+//! Owns the connect-time lead, the `biased` priority loop over the outbound
+//! sources, the descriptor delta/full-set decision, reap coalescing, and the
+//! per-send stall bound that tears down a relay which reads nothing.
+
+use std::time::Duration;
+
+use axum::extract::ws::{CloseFrame, Message};
+use futures_util::SinkExt;
+use rally_point_proto::control::{
+    CoordinatorToRelay, DescriptorKey, MeshPeerIdentity, RegionBeaconTarget, SessionDescriptor,
+    TenantVerifyingKey,
+};
+use rally_point_proto::ids::RelayId;
+use rally_point_proto::time::unix_millis;
+use rally_point_proto::version::{CONTROL_CLOSE_RETIRED, ProtocolVersion};
+
+use crate::attest::LoadStateAsk;
+use crate::descriptors::SlotClose;
+use crate::regions::RegionsConfig;
+use crate::registry;
+use crate::session::SessionSetup;
+use crate::tenant;
+
+use super::control::DrainSend;
+
+/// The writer half's outbound sources: the per-relay descriptor and reap outboxes,
+/// the fleet mesh-peer watch, the reader's drain-exchange directives, and the
+/// connect-time payloads led out ahead of any steady-state push. Bundled because
+/// they are all consumed by the one writer and nowhere else, so they are moved in
+/// together and owned for the connection's life.
+pub(super) struct WriterSources {
+    /// This relay's current descriptor set, latest-wins, re-synced on connect and
+    /// pushed on every change.
+    descriptors: tokio::sync::watch::Receiver<Vec<SessionDescriptor>>,
+    delivery: Option<DescriptorDeliveryConnection>,
+    /// The fleet mesh-peer set, shared across every connection and pushed on
+    /// membership changes.
+    mesh_peers: tokio::sync::watch::Receiver<Vec<MeshPeerIdentity>>,
+    /// This relay's reap directives, coalesced per session before each is sent.
+    reaps: tokio::sync::mpsc::UnboundedReceiver<SlotClose>,
+    /// Load-state questions addressed to this relay, each answered with one request
+    /// frame down the connection.
+    load_state: tokio::sync::mpsc::Receiver<LoadStateAsk>,
+    /// The attestation broker the questions above come from, so the writer can drop
+    /// one whose waiter has already gone before spending a frame on it.
+    attest: crate::attest::LoadStateAttest,
+    /// The reader's directives to emit a drain exchange's set-then-ack.
+    drain: tokio::sync::mpsc::UnboundedReceiver<DrainSend>,
+    /// Ready flight-upload grant/refusal frames the reader minted (a presign runs off
+    /// the read loop and pushes its result here), forwarded to the relay verbatim.
+    grants: tokio::sync::mpsc::UnboundedReceiver<CoordinatorToRelay>,
+    /// The tenant verifying keys, led out first so a relay can verify a session's
+    /// client tokens before that session's descriptor arrives.
+    tenant_keys: Vec<TenantVerifyingKey>,
+    /// Bounded, connection-local receipts; observation delivery yields to fleet work.
+    evidence_receipts:
+        Option<tokio::sync::mpsc::Receiver<rally_point_proto::control::EvidenceReceipt>>,
+    /// The region ping-beacon targets, led out after the keys; empty on a
+    /// region-blind coordinator.
+    beacon_targets: Vec<RegionBeaconTarget>,
+}
+
+struct DescriptorDeliveryConnection {
+    delivery: crate::descriptors::DescriptorDelivery,
+    relay: RelayId,
+    generation: u64,
+}
+
+impl DescriptorDeliveryConnection {
+    fn stamp(&self, set: &[SessionDescriptor]) -> Option<u64> {
+        self.delivery.sent(self.relay, self.generation, set)
+    }
+}
+
+impl Drop for DescriptorDeliveryConnection {
+    fn drop(&mut self) {
+        self.delivery.end(self.relay, self.generation);
+    }
+}
+
+impl WriterSources {
+    pub(super) fn with_evidence_receipts(
+        mut self,
+        receipts: tokio::sync::mpsc::Receiver<rally_point_proto::control::EvidenceReceipt>,
+    ) -> Self {
+        self.evidence_receipts = Some(receipts);
+        self
+    }
+
+    /// Only an opted-in, current connection receives acknowledgement requests.
+    /// Replacing the connection invalidates every proof from its predecessor.
+    pub(super) fn enable_acknowledgements(
+        &mut self,
+        setup: &SessionSetup,
+        relay: RelayId,
+        generation: u64,
+    ) -> bool {
+        let _assignment = setup.lock_assignment();
+        let Some((entry, current)) = registry::entry_with_generation(setup.registry(), relay)
+        else {
+            return false;
+        };
+        if current != generation {
+            return false;
+        }
+        if !entry
+            .capabilities
+            .iter()
+            .any(|c| c == rally_point_proto::control::CAPABILITY_DESCRIPTOR_ACK_V1)
+        {
+            return true;
+        }
+        let delivery = setup.descriptors().delivery().clone();
+        if !delivery.begin(relay, generation) {
+            return false;
+        }
+        self.delivery = Some(DescriptorDeliveryConnection {
+            delivery,
+            relay,
+            generation,
+        });
+        true
+    }
+
+    /// Subscribes this connection to every coordinator→relay source the writer
+    /// draws from, and snapshots the connect-time lead.
+    ///
+    /// The descriptor and reap outboxes' fresh subscribes replace any prior
+    /// sender, so a reconnect owns the live receivers; the mesh-peer watch is
+    /// shared across every connection. The tenant keys and region beacons are
+    /// immutable per process, snapshotted here and led out ahead of the first
+    /// descriptor (a relay that reconnects re-receives them). Only `drain` and
+    /// `grants` are passed in — they are the reader's ends of two channels this
+    /// connection creates.
+    pub(super) fn new(
+        setup: &SessionSetup,
+        relay_id: RelayId,
+        regions: &RegionsConfig,
+        drain: tokio::sync::mpsc::UnboundedReceiver<DrainSend>,
+        grants: tokio::sync::mpsc::UnboundedReceiver<CoordinatorToRelay>,
+    ) -> Self {
+        Self {
+            descriptors: setup.descriptors().subscribe(relay_id),
+            delivery: None,
+            evidence_receipts: None,
+            mesh_peers: registry::subscribe_mesh_peers(setup.registry()),
+            reaps: setup.reaps().subscribe(relay_id),
+            load_state: setup.attest().subscribe(relay_id),
+            attest: setup.attest().clone(),
+            drain,
+            grants,
+            tenant_keys: tenant::all_verifying_keys(setup.tenants()),
+            beacon_targets: regions.beacon_targets(),
+        }
+    }
+}
+
+/// Owns the write half and every coordinator→relay send. Leads with the
+/// connect-time sequence in a fixed order — tenant keys, region beacons (when any),
+/// the initial descriptor set, the initial mesh-peer set — strictly before any
+/// steady-state push, then serves a `biased` priority loop: the drain exchange
+/// first, then the latest-wins descriptor watch, the mesh-peer watch, the
+/// flight-upload grants, the reap receiver, load-state questions, and evidence
+/// receipts last. The arms above load-state are fleet machinery whose delay costs
+/// a relay correctness or a session its teardown; a load-state question is
+/// tenant-driven, arrives in bursts,
+/// and is cheap for its caller to repeat, so it yields to all of them — and a
+/// question whose waiter has since gone is dropped rather than sent. Returns (ending
+/// the connection) when a send stalls or errors, the relay's id is retired (after a
+/// [`CONTROL_CLOSE_RETIRED`] close), the mesh-peer watch closes on shutdown, or the
+/// reader ends.
+///
+/// The connect-time descriptor set is always the full set (it seeds the relay's
+/// baseline), but the steady-state descriptor arm sends only what changed — a
+/// [`CoordinatorToRelay::DescriptorDelta`] — to a relay whose `negotiated` version
+/// supports it, falling back to the full set for an older relay. `last_sent` tracks
+/// the set the relay currently holds so each delta diffs against exactly that.
+///
+/// Generic over the sink, like [`writer_send`], so a test can watch which frames
+/// a given ending sends; the connection itself passes its socket's write half.
+pub(super) async fn run_writer<S>(
+    write_half: &mut S,
+    sources: &mut WriterSources,
+    relay_id: RelayId,
+    liveness_timeout: Duration,
+    negotiated: ProtocolVersion,
+) where
+    S: futures_util::Sink<Message> + Unpin,
+    S::Error: std::fmt::Display,
+{
+    // Split the sources into the individual channels + payloads the loop drives;
+    // they are disjoint fields, so each arm borrows its own.
+    let WriterSources {
+        descriptors: rx,
+        delivery,
+        mesh_peers: mesh_peers_rx,
+        reaps,
+        load_state: load_state_rx,
+        attest,
+        drain: drain_rx,
+        grants: grants_rx,
+        tenant_keys,
+        beacon_targets,
+        evidence_receipts,
+    } = sources;
+    // Tenant keys first — a descriptor is meaningless to a relay that cannot yet
+    // verify the session's client tokens.
+    let keys_frame = control_frame(&CoordinatorToRelay::TenantKeys {
+        keys: tenant_keys.to_vec(),
+    });
+    if !writer_send(
+        write_half,
+        keys_frame,
+        relay_id,
+        liveness_timeout,
+        "tenant-keys",
+    )
+    .await
+    {
+        return;
+    }
+    // Region beacons only when the coordinator configures regions: a region-blind
+    // fleet has none to measure, so the frame stays off its connections entirely.
+    if !beacon_targets.is_empty() {
+        let beacons_frame = control_frame(&CoordinatorToRelay::RegionBeacons {
+            beacons: beacon_targets.to_vec(),
+        });
+        if !writer_send(
+            write_half,
+            beacons_frame,
+            relay_id,
+            liveness_timeout,
+            "region-beacons",
+        )
+        .await
+        {
+            return;
+        }
+    }
+    // The initial descriptor and mesh-peer re-syncs. Clone each set out of its watch
+    // borrow before awaiting — a watch borrow must never be held across an await —
+    // and mark it seen so the steady-state arm does not redundantly re-push it.
+    //
+    // The connect-time descriptor re-sync is always the full set, whatever the
+    // negotiated version: it is the baseline every later delta on this connection
+    // diffs against, so `last_sent` is seeded from it before it goes out.
+    let initial = rx.borrow_and_update().clone();
+    let mut last_sent = index_descriptors(&initial);
+    let Ok(ack_id) = stamp_delivery(delivery, &initial) else {
+        return;
+    };
+    if !writer_send(
+        write_half,
+        descriptors_frame(initial, ack_id),
+        relay_id,
+        liveness_timeout,
+        "descriptor",
+    )
+    .await
+    {
+        return;
+    }
+    let initial_peers = mesh_peers_rx.borrow_and_update().clone();
+    if !writer_send(
+        write_half,
+        control_frame(&CoordinatorToRelay::MeshPeers {
+            peers: initial_peers,
+        }),
+        relay_id,
+        liveness_timeout,
+        "mesh-peers",
+    )
+    .await
+    {
+        return;
+    }
+
+    let exit = loop {
+        tokio::select! {
+            biased;
+
+            directive = drain_rx.recv() => {
+                // The reader marked the relay draining and asked for the exchange's
+                // send half. `None` means the reader ended, so this half ends too.
+                if directive.is_none() {
+                    break LoopExit::SourceClosed;
+                }
+                // Set before ack. `borrow_and_update` reads the latest set — which
+                // already reflects every descriptor staged before the reader's
+                // assignment-locked mark — and marks it seen so the descriptor arm
+                // does not redundantly re-push the same set right after. The drain
+                // exchange always pushes the full set (rare, and self-verifying on
+                // the relay), whatever the negotiated version, and refreshes the
+                // baseline from it so a later steady-state delta diffs against what
+                // the relay actually now holds.
+                let set = rx.borrow_and_update().clone();
+                let Ok(ack_id) = stamp_delivery(delivery, &set) else {
+                    break LoopExit::SourceClosed;
+                };
+                if !writer_send(
+                    write_half,
+                    descriptors_frame(set.clone(), ack_id),
+                    relay_id,
+                    liveness_timeout,
+                    "descriptor",
+                )
+                .await
+                {
+                    break LoopExit::SendFailed;
+                }
+                last_sent = index_descriptors(&set);
+                if !writer_send(
+                    write_half,
+                    control_frame(&CoordinatorToRelay::DrainAck),
+                    relay_id,
+                    liveness_timeout,
+                    "drain-ack",
+                )
+                .await
+                {
+                    break LoopExit::SendFailed;
+                }
+            }
+            changed = rx.changed() => {
+                if changed.is_err() {
+                    // Retired: the close goes out below the loop.
+                    break LoopExit::SourceClosed;
+                }
+                let set = rx.borrow_and_update().clone();
+                if !send_descriptor_change(
+                    write_half,
+                    &mut last_sent,
+                    delivery,
+                    set,
+                    negotiated,
+                    relay_id,
+                    liveness_timeout,
+                )
+                .await
+                {
+                    break LoopExit::SendFailed;
+                }
+            }
+            changed = mesh_peers_rx.changed() => {
+                if changed.is_err() {
+                    // The registry's mesh-peer channel was dropped: shutting down.
+                    break LoopExit::SourceClosed;
+                }
+                let peers = mesh_peers_rx.borrow_and_update().clone();
+                if !writer_send(
+                    write_half,
+                    control_frame(&CoordinatorToRelay::MeshPeers { peers }),
+                    relay_id,
+                    liveness_timeout,
+                    "mesh-peers",
+                )
+                .await
+                {
+                    break LoopExit::SendFailed;
+                }
+            }
+            grant = grants_rx.recv() => {
+                // A ready flight-upload grant or refusal the reader (or a presign it
+                // spawned) minted. `None` means every sender is gone — the reader ended
+                // and no presign is still in flight — so this half ends too.
+                let Some(grant) = grant else { break LoopExit::SourceClosed };
+                if !writer_send(
+                    write_half,
+                    control_frame(&grant),
+                    relay_id,
+                    liveness_timeout,
+                    "flight-grant",
+                )
+                .await
+                {
+                    break LoopExit::SendFailed;
+                }
+            }
+            first = reaps.recv() => {
+                // The reap outbox never closes on its own (the sender lives in the
+                // shared outbox), so `None` here means a replaced subscription or
+                // a retirement — end-of-stream either way; the exit check below
+                // tells them apart.
+                let Some(first) = first else { break LoopExit::SourceClosed };
+                if !send_coalesced_reaps(write_half, reaps, first, relay_id, liveness_timeout).await
+                {
+                    break LoopExit::SendFailed;
+                }
+            }
+            ask = load_state_rx.recv() => {
+                // A load-state question for this relay, from a tenant read blocked on
+                // the answer. `None` means the broker replaced this connection's
+                // channel (a reconnect took over) or the relay was retired, so this
+                // half ends too.
+                //
+                // Below fleet work and above best-effort evidence receipts. Each
+                // arm above it is the fleet's own
+                // machinery — a drain exchange, the descriptor set, the mesh-peer
+                // set, an upload grant, a reap directive — where a delayed frame
+                // costs a relay correctness or a session its teardown. A load-state
+                // read is tenant-driven, arrives in bursts, and is cheap to repeat,
+                // so it yields to all of them.
+                let Some(ask) = ask else { break LoopExit::SourceClosed };
+                // A question nobody is waiting for is not worth a frame or the
+                // relay's fence: the read that made it timed out, or its HTTP
+                // request was cancelled, and either retires the request as it
+                // leaves. Queued asks outlive their waiters precisely because this
+                // arm yields to everything above it.
+                if !attest.is_pending(ask.request_id) {
+                    continue;
+                }
+                let frame = control_frame(&CoordinatorToRelay::LoadStateRequest {
+                    tenant: ask.tenant,
+                    session: ask.session,
+                    request_id: ask.request_id,
+                    settle_lobby: ask.settle_lobby,
+                });
+                if !writer_send(write_half, frame, relay_id, liveness_timeout, "load-state-request")
+                    .await
+                {
+                    break LoopExit::SendFailed;
+                }
+            }
+            receipt = async {
+                match evidence_receipts {
+                    Some(receiver) => receiver.recv().await,
+                    None => std::future::pending().await,
+                }
+            } => {
+                let Some(receipt) = receipt else {
+                    *evidence_receipts = None;
+                    continue;
+                };
+                if !writer_send(
+                    write_half,
+                    control_frame(&CoordinatorToRelay::EvidenceReceipt(receipt)),
+                    relay_id,
+                    liveness_timeout,
+                    "evidence-receipt",
+                ).await {
+                    break LoopExit::SendFailed;
+                }
+            }
+        }
+    };
+
+    // The descriptor channel outlives every connection and only `forget` closes
+    // it, so a closed one at exit means this relay's id was just retired. Say so
+    // rather than dropping the socket, so the relay reads the end of its life as
+    // one and not as a fault to redial. Checked here, not in the descriptor arm,
+    // because `forget` also closes the reap and load-state channels, and on a
+    // multi-thread runtime either may be observed first: `biased` orders the
+    // polls within one pass, not the channels' closures between them. A replaced
+    // subscription leaves the descriptor channel open, so it still ends bare.
+    if matches!(exit, LoopExit::SourceClosed) && rx.has_changed().is_err() {
+        let _ = writer_send(
+            write_half,
+            Message::Close(Some(CloseFrame {
+                code: CONTROL_CLOSE_RETIRED,
+                reason: "relay retired".into(),
+            })),
+            relay_id,
+            liveness_timeout,
+            "retired-close",
+        )
+        .await;
+    }
+}
+
+/// Why [`run_writer`]'s steady-state loop ended: a source it drains closed (the
+/// reader ended, a subscription was replaced, or the relay was retired), or a send
+/// failed or stalled — after which the socket is not worth another send.
+enum LoopExit {
+    SourceClosed,
+    SendFailed,
+}
+
+/// Coalesces a burst of reap nudges into one `CloseSlot` frame per session, then
+/// sends them. When the reap arm wakes with `first`, every other nudge already
+/// queued is drained and deduped by `(tenant, session)` keeping the **last** — each
+/// nudge carries the merged-so-far slot union for its session, so the last is the
+/// most complete — collapsing a teardown storm's hundreds of redundant nudges into
+/// at most one frame per session per wake. Returns whether the connection should
+/// keep running.
+async fn send_coalesced_reaps<S>(
+    write_half: &mut S,
+    reaps: &mut tokio::sync::mpsc::UnboundedReceiver<SlotClose>,
+    first: SlotClose,
+    relay_id: RelayId,
+    liveness_timeout: Duration,
+) -> bool
+where
+    S: futures_util::Sink<Message> + Unpin,
+    S::Error: std::fmt::Display,
+{
+    let mut received: u64 = 1;
+    let mut latest: std::collections::BTreeMap<(String, u64), SlotClose> =
+        std::collections::BTreeMap::new();
+    latest.insert((first.tenant.as_ref().to_owned(), first.session.0), first);
+    while let Ok(next) = reaps.try_recv() {
+        received += 1;
+        latest.insert((next.tenant.as_ref().to_owned(), next.session.0), next);
+    }
+    let unique = latest.len() as u64;
+    crate::metrics::reap_nudges_coalesced(received - unique);
+    for (_, close) in latest {
+        let frame = control_frame(&CoordinatorToRelay::CloseSlot {
+            tenant: close.tenant,
+            session: close.session,
+            slots: close.slots,
+        });
+        if !writer_send(write_half, frame, relay_id, liveness_timeout, "close-slot").await {
+            return false;
+        }
+        crate::metrics::reap_directives_sent(1);
+    }
+    true
+}
+
+/// Serializes a coordinator→relay control message into its tagged JSON text frame.
+fn control_frame(message: &CoordinatorToRelay) -> Message {
+    let json =
+        serde_json::to_string(message).expect("a coordinator control frame always serializes");
+    Message::Text(json.into())
+}
+
+fn stamp_delivery(
+    delivery: &Option<DescriptorDeliveryConnection>,
+    set: &[SessionDescriptor],
+) -> Result<Option<u64>, ()> {
+    match delivery {
+        None => Ok(None),
+        Some(connection) => connection.stamp(set).map(Some).ok_or(()),
+    }
+}
+
+/// Builds a `Descriptors` control frame, stamping the coordinator's wall-clock at
+/// the moment the set snapshot leaves the outbox so the relay can measure how far
+/// its apply lags staging. Called at each `borrow_and_update` site — the
+/// connect-time resync, the steady-state change arm, and the drain exchange's set
+/// push — so every descriptor push carries a fresh stamp.
+fn descriptors_frame(descriptors: Vec<SessionDescriptor>, ack_id: Option<u64>) -> Message {
+    control_frame(&CoordinatorToRelay::Descriptors {
+        ack_id,
+        descriptors,
+        staged_at_unix_ms: Some(unix_millis()),
+    })
+}
+
+/// Emits one steady-state descriptor change on the write half. A relay whose
+/// negotiated version supports deltas receives only what changed since the last
+/// send — a [`CoordinatorToRelay::DescriptorDelta`] diffed against `last_sent` by
+/// `(tenant, session)` and by value (so an in-place descriptor mutation surfaces as
+/// an upsert) — and nothing at all when the set is unchanged. An older relay
+/// receives the whole set, exactly as every steady-state push did before deltas
+/// existed. `last_sent` advances to the current set only after a delta send
+/// succeeds, so it always mirrors what the relay actually holds. Returns whether the
+/// connection should keep running.
+async fn send_descriptor_change<S>(
+    write_half: &mut S,
+    last_sent: &mut std::collections::HashMap<DescriptorKey, SessionDescriptor>,
+    delivery: &Option<DescriptorDeliveryConnection>,
+    set: Vec<SessionDescriptor>,
+    negotiated: ProtocolVersion,
+    relay_id: RelayId,
+    liveness_timeout: Duration,
+) -> bool
+where
+    S: futures_util::Sink<Message> + Unpin,
+    S::Error: std::fmt::Display,
+{
+    let Ok(ack_id) = stamp_delivery(delivery, &set) else {
+        return false;
+    };
+    if negotiated < ProtocolVersion::DESCRIPTOR_DELTA_MIN {
+        // An older relay decodes a DescriptorDelta as an unknown frame and would
+        // silently drift, so it always gets the whole current set. Its baseline is
+        // never diffed, so there is nothing to advance.
+        if !writer_send(
+            write_half,
+            descriptors_frame(set.clone(), ack_id),
+            relay_id,
+            liveness_timeout,
+            "descriptor",
+        )
+        .await
+        {
+            return false;
+        }
+        crate::metrics::descriptor_full_set_sent();
+        return true;
+    }
+
+    let (upserts, removals) = diff_descriptors(last_sent, &set);
+    if upserts.is_empty() && removals.is_empty() && delivery.is_none() {
+        // The relay already holds exactly this set — a coalesced wake that produced
+        // no net change. An empty delta would be pure overhead, so send nothing and
+        // leave the metrics untouched.
+        return true;
+    }
+    let upsert_count = upserts.len();
+    let removal_count = removals.len();
+    // A remove/re-add can coalesce to the same set while invalidating its proof.
+    // An empty delta still requests a fresh acknowledgement on capable relays.
+    let frame = control_frame(&CoordinatorToRelay::DescriptorDelta {
+        ack_id,
+        staged_at_unix_ms: Some(unix_millis()),
+        upserts,
+        removals,
+    });
+    if !writer_send(
+        write_half,
+        frame,
+        relay_id,
+        liveness_timeout,
+        "descriptor-delta",
+    )
+    .await
+    {
+        return false;
+    }
+    // The send landed, so the relay now holds this set: advance the baseline to it,
+    // keeping the update ordered strictly after the successful send.
+    *last_sent = index_descriptors(&set);
+    crate::metrics::descriptor_delta_sent(upsert_count, removal_count);
+    true
+}
+
+/// Diffs the descriptor set the relay currently holds (`last_sent`, keyed by
+/// `(tenant, session)`) against the coordinator's `current` set, producing the
+/// upserts and removals a [`CoordinatorToRelay::DescriptorDelta`] carries. A session
+/// present in `current` is an upsert when the relay holds no descriptor for it or
+/// holds one that differs by value — so an in-place mutation (a rehomed
+/// `homed_slots`, say) surfaces even though its key is unchanged. A session the
+/// relay holds but `current` no longer names is a removal.
+pub(super) fn diff_descriptors(
+    last_sent: &std::collections::HashMap<DescriptorKey, SessionDescriptor>,
+    current: &[SessionDescriptor],
+) -> (Vec<SessionDescriptor>, Vec<DescriptorKey>) {
+    let mut upserts = Vec::new();
+    let mut current_keys = std::collections::HashSet::with_capacity(current.len());
+    for descriptor in current {
+        let key = DescriptorKey {
+            tenant: descriptor.tenant.clone(),
+            session: descriptor.session,
+        };
+        if last_sent.get(&key) != Some(descriptor) {
+            upserts.push(descriptor.clone());
+        }
+        current_keys.insert(key);
+    }
+    let removals = last_sent
+        .keys()
+        .filter(|key| !current_keys.contains(*key))
+        .cloned()
+        .collect();
+    (upserts, removals)
+}
+
+/// Indexes a full descriptor set by `(tenant, session)` — the baseline a later
+/// [`CoordinatorToRelay::DescriptorDelta`] diffs against. Owns a clone of each
+/// descriptor so the baseline is a stable snapshot of exactly what the relay was
+/// sent, independent of the coordinator's live set.
+pub(super) fn index_descriptors(
+    set: &[SessionDescriptor],
+) -> std::collections::HashMap<DescriptorKey, SessionDescriptor> {
+    set.iter()
+        .map(|d| {
+            (
+                DescriptorKey {
+                    tenant: d.tenant.clone(),
+                    session: d.session,
+                },
+                d.clone(),
+            )
+        })
+        .collect()
+}
+
+/// Sends one frame on the write half, racing a fixed per-send stall bound measured
+/// from this send's start and recording the send's duration. The bound is fixed
+/// (not a reader-refreshed deadline) so a relay that keeps heartbeating but stops
+/// reading — refreshing the reader's deadline forever — still cannot hold its
+/// registry entry open: its stalled send trips this bound instead. Returns whether
+/// the connection should keep running: `false` on a stall past `liveness_timeout`
+/// or a socket error, which ends it. `what` names the frame for the log line.
+///
+/// Generic over the sink so the bound can be asserted against a send that never
+/// completes, which a real socket cannot be made to do on demand; the connection
+/// itself passes its socket's write half.
+pub(super) async fn writer_send<S>(
+    write_half: &mut S,
+    message: Message,
+    relay_id: RelayId,
+    liveness_timeout: Duration,
+    what: &str,
+) -> bool
+where
+    S: futures_util::Sink<Message> + Unpin,
+    S::Error: std::fmt::Display,
+{
+    let started = tokio::time::Instant::now();
+    let outcome = tokio::time::timeout(liveness_timeout, write_half.send(message)).await;
+    crate::metrics::observe_control_send(started.elapsed().as_millis() as u64);
+    match outcome {
+        Ok(Ok(())) => true,
+        Ok(Err(error)) => {
+            tracing::debug!(%error, relay_id = relay_id.0, "{what} push failed");
+            false
+        }
+        Err(_elapsed) => {
+            tracing::info!(
+                relay_id = relay_id.0,
+                "{what} push stalled past the liveness deadline; dropping",
+            );
+            crate::metrics::control_connection_ended("write_stall");
+            false
+        }
+    }
+}

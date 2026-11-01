@@ -1,0 +1,389 @@
+//! Mesh control frames that fan out to this relay's own local members: lobby
+//! commands, chat, cosmetic skins and slot connectivity — none of which is
+//! ever echoed back across the mesh — and the connection-epoch fence that
+//! keeps a stale teardown off a reconnected slot.
+
+use super::*;
+
+/// Every frame kind a peer relay's dispatch folds into this relay's own local
+/// delivery behaves the same way: the origin member's authoritative slot is
+/// preserved verbatim, the frame reaches whichever local registry owns that
+/// kind, and nothing goes back out to the mesh on either path — the origin
+/// relay already sent a copy to every link serving the session, so re-flooding
+/// would only echo.
+///
+/// What differs per kind is only the recipient and the extra effect: a lobby
+/// command is appended to the replay log, a chat message carries scope fields
+/// the relay never interprets, a skin blob is stored so a member joining later
+/// replays it, and a connectivity change reaches a routing slot rather than a
+/// lobby/chat member (connectivity is a client-edge concern).
+#[test]
+fn a_peer_relays_local_fan_out_frames_deliver_locally_and_never_echo() {
+    let sessions: routing::Sessions = Arc::default();
+    let mesh_state = test_mesh_state();
+    let key = control_key();
+
+    // One local member per registry a dispatch can fan to (slot 5), plus the
+    // routing slot a connectivity change reaches.
+    let mut lobby_member = mesh_state
+        .session
+        .side_channels
+        .lobby
+        .register_member(&key, SlotId(5));
+    let mut chat_member = mesh_state
+        .session
+        .side_channels
+        .chat
+        .register_member(&key, SlotId(5));
+    let mut skin_member = mesh_state
+        .session
+        .side_channels
+        .skins
+        .register_member(&key, SlotId(5));
+    let (mut guard, mut inbox) =
+        routing::register(&sessions, &key, SlotId(5), 1).expect("slot 5 registers");
+    guard.disarm();
+    // A peer mesh link that must NOT hear an echo of anything received.
+    let (mut echo_fwd_rx, mut echo_ctl_rx) = register_link_channels(&mesh_state.links, &key);
+    let joined = joined_state(&mesh_state.links, &key);
+
+    let dispatch = |kind| {
+        dispatch_mesh_control(
+            MeshControlFrame {
+                session: key.session.0,
+                kind: Some(kind),
+            },
+            RelayId(9),
+            0,
+            &joined,
+            &sessions,
+            &mesh_state,
+        );
+    };
+
+    // A lobby command a remote member (slot 0) authored, already slot-stamped.
+    dispatch(mesh_control_frame::Kind::LobbyCommand(LobbyCommand {
+        slot: 0,
+        payload: vec![0xAB].into(),
+        seq: None,
+    }));
+    let delivered = lobby_member
+        .try_recv()
+        .expect("the local member received the lobby command");
+    assert_eq!(delivered.slot, 0);
+    assert_eq!(delivered.payload.as_ref(), &[0xAB]);
+
+    // A chat message, whose scope fields must arrive intact.
+    dispatch(mesh_control_frame::Kind::GameChat(GameChat {
+        slot: 0,
+        target_kind: 2,
+        target_slot: 0,
+        text: "hi from relay A".to_owned(),
+    }));
+    let delivered = chat_member
+        .try_recv()
+        .expect("the local member received the chat message");
+    assert_eq!(delivered.slot, 0);
+    assert_eq!(delivered.target_kind, 2);
+    assert_eq!(delivered.text, "hi from relay A");
+
+    // A cosmetic skin blob, which is also stored per slot.
+    dispatch(mesh_control_frame::Kind::PlayerSkin(PlayerSkin {
+        slot: 0,
+        payload: vec![0xDE, 0xAD].into(),
+    }));
+    let delivered = skin_member
+        .try_recv()
+        .expect("the local member received the skin blob");
+    assert_eq!(delivered.slot, 0);
+    assert_eq!(delivered.payload.as_ref(), &[0xDE, 0xAD]);
+    let mut late = mesh_state
+        .session
+        .side_channels
+        .skins
+        .register_member(&key, SlotId(6));
+    let replayed = late
+        .try_recv()
+        .expect("a member joining afterwards replays the stored blob");
+    assert_eq!(replayed.slot, 0);
+    assert_eq!(replayed.payload.as_ref(), &[0xDE, 0xAD]);
+
+    // A remote relay reporting that its home client (slot 0) lost its link.
+    dispatch(mesh_control_frame::Kind::SlotConnectivity(
+        SlotConnectivity {
+            slot: 0,
+            connected: false,
+            connection_epoch: None,
+        },
+    ));
+    assert_eq!(
+        inbox.try_recv_connectivity(),
+        Some((SlotId(0), false)),
+        "the mesh connectivity change fanned to the local routing slot",
+    );
+
+    // Not one of the four went back out to the mesh.
+    assert!(echo_fwd_rx.try_recv().is_err(), "no datagram-path echo");
+    assert!(echo_ctl_rx.try_recv().is_err(), "no control-stream echo");
+}
+
+#[test]
+fn peer_lobby_mismatch_is_dropped_without_eviction_or_replay() {
+    use rally_point_proto::control::{AllowedLobbyCommand, BufferBounds, LobbyPolicy};
+
+    let sessions: routing::Sessions = Arc::default();
+    let mesh_state = test_mesh_state();
+    let key = control_key();
+    let makers = &mesh_state.session.decision_makers;
+    let _ = makers.sync_maker(
+        &key,
+        crate::consensus::MakerSync {
+            lobby_policy: Some(LobbyPolicy {
+                allowed: vec![AllowedLobbyCommand {
+                    slot: SlotId(0),
+                    payload: vec![0xAB],
+                }],
+            }),
+            ..crate::consensus::MakerSync::new(
+                BufferBounds::new(0, 20).unwrap(),
+                crate::consensus::Authority::Peer,
+            )
+        },
+    );
+    let (notice_tx, mut notices) = mpsc::unbounded_channel();
+    makers.set_notice_notifier(notice_tx);
+    let mut member = mesh_state
+        .session
+        .side_channels
+        .lobby
+        .register_member(&key, SlotId(5));
+    let joined = joined_state(&mesh_state.links, &key);
+    let dispatch = |payload: Vec<u8>| {
+        dispatch_mesh_control(
+            MeshControlFrame {
+                session: key.session.0,
+                kind: Some(mesh_control_frame::Kind::LobbyCommand(LobbyCommand {
+                    slot: 0,
+                    payload: payload.into(),
+                    seq: None,
+                })),
+            },
+            RelayId(9),
+            0,
+            &joined,
+            &sessions,
+            &mesh_state,
+        );
+    };
+    dispatch(vec![0xCD]);
+    assert!(
+        member.try_recv().is_err(),
+        "mismatch must not reach local members"
+    );
+    let mut late = mesh_state
+        .session
+        .side_channels
+        .lobby
+        .register_member(&key, SlotId(6));
+    assert!(
+        late.try_recv().is_err(),
+        "mismatch must not enter replay log"
+    );
+    assert_eq!(makers.lock().get(&key).unwrap().eviction(SlotId(0)), None);
+    assert!(
+        notices.try_recv().is_err(),
+        "peer relay cannot report home violation"
+    );
+    dispatch(vec![0xAB]);
+    assert_eq!(member.try_recv().unwrap().payload.as_ref(), &[0xAB]);
+    assert_eq!(late.try_recv().unwrap().payload.as_ref(), &[0xAB]);
+}
+
+#[test]
+fn stale_mesh_teardown_cannot_regress_a_reconnected_slot() {
+    let sessions: routing::Sessions = Arc::default();
+    let mesh_state = test_mesh_state();
+    let makers = Arc::clone(&mesh_state.session.decision_makers);
+    let key = control_key();
+    test_maker(&makers, &key, crate::consensus::Authority::Peer);
+    let _ = makers.activate_connection_epoch(&key, SlotId(0), 22);
+
+    let (mut guard, mut inbox) =
+        routing::register(&sessions, &key, SlotId(5), 1).expect("local survivor registers");
+    guard.disarm();
+    let joined = joined_state(&mesh_state.links, &key);
+
+    let stale_down = MeshControlFrame {
+        session: key.session.0,
+        kind: Some(mesh_control_frame::Kind::SlotConnectivity(
+            SlotConnectivity {
+                slot: 0,
+                connected: false,
+                connection_epoch: Some(11),
+            },
+        )),
+    };
+    dispatch_mesh_control(stale_down, RelayId(9), 0, &joined, &sessions, &mesh_state);
+    assert_eq!(inbox.try_recv_connectivity(), None);
+    assert!(makers.flight_recorder().events(&key).iter().any(|record| {
+        record.event
+            == crate::observability::events::FlightEvent::ConnectivityMeshRejected {
+                source_relay: 9,
+                slot: 0,
+                connected: false,
+                connection_epoch: Some(11),
+            }
+    }));
+
+    let stale_departure = MeshControlFrame {
+        session: key.session.0,
+        kind: Some(mesh_control_frame::Kind::SlotDeparted(SlotDeparted {
+            finalized: false,
+            slot: 0,
+            last_frame: Some(10),
+            reachable_frame: Some(9),
+            reason: 0x4000_0006,
+            result_payload: Vec::new().into(),
+            result_arrival_ms: 0,
+            result_session_frame: None,
+            result_slot_frame: None,
+            connection_epoch: Some(11),
+            final_turn_count: None,
+        })),
+    };
+    dispatch_mesh_control(
+        stale_departure,
+        RelayId(9),
+        0,
+        &joined,
+        &sessions,
+        &mesh_state,
+    );
+    assert!(!makers.has_departure(&key, SlotId(0)));
+    assert!(!mesh_state.session.drop_holds.is_pending(&key, SlotId(0)));
+
+    let current_down = MeshControlFrame {
+        session: key.session.0,
+        kind: Some(mesh_control_frame::Kind::SlotConnectivity(
+            SlotConnectivity {
+                slot: 0,
+                connected: false,
+                connection_epoch: Some(22),
+            },
+        )),
+    };
+    dispatch_mesh_control(current_down, RelayId(9), 0, &joined, &sessions, &mesh_state);
+    assert_eq!(inbox.try_recv_connectivity(), Some((SlotId(0), false)));
+}
+
+/// A real cross-relay drop announces its departure before connectivity. The
+/// duplicate Down(E) transition must still reach the local survivor's display.
+#[test]
+fn departure_then_same_epoch_connectivity_reaches_the_survivor() {
+    let sessions: routing::Sessions = Arc::default();
+    let mesh = test_mesh_state();
+    let makers = &mesh.session.decision_makers;
+    let key = control_key();
+    test_maker(makers, &key, crate::consensus::Authority::Peer);
+    assert!(makers.activate_connection_epoch(&key, SlotId(0), 22));
+    let (mut guard, mut inbox) =
+        routing::register(&sessions, &key, SlotId(5), 7).expect("survivor registers");
+    guard.disarm();
+    let (_, mut echo_rx) = register_link_channels(&mesh.links, &key);
+    let joined = joined_state(&mesh.links, &key);
+    let dispatch = |kind| {
+        dispatch_mesh_control(
+            MeshControlFrame {
+                session: key.session.0,
+                kind: Some(kind),
+            },
+            RelayId(9),
+            0,
+            &joined,
+            &sessions,
+            &mesh,
+        );
+    };
+
+    dispatch(mesh_control_frame::Kind::SlotDeparted(SlotDeparted {
+        slot: 0,
+        last_frame: Some(10),
+        reachable_frame: Some(9),
+        reason: crate::consensus::LEAVE_REASON_DROPPED,
+        connection_epoch: Some(22),
+        ..Default::default()
+    }));
+    assert!(makers.has_departure(&key, SlotId(0)));
+    assert!(mesh.session.drop_holds.is_pending(&key, SlotId(0)));
+    assert_eq!(inbox.try_recv_connectivity(), None);
+
+    dispatch(mesh_control_frame::Kind::SlotConnectivity(
+        SlotConnectivity {
+            slot: 0,
+            connected: false,
+            connection_epoch: Some(22),
+        },
+    ));
+    assert_eq!(inbox.try_recv_connectivity(), Some((SlotId(0), false)));
+    assert_eq!(inbox.try_recv_connectivity(), None);
+    assert!(
+        inbox.try_recv_leave().is_none(),
+        "notification does not decide the hold"
+    );
+    assert!(mesh.session.drop_holds.is_pending(&key, SlotId(0)));
+    assert!(echo_rx.try_recv().is_err(), "no mesh echo");
+    assert!(!makers.flight_recorder().events(&key).iter().any(|record| {
+        matches!(
+            record.event,
+            crate::observability::events::FlightEvent::ConnectivityMeshRejected { .. }
+        )
+    }));
+}
+
+#[test]
+fn a_stale_mesh_reconnect_records_rejection_without_releasing_the_hold() {
+    let sessions: routing::Sessions = Arc::default();
+    let mesh = test_mesh_state();
+    let makers = &mesh.session.decision_makers;
+    let key = control_key();
+    test_maker(makers, &key, crate::consensus::Authority::Peer);
+    // Epochs are equality-only tokens: make 11 a known retired incarnation
+    // before installing 22, rather than treating a smaller number as older.
+    assert!(makers.activate_connection_epoch(&key, SlotId(0), 11));
+    assert!(makers.mark_connection_down(&key, SlotId(0), Some(11)));
+    assert!(makers.activate_connection_epoch(&key, SlotId(0), 22));
+    assert!(makers.mark_connection_down(&key, SlotId(0), Some(22)));
+    mesh.session.drop_holds.hold(key.clone(), SlotId(0));
+    let (mut guard, mut inbox) =
+        routing::register(&sessions, &key, SlotId(5), 7).expect("survivor registers");
+    guard.disarm();
+    let joined = joined_state(&mesh.links, &key);
+    dispatch_mesh_control(
+        MeshControlFrame {
+            session: key.session.0,
+            kind: Some(mesh_control_frame::Kind::SlotConnectivity(
+                SlotConnectivity {
+                    slot: 0,
+                    connected: true,
+                    connection_epoch: Some(11),
+                },
+            )),
+        },
+        RelayId(9),
+        0,
+        &joined,
+        &sessions,
+        &mesh,
+    );
+    assert!(mesh.session.drop_holds.is_pending(&key, SlotId(0)));
+    assert_eq!(inbox.try_recv_connectivity(), None);
+    assert!(makers.flight_recorder().events(&key).iter().any(|record| {
+        record.event
+            == crate::observability::events::FlightEvent::ConnectivityMeshRejected {
+                source_relay: 9,
+                slot: 0,
+                connected: true,
+                connection_epoch: Some(11),
+            }
+    }));
+}
