@@ -36,3 +36,5 @@ engine/mods/**/art/
 
 engine/mods/**/sounds/
 engine/mods/**/portraits/
+engine/third_party
+engine/src117/build/
