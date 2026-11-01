@@ -94,6 +94,50 @@ static void AddUnit(UnitTypes::Enum::Enum t, int player, int x, int y, int hp, i
 typedef AIModule *(WINAPI *FnNewAIModule)();
 typedef void(WINAPI *FnGameInit)(Game *);
 
+// The bot's Player vtable slot 4 is a race getter that writes the race id to *out
+// (when non-null) and returns it in eax (Races: Zerg 0, Terran 1, Protoss 2, Random 6,
+// Unknown 8). BWAPI 4.4.0 puts getType at that slot, so the bot's interface is a fork.
+static int __attribute__((thiscall)) PlayerRace4(void *self, int *out) {
+  const int race = static_cast<PlayerImpl *>(self)->getRace().getID();
+  if (out)
+    *out = race;
+  { static int s_n; if (s_n < 20) { FILE *tf = fopen("c:\\rigtrace.log", "a"); if (tf) { fprintf(tf, "RACE4 self=%p race=%d caller=%p\n", self, race, (void*)__builtin_return_address(0)); fclose(tf); } s_n++; } }
+  return race;
+}
+
+// The bot's chat announcement calls this slot as (int code, const char *text); BWAPI
+// 4.4.0's vPrintf is (const char *format, va_list), so the shim just logs the text.
+static void __attribute__((thiscall)) GamePrint2(void *self, int code, const char *text) {
+  (void)self;
+  (void)code;
+  FILE *tf = fopen("c:\\pluto-chat.log", "a");
+  if (tf) {
+    fprintf(tf, "[chat %d] %s\n", code, text ? text : "(null)");
+    fclose(tf);
+  }
+}
+
+// An empty set for the bot's set-returning Unit slots. The bot's fork-ABI returns its
+// set by hidden pointer (12 bytes, likely {begin,end,cap}); the shim writes an empty one
+// and returns the pointer, whatever the convention.
+struct MsSet {
+  void *head;
+  unsigned size;
+};
+static struct {
+  void *left, *parent, *right;
+} g_emptyHead;
+static MsSet g_emptyMs;
+
+static void *__attribute__((thiscall)) UnitEmptySet(void *self, void *sret) {
+  (void)self;
+  { static int s_n; if (s_n < 10) { FILE *tf = fopen("c:\\rigtrace.log", "a"); if (tf) { fprintf(tf, "EMPTYSET sret=%p caller=%p\\n", sret, (void*)__builtin_return_address(0)); fclose(tf); } s_n++; } }
+  if (sret) {
+    memset(sret, 0, 16);  // an empty {begin,end,cap} or {head,size}: all null
+  }
+  return sret;
+}
+
 static DWORD WINAPI ServePipe(LPVOID p) {
   HANDLE hPipe = static_cast<HANDLE>(p);
   if (!ConnectNamedPipe(hPipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED)
@@ -253,6 +297,50 @@ int main(int argc, char **argv) {
   BWAPI::BWAPIClient.data = g;  // connect() would set this; the impls read it directly
   GameImpl handoff(g);  // what the bot's own connect() later replaces with its own GameImpl
   BWAPI::BroodwarPtr = &handoff;  // the GameWrapper forwards through this
+
+  // The bot's Player vtable slot 4 is a race getter that writes the race id to *out
+  // (when non-null) and returns it in eax (Races: Zerg 0, Terran 1, Protoss 2,
+  // Random 6, Unknown 8). BWAPI 4.4.0 puts getType at that slot, so the bot's
+  // interface is a fork; patch the slot on the one shared PlayerImpl vtable.
+  {
+    PlayerImpl probe(0);
+    void **vt = *reinterpret_cast<void ***>(&probe);
+    DWORD old;
+    VirtualProtect(vt, 0x100, PAGE_READWRITE, &old);
+    vt[4] = reinterpret_cast<void *>(&PlayerRace4);
+    VirtualProtect(vt, 0x100, old, &old);
+    printf("[fakehost] PlayerImpl vtable slot 4 -> %p\\n", reinterpret_cast<void *>(&PlayerRace4));
+  }
+
+  // Same trick for the Game's chat/printf slot: the bot calls it as (int, const char *).
+  {
+    void (GameImpl::*pmf)(const char *, va_list) = &GameImpl::vPrintf;
+    const unsigned p = *reinterpret_cast<unsigned *>(&pmf);
+    const int slot = static_cast<int>(p - 1) / 4;
+    void **vt = *reinterpret_cast<void ***>(&handoff);
+    DWORD old;
+    VirtualProtect(vt, 0x200, PAGE_READWRITE, &old);
+    vt[slot] = reinterpret_cast<void *>(&GamePrint2);
+    VirtualProtect(vt, 0x200, old, &old);
+    printf("[fakehost] GameImpl vPrintf slot %d -> %p\\n", slot,
+           reinterpret_cast<void *>(&GamePrint2));
+  }
+
+  // The set-returning Unit slots: the bot expects an MSVC-shaped set by value; hand it
+  // an empty one (slots 63 getLoadedUnits, 65 getInterceptors, 67 getLarva with the
+  // inline destructor at 0).
+  if (getenv("HX_NO_SETS") == NULL) {
+    g_emptyHead.left = g_emptyHead.parent = g_emptyHead.right = &g_emptyHead;
+    UnitImpl probe(0);
+    void **vt = *reinterpret_cast<void ***>(&probe);
+    DWORD old;
+    VirtualProtect(vt, 0x200, PAGE_READWRITE, &old);
+    if (getenv("HX_NO_SETS") == NULL || *getenv("HX_NO_SETS") == '2')
+      for (int s : {63, 65, 67})
+        vt[s] = reinterpret_cast<void *>(&UnitEmptySet);
+    VirtualProtect(vt, 0x200, old, &old);
+    printf("[fakehost] UnitImpl set slots -> %p\\n", reinterpret_cast<void *>(&UnitEmptySet));
+  }
   {
     HMODULE hDll = GetModuleHandleA("pluto.patched.dll");
     printf("[fakehost] pluto.dll base %p, newAIModule %p, gameInit %p\n",

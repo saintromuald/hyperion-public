@@ -52,3 +52,24 @@ handshakes over shm (`BWRL: inference server up ... shm transport`). Open items 
 magic `PLO1`, version 4, frames_per_step 6, max_units 768; request = obs (N units,
 W×H map, globals), reply = per-unit actions + win estimate; transport = `BWRL_SHM`
 + events, pipes fallback; engine args `--bench --blob --seed --threads --backend ...`.
+
+## State 2026-11-01 (session 2)
+
+The bot now completes its entire startup in the rig:
+- onStart runs (its vtable is not BWAPI's AIModule: [1] = a race probe calling
+  self()->[4](&out) then the real worker, [2] = onEnd(bool), [3] = onFrame).
+- Its fork-ABI differences are shimmed by patching vtable slots on the objects handed
+  out: Player slot 4 = a race getter (out-param + eax), Game's vPrintf slot = (int,
+  const char*) chat printer. patch_pluto.py now remaps every SC-address constant (SIB
+  displacements included) onto the stand-in buffers.
+- Verified end to end: `own_race=0 ... BO free/UltraLing~tr (22 arms)`, the chat
+  announcement ("Pluto online (v2.0 md09b_1331000). gl hf!"), the engine's shm
+  handshake ("inference server up ... shm transport").
+
+Open (next session):
+- The bot's set-returning Unit slots (63 getLoadedUnits / 65 getInterceptors /
+  67 getLarva) crash its iteration — its set layout/convention is still to pin down
+  (12-byte vector-style with an sret pointer is the current hypothesis; the empty-set
+  shim is in place and being adjusted).
+- After that: the observation builder completes per frame, `dump/` fills with
+  BWRL_SHM captures, and the schema extraction begins (differential scenarios).
