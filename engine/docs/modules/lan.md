@@ -333,7 +333,10 @@ The host's own settings live in `lanroom.json` in the room's data folder, writte
 console: `name`, `password` (on or off), `dir` (the Room tab as floor, rack or wall), `delay`
 (the watching delay), `watch` (who may watch), `browserFiles` (whether the host offers its 1.17
 files), `copies` (`Off` starts no copy of a match) and `fp` (the host's data fingerprint, which
-joiners are checked against). `lan_room.json` beside it is the running room's note, its process
+joiners are checked against). The console's Settings screen knows only these; the online keys
+it knows nothing of — `sbCoordinator`, `sbTenant`, `sbKid`, `sbClientSeed`, `sbServerName`,
+`defaultTransport`, `announce`, `announceHost`, `announceSecret` — are kept across its saves.
+`lan_room.json` beside it is the running room's note, its process
 id and console key, so a console restarted in the same data folder takes its room back
 (`TakeBackRoom`) instead of starting a second one that could not have the port.
 
@@ -362,6 +365,41 @@ relay, and a seat that drops is removed by the relay's synced drop so the match 
 `../sb-netcode-port.md` is the port's plan and status; `BUILDING.md` has the runbook, and
 `engine/tools/sbtest/` the headless gates (sb_room.sh drives the whole flow above with two
 seats).
+
+With a coordinator configured, a new match **plays online by default** (transport `sb`;
+`"defaultTransport":"lan"` in `lanroom.json` turns that off) — the host's lobby shows the
+choice as the strip beside Start Game, `ONLINE (RELAY)` or `THIS NETWORK`, and the toggle
+changes this match's only. The room's summary (its answer to a query, its entry in a
+directory, and the room's row in Multiplayer's rooms list) carries `netcode`, on when the
+room can play online, and the rooms list shows a `NETCODE` chip beside such a room's name
+(`LAN` otherwise).
+
+### The game list over the internet
+
+A room on the local network is found by the game's own query, but a friend's room across the
+internet is not. `engine/tools/directory/hyperion-directory.py` is that missing piece, one
+small server that speaks the same query protocol:
+
+- A room announces itself: `"announce":"<host>:<port>"` in `lanroom.json` sends the room's
+  summary as a UDP datagram (`HXLR`) every ten seconds. `"announceHost"` names the address
+  players join at when it is not the machine's own (a tailnet address, a public address with
+  the ports forwarded); `"announceSecret"` is the directory's shared secret, when it has one.
+  An entry not announced again within its expire time drops off.
+- The game asks the directory where the games are: a joiner's `HYPERION_LAN_HOSTS` holds the
+  directory's address (the query goes to the same UDP port a room answers, 6111). Each answer
+  carries the room's own summary plus `host`, the address to actually join at, so a room
+  behind NAT is listed while the directory answers for it; the rooms list shows it like a
+  room on the network, with its `NETCODE` or `LAN` chip, and Join connects to the room's
+  own address.
+- The directory's own page (`http://<directory>:7118/`) lists the same rooms for a browser,
+  with the badges and the addresses to join at.
+
+`netcode-server.sh` in `engine/tools/sbtest/` runs the group's coordinator and relay together
+(a dev tenant, keys made once and kept, `--advertise-addr` the address seats dial), and
+prints the `lanroom.json` settings. With the directory and the netcode server on one always-on
+machine everyone can reach (a VPS, or a box on the group's tailnet), anyone hosts from their
+own machine — `--room` with `announce` — and everyone else sees the room in Multiplayer's
+list and joins; the matches then play online through the relay, netcode on.
 
 ## Testing it
 

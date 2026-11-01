@@ -174,9 +174,9 @@ msgstr "最高速度"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:54
 #: src117/port/front/port_front_campaign.cpp:58
-#: src117/port/front/port_front_mutators.cpp:1001
+#: src117/port/front/port_front_mutators.cpp:1002
 #: src117/port/front/port_front_replays.cpp:50
-#: src117/port/front/port_front_skirmish.cpp:1628
+#: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
 #: src117/port/tools/port_benchview.cpp:1307
 msgid "Zerg"
@@ -185,9 +185,9 @@ msgstr "蟲族"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:53
 #: src117/port/front/port_front_campaign.cpp:57
-#: src117/port/front/port_front_mutators.cpp:1001
+#: src117/port/front/port_front_mutators.cpp:1002
 #: src117/port/front/port_front_replays.cpp:50
-#: src117/port/front/port_front_skirmish.cpp:1628
+#: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
 #: src117/port/tools/port_benchview.cpp:1307
 msgid "Terran"
@@ -196,9 +196,9 @@ msgstr "人類"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:55
 #: src117/port/front/port_front_campaign.cpp:56
-#: src117/port/front/port_front_mutators.cpp:1001
+#: src117/port/front/port_front_mutators.cpp:1002
 #: src117/port/front/port_front_replays.cpp:50
-#: src117/port/front/port_front_skirmish.cpp:1628
+#: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
 #: src117/port/tools/port_benchview.cpp:1307
 msgid "Protoss"
@@ -207,9 +207,9 @@ msgstr "神族"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_bench.cpp:1423
 #: src117/port/front/port_front_replays.cpp:877
-#: src117/port/front/port_front_skirmish.cpp:1635
-#: src117/port/front/port_front_skirmish.cpp:2812
-#: src117/port/front/port_front_skirmish.cpp:2820
+#: src117/port/front/port_front_skirmish.cpp:1636
+#: src117/port/front/port_front_skirmish.cpp:2813
+#: src117/port/front/port_front_skirmish.cpp:2821
 #: src117/port/front/port_front_trainer.cpp:48
 msgid "Random"
 msgstr "隨機"
@@ -219,13 +219,13 @@ msgid "Sixty-four computers on Big Game Hunters 8x8, 1,024 tiles a side, as fast
 msgstr "在 Big Game Hunters 8x8 上以 64 個電腦對戰，地圖每邊 1,024 格，全速執行 30 分鐘：超出 Hyperion 目前設定的 32 名玩家與 512 格，是它能承受的極限。地圖位於 maps\\Hyperion\\Experimental\\。"
 
 #: src117/port/front/port_front_bench.cpp:1088
-#: src117/port/front/port_front_skirmish.cpp:2040
-#: src117/port/front/port_front_skirmish.cpp:2044
+#: src117/port/front/port_front_skirmish.cpp:2041
+#: src117/port/front/port_front_skirmish.cpp:2045
 msgid "Player {0}"
 msgstr "玩家 {0}"
 
 #: src117/port/front/port_front_bench.cpp:1090
-#: src117/port/front/port_front_skirmish.cpp:2041
+#: src117/port/front/port_front_skirmish.cpp:2042
 msgid "Starts by slot: player {0} starts where the map’s picture shows {0}."
 msgstr "依欄位決定起始位置：玩家 {0} 會從地圖預覽上標示 {0} 的位置開始。"
 
@@ -237,10 +237,10 @@ msgstr "起始位置由種子隨機決定，因此欄位並不對應地圖上的
 #: src117/port/front/port_front_replays.cpp:880
 #: src117/port/front/port_front_score.cpp:720
 #: src117/port/front/port_front_score.cpp:731
-#: src117/port/front/port_front_skirmish.cpp:2081
-#: src117/port/front/port_front_skirmish.cpp:2085
-#: src117/port/front/port_front_skirmish.cpp:2089
-#: src117/port/front/port_front_skirmish.cpp:3086
+#: src117/port/front/port_front_skirmish.cpp:2082
+#: src117/port/front/port_front_skirmish.cpp:2086
+#: src117/port/front/port_front_skirmish.cpp:2090
+#: src117/port/front/port_front_skirmish.cpp:3113
 #: src117/port/lan/port_front_lanhost.cpp:464
 #: src117/port/lan/port_front_lanhost.cpp:1104
 msgid "Computer"
@@ -252,7 +252,7 @@ msgid "Its own"
 msgstr "各自顏色"
 
 #: src117/port/front/port_front_bench.cpp:1104
-#: src117/port/front/port_front_skirmish.cpp:2160
+#: src117/port/front/port_front_skirmish.cpp:2161
 msgid "Colours by team"
 msgstr "依隊伍上色"
 
@@ -270,7 +270,7 @@ msgstr "每個欄位使用遊戲為它指定的顏色。在隊伍對戰中，「
 
 #: src117/port/front/port_front_bench.cpp:1119
 #: src117/port/front/port_front_bench.cpp:1168
-#: src117/port/front/port_front_skirmish.cpp:2398
+#: src117/port/front/port_front_skirmish.cpp:2399
 msgid "Race"
 msgstr "種族"
 
@@ -279,7 +279,7 @@ msgid "Random is drawn from the seed: the same seed gives the same races."
 msgstr "隨機由種子決定：相同的種子會得到相同的種族。"
 
 #: src117/port/front/port_front_bench.cpp:1121
-#: src117/port/front/port_front_skirmish.cpp:2221
+#: src117/port/front/port_front_skirmish.cpp:2222
 msgid "Handicap"
 msgstr "讓分"
 
@@ -288,31 +288,31 @@ msgid "A player’s units at a share of their life, as in SC2. Not available yet
 msgstr "玩家的單位只保有部分生命值，與 SC2 相同。尚未提供。"
 
 #: src117/port/front/port_front_bench.cpp:1128
-#: src117/port/front/port_front_skirmish.cpp:2255
+#: src117/port/front/port_front_skirmish.cpp:2256
 msgid "Computer level"
 msgstr "電腦等級"
 
 #: src117/port/front/port_front_bench.cpp:1129
 #: src117/port/front/port_front_bench.cpp:1187
-#: src117/port/front/port_front_skirmish.cpp:2260
-#: src117/port/front/port_front_skirmish.cpp:2420
+#: src117/port/front/port_front_skirmish.cpp:2261
+#: src117/port/front/port_front_skirmish.cpp:2421
 #: src117/port/gameplay/port_ai.cpp:67
 msgid "Its own script"
 msgstr "各自的腳本"
 
 #: src117/port/front/port_front_bench.cpp:1129
-#: src117/port/front/port_front_skirmish.cpp:2260
+#: src117/port/front/port_front_skirmish.cpp:2261
 msgid "Personality"
 msgstr "性格"
 
 #: src117/port/front/port_front_bench.cpp:1130
-#: src117/port/front/port_front_skirmish.cpp:2261
+#: src117/port/front/port_front_skirmish.cpp:2262
 msgid "How the computer plays: turtle, rusher, expander and the like. Not available yet."
 msgstr "電腦的遊戲風格：防守型、速攻型、擴張型等等。尚未提供。"
 
 #: src117/port/front/port_front_bench.cpp:1155
-#: src117/port/front/port_front_skirmish.cpp:2384
-#: src117/port/front/port_front_skirmish.cpp:2425
+#: src117/port/front/port_front_skirmish.cpp:2385
+#: src117/port/front/port_front_skirmish.cpp:2426
 msgid "All computers:"
 msgstr "所有電腦："
 
@@ -329,32 +329,32 @@ msgid "Sets every slot’s race at once; each slot’s own list changes it after
 msgstr "一次設定所有欄位的種族；之後仍可用各欄位的清單個別修改。隨機由種子決定。"
 
 #: src117/port/front/port_front_bench.cpp:1182
-#: src117/port/front/port_front_skirmish.cpp:2412
+#: src117/port/front/port_front_skirmish.cpp:2413
 msgid "Level"
 msgstr "等級"
 
 #: src117/port/front/port_front_bench.cpp:1186
-#: src117/port/front/port_front_skirmish.cpp:2419
+#: src117/port/front/port_front_skirmish.cpp:2420
 msgid "Every computer’s level"
 msgstr "所有電腦的等級"
 
 #: src117/port/front/port_front_bench.cpp:1187
-#: src117/port/front/port_front_skirmish.cpp:2420
+#: src117/port/front/port_front_skirmish.cpp:2421
 msgid "Every computer’s personality"
 msgstr "所有電腦的性格"
 
 #: src117/port/front/port_front_bench.cpp:1188
-#: src117/port/front/port_front_skirmish.cpp:2421
+#: src117/port/front/port_front_skirmish.cpp:2422
 msgid "How the computers play: turtle, rusher, expander and the like. Not available yet."
 msgstr "電腦的遊戲風格：防守型、速攻型、擴張型等等。尚未提供。"
 
 #: src117/port/front/port_front_bench.cpp:1197
-#: src117/port/front/port_front_skirmish.cpp:2440
+#: src117/port/front/port_front_skirmish.cpp:2441
 msgid "New Team"
 msgstr "新增隊伍"
 
 #: src117/port/front/port_front_bench.cpp:1201
-#: src117/port/front/port_front_skirmish.cpp:2446
+#: src117/port/front/port_front_skirmish.cpp:2447
 #: src117/port/front/port_frontlobby.cpp:156
 msgid "New team"
 msgstr "新增隊伍"
@@ -373,8 +373,8 @@ msgstr "蟲苔的生長與凋亡"
 
 #: src117/port/front/port_front_bench.cpp:1210
 #: src117/port/front/port_front_bench.cpp:1213
-#: src117/port/front/port_front_skirmish.cpp:2455
-#: src117/port/front/port_front_skirmish.cpp:2460
+#: src117/port/front/port_front_skirmish.cpp:2456
+#: src117/port/front/port_front_skirmish.cpp:2461
 msgid "Quick layout"
 msgstr "快速分組"
 
@@ -427,11 +427,11 @@ msgid "empty: choose it in a slot’s Team list"
 msgstr "空的：請在某個欄位的「隊伍」清單中選擇它"
 
 #: src117/port/front/port_front_bench.cpp:1302
-#: src117/port/front/port_front_skirmish.cpp:2335
-#: src117/port/front/port_front_skirmish.cpp:2372
-#: src117/port/front/port_front_skirmish.cpp:2584
+#: src117/port/front/port_front_skirmish.cpp:2336
+#: src117/port/front/port_front_skirmish.cpp:2373
+#: src117/port/front/port_front_skirmish.cpp:2585
 #: src117/port/front/port_front_trainer.cpp:427
-#: src117/port/lan/port_front_lan.cpp:1161
+#: src117/port/lan/port_front_lan.cpp:1163
 #: src117/port/platform/port_discord.cpp:613
 #: src117/port/platform/port_discord.cpp:616
 #: src117/port/tools/port_benchview.cpp:761
@@ -464,14 +464,14 @@ msgstr "顯示第 {0} 到 {1} 項，共 {2} 項，可用滾輪捲動"
 #: src117/port/front/port_front_bench.cpp:1341
 #: src117/port/front/port_front_bench.cpp:1404
 #: src117/port/front/port_front_score.cpp:65
-#: src117/port/front/port_front_skirmish.cpp:1467
+#: src117/port/front/port_front_skirmish.cpp:1468
 #: src117/port/tools/port_benchview.cpp:830
 #: src117/port/tools/port_benchview.cpp:858
 msgid "Players"
 msgstr "玩家"
 
 #: src117/port/front/port_front_bench.cpp:1344
-#: src117/port/front/port_frontkit.cpp:369
+#: src117/port/front/port_frontkit.cpp:373
 #: src117/port/tools/port_benchview.cpp:868
 msgid "Free For All"
 msgstr "自由對戰"
@@ -482,12 +482,12 @@ msgid "Melee, all allied"
 msgstr "一般對戰，全員同盟"
 
 #: src117/port/front/port_front_bench.cpp:1345
-#: src117/port/front/port_front_skirmish.cpp:2737
+#: src117/port/front/port_front_skirmish.cpp:2738
 msgid "Team Match"
 msgstr "隊伍對戰"
 
 #: src117/port/front/port_front_bench.cpp:1355
-#: src117/port/front/port_front_skirmish.cpp:2730
+#: src117/port/front/port_front_skirmish.cpp:2731
 #: src117/port/tools/port_benchview.cpp:863
 msgid "Game type"
 msgstr "遊戲類型"
@@ -497,10 +497,10 @@ msgid "Free For All: every computer for itself. Melee: the original’s, where e
 msgstr "自由對戰：每部電腦各自為戰。一般對戰：原版的做法，所有電腦同在一方，彼此不會交戰，保留下來以便與原版比對。隊伍對戰：電腦分成隊伍，彼此同盟、共享視野並一起獲勝；「快速分組」會依地圖的起始位置編隊。隊伍對戰採用 Hyperion 的規則。只有在隊伍與起始位置相同時，兩次執行才是同一場遊戲。"
 
 #: src117/port/front/port_front_bench.cpp:1364
-#: src117/port/front/port_front_skirmish.cpp:1991
-#: src117/port/front/port_front_skirmish.cpp:2078
-#: src117/port/front/port_front_skirmish.cpp:2089
-#: src117/port/front/port_front_skirmish.cpp:2644
+#: src117/port/front/port_front_skirmish.cpp:1992
+#: src117/port/front/port_front_skirmish.cpp:2079
+#: src117/port/front/port_front_skirmish.cpp:2090
+#: src117/port/front/port_front_skirmish.cpp:2645
 msgid "You"
 msgstr "你"
 
@@ -522,7 +522,7 @@ msgid "A minute, to see it runs"
 msgstr "一分鐘，確認可以執行"
 
 #: src117/port/front/port_front_bench.cpp:138
-#: src117/port/gameplay/port_mutators.cpp:87
+#: src117/port/gameplay/port_mutators.cpp:112
 msgid "Standard"
 msgstr "標準"
 
@@ -581,9 +581,9 @@ msgstr[0] "{0} 有 {1} 個起始位置。"
 
 #: src117/port/front/port_front_bench.cpp:1421
 #: src117/port/front/port_front_bench.cpp:1427
-#: src117/port/front/port_front_skirmish.cpp:2810
-#: src117/port/front/port_front_skirmish.cpp:2816
-#: src117/port/front/port_front_skirmish.cpp:2821
+#: src117/port/front/port_front_skirmish.cpp:2811
+#: src117/port/front/port_front_skirmish.cpp:2817
+#: src117/port/front/port_front_skirmish.cpp:2822
 msgid "Start positions"
 msgstr "起始位置"
 
@@ -596,8 +596,8 @@ msgid "drawn from the seed"
 msgstr "由種子隨機決定"
 
 #: src117/port/front/port_front_bench.cpp:1423
-#: src117/port/front/port_front_skirmish.cpp:2173
-#: src117/port/front/port_front_skirmish.cpp:2812
+#: src117/port/front/port_front_skirmish.cpp:2174
+#: src117/port/front/port_front_skirmish.cpp:2813
 msgid "By slot"
 msgstr "依欄位"
 
@@ -611,18 +611,18 @@ msgstr "無法讀取地圖的起始位置，因此改由種子抽出。"
 
 #: src117/port/front/port_front_bench.cpp:1437
 #: src117/port/front/port_front_bench.cpp:1442
-#: src117/port/front/port_front_skirmish.cpp:2830
-#: src117/port/front/port_front_skirmish.cpp:2837
+#: src117/port/front/port_front_skirmish.cpp:2831
+#: src117/port/front/port_front_skirmish.cpp:2838
 msgid "Colours"
 msgstr "顏色"
 
 #: src117/port/front/port_front_bench.cpp:1438
-#: src117/port/front/port_front_skirmish.cpp:2831
+#: src117/port/front/port_front_skirmish.cpp:2832
 msgid "By player"
 msgstr "依玩家"
 
 #: src117/port/front/port_front_bench.cpp:1438
-#: src117/port/front/port_front_skirmish.cpp:2831
+#: src117/port/front/port_front_skirmish.cpp:2832
 msgid "By team"
 msgstr "依隊伍"
 
@@ -636,8 +636,8 @@ msgstr "依隊伍上色只在隊伍對戰中可用。"
 
 #: src117/port/front/port_front_bench.cpp:1452
 #: src117/port/front/port_front_settings.cpp:827
-#: src117/port/front/port_front_skirmish.cpp:2758
-#: src117/port/front/port_front_skirmish.cpp:2762
+#: src117/port/front/port_front_skirmish.cpp:2759
+#: src117/port/front/port_front_skirmish.cpp:2763
 msgid "Game speed"
 msgstr "遊戲速度"
 
@@ -664,10 +664,10 @@ msgid "at most {0} frames"
 msgstr "最多 {0} 影格"
 
 #: src117/port/front/port_front_bench.cpp:1474
-#: src117/port/front/port_front_mutators.cpp:1637
+#: src117/port/front/port_front_mutators.cpp:1639
 #: src117/port/front/port_front_theme.cpp:611
-#: src117/port/front/port_frontkit.cpp:381
-#: src117/port/gameplay/port_mutators.cpp:501
+#: src117/port/front/port_frontkit.cpp:385
+#: src117/port/gameplay/port_mutators.cpp:533
 msgid "Custom"
 msgstr "自訂"
 
@@ -709,7 +709,7 @@ msgstr "換一場遊戲。只有相同的種子才能互相比較：在規則相
 
 #: src117/port/front/port_front_bench.cpp:1557
 #: src117/port/front/port_front_bench.cpp:1575
-#: src117/port/gameplay/port_mutators.cpp:64
+#: src117/port/gameplay/port_mutators.cpp:86
 msgid "Supply cap"
 msgstr "補給上限"
 
@@ -722,7 +722,7 @@ msgid "each player"
 msgstr "每位玩家"
 
 #: src117/port/front/port_front_bench.cpp:1563
-#: src117/port/gameplay/port_mutators.cpp:443
+#: src117/port/gameplay/port_mutators.cpp:474
 msgid "Unlimited"
 msgstr "無上限"
 
@@ -732,9 +732,9 @@ msgstr "每部電腦可擁有的最大補給值。原版是 200；更高的上�
 
 #: src117/port/front/port_front_bench.cpp:1583
 #: src117/port/front/port_front_bench.cpp:1591
-#: src117/port/front/port_front_skirmish.cpp:2790
-#: src117/port/front/port_front_skirmish.cpp:2800
-#: src117/port/front/port_front_skirmish.cpp:2802
+#: src117/port/front/port_front_skirmish.cpp:2791
+#: src117/port/front/port_front_skirmish.cpp:2801
+#: src117/port/front/port_front_skirmish.cpp:2803
 msgid "Unit limit"
 msgstr "單位上限"
 
@@ -889,8 +889,8 @@ msgstr "開始效能測試"
 #: src117/port/front/port_front_campaign.cpp:667
 #: src117/port/front/port_front_campaign.cpp:904
 #: src117/port/front/port_front_home.cpp:735
-#: src117/port/front/port_front_skirmish.cpp:1530
-#: src117/port/front/port_front_skirmish.cpp:3014
+#: src117/port/front/port_front_skirmish.cpp:1531
+#: src117/port/front/port_front_skirmish.cpp:3015
 #: src117/port/front/port_front_trainer.cpp:542
 #: src117/port/front/port_front_trainer.cpp:684
 msgid "Back"
@@ -1106,7 +1106,7 @@ msgid "Classic AI is the original’s own computer. The others play by Hyperion�
 msgstr "經典 AI 就是原版自己的電腦。其他等級採用 Hyperion 的規則：StarCraft II 的等級，從「非常簡單」到「菁英」，由較慢較小規模到更快，以及「作弊」等級，實力與菁英相同，作弊方式也與 StarCraft II 相同。「視野」會看見整張地圖；「資源」除了看見整張地圖，每趟採集也會帶回更多，到第 20 分鐘增加到一點五倍；「瘋狂」一開始就多帶回五分之一，最後增加到兩倍。"
 
 #: src117/port/front/port_front_bench.cpp:541
-#: src117/port/front/port_front_skirmish.cpp:2472
+#: src117/port/front/port_front_skirmish.cpp:2473
 msgid "Teams by hand"
 msgstr "手動編隊"
 
@@ -1178,9 +1178,9 @@ msgstr "{0} 影格"
 #: src117/port/front/port_front_bench.cpp:1058
 #: src117/port/front/port_front_replays.cpp:1001
 #: src117/port/front/port_front_score.cpp:927
-#: src117/port/front/port_front_skirmish.cpp:2579
+#: src117/port/front/port_front_skirmish.cpp:2580
 #: src117/port/hud/port_hudstats.cpp:513
-#: src117/port/lan/port_front_lan.cpp:1159
+#: src117/port/lan/port_front_lan.cpp:1161
 #: src117/port/lan/port_front_lanhost.cpp:242
 #: src117/port/platform/port_discord.cpp:611
 #: src117/port/platform/port_discord.cpp:615
@@ -1260,8 +1260,8 @@ msgstr "慢"
 #: src117/port/front/port_front_bench.cpp:90
 #: src117/port/front/port_front_replays.cpp:123
 #: src117/port/front/port_front_skirmish.cpp:83
-#: src117/port/gameplay/port_mutators.cpp:49
-#: src117/port/gameplay/port_mutators.cpp:51
+#: src117/port/gameplay/port_mutators.cpp:67
+#: src117/port/gameplay/port_mutators.cpp:69
 #: src117/port/tools/port_benchview.cpp:62
 msgid "Normal"
 msgstr "正常"
@@ -1313,8 +1313,8 @@ msgstr "任務 {0}"
 #: src117/port/front/port_front_profile.cpp:760
 #: src117/port/front/port_front_profile.cpp:1166
 #: src117/port/lan/port_front_lan.cpp:424
-#: src117/port/lan/port_front_lan.cpp:1162
-#: src117/port/lan/port_lanlobby.cpp:109
+#: src117/port/lan/port_front_lan.cpp:1164
+#: src117/port/lan/port_lanlobby.cpp:113
 msgid "{0} and {1}"
 msgstr "{0} 與 {1}"
 
@@ -1464,10 +1464,10 @@ msgstr "現在就玩"
 #: src117/port/front/port_front_score.cpp:1120
 #: src117/port/front/port_front_settings.cpp:1814
 #: src117/port/front/port_front_settings.cpp:2000
-#: src117/port/front/port_front_skirmish.cpp:1607
+#: src117/port/front/port_front_skirmish.cpp:1608
 #: src117/port/gameplay/port_trainerview.cpp:1496
-#: src117/port/lan/port_front_lan.cpp:1068
-#: src117/port/lan/port_front_lan.cpp:1587
+#: src117/port/lan/port_front_lan.cpp:1070
+#: src117/port/lan/port_front_lan.cpp:1613
 #: src117/port/lan/port_front_lanhost.cpp:235
 #: src117/port/lan/port_front_lanhost.cpp:249
 #: src117/port/lan/port_front_lanhost.cpp:323
@@ -1542,7 +1542,7 @@ msgid "Watch Again"
 msgstr "再看一次"
 
 #: src117/port/front/port_front_campaign.cpp:899
-#: src117/port/lan/port_front_lan.cpp:1807
+#: src117/port/lan/port_front_lan.cpp:1833
 #: src117/port/lan/port_front_lanhost.cpp:500
 msgid "Watch"
 msgstr "觀看"
@@ -1909,7 +1909,7 @@ msgid "Resume Game"
 msgstr "繼續遊戲"
 
 #: src117/port/front/port_front_gamemenu.cpp:326
-#: src117/port/front/port_front_mutators.cpp:1534
+#: src117/port/front/port_front_mutators.cpp:1536
 msgid "Options"
 msgstr "選項"
 
@@ -2278,7 +2278,7 @@ msgid "Right column"
 msgstr "右欄"
 
 #: src117/port/front/port_front_hud.cpp:678
-#: src117/port/front/port_front_skirmish.cpp:1480
+#: src117/port/front/port_front_skirmish.cpp:1481
 msgid "Size"
 msgstr "大小"
 
@@ -2371,13 +2371,13 @@ msgstr "劇情戰役"
 #: src117/port/front/port_front_load.cpp:334
 #: src117/port/front/port_front_load.cpp:399
 #: src117/port/front/port_front_load.cpp:400
-#: src117/port/front/port_front_skirmish.cpp:2946
+#: src117/port/front/port_front_skirmish.cpp:2947
 #: src117/port/platform/port_discord.cpp:707
 msgid "Skirmish"
 msgstr "單人對戰"
 
 #: src117/port/front/port_front_internal.h:31
-#: src117/port/lan/port_front_lan.cpp:1630
+#: src117/port/lan/port_front_lan.cpp:1656
 msgid "Multiplayer"
 msgstr "多人對戰"
 
@@ -2540,7 +2540,7 @@ msgstr "刪除"
 #: src117/port/front/port_front_mods.cpp:341
 #: src117/port/front/port_front_notes.cpp:787
 #: src117/port/front/port_front_profile.cpp:1213
-#: src117/port/front/port_front_skirmish.cpp:3098
+#: src117/port/front/port_front_skirmish.cpp:3125
 #: src117/port/gameplay/port_trainerview.cpp:1569
 #: src117/port/gameplay/port_trainerview.cpp:1587
 #: src117/port/hud/port_hudstats.cpp:721
@@ -2681,397 +2681,397 @@ msgstr "Hyperion 下次啟動後，遊戲就不會再使用「{0}」。"
 msgid "“{0}” opens Hyperion's live channel while it is active. Programs on this computer that you run can then read and change your games through it. Allow it only for a mod you trust."
 msgstr "「{0}」在啟用期間會開啟 Hyperion 的即時通道。你在這台電腦上執行的程式之後可以透過它讀取和變更你的遊戲。只對你信任的模組允許此操作。"
 
-#: src117/port/front/port_front_mutators.cpp:1007
+#: src117/port/front/port_front_mutators.cpp:1008
 msgid "Town halls"
 msgstr "主基地"
 
-#: src117/port/front/port_front_mutators.cpp:1013
+#: src117/port/front/port_front_mutators.cpp:1014
 msgid "depot, pylon, overlord"
 msgstr "補給站、水晶塔、王蟲"
 
-#: src117/port/front/port_front_mutators.cpp:1058
+#: src117/port/front/port_front_mutators.cpp:1059
 msgid "Black until scouted"
 msgstr "未探索前全黑"
 
-#: src117/port/front/port_front_mutators.cpp:1058
+#: src117/port/front/port_front_mutators.cpp:1059
 msgid "Land known, units in sight"
 msgstr "地形已知，單位需在視野內"
 
-#: src117/port/front/port_front_mutators.cpp:1059
+#: src117/port/front/port_front_mutators.cpp:1060
 msgid "The whole map, all game"
 msgstr "全場都看得見整張地圖"
 
-#: src117/port/front/port_front_mutators.cpp:1086
+#: src117/port/front/port_front_mutators.cpp:1087
 msgid "This game · harder"
 msgstr "這場遊戲 · 更難"
 
-#: src117/port/front/port_front_mutators.cpp:1089
+#: src117/port/front/port_front_mutators.cpp:1090
 msgid "{0} s"
 msgstr "{0} 秒"
 
-#: src117/port/front/port_front_mutators.cpp:1094
-#: src117/port/front/port_front_mutators.cpp:1142
+#: src117/port/front/port_front_mutators.cpp:1095
+#: src117/port/front/port_front_mutators.cpp:1143
 msgid "as Classic"
 msgstr "與經典版相同"
 
-#: src117/port/front/port_front_mutators.cpp:1095
+#: src117/port/front/port_front_mutators.cpp:1096
 msgid "an SCV at {0}"
 msgstr "太空工程車 {0}"
 
-#: src117/port/front/port_front_mutators.cpp:1098
+#: src117/port/front/port_front_mutators.cpp:1099
 msgid "Buildings, units, research and upgrades alike"
 msgstr "建築、單位、研發與升級都一樣"
 
-#: src117/port/front/port_front_mutators.cpp:1133
+#: src117/port/front/port_front_mutators.cpp:1134
 msgid "all to research"
 msgstr "全部需要研發"
 
-#: src117/port/front/port_front_mutators.cpp:1133
+#: src117/port/front/port_front_mutators.cpp:1134
 msgid "all done at the start"
 msgstr "開場就全部完成"
 
-#: src117/port/front/port_front_mutators.cpp:1133
-#: src117/port/gameplay/port_mutators.cpp:583
+#: src117/port/front/port_front_mutators.cpp:1134
+#: src117/port/gameplay/port_mutators.cpp:615
 msgid "no upgrades"
 msgstr "沒有升級"
 
-#: src117/port/front/port_front_mutators.cpp:1134
+#: src117/port/front/port_front_mutators.cpp:1135
 msgid "nothing to research"
 msgstr "沒有可研發的項目"
 
-#: src117/port/front/port_front_mutators.cpp:1135
+#: src117/port/front/port_front_mutators.cpp:1136
 msgid "Upgrades"
 msgstr "升級"
 
-#: src117/port/front/port_front_mutators.cpp:1136
+#: src117/port/front/port_front_mutators.cpp:1137
 #: src117/port/gameplay/port_trainerview.cpp:420
 msgid "Research"
 msgstr "研發"
 
-#: src117/port/front/port_front_mutators.cpp:1142
+#: src117/port/front/port_front_mutators.cpp:1143
 msgid "This game · {0}"
 msgstr "這場遊戲 · {0}"
 
-#: src117/port/front/port_front_mutators.cpp:1143
+#: src117/port/front/port_front_mutators.cpp:1144
 msgid "Classic · {0}"
 msgstr "經典版 · {0}"
 
-#: src117/port/front/port_front_mutators.cpp:1150
+#: src117/port/front/port_front_mutators.cpp:1151
 msgid "Weapons, Armor, U-238 Shells · Stim Packs, Lockdown, Siege Tech"
 msgstr "武器、裝甲、U-238子彈 · 戰鬥藥劑、癱瘓、攻城模式"
 
-#: src117/port/front/port_front_mutators.cpp:1151
+#: src117/port/front/port_front_mutators.cpp:1152
 msgid "Three upgrades and three researches"
 msgstr "三項升級與三項研發"
 
-#: src117/port/front/port_front_mutators.cpp:1318
+#: src117/port/front/port_front_mutators.cpp:1320
 msgid "NEW"
 msgstr "新"
 
-#: src117/port/front/port_front_mutators.cpp:1374
+#: src117/port/front/port_front_mutators.cpp:1376
 msgid "Classic’s."
 msgstr "與經典版相同。"
 
-#: src117/port/front/port_front_mutators.cpp:1376
+#: src117/port/front/port_front_mutators.cpp:1378
 msgid "Harder than Classic."
 msgstr "比經典版更難。"
 
-#: src117/port/front/port_front_mutators.cpp:1507
-#: src117/port/front/port_front_skirmish.cpp:2724
+#: src117/port/front/port_front_mutators.cpp:1509
+#: src117/port/front/port_front_skirmish.cpp:2725
 msgid "GAME OPTIONS"
 msgstr "遊戲選項"
 
-#: src117/port/front/port_front_mutators.cpp:1507
-#: src117/port/front/port_front_mutators.cpp:1611
-#: src117/port/front/port_front_mutators.cpp:1868
+#: src117/port/front/port_front_mutators.cpp:1509
+#: src117/port/front/port_front_mutators.cpp:1613
+#: src117/port/front/port_front_mutators.cpp:1870
 msgid "MUTATORS"
 msgstr "突變因子"
 
-#: src117/port/front/port_front_mutators.cpp:1534
-#: src117/port/front/port_front_mutators.cpp:1613
+#: src117/port/front/port_front_mutators.cpp:1536
+#: src117/port/front/port_front_mutators.cpp:1615
 msgid "Mutators"
 msgstr "突變因子"
 
-#: src117/port/front/port_front_mutators.cpp:1534
+#: src117/port/front/port_front_mutators.cpp:1536
 msgid "Game Options"
 msgstr "遊戲選項"
 
-#: src117/port/front/port_front_mutators.cpp:1535
+#: src117/port/front/port_front_mutators.cpp:1537
 msgid "One set of mutators for every player: what the map holds, what each player starts with, supply, the fog, build time and tech. Hotkey: U"
 msgstr "所有玩家共用一組突變因子：地圖上的資源、每位玩家的起始條件、補給、戰爭迷霧、建造時間與科技。快速鍵：U"
 
-#: src117/port/front/port_front_mutators.cpp:1538
+#: src117/port/front/port_front_mutators.cpp:1540
 msgid "The game type, speed, rules and start positions, and the map. Hotkey: O"
 msgstr "遊戲類型、速度、規則、起始位置與地圖。快速鍵：O"
 
-#: src117/port/front/port_front_mutators.cpp:1546
+#: src117/port/front/port_front_mutators.cpp:1548
 msgid "{0} · Hyperion rules"
 msgstr "{0} · Hyperion 規則"
 
-#: src117/port/front/port_front_mutators.cpp:1547
+#: src117/port/front/port_front_mutators.cpp:1549
 msgid "Custom set"
 msgstr "自訂組合"
 
-#: src117/port/front/port_front_mutators.cpp:1548
+#: src117/port/front/port_front_mutators.cpp:1550
 msgid "No mutators · as Classic"
 msgstr "沒有突變因子 · 與經典版相同"
 
-#: src117/port/front/port_front_mutators.cpp:1614
+#: src117/port/front/port_front_mutators.cpp:1616
 msgid "They change the game past the classic rules, the same for every player, so they play by Hyperion’s, and its replay and save keep them."
 msgstr "它們會讓遊戲超出經典規則，所有玩家一視同仁，因此採用 Hyperion 的規則，戰鬥錄影與存檔也會保留這些設定。"
 
-#: src117/port/front/port_front_mutators.cpp:1620
+#: src117/port/front/port_front_mutators.cpp:1622
 msgid "One set for every player. Any mutator plays by Hyperion rules, and the replay keeps the set."
 msgstr "所有玩家共用一組。只要使用任何突變因子就採用 Hyperion 規則，戰鬥錄影也會保留這組設定。"
 
-#: src117/port/front/port_front_mutators.cpp:1621
+#: src117/port/front/port_front_mutators.cpp:1623
 msgid "The host’s set, the same for every player. Any mutator plays by Hyperion rules."
 msgstr "由主持者決定，所有玩家共用一組。只要使用任何突變因子就採用 Hyperion 規則。"
 
-#: src117/port/front/port_front_mutators.cpp:1632
+#: src117/port/front/port_front_mutators.cpp:1634
 msgid "Presets"
 msgstr "預設集"
 
-#: src117/port/front/port_front_mutators.cpp:1641
+#: src117/port/front/port_front_mutators.cpp:1643
 msgid "Any other set of the mutators below."
 msgstr "下方突變因子的任何其他組合。"
 
-#: src117/port/front/port_front_mutators.cpp:1642
+#: src117/port/front/port_front_mutators.cpp:1644
 msgid "The host chooses the mutators."
 msgstr "突變因子由主持者選擇。"
 
-#: src117/port/front/port_front_mutators.cpp:1723
+#: src117/port/front/port_front_mutators.cpp:1725
 msgid "CLICK TO CHOOSE"
 msgstr "點擊以選擇"
 
-#: src117/port/front/port_front_mutators.cpp:1777
+#: src117/port/front/port_front_mutators.cpp:1779
 #: src117/port/tools/port_benchview.cpp:2215
 #: src117/port/tools/port_benchview.cpp:2224
 #: src117/port/tools/port_benchview.cpp:2226
 msgid "Where"
 msgstr "位置"
 
-#: src117/port/front/port_front_mutators.cpp:1778
+#: src117/port/front/port_front_mutators.cpp:1780
 msgid "Which bases may turn rich: those past each start’s natural, those at least a distance from every start, only the farthest, or every base. Off has none, as Classic."
 msgstr "哪些基地可能變成富礦：各起點天然分礦之外的、距離所有起點至少一定距離的、只有最遠的，或是每個基地。關閉則一個也沒有，與經典版相同。"
 
-#: src117/port/front/port_front_mutators.cpp:1789
+#: src117/port/front/port_front_mutators.cpp:1791
 msgid "Distance"
 msgstr "距離"
 
-#: src117/port/front/port_front_mutators.cpp:1790
+#: src117/port/front/port_front_mutators.cpp:1792
 msgid "How far a base must be from every start, in a straight line, to turn rich: in tiles, or a share of the map’s size, its width and height averaged. For Outside a radius."
 msgstr "基地要變成富礦時，與所有起點之間的直線距離至少要多遠：以格數計，或以地圖大小（寬高平均）的比例計。用於「半徑之外」。"
 
-#: src117/port/front/port_front_mutators.cpp:1799
+#: src117/port/front/port_front_mutators.cpp:1801
 msgid "Chance"
 msgstr "機率"
 
-#: src117/port/front/port_front_mutators.cpp:1800
+#: src117/port/front/port_front_mutators.cpp:1802
 msgid "The chance a base far enough from every start turns rich at. Bases that mirror each other are rolled together. Not for Off or Every base, which roll nothing."
 msgstr "距離所有起點足夠遠的基地變成富礦的機率。互為鏡像的基地會一起判定。「關閉」與「每個基地」不需判定，因此不適用。"
 
-#: src117/port/front/port_front_mutators.cpp:1823
-#: src117/port/front/port_front_mutators.cpp:1826
+#: src117/port/front/port_front_mutators.cpp:1825
+#: src117/port/front/port_front_mutators.cpp:1828
 msgid "Announce at the start"
 msgstr "開場時宣告"
 
-#: src117/port/front/port_front_mutators.cpp:1827
+#: src117/port/front/port_front_mutators.cpp:1829
 msgid "On, the game’s first message says how many bases turned rich, or why none did. Off, it says nothing, and players find the gold and violet bases on the map."
 msgstr "開啟時，遊戲的第一則訊息會說有幾個基地變成富礦，或為什麼一個也沒有。關閉時不會提示，玩家要自己在地圖上找出金色與紫羅蘭色的基地。"
 
-#: src117/port/front/port_front_mutators.cpp:1872
+#: src117/port/front/port_front_mutators.cpp:1874
 msgid "{0} ON"
 msgstr "已開啟 {0}"
 
-#: src117/port/front/port_front_mutators.cpp:1873
+#: src117/port/front/port_front_mutators.cpp:1875
 msgid "NONE ON"
 msgstr "全部關閉"
 
-#: src117/port/front/port_front_mutators.cpp:1880
+#: src117/port/front/port_front_mutators.cpp:1882
 msgid "The game plays as Classic: the map’s resources, 50 minerals, 4 workers, 200 supply."
 msgstr "遊戲依照經典版進行：地圖原本的資源、50 晶礦、4 個工人、200 補給。"
 
-#: src117/port/front/port_front_mutators.cpp:1924
+#: src117/port/front/port_front_mutators.cpp:1926
 msgid "Change Mutators"
 msgstr "變更突變因子"
 
-#: src117/port/front/port_front_mutators.cpp:1925
+#: src117/port/front/port_front_mutators.cpp:1927
 msgid "Choose Mutators"
 msgstr "選擇突變因子"
 
-#: src117/port/front/port_front_mutators.cpp:1926
+#: src117/port/front/port_front_mutators.cpp:1928
 msgid "See Mutators"
 msgstr "查看突變因子"
 
-#: src117/port/front/port_front_mutators.cpp:398
+#: src117/port/front/port_front_mutators.cpp:399
 msgid "a quarter as long"
 msgstr "四分之一的時間"
 
-#: src117/port/front/port_front_mutators.cpp:399
+#: src117/port/front/port_front_mutators.cpp:400
 msgid "half as long"
 msgstr "一半的時間"
 
-#: src117/port/front/port_front_mutators.cpp:400
+#: src117/port/front/port_front_mutators.cpp:401
 msgid "three quarters as long"
 msgstr "四分之三的時間"
 
-#: src117/port/front/port_front_mutators.cpp:401
+#: src117/port/front/port_front_mutators.cpp:402
 msgid "as long as Classic"
 msgstr "與經典版相同的時間"
 
-#: src117/port/front/port_front_mutators.cpp:402
+#: src117/port/front/port_front_mutators.cpp:403
 msgid "half again as long"
 msgstr "一點五倍的時間"
 
-#: src117/port/front/port_front_mutators.cpp:403
+#: src117/port/front/port_front_mutators.cpp:404
 msgid "twice as long"
 msgstr "兩倍的時間"
 
-#: src117/port/front/port_front_mutators.cpp:404
+#: src117/port/front/port_front_mutators.cpp:405
 msgid "three times as long"
 msgstr "三倍的時間"
 
-#: src117/port/front/port_front_mutators.cpp:405
+#: src117/port/front/port_front_mutators.cpp:406
 msgid "four times as long"
 msgstr "四倍的時間"
 
-#: src117/port/front/port_front_mutators.cpp:406
+#: src117/port/front/port_front_mutators.cpp:407
 msgid "eight times as long"
 msgstr "八倍的時間"
 
-#: src117/port/front/port_front_mutators.cpp:411
+#: src117/port/front/port_front_mutators.cpp:412
 msgid "×{0} as long"
 msgstr "×{0} 的時間"
 
-#: src117/port/front/port_front_mutators.cpp:440
+#: src117/port/front/port_front_mutators.cpp:441
 msgid "this map"
 msgstr "這張地圖"
 
-#: src117/port/front/port_front_mutators.cpp:444
+#: src117/port/front/port_front_mutators.cpp:445
 msgid "Fields never run dry: a base can be mined all game."
 msgstr "礦場永不枯竭：一個基地可以採整場遊戲。"
 
-#: src117/port/front/port_front_mutators.cpp:446
+#: src117/port/front/port_front_mutators.cpp:447
 msgid "A field holds {0}, the small ones {1}: a base lasts {2}."
 msgstr "一個礦場有 {0}，小的有 {1}：一個基地可採 {2}。"
 
-#: src117/port/front/port_front_mutators.cpp:451
+#: src117/port/front/port_front_mutators.cpp:452
 msgid "Geysers never run dry."
 msgstr "瓦斯湧源永不枯竭。"
 
-#: src117/port/front/port_front_mutators.cpp:452
+#: src117/port/front/port_front_mutators.cpp:453
 msgid "A geyser holds {0} before it runs dry, then gives 2 a trip. It lasts {1}."
 msgstr "一個瓦斯湧源枯竭前有 {0}，之後每趟只給 2。可採 {1}。"
 
-#: src117/port/front/port_front_mutators.cpp:456
+#: src117/port/front/port_front_mutators.cpp:457
 msgid "Every base as the map made it."
 msgstr "每個基地都維持地圖原本的設定。"
 
-#: src117/port/front/port_front_mutators.cpp:459
+#: src117/port/front/port_front_mutators.cpp:460
 msgid "Every mineral field and geyser on {0} is rich: a trip brings 11 minerals or 16 gas, Classic 8."
 msgstr "{0} 上的每個晶礦場與瓦斯湧源都是富礦：每趟帶回 11 晶礦或 16 瓦斯，經典版是 8。"
 
-#: src117/port/front/port_front_mutators.cpp:465
+#: src117/port/front/port_front_mutators.cpp:466
 msgid "{0} ({1} tiles)"
 msgstr "{0}（{1} 格）"
 
-#: src117/port/front/port_front_mutators.cpp:469
+#: src117/port/front/port_front_mutators.cpp:470
 msgid "that is no start’s main or natural"
 msgstr "不是任何起點的主礦或天然分礦"
 
-#: src117/port/front/port_front_mutators.cpp:470
+#: src117/port/front/port_front_mutators.cpp:471
 msgid "{0} or more from every start"
 msgstr "距離所有起點 {0} 以上"
 
-#: src117/port/front/port_front_mutators.cpp:471
+#: src117/port/front/port_front_mutators.cpp:472
 msgid "farthest from every start"
 msgstr "距離所有起點最遠"
 
-#: src117/port/front/port_front_mutators.cpp:477
+#: src117/port/front/port_front_mutators.cpp:478
 msgid "Any base {0} may turn rich, at {1}%. Reading this map’s bases…"
 msgstr "任何 {0} 的基地都可能變成富礦，機率 {1}%。正在讀取這張地圖的基地…"
 
-#: src117/port/front/port_front_mutators.cpp:479
+#: src117/port/front/port_front_mutators.cpp:480
 msgid "Any base {0} may turn rich, at {1}%. Read from the map as the game starts."
 msgstr "任何 {0} 的基地都可能變成富礦，機率 {1}%。會在遊戲開始時從地圖讀取。"
 
-#: src117/port/front/port_front_mutators.cpp:483
+#: src117/port/front/port_front_mutators.cpp:484
 msgid "{0} No base turns rich, so no player starts ahead."
 msgstr "{0} 沒有基地會變成富礦，因此沒有玩家在開場就領先。"
 
-#: src117/port/front/port_front_mutators.cpp:486
+#: src117/port/front/port_front_mutators.cpp:487
 msgid "that are no start’s main or natural"
 msgstr "不是任何起點主礦或天然分礦的"
 
-#: src117/port/front/port_front_mutators.cpp:488
+#: src117/port/front/port_front_mutators.cpp:489
 msgid "Up to {0} base {1} on {2} may turn rich, each at {3}%: a trip brings 11 minerals or 16 gas, Classic 8."
 msgid_plural "Up to {0} bases {1} on {2} may turn rich, each at {3}%: a trip brings 11 minerals or 16 gas, Classic 8."
 msgstr[0] "{2} 上最多有 {0} 個 {1} 基地可能變成富礦，各自機率 {3}%：每趟帶回 11 晶礦或 16 瓦斯，經典版是 8。"
 
-#: src117/port/front/port_front_mutators.cpp:496
+#: src117/port/front/port_front_mutators.cpp:497
 msgid "Each player begins with {0} minerals and {1} gas: {2} worker’s worth."
 msgid_plural "Each player begins with {0} minerals and {1} gas: {2} workers’ worth."
 msgstr[0] "每位玩家開場有 {0} 晶礦與 {1} 瓦斯：相當於 {2} 個工人的價值。"
 
-#: src117/port/front/port_front_mutators.cpp:501
+#: src117/port/front/port_front_mutators.cpp:502
 msgid "Each player begins with {0} worker beside the town hall."
 msgid_plural "Each player begins with {0} workers beside the town hall."
 msgstr[0] "每位玩家開場在主基地旁有 {0} 個工人。"
 
-#: src117/port/front/port_front_mutators.cpp:505
+#: src117/port/front/port_front_mutators.cpp:506
 msgid "Not on this game: Use Map Settings keeps the map’s own start units."
 msgstr "這場遊戲不適用：「使用地圖設定」會保留地圖本身的起始單位。"
 
-#: src117/port/front/port_front_mutators.cpp:510
+#: src117/port/front/port_front_mutators.cpp:511
 msgid "No cap: an army is held back only by the supply built."
 msgstr "沒有上限：部隊規模只受已建造的補給限制。"
 
-#: src117/port/front/port_front_mutators.cpp:511
+#: src117/port/front/port_front_mutators.cpp:512
 msgid "Each player can hold {0} supply."
 msgstr "每位玩家最多可有 {0} 補給。"
 
-#: src117/port/front/port_front_mutators.cpp:517
+#: src117/port/front/port_front_mutators.cpp:518
 msgid "A depot, pylon or overlord gives {0}, a command center {1}, a nexus {2}, a hatchery {3}: whole supply, rounded down."
 msgstr "補給站、水晶塔或王蟲提供 {0}，指揮中心 {1}，星核 {2}，孵化所 {3}：取整數，向下捨去。"
 
-#: src117/port/front/port_front_mutators.cpp:520
+#: src117/port/front/port_front_mutators.cpp:521
 msgid "A depot, pylon or overlord gives {0}, a command center {1}, a nexus {2}, a hatchery {3}, as Classic."
 msgstr "補給站、水晶塔或王蟲提供 {0}，指揮中心 {1}，星核 {2}，孵化所 {3}，與經典版相同。"
 
-#: src117/port/front/port_front_mutators.cpp:526
+#: src117/port/front/port_front_mutators.cpp:527
 msgid "Every player knows the map’s land from the start. Units still show only in sight."
 msgstr "每位玩家一開始就知道地圖的地形。單位仍然只在視野內才看得見。"
 
-#: src117/port/front/port_front_mutators.cpp:528
+#: src117/port/front/port_front_mutators.cpp:529
 msgid "Every player sees the whole map all game."
 msgstr "每位玩家全場都看得見整張地圖。"
 
-#: src117/port/front/port_front_mutators.cpp:529
+#: src117/port/front/port_front_mutators.cpp:530
 msgid "The fog of war, as Classic plays it."
 msgstr "戰爭迷霧，依照經典版的做法。"
 
-#: src117/port/front/port_front_mutators.cpp:534
+#: src117/port/front/port_front_mutators.cpp:535
 msgid "As Classic: an SCV trains in {0} s at {1}."
 msgstr "與經典版相同：在 {1} 速度下，太空工程車需要 {0} 秒。"
 
-#: src117/port/front/port_front_mutators.cpp:536
+#: src117/port/front/port_front_mutators.cpp:537
 msgid "Everything takes {0}: an SCV trains in {1} s at {2}, Classic {3} s."
 msgstr "所有項目都需要 {0}：在 {2} 速度下，太空工程車需要 {1} 秒，經典版是 {3} 秒。"
 
-#: src117/port/front/port_front_mutators.cpp:542
+#: src117/port/front/port_front_mutators.cpp:543
 msgid "Every upgrade at its top level and every ability researched from the start."
 msgstr "開場所有升級都已達最高等級，所有技能都已研發完成。"
 
-#: src117/port/front/port_front_mutators.cpp:544
+#: src117/port/front/port_front_mutators.cpp:545
 msgid "Upgrades cannot be researched. Abilities still can."
 msgstr "無法研發升級。技能仍然可以研發。"
 
-#: src117/port/front/port_front_mutators.cpp:546
+#: src117/port/front/port_front_mutators.cpp:547
 msgid "Neither upgrades nor the abilities that need research."
 msgstr "升級與需要研發的技能都無法研發。"
 
-#: src117/port/front/port_front_mutators.cpp:547
+#: src117/port/front/port_front_mutators.cpp:548
 msgid "Everything to research, as Classic."
 msgstr "所有項目都需要研發，與經典版相同。"
 
@@ -3087,29 +3087,30 @@ msgstr "資源"
 msgid "The start"
 msgstr "起始條件"
 
-#: src117/port/front/port_front_mutators.cpp:686
+#: src117/port/front/port_front_mutators.cpp:687
 #: src117/port/gameplay/port_ai.cpp:64
 msgid "Harder"
 msgstr "更難"
 
-#: src117/port/front/port_front_mutators.cpp:686
-#: src117/port/front/port_front_mutators.cpp:1086
+#: src117/port/front/port_front_mutators.cpp:687
+#: src117/port/front/port_front_mutators.cpp:1087
 msgid "This game"
 msgstr "這場遊戲"
 
-#: src117/port/front/port_front_mutators.cpp:686
-#: src117/port/front/port_front_mutators.cpp:833
-#: src117/port/front/port_front_mutators.cpp:1086
-#: src117/port/front/port_front_mutators.cpp:1696
+#: src117/port/front/port_front_mutators.cpp:687
+#: src117/port/front/port_front_mutators.cpp:834
+#: src117/port/front/port_front_mutators.cpp:1087
+#: src117/port/front/port_front_mutators.cpp:1698
 #: src117/port/front/port_front_replays.cpp:54
 #: src117/port/front/port_front_replays.cpp:1010
 #: src117/port/front/port_front_score.cpp:929
-#: src117/port/front/port_front_skirmish.cpp:2769
+#: src117/port/front/port_front_skirmish.cpp:2770
+#: src117/port/gameplay/port_mutators.cpp:83
 msgid "Classic"
 msgstr "經典版"
 
 #: src117/port/front/port_front_mutators.cpp:69
-#: src117/port/front/port_front_mutators.cpp:1007
+#: src117/port/front/port_front_mutators.cpp:1008
 #: src117/port/gameplay/port_trainerview.cpp:409
 #: src117/port/hud/port_hudstats.cpp:414
 msgid "Supply"
@@ -3127,11 +3128,11 @@ msgstr "每個晶礦場的蘊藏量，也就是一個基地能採多久。"
 msgid "How much each geyser holds before it runs dry."
 msgstr "每個瓦斯湧源枯竭前的蘊藏量。"
 
-#: src117/port/front/port_front_mutators.cpp:730
+#: src117/port/front/port_front_mutators.cpp:731
 msgid "a geyser"
 msgstr "一個瓦斯湧源"
 
-#: src117/port/front/port_front_mutators.cpp:730
+#: src117/port/front/port_front_mutators.cpp:731
 msgid "a field"
 msgstr "一個礦場"
 
@@ -3139,25 +3140,25 @@ msgstr "一個礦場"
 msgid "What each player has to spend at the first second."
 msgstr "每位玩家在第一秒可以動用的資源。"
 
-#: src117/port/front/port_front_mutators.cpp:740
+#: src117/port/front/port_front_mutators.cpp:741
 msgid "never runs dry"
 msgstr "永不枯竭"
 
-#: src117/port/front/port_front_mutators.cpp:741
+#: src117/port/front/port_front_mutators.cpp:742
 msgid "lasts {0}"
 msgstr "可採 {0}"
 
-#: src117/port/front/port_front_mutators.cpp:742
+#: src117/port/front/port_front_mutators.cpp:743
 msgid "then 2 a trip"
 msgstr "之後每趟 2"
 
-#: src117/port/front/port_front_mutators.cpp:743
+#: src117/port/front/port_front_mutators.cpp:744
 msgid "the small ones {0}"
 msgstr "小的 {0}"
 
-#: src117/port/front/port_front_mutators.cpp:744
-#: src117/port/gameplay/port_mutators.cpp:87
-#: src117/port/gameplay/port_mutators.cpp:111
+#: src117/port/front/port_front_mutators.cpp:745
+#: src117/port/gameplay/port_mutators.cpp:112
+#: src117/port/gameplay/port_mutators.cpp:136
 msgid "Infinite"
 msgstr "無限"
 
@@ -3189,80 +3190,84 @@ msgstr "開場就研發完所有項目，或是在沒有升級與研發的情況
 msgid "Some bases away from the starts get gold minerals and violet gas, which bring more each trip."
 msgstr "遠離起點的部分基地會變成金色晶礦與紫羅蘭色瓦斯，每趟採集帶回更多。"
 
-#: src117/port/front/port_front_mutators.cpp:828
+#: src117/port/front/port_front_mutators.cpp:82
+msgid "How many workers and how much minerals and gas each player starts with, rolled fresh every game."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:829
 msgid "A trip brings"
 msgstr "每趟帶回"
 
-#: src117/port/front/port_front_mutators.cpp:834
+#: src117/port/front/port_front_mutators.cpp:835
 msgid "Rich · off"
 msgstr "富礦 · 關閉"
 
-#: src117/port/front/port_front_mutators.cpp:835
+#: src117/port/front/port_front_mutators.cpp:836
 msgid "Rich · every base"
 msgstr "富礦 · 每個基地"
 
-#: src117/port/front/port_front_mutators.cpp:836
+#: src117/port/front/port_front_mutators.cpp:837
 msgid "Rich · up to {0} base"
 msgid_plural "Rich · up to {0} bases"
 msgstr[0] "富礦 · 最多 {0} 個基地"
 
-#: src117/port/front/port_front_mutators.cpp:838
+#: src117/port/front/port_front_mutators.cpp:839
 msgid "Rich · none far enough"
 msgstr "富礦 · 沒有基地足夠遠"
 
-#: src117/port/front/port_front_mutators.cpp:851
+#: src117/port/front/port_front_mutators.cpp:852
 msgid "Reading this map…"
 msgstr "正在讀取這張地圖…"
 
-#: src117/port/front/port_front_mutators.cpp:851
+#: src117/port/front/port_front_mutators.cpp:852
 msgid "A sketch, not this map"
 msgstr "示意圖，不是這張地圖"
 
-#: src117/port/front/port_front_mutators.cpp:871
+#: src117/port/front/port_front_mutators.cpp:872
 msgid "gas"
 msgstr "瓦斯"
 
-#: src117/port/front/port_front_mutators.cpp:871
+#: src117/port/front/port_front_mutators.cpp:872
 msgid "minerals"
 msgstr "晶礦"
 
-#: src117/port/front/port_front_mutators.cpp:912
+#: src117/port/front/port_front_mutators.cpp:913
 msgid "No cap"
 msgstr "無上限"
 
-#: src117/port/front/port_front_mutators.cpp:916
+#: src117/port/front/port_front_mutators.cpp:917
 msgid "supply has no limit"
 msgstr "補給沒有上限"
 
-#: src117/port/front/port_front_mutators.cpp:917
+#: src117/port/front/port_front_mutators.cpp:918
 msgid "supply, less than Classic: harder"
 msgstr "補給，比經典版少：更難"
 
-#: src117/port/front/port_front_mutators.cpp:918
+#: src117/port/front/port_front_mutators.cpp:919
 msgid "supply, the most a player holds"
 msgstr "補給，玩家可擁有的上限"
 
-#: src117/port/front/port_front_mutators.cpp:947
+#: src117/port/front/port_front_mutators.cpp:948
 msgid "Classic 200"
 msgstr "經典版 200"
 
-#: src117/port/front/port_front_mutators.cpp:953
+#: src117/port/front/port_front_mutators.cpp:954
 msgid "marines"
 msgstr "陸戰隊"
 
-#: src117/port/front/port_front_mutators.cpp:953
+#: src117/port/front/port_front_mutators.cpp:954
 msgid "zealots"
 msgstr "狂戰士"
 
-#: src117/port/front/port_front_mutators.cpp:953
+#: src117/port/front/port_front_mutators.cpp:954
 msgid "ultralisks"
 msgstr "雷獸"
 
-#: src117/port/front/port_front_mutators.cpp:961
+#: src117/port/front/port_front_mutators.cpp:962
 msgid "Any number of {0}"
 msgstr "{0} 可以無限多"
 
-#: src117/port/front/port_front_mutators.cpp:965
+#: src117/port/front/port_front_mutators.cpp:966
 msgid "Classic {0}"
 msgstr "經典版 {0}"
 
@@ -3400,7 +3405,7 @@ msgid "Make a profile to play. It keeps your campaign and your saves."
 msgstr "建立個人資訊才能開始遊戲。它會保存你的劇情戰役進度與存檔。"
 
 #: src117/port/front/port_front_profile.cpp:1201
-#: src117/port/front/port_front_skirmish.cpp:1602
+#: src117/port/front/port_front_skirmish.cpp:1603
 msgid "Choose"
 msgstr "選擇"
 
@@ -3562,7 +3567,7 @@ msgid "Made {0}"
 msgstr "建立於 {0}"
 
 #: src117/port/front/port_front_profile.cpp:838
-#: src117/port/lan/port_front_lan.cpp:1614
+#: src117/port/lan/port_front_lan.cpp:1640
 msgid "In {0}"
 msgstr "位於 {0}"
 
@@ -3599,7 +3604,7 @@ msgid "New profile"
 msgstr "新的個人資訊"
 
 #: src117/port/front/port_front_profile.cpp:869
-#: src117/port/front/port_front_skirmish.cpp:1443
+#: src117/port/front/port_front_skirmish.cpp:1444
 #: src117/port/lan/port_front_lanhost.cpp:603
 msgid "and {0} more"
 msgstr "還有 {0} 個"
@@ -3621,7 +3626,7 @@ msgid "{0} frames at {1}"
 msgstr "{1} 速度下 {0} 影格"
 
 #: src117/port/front/port_front_replays.cpp:1010
-#: src117/port/front/port_front_skirmish.cpp:2768
+#: src117/port/front/port_front_skirmish.cpp:2769
 msgid "Rules"
 msgstr "規則"
 
@@ -3755,7 +3760,7 @@ msgid "Campaign mission"
 msgstr "劇情戰役任務"
 
 #: src117/port/front/port_front_replays.cpp:300
-#: src117/port/front/port_front_skirmish.cpp:1349
+#: src117/port/front/port_front_skirmish.cpp:1350
 #: src117/port/front/port_front_trainer.cpp:423
 msgid "Unreadable"
 msgstr "無法讀取"
@@ -3834,8 +3839,8 @@ msgid "My Replays"
 msgstr "我的戰鬥錄影"
 
 #: src117/port/front/port_front_replays.cpp:53
-#: src117/port/lan/port_front_lan.cpp:1648
-#: src117/port/lan/port_front_lan.cpp:1649
+#: src117/port/lan/port_front_lan.cpp:1674
+#: src117/port/lan/port_front_lan.cpp:1675
 msgid "Online"
 msgstr "線上"
 
@@ -3885,13 +3890,13 @@ msgid "REPLAY"
 msgstr "戰鬥錄影"
 
 #: src117/port/front/port_front_replays.cpp:745
-#: src117/port/front/port_front_skirmish.cpp:1237
+#: src117/port/front/port_front_skirmish.cpp:1238
 msgid "MAP"
 msgstr "地圖"
 
 #: src117/port/front/port_front_replays.cpp:745
-#: src117/port/front/port_front_skirmish.cpp:1239
-#: src117/port/front/port_front_skirmish.cpp:2582
+#: src117/port/front/port_front_skirmish.cpp:1240
+#: src117/port/front/port_front_skirmish.cpp:2583
 #: src117/port/hud/port_hudstats.cpp:531
 #: src117/port/hud/port_hudstats.cpp:1083
 #: src117/port/tools/port_benchview.cpp:1668
@@ -4110,23 +4115,23 @@ msgid "Spent"
 msgstr "消耗"
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2484
+#: src117/port/front/port_front_skirmish.cpp:2485
 msgid "Auto"
 msgstr "自動"
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2484
+#: src117/port/front/port_front_skirmish.cpp:2485
 msgid "Rows"
 msgstr "橫列"
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2484
+#: src117/port/front/port_front_skirmish.cpp:2485
 #: src117/port/tools/port_benchview.cpp:2234
 msgid "Compact"
 msgstr "精簡"
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2484
+#: src117/port/front/port_front_skirmish.cpp:2485
 msgid "Columns"
 msgstr "直欄"
 
@@ -4135,7 +4140,7 @@ msgid "By Team"
 msgstr "依隊伍"
 
 #: src117/port/front/port_front_score.cpp:65
-#: src117/port/front/port_front_skirmish.cpp:2745
+#: src117/port/front/port_front_skirmish.cpp:2746
 msgid "Teams"
 msgstr "隊伍"
 
@@ -4172,8 +4177,8 @@ msgid "{0} of {1} by score"
 msgstr "分數為 {1} 人中第 {0} 名"
 
 #: src117/port/front/port_front_score.cpp:959
-#: src117/port/front/port_front_skirmish.cpp:2329
-#: src117/port/front/port_front_skirmish.cpp:2370
+#: src117/port/front/port_front_skirmish.cpp:2330
+#: src117/port/front/port_front_skirmish.cpp:2371
 #: src117/port/hud/port_hudinput.cpp:675
 msgid "{0} of {1}"
 msgstr "{1} 人中第 {0} 名"
@@ -4199,9 +4204,9 @@ msgid "Primary"
 msgstr "主螢幕"
 
 #: src117/port/front/port_front_settings.cpp:1673
-#: src117/port/gameplay/port_mutators.cpp:49
-#: src117/port/gameplay/port_mutators.cpp:363
-#: src117/port/gameplay/port_mutators.cpp:446
+#: src117/port/gameplay/port_mutators.cpp:67
+#: src117/port/gameplay/port_mutators.cpp:391
+#: src117/port/gameplay/port_mutators.cpp:477
 #: src117/port/tools/port_benchview.cpp:2237
 msgid "None"
 msgstr "全部展開"
@@ -4739,8 +4744,8 @@ msgstr "快速鍵編輯器"
 
 #: src117/port/front/port_front_settings.cpp:919
 #: src117/port/front/port_front_settings.cpp:1737
-#: src117/port/front/port_front_skirmish.cpp:2092
-#: src117/port/front/port_front_skirmish.cpp:3085
+#: src117/port/front/port_front_skirmish.cpp:2093
+#: src117/port/front/port_front_skirmish.cpp:3112
 msgid "Open"
 msgstr "開啟"
 
@@ -4968,633 +4973,658 @@ msgstr "自動|大快取|任意"
 msgid "On a processor whose cores do not all share one cache, such as a Ryzen X3D with its two halves, which cores the game runs on. Large cache plays large games faster, a 64-player game by a tenth; Any lets Windows choose, which favours the fastest clocks and suits small games a little better. Auto takes the large cache once a game has 2,000 units. Where every core shares one cache it makes no difference."
 msgstr "在核心不共用同一個快取的處理器上，例如分成兩半的 Ryzen X3D，決定遊戲在哪些核心上執行。「大快取」讓大型遊戲跑得更快，64 位玩家的遊戲約快十分之一；「任意」交由 Windows 選擇，它偏好時脈最高的核心，對小型遊戲稍微有利。「自動」會在遊戲達到 2,000 個單位後改用大快取。所有核心共用同一個快取時沒有差別。"
 
-#: src117/port/front/port_front_skirmish.cpp:1239
+#: src117/port/front/port_front_skirmish.cpp:1240
 msgid "SIZE"
 msgstr "大小"
 
-#: src117/port/front/port_front_skirmish.cpp:1239
+#: src117/port/front/port_front_skirmish.cpp:1240
 msgid "TILESET"
 msgstr "圖磚"
 
-#: src117/port/front/port_front_skirmish.cpp:1239
+#: src117/port/front/port_front_skirmish.cpp:1240
 msgid "RULES"
 msgstr "規則"
 
-#: src117/port/front/port_front_skirmish.cpp:1317
+#: src117/port/front/port_front_skirmish.cpp:1318
 msgid "Up One Level"
 msgstr "上一層"
 
-#: src117/port/front/port_front_skirmish.cpp:1324
+#: src117/port/front/port_front_skirmish.cpp:1325
 msgid "To {0} · Backspace"
 msgstr "回到 {0} · Backspace"
 
-#: src117/port/front/port_front_skirmish.cpp:1326
+#: src117/port/front/port_front_skirmish.cpp:1327
 msgid "Folder"
 msgstr "資料夾"
 
-#: src117/port/front/port_front_skirmish.cpp:1335
+#: src117/port/front/port_front_skirmish.cpp:1336
 msgid "{0} map"
 msgid_plural "{0} maps"
 msgstr[0] "{0} 張地圖"
 
-#: src117/port/front/port_front_skirmish.cpp:1335
+#: src117/port/front/port_front_skirmish.cpp:1336
 msgid "No maps"
 msgstr "沒有地圖"
 
-#: src117/port/front/port_front_skirmish.cpp:1347
+#: src117/port/front/port_front_skirmish.cpp:1348
 msgid "Either"
 msgstr "兩者皆可"
 
-#: src117/port/front/port_front_skirmish.cpp:1349
+#: src117/port/front/port_front_skirmish.cpp:1350
 msgid "Too many"
 msgstr "太多"
 
-#: src117/port/front/port_front_skirmish.cpp:1365
+#: src117/port/front/port_front_skirmish.cpp:1366
 msgid "No maps in this folder."
 msgstr "這個資料夾中沒有地圖。"
 
-#: src117/port/front/port_front_skirmish.cpp:1366
+#: src117/port/front/port_front_skirmish.cpp:1367
 msgid "No map in this folder has that many players at that size."
 msgstr "這個資料夾中沒有符合該玩家數與該大小的地圖。"
 
-#: src117/port/front/port_front_skirmish.cpp:1402
-#: src117/port/front/port_front_skirmish.cpp:2888
+#: src117/port/front/port_front_skirmish.cpp:1403
+#: src117/port/front/port_front_skirmish.cpp:2889
 msgid "{0} starts · {1} × {2} tiles · {3}"
 msgstr "{0} 個起始位置 · {1} × {2} 格 · {3}"
 
-#: src117/port/front/port_front_skirmish.cpp:1409
+#: src117/port/front/port_front_skirmish.cpp:1410
 msgid "Plays under Hyperion rules: past the original’s 8 players."
 msgstr "採用 Hyperion 規則：超出原版的 8 位玩家。"
 
-#: src117/port/front/port_front_skirmish.cpp:1410
+#: src117/port/front/port_front_skirmish.cpp:1411
 msgid "Plays under Hyperion rules: past the original’s 256 tiles."
 msgstr "採用 Hyperion 規則：超出原版的 256 格。"
 
-#: src117/port/front/port_front_skirmish.cpp:1413
+#: src117/port/front/port_front_skirmish.cpp:1414
 msgid "Classic or Hyperion rules."
 msgstr "經典或 Hyperion 規則。"
 
-#: src117/port/front/port_front_skirmish.cpp:1432
+#: src117/port/front/port_front_skirmish.cpp:1433
 msgid "{0} map, counting its folders"
 msgid_plural "{0} maps, counting its folders"
 msgstr[0] "{0} 張地圖，含子資料夾"
 
-#: src117/port/front/port_front_skirmish.cpp:1447
+#: src117/port/front/port_front_skirmish.cpp:1448
 msgid "Double-click or Enter opens it."
 msgstr "連按兩下或按 Enter 開啟。"
 
-#: src117/port/front/port_front_skirmish.cpp:1458
+#: src117/port/front/port_front_skirmish.cpp:1459
 msgid "CHOOSE A MAP"
 msgstr "選擇地圖"
 
-#: src117/port/front/port_front_skirmish.cpp:1490
+#: src117/port/front/port_front_skirmish.cpp:1491
 msgid "Maps for Brood War"
 msgstr "Brood War 的地圖"
 
-#: src117/port/front/port_front_skirmish.cpp:1490
+#: src117/port/front/port_front_skirmish.cpp:1491
 msgid "Maps for StarCraft"
 msgstr "StarCraft 的地圖"
 
-#: src117/port/front/port_front_skirmish.cpp:1525
-#: src117/port/front/port_front_skirmish.cpp:1602
+#: src117/port/front/port_front_skirmish.cpp:1526
+#: src117/port/front/port_front_skirmish.cpp:1603
 msgid "Open Folder"
 msgstr "開啟資料夾"
 
-#: src117/port/front/port_front_skirmish.cpp:1525
+#: src117/port/front/port_front_skirmish.cpp:1526
 msgid "Choose Map"
 msgstr "選擇地圖"
 
-#: src117/port/front/port_front_skirmish.cpp:1538
+#: src117/port/front/port_front_skirmish.cpp:1539
 msgid "The set-up waits: choose {0} again to keep it."
 msgstr "目前的設定會暫時保留：再選擇一次 {0} 就會沿用。"
 
-#: src117/port/front/port_front_skirmish.cpp:1540
+#: src117/port/front/port_front_skirmish.cpp:1541
 msgid "Slots, races and options come next."
 msgstr "接下來是欄位、種族與選項。"
 
-#: src117/port/front/port_front_skirmish.cpp:1741
+#: src117/port/front/port_front_skirmish.cpp:1742
 msgid "{0}: player {1}’s colour. Picking it swaps the two."
 msgstr "{0}：玩家 {1} 的顏色。選它會讓兩者互換。"
 
-#: src117/port/front/port_front_skirmish.cpp:1743
+#: src117/port/front/port_front_skirmish.cpp:1744
 msgid "{0}: reads as player {1}’s colour {2}. Picking it swaps the two."
 msgstr "{0}：看起來與玩家 {1} 的顏色 {2} 相同。選它會讓兩者互換。"
 
-#: src117/port/front/port_front_skirmish.cpp:1746
+#: src117/port/front/port_front_skirmish.cpp:1747
 msgid "{0}: hard to tell from player {1}’s colour {2}."
 msgstr "{0}：與玩家 {1} 的顏色 {2} 難以分辨。"
 
-#: src117/port/front/port_front_skirmish.cpp:1779
+#: src117/port/front/port_front_skirmish.cpp:1780
 msgid "Now its own colour, {0}"
 msgstr "現在是它自己的顏色，{0}"
 
-#: src117/port/front/port_front_skirmish.cpp:1780
+#: src117/port/front/port_front_skirmish.cpp:1781
 msgid "Now {0}"
 msgstr "現在是 {0}"
 
-#: src117/port/front/port_front_skirmish.cpp:1787
+#: src117/port/front/port_front_skirmish.cpp:1788
 msgid "A number: that player’s colour. Picking it swaps the two."
 msgstr "數字：該玩家的顏色。選它會讓兩者互換。"
 
-#: src117/port/front/port_front_skirmish.cpp:1790
+#: src117/port/front/port_front_skirmish.cpp:1791
 msgid "Orange rim: hard to tell from a player’s colour."
 msgstr "橘色外框：與某位玩家的顏色難以分辨。"
 
-#: src117/port/front/port_front_skirmish.cpp:1827
+#: src117/port/front/port_front_skirmish.cpp:1828
 msgid "The units"
 msgstr "單位"
 
-#: src117/port/front/port_front_skirmish.cpp:1834
+#: src117/port/front/port_front_skirmish.cpp:1835
 msgid "The minimap"
 msgstr "小地圖"
 
-#: src117/port/front/port_front_skirmish.cpp:1839
+#: src117/port/front/port_front_skirmish.cpp:1840
 msgid "Nobody else to compare with."
 msgstr "沒有其他人可以比較。"
 
-#: src117/port/front/port_front_skirmish.cpp:1840
+#: src117/port/front/port_front_skirmish.cpp:1841
 msgid "Clear of every other player, on the minimap and in the units."
 msgstr "在小地圖上與單位上都與其他玩家分得清楚。"
 
-#: src117/port/front/port_front_skirmish.cpp:1845
+#: src117/port/front/port_front_skirmish.cpp:1846
 msgid "Reads as player {0}’s colour {1}. Choose another, or give player {0} a new colour first."
 msgstr "看起來與玩家 {0} 的顏色 {1} 相同。請換一個，或先為玩家 {0} 指定新的顏色。"
 
-#: src117/port/front/port_front_skirmish.cpp:1848
+#: src117/port/front/port_front_skirmish.cpp:1849
 msgid "Close to player {0}’s colour {1}. Allowed, and marked on both."
 msgstr "與玩家 {0} 的顏色 {1} 相近。允許使用，兩邊都會標示。"
 
-#: src117/port/front/port_front_skirmish.cpp:1859
+#: src117/port/front/port_front_skirmish.cpp:1860
 msgid "Use This Colour"
 msgstr "使用這個顏色"
 
-#: src117/port/front/port_front_skirmish.cpp:1919
+#: src117/port/front/port_front_skirmish.cpp:1920
 msgid "Close colours"
 msgstr "相近的顏色"
 
-#: src117/port/front/port_front_skirmish.cpp:1920
+#: src117/port/front/port_front_skirmish.cpp:1921
 msgid "Hard to tell from player {0}’s colour {1}. Pick another, or press Distinct Colours to separate every player’s."
 msgstr "與玩家 {0} 的顏色 {1} 難以分辨。請換一個，或按「區分顏色」讓每位玩家的顏色分開。"
 
-#: src117/port/front/port_front_skirmish.cpp:1946
+#: src117/port/front/port_front_skirmish.cpp:1947
 msgid "Colour for player {0}"
 msgstr "玩家 {0} 的顏色"
 
-#: src117/port/front/port_front_skirmish.cpp:1947
+#: src117/port/front/port_front_skirmish.cpp:1948
 msgid "The game’s colours"
 msgstr "遊戲的顏色"
 
-#: src117/port/front/port_front_skirmish.cpp:1947
+#: src117/port/front/port_front_skirmish.cpp:1948
 msgid "Any colour"
 msgstr "任何顏色"
 
-#: src117/port/front/port_front_skirmish.cpp:1971
+#: src117/port/front/port_front_skirmish.cpp:1972
 msgid "Observer 1"
 msgstr "觀戰者 1"
 
-#: src117/port/front/port_front_skirmish.cpp:1972
+#: src117/port/front/port_front_skirmish.cpp:1973
 msgid "An observer has no seat: they watch every seat play, the whole map shown."
 msgstr "觀戰者沒有席位：他們觀看所有席位進行遊戲，並看得見整張地圖。"
 
-#: src117/port/front/port_front_skirmish.cpp:1991
+#: src117/port/front/port_front_skirmish.cpp:1992
 msgid "Empty"
 msgstr "空位"
 
-#: src117/port/front/port_front_skirmish.cpp:1994
-#: src117/port/front/port_front_skirmish.cpp:2115
-#: src117/port/front/port_front_skirmish.cpp:2119
-#: src117/port/front/port_front_skirmish.cpp:2198
-#: src117/port/front/port_frontkit.cpp:376
+#: src117/port/front/port_front_skirmish.cpp:1995
+#: src117/port/front/port_front_skirmish.cpp:2116
+#: src117/port/front/port_front_skirmish.cpp:2120
+#: src117/port/front/port_front_skirmish.cpp:2199
+#: src117/port/front/port_frontkit.cpp:380
 msgid "Use Map Settings"
 msgstr "使用地圖設定"
 
-#: src117/port/front/port_front_skirmish.cpp:1995
-#: src117/port/front/port_front_skirmish.cpp:2116
+#: src117/port/front/port_front_skirmish.cpp:1996
+#: src117/port/front/port_front_skirmish.cpp:2117
 msgid "The map seats the players and runs the game, and expects you in your seat. Watching a game of computers is for melee games."
 msgstr "由地圖安排玩家並控制遊戲進行，而且預期你要坐在自己的席位上。觀看電腦對戰只適用於一般對戰。"
 
-#: src117/port/front/port_front_skirmish.cpp:1998
+#: src117/port/front/port_front_skirmish.cpp:1999
 msgid "Observer"
 msgstr "觀戰者"
 
-#: src117/port/front/port_front_skirmish.cpp:1999
+#: src117/port/front/port_front_skirmish.cpp:2000
 msgid "Watch instead of playing: your seat becomes a computer, and you watch every seat play with the whole map shown, the replay’s controls and speeds up to 16 times Fastest."
 msgstr "改為觀戰而不親自進行：你的席位會變成電腦，而你會看著所有席位進行遊戲，看得見整張地圖，並可使用戰鬥錄影的控制與最高 16 倍「最快」的速度。"
 
-#: src117/port/front/port_front_skirmish.cpp:2012
+#: src117/port/front/port_front_skirmish.cpp:2013
 msgid "The whole map shown, the replay’s controls, up to 16 times Fastest"
 msgstr "看得見整張地圖，可使用戰鬥錄影的控制，最高 16 倍「最快」"
 
-#: src117/port/front/port_front_skirmish.cpp:2020
+#: src117/port/front/port_front_skirmish.cpp:2021
 msgid "EMPTY"
 msgstr "空位"
 
-#: src117/port/front/port_front_skirmish.cpp:2022
+#: src117/port/front/port_front_skirmish.cpp:2023
 msgid "watching is for melee games"
 msgstr "觀戰只適用於一般對戰"
 
-#: src117/port/front/port_front_skirmish.cpp:2023
+#: src117/port/front/port_front_skirmish.cpp:2024
 msgid "choose You to watch a game of computers"
 msgstr "選擇「你」才能觀看電腦對戰"
 
-#: src117/port/front/port_front_skirmish.cpp:2045
+#: src117/port/front/port_front_skirmish.cpp:2046
 msgid "Starts are drawn at random in a melee game, so a slot is not a place on the map. Choose Start positions: By slot to give each player a start."
 msgstr "一般對戰的起始位置是隨機抽出的，因此欄位並不對應地圖上的位置。選擇「起始位置：依欄位」才能為每位玩家指定起點。"
 
-#: src117/port/front/port_front_skirmish.cpp:2078
+#: src117/port/front/port_front_skirmish.cpp:2079
 msgid "You, the host"
 msgstr "你，主持者"
 
-#: src117/port/front/port_front_skirmish.cpp:2078
+#: src117/port/front/port_front_skirmish.cpp:2079
 msgid "The host"
 msgstr "主持者"
 
-#: src117/port/front/port_front_skirmish.cpp:2085
+#: src117/port/front/port_front_skirmish.cpp:2086
 msgid "Closed"
 msgstr "關閉"
 
-#: src117/port/front/port_front_skirmish.cpp:2105
-#: src117/port/lan/port_front_lan.cpp:1835
+#: src117/port/front/port_front_skirmish.cpp:2106
+#: src117/port/lan/port_front_lan.cpp:1861
 msgid "{0} (you)"
 msgstr "{0}（你）"
 
-#: src117/port/front/port_front_skirmish.cpp:2119
+#: src117/port/front/port_front_skirmish.cpp:2120
 msgid "The map seats the players and runs the game."
 msgstr "由地圖安排玩家並控制遊戲進行。"
 
-#: src117/port/front/port_front_skirmish.cpp:2121
+#: src117/port/front/port_front_skirmish.cpp:2122
 msgid "Your seat"
 msgstr "你的席位"
 
-#: src117/port/front/port_front_skirmish.cpp:2122
+#: src117/port/front/port_front_skirmish.cpp:2123
 msgid "Play it yourself, or make it a computer and watch: every seat a computer, the whole map shown, with the replay’s controls and speeds up to 16 times Fastest."
 msgstr "可以自己進行，也可以改成電腦來觀戰：所有席位都是電腦，看得見整張地圖，並可使用戰鬥錄影的控制與最高 16 倍「最快」的速度。"
 
-#: src117/port/front/port_front_skirmish.cpp:2125
+#: src117/port/front/port_front_skirmish.cpp:2126
 msgid "The seat"
 msgstr "席位"
 
-#: src117/port/front/port_front_skirmish.cpp:2126
+#: src117/port/front/port_front_skirmish.cpp:2127
 msgid "Open: the next person in the room to join takes it. A person seated here goes back to the room when the seat is made a computer, closed or open. The host may give up their own seat to run the room, and take any seat that is not a person's again."
 msgstr "「開放」：房間中下一個加入的人會坐進來。坐在這裡的人在席位被改成電腦、關閉或開放時會回到房間。主持者可以放棄自己的席位來管理房間，之後也能再坐進任何沒有人的席位。"
 
-#: src117/port/front/port_front_skirmish.cpp:2145
+#: src117/port/front/port_front_skirmish.cpp:2146
 msgid "OPEN"
 msgstr "開放"
 
-#: src117/port/front/port_front_skirmish.cpp:2145
+#: src117/port/front/port_front_skirmish.cpp:2146
 msgid "CLOSED"
 msgstr "關閉"
 
-#: src117/port/front/port_front_skirmish.cpp:2147
+#: src117/port/front/port_front_skirmish.cpp:2148
 msgid "for the next person to join"
 msgstr "保留給下一個加入的人"
 
-#: src117/port/front/port_front_skirmish.cpp:2161
+#: src117/port/front/port_front_skirmish.cpp:2162
 msgid "Each team plays in shades of its colour. Choose Colours: By player to pick each player’s."
 msgstr "每個隊伍使用同一色系的深淺。選擇「顏色：依玩家」可為每位玩家挑選顏色。"
 
-#: src117/port/front/port_front_skirmish.cpp:2173
-#: src117/port/front/port_front_skirmish.cpp:2820
+#: src117/port/front/port_front_skirmish.cpp:2174
+#: src117/port/front/port_front_skirmish.cpp:2821
 msgid "The map’s"
 msgstr "地圖決定"
 
-#: src117/port/front/port_front_skirmish.cpp:2197
+#: src117/port/front/port_front_skirmish.cpp:2198
 msgid "Their race"
 msgstr "各自的種族"
 
-#: src117/port/front/port_front_skirmish.cpp:2199
-#: src117/port/front/port_front_skirmish.cpp:2223
+#: src117/port/front/port_front_skirmish.cpp:2200
+#: src117/port/front/port_front_skirmish.cpp:2224
 msgid "The host’s"
 msgstr "主持者決定"
 
-#: src117/port/front/port_front_skirmish.cpp:2200
+#: src117/port/front/port_front_skirmish.cpp:2201
 msgid "Each person in the room chooses their own race."
 msgstr "房間中每個人自己選擇種族。"
 
-#: src117/port/front/port_front_skirmish.cpp:2201
+#: src117/port/front/port_front_skirmish.cpp:2202
 msgid "The map gives the computers their races."
 msgstr "電腦的種族由地圖決定。"
 
-#: src117/port/front/port_front_skirmish.cpp:2202
+#: src117/port/front/port_front_skirmish.cpp:2203
 msgid "The host chooses the computers’ races."
 msgstr "電腦的種族由主持者選擇。"
 
-#: src117/port/front/port_front_skirmish.cpp:2222
+#: src117/port/front/port_front_skirmish.cpp:2223
 msgid "Their handicap"
 msgstr "各自的讓分"
 
-#: src117/port/front/port_front_skirmish.cpp:2225
+#: src117/port/front/port_front_skirmish.cpp:2226
 msgid "Each person in the room chooses their own handicap."
 msgstr "房間中每個人自己選擇讓分。"
 
-#: src117/port/front/port_front_skirmish.cpp:2226
+#: src117/port/front/port_front_skirmish.cpp:2227
 msgid "The host chooses the computers’ handicaps."
 msgstr "電腦的讓分由主持者選擇。"
 
-#: src117/port/front/port_front_skirmish.cpp:2244
+#: src117/port/front/port_front_skirmish.cpp:2245
 msgid "READY"
 msgstr "已準備"
 
-#: src117/port/front/port_front_skirmish.cpp:2244
+#: src117/port/front/port_front_skirmish.cpp:2245
 msgid "NOT READY"
 msgstr "未準備"
 
-#: src117/port/front/port_front_skirmish.cpp:2256
+#: src117/port/front/port_front_skirmish.cpp:2257
 msgid "Use Map Settings: the map runs its computers."
 msgstr "使用地圖設定：電腦由地圖控制。"
 
-#: src117/port/front/port_front_skirmish.cpp:2257
+#: src117/port/front/port_front_skirmish.cpp:2258
 msgid "A room’s computers are the original’s own, Classic AI. Other levels in a room are not available yet."
 msgstr "房間中的電腦是原版自己的「經典 AI」。房間中的其他等級尚未提供。"
 
-#: src117/port/front/port_front_skirmish.cpp:2291
-#: src117/port/front/port_front_skirmish.cpp:2427
+#: src117/port/front/port_front_skirmish.cpp:2292
+#: src117/port/front/port_front_skirmish.cpp:2428
 msgid "Distinct Colours ({0})"
 msgstr "區分顏色（{0}）"
 
-#: src117/port/front/port_front_skirmish.cpp:2292
+#: src117/port/front/port_front_skirmish.cpp:2293
 msgid "Distinct Colours"
 msgstr "區分顏色"
 
-#: src117/port/front/port_front_skirmish.cpp:2295
+#: src117/port/front/port_front_skirmish.cpp:2296
 msgid "Distinct colours"
 msgstr "區分顏色"
 
-#: src117/port/front/port_front_skirmish.cpp:2296
+#: src117/port/front/port_front_skirmish.cpp:2297
 msgid "Some players’ colours are close to another’s. Gives each player the colour farthest from those already taken; you keep yours. Hotkey: T"
 msgstr "有些玩家的顏色與其他人相近。這會為每位玩家指定與已選顏色差距最大的顏色；你自己的顏色會保留。快速鍵：T"
 
-#: src117/port/front/port_front_skirmish.cpp:2298
+#: src117/port/front/port_front_skirmish.cpp:2299
 msgid "No two colours are close. Gives each player the colour farthest from those already taken; you keep yours. Hotkey: T"
 msgstr "沒有任何兩個顏色相近。這會為每位玩家指定與已選顏色差距最大的顏色；你自己的顏色會保留。快速鍵：T"
 
-#: src117/port/front/port_front_skirmish.cpp:2334
+#: src117/port/front/port_front_skirmish.cpp:2335
 #: src117/port/platform/port_discord.cpp:656
 msgid "{0} person"
 msgid_plural "{0} people"
 msgstr[0] "{0} 人"
 
-#: src117/port/front/port_front_skirmish.cpp:2337
+#: src117/port/front/port_front_skirmish.cpp:2338
 msgid "{0} open"
 msgstr "{0} 個開放"
 
-#: src117/port/front/port_front_skirmish.cpp:2339
+#: src117/port/front/port_front_skirmish.cpp:2340
 msgid "{0} of {1} ready"
 msgstr "{1} 人中 {0} 人已準備"
 
-#: src117/port/front/port_front_skirmish.cpp:2346
-#: src117/port/front/port_front_skirmish.cpp:2379
-#: src117/port/front/port_front_skirmish.cpp:2424
+#: src117/port/front/port_front_skirmish.cpp:2347
+#: src117/port/front/port_front_skirmish.cpp:2380
+#: src117/port/front/port_front_skirmish.cpp:2425
 msgid "Fill Empty"
 msgstr "填滿空位"
 
-#: src117/port/front/port_front_skirmish.cpp:2348
+#: src117/port/front/port_front_skirmish.cpp:2349
 msgid "Fill empty"
 msgstr "填滿空位"
 
-#: src117/port/front/port_front_skirmish.cpp:2349
+#: src117/port/front/port_front_skirmish.cpp:2350
 msgid "A computer of a random race in each closed seat; open seats wait for people. Hotkey: F"
 msgstr "在每個關閉的席位放入一個隨機種族的電腦；開放的席位仍會等人加入。快速鍵：F"
 
-#: src117/port/front/port_front_skirmish.cpp:2374
+#: src117/port/front/port_front_skirmish.cpp:2375
 msgid "{0} empty"
 msgstr "{0} 個空位"
 
-#: src117/port/front/port_front_skirmish.cpp:2447
+#: src117/port/front/port_front_skirmish.cpp:2448
 msgid "Adds a team; choose it in a player’s Team list to move them to it. Hotkey: N"
 msgstr "新增一個隊伍；在某位玩家的「隊伍」清單中選擇它，就能把他移到該隊。快速鍵：N"
 
-#: src117/port/front/port_front_skirmish.cpp:2462
+#: src117/port/front/port_front_skirmish.cpp:2463
 msgid "This map’s starts could not be read, so no layout can be worked out from them. New Team and each player’s Team list make the teams."
 msgstr "無法讀取這張地圖的起始位置，因此無法據此分組。請用「新增隊伍」與各玩家的「隊伍」清單自行編隊。"
 
-#: src117/port/front/port_front_skirmish.cpp:2464
+#: src117/port/front/port_front_skirmish.cpp:2465
 msgid "Sets the teams from where the map’s starts are: halves of the map, or groups of nearby starts. Each player starts in their team’s part (Start positions: By slot). Move anyone with their Team list after."
 msgstr "依地圖起始位置編隊：切成兩半，或把相鄰的起點分成一組。每位玩家會從自己隊伍所在的區域開始（「起始位置：依欄位」）。之後仍可用各自的「隊伍」清單調整。"
 
-#: src117/port/front/port_front_skirmish.cpp:2488
+#: src117/port/front/port_front_skirmish.cpp:2489
 msgid "Each team a column of chips, for games past 24 players. Not available yet."
 msgstr "每個隊伍一欄標籤，適用於超過 24 位玩家的遊戲。尚未提供。"
 
-#: src117/port/front/port_front_skirmish.cpp:2578
+#: src117/port/front/port_front_skirmish.cpp:2579
 msgid "empty: choose it in a player’s Team list"
 msgstr "空的：請在某位玩家的「隊伍」清單中選擇它"
 
-#: src117/port/front/port_front_skirmish.cpp:2583
+#: src117/port/front/port_front_skirmish.cpp:2584
 msgid "{0} slots"
 msgstr "{0} 個欄位"
 
-#: src117/port/front/port_front_skirmish.cpp:2605
+#: src117/port/front/port_front_skirmish.cpp:2606
 msgid "{0} to {1} shown, the wheel scrolls"
 msgstr "顯示第 {0} 到 {1} 項，可用滾輪捲動"
 
-#: src117/port/front/port_front_skirmish.cpp:2613
+#: src117/port/front/port_front_skirmish.cpp:2614
 msgid "Use Map Settings: the map seats the players and runs the game."
 msgstr "使用地圖設定：由地圖安排玩家並控制遊戲進行。"
 
-#: src117/port/front/port_front_skirmish.cpp:2638
+#: src117/port/front/port_front_skirmish.cpp:2639
 msgid "OBSERVERS"
 msgstr "觀戰者"
 
-#: src117/port/front/port_front_skirmish.cpp:2644
-#: src117/port/front/port_front_skirmish.cpp:2646
+#: src117/port/front/port_front_skirmish.cpp:2645
+#: src117/port/front/port_front_skirmish.cpp:2647
 #: src117/port/lan/port_front_lanhost.cpp:54
 msgid "Nobody"
 msgstr "沒有人"
 
-#: src117/port/front/port_front_skirmish.cpp:2644
+#: src117/port/front/port_front_skirmish.cpp:2645
 msgid "Multiplayer only"
 msgstr "僅限多人對戰"
 
-#: src117/port/front/port_front_skirmish.cpp:2645
+#: src117/port/front/port_front_skirmish.cpp:2646
 #: src117/port/lan/port_front_lanhost.cpp:54
 msgid "Anyone in the room"
 msgstr "房間中的任何人"
 
-#: src117/port/front/port_front_skirmish.cpp:2653
+#: src117/port/front/port_front_skirmish.cpp:2654
 msgid "Observers watch a multiplayer game without playing. They come with multiplayer, which is not available yet."
 msgstr "觀戰者可以觀看多人對戰遊戲而不參與。它會隨多人對戰一起推出，目前尚未提供。"
 
-#: src117/port/front/port_front_skirmish.cpp:2656
+#: src117/port/front/port_front_skirmish.cpp:2657
 msgid "The room’s people who are not seated can watch the match once it starts, {0} s behind the players."
 msgstr "房間中沒有入座的人可以在比賽開始後觀看，畫面比玩家慢 {0} 秒。"
 
-#: src117/port/front/port_front_skirmish.cpp:2659
+#: src117/port/front/port_front_skirmish.cpp:2660
 #: src117/port/lan/port_front_lan.cpp:762
-#: src117/port/lan/port_lanroom_proto.cpp:690
+#: src117/port/lan/port_lanroom_proto.cpp:744
 msgid "The host has turned watching off."
 msgstr "主持者已關閉觀戰。"
 
-#: src117/port/front/port_front_skirmish.cpp:2688
+#: src117/port/front/port_front_skirmish.cpp:2689
 msgid "The host chooses it."
 msgstr "由主持者選擇。"
 
-#: src117/port/front/port_front_skirmish.cpp:2732
+#: src117/port/front/port_front_skirmish.cpp:2733
 msgid "Free For All while you watch"
 msgstr "你觀戰時為自由對戰"
 
-#: src117/port/front/port_front_skirmish.cpp:2738
+#: src117/port/front/port_front_skirmish.cpp:2739
 msgid "Players on teams: teammates are allied, share vision and win together, and every other team is an enemy. Quick layout sets the teams from the map’s starts; New Team and each player’s Team list change them. Plays by Hyperion’s rules."
 msgstr "玩家分成隊伍：隊友彼此同盟、共享視野並一起獲勝，其他隊伍都是敵人。「快速分組」會依地圖的起始位置編隊；「新增隊伍」與各玩家的「隊伍」清單可以調整。採用 Hyperion 的規則。"
 
-#: src117/port/front/port_front_skirmish.cpp:2745
-#: src117/port/front/port_frontkit.cpp:380
+#: src117/port/front/port_front_skirmish.cpp:2746
+#: src117/port/front/port_frontkit.cpp:384
 msgid "Top vs Bottom"
 msgstr "上下大對抗"
 
-#: src117/port/front/port_front_skirmish.cpp:2754
+#: src117/port/front/port_front_skirmish.cpp:2755
 msgid "Fastest ×{0}"
 msgstr "最快 ×{0}"
 
-#: src117/port/front/port_front_skirmish.cpp:2776
-#: src117/port/front/port_front_skirmish.cpp:2779
+#: src117/port/front/port_front_skirmish.cpp:2777
+#: src117/port/front/port_front_skirmish.cpp:2780
 msgid "Rule set"
 msgstr "規則組合"
 
-#: src117/port/front/port_front_skirmish.cpp:2777
+#: src117/port/front/port_front_skirmish.cpp:2778
 msgid "The host chooses the rules the room’s match plays by."
 msgstr "房間比賽採用的規則由主持者選擇。"
 
-#: src117/port/front/port_front_skirmish.cpp:2780
+#: src117/port/front/port_front_skirmish.cpp:2781
 msgid "Classic plays as the original does, to the frame. Hyperion has the improvements, starting with pathing. The replay keeps the choice."
 msgstr "「經典」完全照原版進行，連影格都一樣。「Hyperion」包含各項改良，從尋路開始。戰鬥錄影會保留這個選擇。"
 
-#: src117/port/front/port_front_skirmish.cpp:2784
+#: src117/port/front/port_front_skirmish.cpp:2785
 msgid "Hyperion rules, required"
 msgstr "必須使用 Hyperion 規則"
 
-#: src117/port/front/port_front_skirmish.cpp:2785
+#: src117/port/front/port_front_skirmish.cpp:2786
 msgid "Because of {0}. The original never had such games, so there is nothing to match."
 msgstr "因為 {0}。原版從未有這樣的遊戲，所以沒有可以比對的對象。"
 
-#: src117/port/front/port_front_skirmish.cpp:2800
+#: src117/port/front/port_front_skirmish.cpp:2801
 msgid "The host chooses the most units the game holds."
 msgstr "遊戲能容納的最大單位數由主持者選擇。"
 
-#: src117/port/front/port_front_skirmish.cpp:2803
+#: src117/port/front/port_front_skirmish.cpp:2804
 msgid "The most units the game holds at once, every player’s and the map’s minerals and geysers together. The original holds 1,700. Automatic: the original’s in a game it could play, and in a bigger game or with a supply cap past 200, room for the map’s own and for each player’s whole supply cap in units. A number plays by Hyperion’s rules."
 msgstr "遊戲同時能容納的最大單位數，包含所有玩家的單位以及地圖上的晶礦與瓦斯湧源。原版可容納 1,700 個。自動：在原版能進行的遊戲中沿用原版的數值；遊戲更大或補給上限超過 200 時，則為地圖本身的單位以及每位玩家的完整補給上限預留空間。指定數字會採用 Hyperion 的規則。"
 
-#: src117/port/front/port_front_skirmish.cpp:2810
+#: src117/port/front/port_front_skirmish.cpp:2811
 msgid "The map sets them"
 msgstr "由地圖決定"
 
-#: src117/port/front/port_front_skirmish.cpp:2817
+#: src117/port/front/port_front_skirmish.cpp:2818
 msgid "Random: the original draws each player a start. By slot: each player starts where the map’s picture shows their number. Either plays by the original’s rules."
 msgstr "隨機：由原版為每位玩家抽出起始位置。依欄位：每位玩家從地圖預覽上標示自己編號的位置開始。兩者都採用原版的規則。"
 
-#: src117/port/front/port_front_skirmish.cpp:2823
-#: src117/port/front/port_front_skirmish.cpp:2892
+#: src117/port/front/port_front_skirmish.cpp:2824
+#: src117/port/front/port_front_skirmish.cpp:2893
 msgid "The map places the players."
 msgstr "玩家位置由地圖決定。"
 
-#: src117/port/front/port_front_skirmish.cpp:2824
+#: src117/port/front/port_front_skirmish.cpp:2825
 msgid "This game type draws the starts at random. Choosing them is not available for it."
 msgstr "這個遊戲類型的起始位置是隨機抽出的，無法自行選擇。"
 
-#: src117/port/front/port_front_skirmish.cpp:2838
+#: src117/port/front/port_front_skirmish.cpp:2839
 msgid "By player: each player’s own colour. By team: each team in shades of one colour, so a team reads at a glance."
 msgstr "依玩家：每位玩家使用自己的顏色。依隊伍：每個隊伍使用同一色系的深淺，一眼就能看出隊伍。"
 
-#: src117/port/front/port_front_skirmish.cpp:2855
-#: src117/port/front/port_front_skirmish.cpp:2857
+#: src117/port/front/port_front_skirmish.cpp:2856
+#: src117/port/front/port_front_skirmish.cpp:2858
 msgid "Lock teams"
 msgstr "鎖定隊伍"
 
-#: src117/port/front/port_front_skirmish.cpp:2858
+#: src117/port/front/port_front_skirmish.cpp:2859
 msgid "Keeps players from changing team in a multiplayer lobby. Not available yet."
 msgstr "防止玩家在多人對戰房間中更換隊伍。尚未提供。"
 
-#: src117/port/front/port_front_skirmish.cpp:2894
+#: src117/port/front/port_front_skirmish.cpp:2895
 msgid "Starts by slot: each number is that player’s start."
 msgstr "起始位置依欄位：每個編號就是那位玩家的起點。"
 
-#: src117/port/front/port_front_skirmish.cpp:2895
+#: src117/port/front/port_front_skirmish.cpp:2896
 msgid "Random starts: the numbers are the map’s, not the players’."
 msgstr "隨機起始位置：這些編號屬於地圖，不是玩家的。"
 
-#: src117/port/front/port_front_skirmish.cpp:2899
+#: src117/port/front/port_front_skirmish.cpp:2900
 msgid "Enlarge"
 msgstr "放大"
 
-#: src117/port/front/port_front_skirmish.cpp:2945
+#: src117/port/front/port_front_skirmish.cpp:2946
 msgid "{0} on {1}"
 msgstr "{1} 上的 {0}"
 
-#: src117/port/front/port_front_skirmish.cpp:2947
-#: src117/port/front/port_front_skirmish.cpp:3060
+#: src117/port/front/port_front_skirmish.cpp:2948
+#: src117/port/front/port_front_skirmish.cpp:3087
 msgid "{0} starts"
 msgstr "{0} 個起始位置"
 
-#: src117/port/front/port_front_skirmish.cpp:2962
+#: src117/port/front/port_front_skirmish.cpp:2963
 msgid "Mod: {0}"
 msgstr "模組：{0}"
 
-#: src117/port/front/port_front_skirmish.cpp:2962
+#: src117/port/front/port_front_skirmish.cpp:2963
 msgid "Game: {0}"
 msgstr "遊戲：{0}"
 
-#: src117/port/front/port_front_skirmish.cpp:2965
-#: src117/port/front/port_front_skirmish.cpp:2970
+#: src117/port/front/port_front_skirmish.cpp:2966
+#: src117/port/front/port_front_skirmish.cpp:2971
 msgid "The game"
 msgstr "遊戲"
 
-#: src117/port/front/port_front_skirmish.cpp:2966
+#: src117/port/front/port_front_skirmish.cpp:2967
 msgid "{0}, a mod on {1}: its units, weapons and rules are in every game started here. The Mods screen chooses another mod, or the original game."
 msgstr "{0}，一個建構於 {1} 的模組：它的單位、武器與規則會套用到這裡開始的每一場遊戲。「模組」畫面可以改選其他模組，或改回原版遊戲。"
 
-#: src117/port/front/port_front_skirmish.cpp:2971
+#: src117/port/front/port_front_skirmish.cpp:2972
 msgid "StarCraft, Brood War or a mod built on one, chosen for each game: it sets the races, the maps and the rules. For now it is the one Hyperion started in; choosing it here is not available yet."
 msgstr "StarCraft、Brood War 或建構於其一的模組，每場遊戲都可以選擇：它決定種族、地圖與規則。目前使用的是 Hyperion 啟動時所載入的那一個；在這裡選擇的功能尚未提供。"
 
-#: src117/port/front/port_front_skirmish.cpp:2977
+#: src117/port/front/port_front_skirmish.cpp:2978
 msgid "Change Map"
 msgstr "更換地圖"
 
-#: src117/port/front/port_front_skirmish.cpp:2979
+#: src117/port/front/port_front_skirmish.cpp:2980
 msgid "The map"
 msgstr "地圖"
 
-#: src117/port/front/port_front_skirmish.cpp:2979
+#: src117/port/front/port_front_skirmish.cpp:2980
 msgid "The host chooses the map."
 msgstr "地圖由主持者選擇。"
 
-#: src117/port/front/port_front_skirmish.cpp:3009
+#: src117/port/front/port_front_skirmish.cpp:3010
 msgid "Start Game"
 msgstr "開始遊戲"
 
-#: src117/port/front/port_front_skirmish.cpp:3014
+#: src117/port/front/port_front_skirmish.cpp:3015
 #: src117/port/gameplay/port_trainerview.cpp:851
 msgid "Leave"
 msgstr "離開"
 
-#: src117/port/front/port_front_skirmish.cpp:3030
+#: src117/port/front/port_front_skirmish.cpp:3033
+msgid "ONLINE (RELAY)"
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3033
+msgid "THIS NETWORK"
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3038
+msgid "Online (relay)"
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3038
+#: src117/port/lan/port_front_lanhost.cpp:1235
+msgid "This network"
+msgstr "這個網路"
+
+#: src117/port/front/port_front_skirmish.cpp:3039
+msgid "The host set this match to play online: at its start the room asks its coordinator for a session, and every seat joins it over the internet. The host toggles this."
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3040
+msgid "The host set this match to play on the room's own network relay. The host toggles this."
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3057
 msgid "MOD RULES"
 msgstr "模組規則"
 
-#: src117/port/front/port_front_skirmish.cpp:3030
+#: src117/port/front/port_front_skirmish.cpp:3057
 msgid "HYPERION RULES"
 msgstr "Hyperion 規則"
 
-#: src117/port/front/port_front_skirmish.cpp:3033
+#: src117/port/front/port_front_skirmish.cpp:3060
 msgid "Mod rules"
 msgstr "模組規則"
 
-#: src117/port/front/port_front_skirmish.cpp:3033
+#: src117/port/front/port_front_skirmish.cpp:3060
 #: src117/port/front/port_front_trainer.cpp:432
 msgid "Hyperion rules"
 msgstr "Hyperion 規則"
 
-#: src117/port/front/port_front_skirmish.cpp:3034
+#: src117/port/front/port_front_skirmish.cpp:3061
 msgid "Required by {0}. Its replay and save are Hyperion’s and say so."
 msgstr "因為 {0} 而必須使用。它的戰鬥錄影與存檔屬於 Hyperion，並會標明這一點。"
 
-#: src117/port/front/port_front_skirmish.cpp:3258
+#: src117/port/front/port_front_skirmish.cpp:3285
 msgid "Choose a map first."
 msgstr "請先選擇地圖。"
 
-#: src117/port/front/port_front_skirmish.cpp:3265
+#: src117/port/front/port_front_skirmish.cpp:3292
 msgid "A session needs at least one computer."
 msgstr "一個工作階段至少需要一部電腦。"
 
@@ -5602,15 +5632,15 @@ msgstr "一個工作階段至少需要一部電腦。"
 msgid "Classic AI is the original’s own computer, and plays by either rules. The others play by Hyperion’s rules: StarCraft II’s levels, Very Easy to Elite, from slower and smaller to faster, and the Cheater levels, which play as Elite and cheat as StarCraft II’s do. Vision sees the whole map; resources sees it too and brings back more from each trip, growing to half as much again by 20 minutes; insane brings back a fifth more from the start, growing to twice as much."
 msgstr "經典 AI 就是原版自己的電腦，兩種規則都適用。其他等級採用 Hyperion 的規則：StarCraft II 的等級，從「非常簡單」到「菁英」，由較慢較小規模到更快，以及「作弊」等級，實力與菁英相同，作弊方式也與 StarCraft II 相同。「視野」會看見整張地圖；「資源」除了看見整張地圖，每趟採集也會帶回更多，到第 20 分鐘增加到一點五倍；「瘋狂」一開始就多帶回五分之一，最後增加到兩倍。"
 
-#: src117/port/front/port_front_skirmish.cpp:768
+#: src117/port/front/port_front_skirmish.cpp:769
 msgid "Brood War map (.scx)"
 msgstr "Brood War 地圖（.scx）"
 
-#: src117/port/front/port_front_skirmish.cpp:770
+#: src117/port/front/port_front_skirmish.cpp:771
 msgid "Hyperion map (.hxm)"
 msgstr "Hyperion 地圖（.hxm）"
 
-#: src117/port/front/port_front_skirmish.cpp:771
+#: src117/port/front/port_front_skirmish.cpp:772
 msgid "StarCraft map (.scm)"
 msgstr "StarCraft 地圖（.scm）"
 
@@ -5618,59 +5648,59 @@ msgstr "StarCraft 地圖（.scm）"
 msgid "The player’s units and buildings at this share of their life and shields, as in StarCraft II, to even a game between players of different skill. Damage, energy and speed stay as they are. Below 100% the game plays by Hyperion’s rules."
 msgstr "玩家的單位與建築只保有這個比例的生命值與護盾，與 StarCraft II 相同，用來平衡實力不同的玩家。傷害、能量與速度不受影響。低於 100% 時遊戲會採用 Hyperion 的規則。"
 
-#: src117/port/front/port_front_skirmish.cpp:824
-#: src117/port/front/port_front_skirmish.cpp:893
-#: src117/port/front/port_front_skirmish.cpp:1418
+#: src117/port/front/port_front_skirmish.cpp:825
+#: src117/port/front/port_front_skirmish.cpp:894
+#: src117/port/front/port_front_skirmish.cpp:1419
 msgid "That map could not be read."
 msgstr "無法讀取這張地圖。"
 
-#: src117/port/front/port_front_skirmish.cpp:828
-#: src117/port/front/port_front_skirmish.cpp:894
-#: src117/port/front/port_front_skirmish.cpp:1417
+#: src117/port/front/port_front_skirmish.cpp:829
+#: src117/port/front/port_front_skirmish.cpp:895
+#: src117/port/front/port_front_skirmish.cpp:1418
 msgid "That map has more players than Hyperion holds."
 msgstr "這張地圖的玩家數超出 Hyperion 的上限。"
 
-#: src117/port/front/port_front_skirmish.cpp:858
+#: src117/port/front/port_front_skirmish.cpp:859
 msgid "the mod {0}, which brings its own data"
 msgstr "模組 {0}，它帶有自己的資料"
 
-#: src117/port/front/port_front_skirmish.cpp:860
+#: src117/port/front/port_front_skirmish.cpp:861
 msgid "{0} players (the original allows 8)"
 msgstr "{0} 位玩家（原版最多 8 位）"
 
-#: src117/port/front/port_front_skirmish.cpp:862
+#: src117/port/front/port_front_skirmish.cpp:863
 msgid "a {0} × {1} map (the original allows 256)"
 msgstr "{0} × {1} 的地圖（原版最多 256）"
 
-#: src117/port/front/port_front_skirmish.cpp:865
+#: src117/port/front/port_front_skirmish.cpp:866
 msgid "Team Match (the original has no teams in a game against computers)"
 msgstr "隊伍對戰（原版在對電腦的遊戲中沒有隊伍）"
 
-#: src117/port/front/port_front_skirmish.cpp:868
+#: src117/port/front/port_front_skirmish.cpp:869
 msgid "a computer at {0} (the original has one computer, its own)"
 msgstr "等級為 {0} 的電腦（原版只有自己的一種電腦）"
 
-#: src117/port/front/port_front_skirmish.cpp:872
+#: src117/port/front/port_front_skirmish.cpp:873
 msgid "a handicap (the original has none)"
 msgstr "讓分（原版沒有）"
 
-#: src117/port/front/port_front_skirmish.cpp:877
+#: src117/port/front/port_front_skirmish.cpp:878
 msgid "a unit limit of {0} (the original holds 1,700)"
 msgstr "單位上限 {0}（原版可容納 1,700）"
 
-#: src117/port/front/port_front_skirmish.cpp:880
+#: src117/port/front/port_front_skirmish.cpp:881
 msgid "mutators ({0})"
 msgstr "突變因子（{0}）"
 
-#: src117/port/front/port_front_skirmish.cpp:896
+#: src117/port/front/port_front_skirmish.cpp:897
 msgid "That map has no room for a computer opponent in this game type."
 msgstr "在這個遊戲類型下，這張地圖沒有空間安排電腦對手。"
 
-#: src117/port/front/port_front_skirmish.cpp:897
+#: src117/port/front/port_front_skirmish.cpp:898
 msgid "That game type does not fit this map."
 msgstr "這個遊戲類型不適用於這張地圖。"
 
-#: src117/port/front/port_front_skirmish.cpp:898
+#: src117/port/front/port_front_skirmish.cpp:899
 msgid "The game could not be made."
 msgstr "無法建立遊戲。"
 
@@ -5695,12 +5725,12 @@ msgstr "256 以下"
 msgid "Past 256"
 msgstr "超過 256"
 
-#: src117/port/front/port_front_skirmish.cpp:971
+#: src117/port/front/port_front_skirmish.cpp:972
 msgid "A skirmish needs at least one computer."
 msgstr "單人對戰至少需要一部電腦。"
 
-#: src117/port/front/port_front_skirmish.cpp:976
-#: src117/port/front/port_front_skirmish.cpp:3270
+#: src117/port/front/port_front_skirmish.cpp:977
+#: src117/port/front/port_front_skirmish.cpp:3297
 msgid "That map is no longer there."
 msgstr "那張地圖已經不在了。"
 
@@ -6047,12 +6077,12 @@ msgstr "回到任何時刻再試一次"
 msgid "timelines and their paths"
 msgstr "時間軸與它們的分支"
 
-#: src117/port/front/port_frontkit.cpp:334
+#: src117/port/front/port_frontkit.cpp:338
 msgid "{0} {1} {2}, {3}"
 msgstr "{2}年{1}{0}日 {3}"
 
-#: src117/port/front/port_frontkit.cpp:341
-#: src117/port/gameplay/port_mutators.cpp:551
+#: src117/port/front/port_frontkit.cpp:345
+#: src117/port/gameplay/port_mutators.cpp:583
 #: src117/port/gameplay/port_trainerview.cpp:228
 #: src117/port/hud/port_hudstats.cpp:472
 #: src117/port/tools/port_benchview.cpp:344
@@ -6060,63 +6090,63 @@ msgctxt "thousands"
 msgid ","
 msgstr ","
 
-#: src117/port/front/port_frontkit.cpp:368
+#: src117/port/front/port_frontkit.cpp:372
 msgid "Melee"
 msgstr "一般對戰"
 
-#: src117/port/front/port_frontkit.cpp:370
+#: src117/port/front/port_frontkit.cpp:374
 msgid "One on One"
 msgstr "一對一"
 
-#: src117/port/front/port_frontkit.cpp:371
+#: src117/port/front/port_frontkit.cpp:375
 msgid "Capture The Flag"
 msgstr "搶旗戰"
 
-#: src117/port/front/port_frontkit.cpp:372
+#: src117/port/front/port_frontkit.cpp:376
 msgid "Greed"
 msgstr "資源戰"
 
-#: src117/port/front/port_frontkit.cpp:373
+#: src117/port/front/port_frontkit.cpp:377
 msgid "Slaughter"
 msgstr "殺戮戰場"
 
-#: src117/port/front/port_frontkit.cpp:374
+#: src117/port/front/port_frontkit.cpp:378
 msgid "Sudden Death"
 msgstr "驟死賽"
 
-#: src117/port/front/port_frontkit.cpp:375
+#: src117/port/front/port_frontkit.cpp:379
 msgid "Ladder"
 msgstr "天梯"
 
-#: src117/port/front/port_frontkit.cpp:377
+#: src117/port/front/port_frontkit.cpp:381
 msgid "Team Melee"
 msgstr "隊伍一般對戰"
 
-#: src117/port/front/port_frontkit.cpp:378
+#: src117/port/front/port_frontkit.cpp:382
 msgid "Team Free For All"
 msgstr "隊伍自由對戰"
 
-#: src117/port/front/port_frontkit.cpp:379
+#: src117/port/front/port_frontkit.cpp:383
 msgid "Team Capture The Flag"
 msgstr "隊伍搶旗戰"
 
-#: src117/port/front/port_frontkit.cpp:845
+#: src117/port/front/port_frontkit.cpp:849
 msgid "Blue and gold"
 msgstr "藍與金"
 
-#: src117/port/front/port_frontkit.cpp:845
+#: src117/port/front/port_frontkit.cpp:849
 msgid "Black and red"
 msgstr "黑與紅"
 
-#: src117/port/front/port_frontkit.cpp:845
+#: src117/port/front/port_frontkit.cpp:849
 msgid "Purple and green"
 msgstr "紫與綠"
 
-#: src117/port/front/port_frontkit.cpp:846
+#: src117/port/front/port_frontkit.cpp:850
 msgid "Steel and amber"
 msgstr "鋼與琥珀"
 
-#: src117/port/front/port_frontkit.cpp:846
+#: src117/port/front/port_frontkit.cpp:850
 msgid "Gold and cyan"
 msgstr "金與青"
 
@@ -6326,278 +6356,298 @@ msgstr "作弊：資源"
 msgid "Cheater: insane"
 msgstr "作弊：瘋狂"
 
-#: src117/port/gameplay/port_mutators.cpp:174
+#: src117/port/gameplay/port_mutators.cpp:100
+msgid "Researched: every upgrade at its top level and every ability researched from the start. No upgrades: none can be researched. No research: neither upgrades nor the abilities that need research. Classic: all to research."
+msgstr "「已研發」：開場所有升級都已達最高等級，所有技能都已研發完成。「無升級」：無法研發升級。「無研發」：升級與需要研發的技能都無法研發。經典版：全部需要研發。"
+
+#: src117/port/gameplay/port_mutators.cpp:103
+msgid "Bases away from every start may turn rich: gold mineral fields and violet geysers that give 11 minerals and 16 gas a trip, and run dry sooner. Never a start's main or natural; bases that mirror each other turn rich together. Every base: all of them. Classic: none."
+msgstr "遠離所有起點的基地可能變成富礦：金色晶礦場與紫羅蘭色瓦斯湧源，每趟給 11 晶礦與 16 瓦斯，但也更快枯竭。永遠不會是起點的主礦或天然分礦；互為鏡像的基地會一起變成富礦。「每個基地」：全部都變。經典版：一個也沒有。"
+
+#: src117/port/gameplay/port_mutators.cpp:106
+msgid "The workers and the minerals and gas each player begins with, rolled fresh every game as it starts: 4 to 8 workers, 100 to 300 minerals and 0 to 125 gas, in steps of five. Classic: 4 workers, 50 minerals and no gas."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:112
+msgid "Plenty"
+msgstr "資源充裕"
+
+#: src117/port/gameplay/port_mutators.cpp:112
+msgid "Gold Rush"
+msgstr "淘金熱"
+
+#: src117/port/gameplay/port_mutators.cpp:113
+msgid "Quick Start"
+msgstr "快速開局"
+
+#: src117/port/gameplay/port_mutators.cpp:200
 msgid "a quarter of the map"
 msgstr "地圖的四分之一"
 
-#: src117/port/gameplay/port_mutators.cpp:175
+#: src117/port/gameplay/port_mutators.cpp:201
 msgid "a third of the map"
 msgstr "地圖的三分之一"
 
-#: src117/port/gameplay/port_mutators.cpp:176
+#: src117/port/gameplay/port_mutators.cpp:202
 msgid "half the map"
 msgstr "地圖的一半"
 
-#: src117/port/gameplay/port_mutators.cpp:178
+#: src117/port/gameplay/port_mutators.cpp:204
 msgid "{0}% of the map"
 msgstr "地圖的 {0}%"
 
-#: src117/port/gameplay/port_mutators.cpp:179
-#: src117/port/gameplay/port_mutators.cpp:190
+#: src117/port/gameplay/port_mutators.cpp:205
+#: src117/port/gameplay/port_mutators.cpp:216
 msgid "{0} tiles"
 msgstr "{0} 格"
 
-#: src117/port/gameplay/port_mutators.cpp:185
+#: src117/port/gameplay/port_mutators.cpp:211
 msgid "Quarter map"
 msgstr "地圖 1/4"
 
-#: src117/port/gameplay/port_mutators.cpp:186
+#: src117/port/gameplay/port_mutators.cpp:212
 msgid "Third map"
 msgstr "地圖 1/3"
 
-#: src117/port/gameplay/port_mutators.cpp:187
+#: src117/port/gameplay/port_mutators.cpp:213
 msgid "Half map"
 msgstr "地圖 1/2"
 
-#: src117/port/gameplay/port_mutators.cpp:189
+#: src117/port/gameplay/port_mutators.cpp:215
 msgid "{0}% of map"
 msgstr "地圖 {0}%"
 
-#: src117/port/gameplay/port_mutators.cpp:315
+#: src117/port/gameplay/port_mutators.cpp:342
 msgid "Automatic"
 msgstr "自動"
 
-#: src117/port/gameplay/port_mutators.cpp:368
-#: src117/port/gameplay/port_mutators.cpp:448
+#: src117/port/gameplay/port_mutators.cpp:397
+#: src117/port/gameplay/port_mutators.cpp:479
 msgid "{0}% chance"
 msgstr "機率 {0}%"
 
-#: src117/port/gameplay/port_mutators.cpp:49
-msgid "Explored"
-msgstr "已探索"
-
-#: src117/port/gameplay/port_mutators.cpp:51
-msgid "Researched"
-msgstr "已研發"
-
-#: src117/port/gameplay/port_mutators.cpp:51
-msgid "No upgrades"
-msgstr "無升級"
-
-#: src117/port/gameplay/port_mutators.cpp:52
-msgid "No research"
-msgstr "無研發"
-
-#: src117/port/gameplay/port_mutators.cpp:53
-#: src117/port/lan/port_front_lanhost.cpp:1222
-msgid "Off"
-msgstr "關閉"
-
-#: src117/port/gameplay/port_mutators.cpp:53
-msgid "Past the naturals"
-msgstr "天然分礦之外"
-
-#: src117/port/gameplay/port_mutators.cpp:53
-msgid "Outside a radius"
-msgstr "半徑之外"
-
-#: src117/port/gameplay/port_mutators.cpp:53
-msgid "Farthest only"
-msgstr "只有最遠"
-
-#: src117/port/gameplay/port_mutators.cpp:54
-msgid "Every base"
-msgstr "每個基地"
-
-#: src117/port/gameplay/port_mutators.cpp:545
+#: src117/port/gameplay/port_mutators.cpp:577
 msgctxt "list"
 msgid ", "
 msgstr "、"
 
-#: src117/port/gameplay/port_mutators.cpp:557
+#: src117/port/gameplay/port_mutators.cpp:589
 msgid "infinite mineral fields"
 msgstr "晶礦場無限"
 
-#: src117/port/gameplay/port_mutators.cpp:557
+#: src117/port/gameplay/port_mutators.cpp:589
 msgid "mineral fields {0}"
 msgstr "晶礦場 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:559
+#: src117/port/gameplay/port_mutators.cpp:591
 msgid "infinite geysers"
 msgstr "瓦斯湧源無限"
 
-#: src117/port/gameplay/port_mutators.cpp:559
+#: src117/port/gameplay/port_mutators.cpp:591
 msgid "geysers {0}"
 msgstr "瓦斯湧源 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:562
+#: src117/port/gameplay/port_mutators.cpp:594
 msgid "start resources {0} / {1}"
 msgstr "起始資源 {0} / {1}"
 
-#: src117/port/gameplay/port_mutators.cpp:564
+#: src117/port/gameplay/port_mutators.cpp:596
 msgid "no supply cap"
 msgstr "補給無上限"
 
-#: src117/port/gameplay/port_mutators.cpp:564
+#: src117/port/gameplay/port_mutators.cpp:596
 msgid "supply cap {0}"
 msgstr "補給上限 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:568
+#: src117/port/gameplay/port_mutators.cpp:600
 msgid "{0} start worker"
 msgid_plural "{0} start workers"
 msgstr[0] "起始工人 {0} 個"
 
-#: src117/port/gameplay/port_mutators.cpp:573
+#: src117/port/gameplay/port_mutators.cpp:605
 msgid "supply +{0}%"
 msgstr "補給 +{0}%"
 
-#: src117/port/gameplay/port_mutators.cpp:575
+#: src117/port/gameplay/port_mutators.cpp:607
 msgid "the map explored"
 msgstr "地圖已探索"
 
-#: src117/port/gameplay/port_mutators.cpp:577
+#: src117/port/gameplay/port_mutators.cpp:609
 msgid "no fog of war"
 msgstr "無戰爭迷霧"
 
-#: src117/port/gameplay/port_mutators.cpp:579
+#: src117/port/gameplay/port_mutators.cpp:611
 msgid "build time {0}"
 msgstr "建造時間 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:581
+#: src117/port/gameplay/port_mutators.cpp:613
 msgid "all researched"
 msgstr "全部已研發"
 
-#: src117/port/gameplay/port_mutators.cpp:585
+#: src117/port/gameplay/port_mutators.cpp:617
 msgid "no research"
 msgstr "無研發"
 
-#: src117/port/gameplay/port_mutators.cpp:587
+#: src117/port/gameplay/port_mutators.cpp:619
 msgid "every base rich, not announced"
 msgstr "每個基地皆富礦，不宣告"
 
-#: src117/port/gameplay/port_mutators.cpp:587
+#: src117/port/gameplay/port_mutators.cpp:619
 msgid "every base rich"
 msgstr "每個基地皆富礦"
 
-#: src117/port/gameplay/port_mutators.cpp:592
+#: src117/port/gameplay/port_mutators.cpp:624
 msgid "rich resources past the naturals at {0}%"
 msgstr "天然分礦之外的富礦，機率 {0}%"
 
-#: src117/port/gameplay/port_mutators.cpp:595
+#: src117/port/gameplay/port_mutators.cpp:627
 msgid "rich resources {0} or more from every start at {1}%"
 msgstr "距離所有起點 {0} 以上的富礦，機率 {1}%"
 
-#: src117/port/gameplay/port_mutators.cpp:597
+#: src117/port/gameplay/port_mutators.cpp:629
 msgid "rich resources farthest only at {0}%"
 msgstr "只有最遠處的富礦，機率 {0}%"
 
-#: src117/port/gameplay/port_mutators.cpp:599
+#: src117/port/gameplay/port_mutators.cpp:631
 msgid "each rolled alone"
 msgstr "各自獨立判定"
 
-#: src117/port/gameplay/port_mutators.cpp:601
+#: src117/port/gameplay/port_mutators.cpp:633
 msgid "maybe none"
 msgstr "可能一個也沒有"
 
-#: src117/port/gameplay/port_mutators.cpp:603
+#: src117/port/gameplay/port_mutators.cpp:635
 msgid "the same every game"
 msgstr "每場遊戲都相同"
 
-#: src117/port/gameplay/port_mutators.cpp:605
+#: src117/port/gameplay/port_mutators.cpp:637
 msgid "not announced"
 msgstr "不宣告"
 
-#: src117/port/gameplay/port_mutators.cpp:608
+#: src117/port/gameplay/port_mutators.cpp:640
 msgid "unit limit {0}"
 msgstr "單位上限 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:63
+#: src117/port/gameplay/port_mutators.cpp:642
+msgid "anti-meta start"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:67
+msgid "Explored"
+msgstr "已探索"
+
+#: src117/port/gameplay/port_mutators.cpp:69
+msgid "Researched"
+msgstr "已研發"
+
+#: src117/port/gameplay/port_mutators.cpp:69
+msgid "No upgrades"
+msgstr "無升級"
+
+#: src117/port/gameplay/port_mutators.cpp:70
+msgid "No research"
+msgstr "無研發"
+
+#: src117/port/gameplay/port_mutators.cpp:71
+#: src117/port/lan/port_front_lanhost.cpp:1222
+msgid "Off"
+msgstr "關閉"
+
+#: src117/port/gameplay/port_mutators.cpp:71
+msgid "Past the naturals"
+msgstr "天然分礦之外"
+
+#: src117/port/gameplay/port_mutators.cpp:71
+msgid "Outside a radius"
+msgstr "半徑之外"
+
+#: src117/port/gameplay/port_mutators.cpp:71
+msgid "Farthest only"
+msgstr "只有最遠"
+
+#: src117/port/gameplay/port_mutators.cpp:72
+msgid "Every base"
+msgstr "每個基地"
+
+#: src117/port/gameplay/port_mutators.cpp:83
+msgid "Anti-meta"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:85
 msgid "Mineral fields"
 msgstr "晶礦場"
 
-#: src117/port/gameplay/port_mutators.cpp:63
+#: src117/port/gameplay/port_mutators.cpp:85
 msgid "Vespene geysers"
 msgstr "高能瓦斯湧源"
 
-#: src117/port/gameplay/port_mutators.cpp:63
+#: src117/port/gameplay/port_mutators.cpp:85
 msgid "Start resources"
 msgstr "起始資源"
 
-#: src117/port/gameplay/port_mutators.cpp:64
+#: src117/port/gameplay/port_mutators.cpp:86
 msgid "Start workers"
 msgstr "起始工人"
 
-#: src117/port/gameplay/port_mutators.cpp:64
+#: src117/port/gameplay/port_mutators.cpp:86
 msgid "Supply boost"
 msgstr "補給加成"
 
-#: src117/port/gameplay/port_mutators.cpp:65
+#: src117/port/gameplay/port_mutators.cpp:862
+msgid "Anti-meta start: {0} workers, {1} minerals, {2} gas."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:87
 msgid "Fog of war"
 msgstr "戰爭迷霧"
 
-#: src117/port/gameplay/port_mutators.cpp:65
+#: src117/port/gameplay/port_mutators.cpp:87
 msgid "Build time"
 msgstr "建造時間"
 
-#: src117/port/gameplay/port_mutators.cpp:65
+#: src117/port/gameplay/port_mutators.cpp:87
 msgid "Tech and upgrades"
 msgstr "科技與升級"
 
-#: src117/port/gameplay/port_mutators.cpp:66
+#: src117/port/gameplay/port_mutators.cpp:88
 msgid "Rich resources"
 msgstr "富礦資源"
 
-#: src117/port/gameplay/port_mutators.cpp:68
+#: src117/port/gameplay/port_mutators.cpp:88
+msgid "Anti-meta start"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:90
 msgid "What each mineral field holds, or that it never runs dry. Classic: 1,500, the small ones 750."
 msgstr "每個晶礦場的蘊藏量，或是永不枯竭。經典版：1,500，小的 750。"
 
-#: src117/port/gameplay/port_mutators.cpp:69
+#: src117/port/gameplay/port_mutators.cpp:91
 msgid "What each geyser holds before it runs dry, or that it never does. Classic: 5,000."
 msgstr "每個瓦斯湧源枯竭前的蘊藏量，或是永不枯竭。經典版：5,000。"
 
-#: src117/port/gameplay/port_mutators.cpp:70
+#: src117/port/gameplay/port_mutators.cpp:92
 msgid "The minerals and gas each player begins with. Classic: 50 and 0."
 msgstr "每位玩家開場的晶礦與瓦斯。經典版：50 與 0。"
 
-#: src117/port/gameplay/port_mutators.cpp:71
+#: src117/port/gameplay/port_mutators.cpp:93
 msgid "The most supply each player can hold. Classic: 200."
 msgstr "每位玩家可擁有的最大補給。經典版：200。"
 
-#: src117/port/gameplay/port_mutators.cpp:72
+#: src117/port/gameplay/port_mutators.cpp:94
 msgid "The workers each player begins with, beside the town hall. Classic: 4."
 msgstr "每位玩家開場在主基地旁的工人數。經典版：4。"
 
-#: src117/port/gameplay/port_mutators.cpp:73
+#: src117/port/gameplay/port_mutators.cpp:95
 msgid "More supply from each depot, pylon, overlord and town hall. Classic: none, a depot’s 8."
 msgstr "每個補給站、水晶塔、王蟲與主基地提供更多補給。經典版：不加成，補給站為 8。"
 
-#: src117/port/gameplay/port_mutators.cpp:74
+#: src117/port/gameplay/port_mutators.cpp:96
 msgid "Explored: every player knows the map’s land from the start, under the fog. None: every player sees the whole map all game. Classic: the fog of war."
 msgstr "「已探索」：每位玩家一開始就知道地圖的地形，但仍在迷霧之下。「無」：每位玩家全場都看得見整張地圖。經典版：戰爭迷霧。"
 
-#: src117/port/gameplay/port_mutators.cpp:76
+#: src117/port/gameplay/port_mutators.cpp:98
 msgid "How long buildings, units, research and upgrades take to make: ×0.5 takes half as long. Classic: ×1."
 msgstr "建築、單位、研發與升級所需的時間：×0.5 表示只要一半。經典版：×1。"
-
-#: src117/port/gameplay/port_mutators.cpp:78
-msgid "Researched: every upgrade at its top level and every ability researched from the start. No upgrades: none can be researched. No research: neither upgrades nor the abilities that need research. Classic: all to research."
-msgstr "「已研發」：開場所有升級都已達最高等級，所有技能都已研發完成。「無升級」：無法研發升級。「無研發」：升級與需要研發的技能都無法研發。經典版：全部需要研發。"
-
-#: src117/port/gameplay/port_mutators.cpp:81
-msgid "Bases away from every start may turn rich: gold mineral fields and violet geysers that give 11 minerals and 16 gas a trip, and run dry sooner. Never a start's main or natural; bases that mirror each other turn rich together. Every base: all of them. Classic: none."
-msgstr "遠離所有起點的基地可能變成富礦：金色晶礦場與紫羅蘭色瓦斯湧源，每趟給 11 晶礦與 16 瓦斯，但也更快枯竭。永遠不會是起點的主礦或天然分礦；互為鏡像的基地會一起變成富礦。「每個基地」：全部都變。經典版：一個也沒有。"
-
-#: src117/port/gameplay/port_mutators.cpp:87
-msgid "Plenty"
-msgstr "資源充裕"
-
-#: src117/port/gameplay/port_mutators.cpp:87
-msgid "Gold Rush"
-msgstr "淘金熱"
-
-#: src117/port/gameplay/port_mutators.cpp:88
-msgid "Quick Start"
-msgstr "快速開局"
 
 #: src117/port/gameplay/port_teams.cpp:310
 #: src117/port/gameplay/port_teams.cpp:400
@@ -7427,122 +7477,122 @@ msgctxt "figure letter"
 msgid "W"
 msgstr "工"
 
-#: src117/port/lan/port_front_lan.cpp:1036
+#: src117/port/lan/port_front_lan.cpp:1038
 msgid "Console"
 msgstr "控制台"
 
-#: src117/port/lan/port_front_lan.cpp:1036
-#: src117/port/lan/port_front_lan.cpp:1143
+#: src117/port/lan/port_front_lan.cpp:1038
+#: src117/port/lan/port_front_lan.cpp:1145
 #: src117/port/lan/port_front_lanhost.cpp:1202
 msgid "The Room"
 msgstr "房間"
 
-#: src117/port/lan/port_front_lan.cpp:1038
+#: src117/port/lan/port_front_lan.cpp:1040
 msgid "The host’s console"
 msgstr "主持者的控制台"
 
-#: src117/port/lan/port_front_lan.cpp:1038
-#: src117/port/lan/port_front_lan.cpp:1745
+#: src117/port/lan/port_front_lan.cpp:1040
+#: src117/port/lan/port_front_lan.cpp:1771
 msgid "The room"
 msgstr "房間"
 
-#: src117/port/lan/port_front_lan.cpp:1039
+#: src117/port/lan/port_front_lan.cpp:1041
 msgid "Everyone in the room, the matches and this machine’s load. Hotkey: R"
 msgstr "房間中的所有人、各場比賽，以及這台機器的負載。快速鍵：R"
 
-#: src117/port/lan/port_front_lan.cpp:1040
+#: src117/port/lan/port_front_lan.cpp:1042
 msgid "Who is in the room and what they play. Leave goes back to Multiplayer. Hotkey: R"
 msgstr "房間中有誰以及他們在玩什麼。「離開」會回到「多人對戰」。快速鍵：R"
 
-#: src117/port/lan/port_front_lan.cpp:1047
+#: src117/port/lan/port_front_lan.cpp:1049
 msgid "Choose a map first"
 msgstr "請先選擇地圖"
 
-#: src117/port/lan/port_front_lan.cpp:1058
+#: src117/port/lan/port_front_lan.cpp:1060
 msgid "A match needs two players or more"
 msgstr "一場比賽需要兩位以上的玩家"
 
-#: src117/port/lan/port_front_lan.cpp:1059
+#: src117/port/lan/port_front_lan.cpp:1061
 msgid "Open a seat for the room, or make one a computer."
 msgstr "為房間開放一個席位，或把其中一個改成電腦。"
 
-#: src117/port/lan/port_front_lan.cpp:1064
+#: src117/port/lan/port_front_lan.cpp:1066
 msgid "{0} Is Not Ready"
 msgstr "{0} 尚未準備"
 
-#: src117/port/lan/port_front_lan.cpp:1065
+#: src117/port/lan/port_front_lan.cpp:1067
 msgid "Every seat says Ready before the match starts."
 msgstr "所有席位都顯示「已準備」後，比賽才會開始。"
 
-#: src117/port/lan/port_front_lan.cpp:1066
+#: src117/port/lan/port_front_lan.cpp:1068
 msgid "Wait for {0}"
 msgstr "等待 {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1066
+#: src117/port/lan/port_front_lan.cpp:1068
 msgid "The match starts when every seat is ready."
 msgstr "所有席位都準備好後比賽就會開始。"
 
-#: src117/port/lan/port_front_lan.cpp:1067
+#: src117/port/lan/port_front_lan.cpp:1069
 msgid "Start Anyway"
 msgstr "仍然開始"
 
-#: src117/port/lan/port_front_lan.cpp:1067
+#: src117/port/lan/port_front_lan.cpp:1069
 msgid "The match starts now, with everyone seated."
 msgstr "比賽立刻開始，所有已入座的人都參加。"
 
-#: src117/port/lan/port_front_lan.cpp:1082
+#: src117/port/lan/port_front_lan.cpp:1084
 msgid "Not Ready"
 msgstr "未準備"
 
-#: src117/port/lan/port_front_lan.cpp:1082
-#: src117/port/lan/port_front_lan.cpp:1253
+#: src117/port/lan/port_front_lan.cpp:1084
+#: src117/port/lan/port_front_lan.cpp:1255
 msgid "Ready"
 msgstr "已準備"
 
-#: src117/port/lan/port_front_lan.cpp:1094
+#: src117/port/lan/port_front_lan.cpp:1096
 msgid "You left the room"
 msgstr "你已離開房間"
 
-#: src117/port/lan/port_front_lan.cpp:1163
+#: src117/port/lan/port_front_lan.cpp:1165
 msgid "{0} in a browser, {1} installed"
 msgstr "{0} 位使用瀏覽器，{1} 位已安裝"
 
-#: src117/port/lan/port_front_lan.cpp:1166
+#: src117/port/lan/port_front_lan.cpp:1168
 msgid "When it starts: {0} from the host"
 msgstr "開始時：{0} 由主持者提供"
 
-#: src117/port/lan/port_front_lan.cpp:1167
+#: src117/port/lan/port_front_lan.cpp:1169
 msgid "{0} new stream"
 msgid_plural "{0} new streams"
 msgstr[0] "{0} 條新串流"
 
-#: src117/port/lan/port_front_lan.cpp:1180
+#: src117/port/lan/port_front_lan.cpp:1182
 #: src117/port/lan/port_front_landevices.cpp:279
 msgid "{0}, the host’s own"
 msgstr "{0}，主持者自己的"
 
-#: src117/port/lan/port_front_lan.cpp:1211
+#: src117/port/lan/port_front_lan.cpp:1213
 msgid "Chat"
 msgstr "聊天"
 
-#: src117/port/lan/port_front_lan.cpp:1236
+#: src117/port/lan/port_front_lan.cpp:1238
 msgid "Nothing said yet. Enter types a line."
 msgstr "還沒有人發言。按 Enter 即可輸入。"
 
-#: src117/port/lan/port_front_lan.cpp:1244
+#: src117/port/lan/port_front_lan.cpp:1246
 msgid "Enter to chat"
 msgstr "按 Enter 聊天"
 
-#: src117/port/lan/port_front_lan.cpp:1250
-#: src117/port/lan/port_front_lan.cpp:1253
+#: src117/port/lan/port_front_lan.cpp:1252
+#: src117/port/lan/port_front_lan.cpp:1255
 msgid "A match in the room"
 msgstr "房間中的一場比賽"
 
-#: src117/port/lan/port_front_lan.cpp:1250
+#: src117/port/lan/port_front_lan.cpp:1252
 msgid "Start Match"
 msgstr "開始比賽"
 
-#: src117/port/lan/port_front_lan.cpp:1251
+#: src117/port/lan/port_front_lan.cpp:1253
 msgid "The seats, the game options and who is in the room come next, then Start Match."
 msgstr "接下來是席位、遊戲選項與房間成員，然後按「開始比賽」。"
 
@@ -7551,299 +7601,299 @@ msgstr "接下來是席位、遊戲選項與房間成員，然後按「開始比
 msgid "The server could not start"
 msgstr "伺服器無法啟動"
 
-#: src117/port/lan/port_front_lan.cpp:1317
-msgid "Nothing answers at {0}"
-msgstr "{0} 沒有回應"
-
-#: src117/port/lan/port_front_lan.cpp:1318
-msgid "A room is joined on port 6112, and found on 6111."
-msgstr "加入房間使用 6112 連接埠，搜尋房間使用 6111。"
-
 #: src117/port/lan/port_front_lan.cpp:132
 msgid "Another room or game on this machine has its port. Close it, then start the server."
 msgstr "這台機器上另一個房間或遊戲佔用了它的連接埠。請先關閉它，再啟動伺服器。"
 
-#: src117/port/lan/port_front_lan.cpp:1348
+#: src117/port/lan/port_front_lan.cpp:1336
+msgid "Nothing answers at {0}"
+msgstr "{0} 沒有回應"
+
+#: src117/port/lan/port_front_lan.cpp:1337
+msgid "A room is joined on port 6112, and found on 6111."
+msgstr "加入房間使用 6112 連接埠，搜尋房間使用 6111。"
+
+#: src117/port/lan/port_front_lan.cpp:1367
 msgid "That is not an address"
 msgstr "這不是一個位址"
 
-#: src117/port/lan/port_front_lan.cpp:1349
+#: src117/port/lan/port_front_lan.cpp:1368
 msgid "An address on this network is four numbers, like 192.168.1.20."
 msgstr "這個網路上的位址是四組數字，例如 192.168.1.20。"
 
-#: src117/port/lan/port_front_lan.cpp:1407
+#: src117/port/lan/port_front_lan.cpp:1426
 msgid "The game, installed here"
 msgstr "本機已安裝的遊戲"
 
-#: src117/port/lan/port_front_lan.cpp:1408
+#: src117/port/lan/port_front_lan.cpp:1427
 msgid "{0}, from this PC’s copy"
 msgstr "{0}，來自這台電腦的檔案"
 
-#: src117/port/lan/port_front_lan.cpp:1408
-#: src117/port/lan/port_front_lan.cpp:1553
+#: src117/port/lan/port_front_lan.cpp:1427
+#: src117/port/lan/port_front_lan.cpp:1579
 msgid "StarCraft and Brood War"
 msgstr "星海爭霸與怒火燎原"
 
-#: src117/port/lan/port_front_lan.cpp:1409
+#: src117/port/lan/port_front_lan.cpp:1428
 msgid "A wired network"
 msgstr "有線網路"
 
-#: src117/port/lan/port_front_lan.cpp:1409
+#: src117/port/lan/port_front_lan.cpp:1428
 msgid "Wi-Fi works, with more delay"
 msgstr "Wi-Fi 也可以，但延遲較高"
 
-#: src117/port/lan/port_front_lan.cpp:1410
+#: src117/port/lan/port_front_lan.cpp:1429
 msgid "A graphics card that makes video"
 msgstr "能編碼影像的顯示卡"
 
-#: src117/port/lan/port_front_lan.cpp:1411
+#: src117/port/lan/port_front_lan.cpp:1430
 msgid "For players in a browser, which is not available yet"
 msgstr "供使用瀏覽器的玩家使用，目前尚未提供"
 
-#: src117/port/lan/port_front_lan.cpp:1430
+#: src117/port/lan/port_front_lan.cpp:1449
 msgid "Rooms on This Network"
 msgstr "這個網路上的房間"
 
-#: src117/port/lan/port_front_lan.cpp:1437
+#: src117/port/lan/port_front_lan.cpp:1456
 msgid "No room answers on this network yet. A room appears here a moment after its host starts it."
 msgstr "這個網路上還沒有房間回應。主持者啟動房間後，它很快就會出現在這裡。"
 
-#: src117/port/lan/port_front_lan.cpp:1457
+#: src117/port/lan/port_front_lan.cpp:1480
 msgid "A room"
 msgstr "一個房間"
 
-#: src117/port/lan/port_front_lan.cpp:1462
-#: src117/port/lan/port_front_lan.cpp:1747
+#: src117/port/lan/port_front_lan.cpp:1488
+#: src117/port/lan/port_front_lan.cpp:1773
 msgid "{0} device in the room"
 msgid_plural "{0} devices in the room"
 msgstr[0] "房間中有 {0} 台裝置"
 
-#: src117/port/lan/port_front_lan.cpp:1463
+#: src117/port/lan/port_front_lan.cpp:1489
 msgid "{0} match running"
 msgid_plural "{0} matches running"
 msgstr[0] "有 {0} 場比賽進行中"
 
-#: src117/port/lan/port_front_lan.cpp:1464
+#: src117/port/lan/port_front_lan.cpp:1490
 msgid "asks for a password"
 msgstr "需要密碼"
 
-#: src117/port/lan/port_front_lan.cpp:1480
-#: src117/port/lan/port_front_lan.cpp:1509
-#: src117/port/lan/port_front_lan.cpp:1583
+#: src117/port/lan/port_front_lan.cpp:1506
+#: src117/port/lan/port_front_lan.cpp:1535
+#: src117/port/lan/port_front_lan.cpp:1609
 msgid "Join"
 msgstr "加入"
 
-#: src117/port/lan/port_front_lan.cpp:1483
+#: src117/port/lan/port_front_lan.cpp:1509
 msgid "Can’t join"
 msgstr "無法加入"
 
-#: src117/port/lan/port_front_lan.cpp:1497
+#: src117/port/lan/port_front_lan.cpp:1523
 msgid "Or an address"
 msgstr "或輸入位址"
 
-#: src117/port/lan/port_front_lan.cpp:1518
+#: src117/port/lan/port_front_lan.cpp:1544
 msgid "Two Ways to Play"
 msgstr "兩種進行方式"
 
-#: src117/port/lan/port_front_lan.cpp:1523
+#: src117/port/lan/port_front_lan.cpp:1549
 msgid "In a browser, streamed"
 msgstr "在瀏覽器中，以串流方式"
 
-#: src117/port/lan/port_front_lan.cpp:1524
+#: src117/port/lan/port_front_lan.cpp:1550
 msgid "Phones, tablets, Macs, Chromebooks, a television: anything with a browser. The host runs that player’s game and sends it as video; nothing is installed and nothing of the game leaves the host. Not available yet."
 msgstr "手機、平板、Mac、Chromebook、電視：任何有瀏覽器的裝置。主持者會執行那位玩家的遊戲並以影像送出；不需安裝任何東西，遊戲檔案也不會離開主持者。目前尚未提供。"
 
-#: src117/port/lan/port_front_lan.cpp:1526
+#: src117/port/lan/port_front_lan.cpp:1552
 msgid "Installed, from the host"
 msgstr "已安裝，由主持者連線"
 
-#: src117/port/lan/port_front_lan.cpp:1527
+#: src117/port/lan/port_front_lan.cpp:1553
 msgid "Windows and Linux PCs, x64 or ARM. Each plays the game itself at its own resolution, and sends its commands through the host."
 msgstr "Windows 與 Linux 電腦，x64 或 ARM。每一台都以自己的解析度執行遊戲，並透過主持者送出指令。"
 
-#: src117/port/lan/port_front_lan.cpp:1544
+#: src117/port/lan/port_front_lan.cpp:1570
 msgid "Both kinds play in one match: every seat sends its commands through the host, and every seat computes the same game from them."
 msgstr "兩種方式可以在同一場比賽中並存：每個席位都透過主持者送出指令，而每個席位都依這些指令算出同一場遊戲。"
 
-#: src117/port/lan/port_front_lan.cpp:1546
+#: src117/port/lan/port_front_lan.cpp:1572
 msgid "THIS COPY"
 msgstr "這份複本"
 
-#: src117/port/lan/port_front_lan.cpp:1549
+#: src117/port/lan/port_front_lan.cpp:1575
 msgid "the mod {0}"
 msgstr "模組 {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1550
+#: src117/port/lan/port_front_lan.cpp:1576
 msgid "no mod"
 msgstr "沒有模組"
 
-#: src117/port/lan/port_front_lan.cpp:1552
+#: src117/port/lan/port_front_lan.cpp:1578
 msgid "{0}, {1}, {2}"
 msgstr "{0}，{1}，{2}"
 
-#: src117/port/lan/port_front_lan.cpp:1556
+#: src117/port/lan/port_front_lan.cpp:1582
 msgid "A room plays only with copies that match it: the same version, the same game data ({0}), the same mod."
 msgstr "房間只接受完全相符的複本：相同的版本、相同的遊戲資料（{0}）、相同的模組。"
 
-#: src117/port/lan/port_front_lan.cpp:1560
+#: src117/port/lan/port_front_lan.cpp:1586
 msgid "Rooms are for this network only, and everyone playing needs their own copy of StarCraft."
 msgstr "房間僅限這個網路使用，而且每位玩家都需要自己的 StarCraft 複本。"
 
-#: src117/port/lan/port_front_lan.cpp:1570
+#: src117/port/lan/port_front_lan.cpp:1596
 msgid "Join {0}"
 msgstr "加入 {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1571
+#: src117/port/lan/port_front_lan.cpp:1597
 msgid "The room asks for its password. The host’s console shows it, under Join This Room."
 msgstr "這個房間需要密碼。主持者的控制台會在「加入這個房間」下顯示它。"
 
-#: src117/port/lan/port_front_lan.cpp:1576
+#: src117/port/lan/port_front_lan.cpp:1602
 msgid "the password"
 msgstr "密碼"
 
-#: src117/port/lan/port_front_lan.cpp:1620
+#: src117/port/lan/port_front_lan.cpp:1646
 msgid "Couldn’t join {0}"
 msgstr "無法加入 {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1624
+#: src117/port/lan/port_front_lan.cpp:1650
 msgid "Nothing answers in {0}"
 msgstr "{0} 內沒有任何回應"
 
-#: src117/port/lan/port_front_lan.cpp:1624
+#: src117/port/lan/port_front_lan.cpp:1650
 msgid "The room may have stopped."
 msgstr "這個房間可能已經關閉。"
 
-#: src117/port/lan/port_front_lan.cpp:1631
+#: src117/port/lan/port_front_lan.cpp:1657
 msgid "Joining {0}…"
 msgstr "正在加入 {0}…"
 
-#: src117/port/lan/port_front_lan.cpp:1632
+#: src117/port/lan/port_front_lan.cpp:1658
 msgid "Couldn’t join: {0} {1}"
 msgstr "無法加入：{0} {1}"
 
-#: src117/port/lan/port_front_lan.cpp:1633
+#: src117/port/lan/port_front_lan.cpp:1659
 msgid "Play with others on this network: host a room here, or join one"
 msgstr "與這個網路上的其他人一起玩：在這裡主持一個房間，或加入一個"
 
-#: src117/port/lan/port_front_lan.cpp:1643
+#: src117/port/lan/port_front_lan.cpp:1669
 msgid "This Network"
 msgstr "這個網路"
 
-#: src117/port/lan/port_front_lan.cpp:1650
+#: src117/port/lan/port_front_lan.cpp:1676
 msgid "Not available yet. Online play comes later, on the same connection the network uses."
 msgstr "尚未提供。線上對戰之後才會推出，使用與網路相同的連線方式。"
 
-#: src117/port/lan/port_front_lan.cpp:1655
+#: src117/port/lan/port_front_lan.cpp:1681
 msgid "The Original’s Screens"
 msgstr "原版的畫面"
 
-#: src117/port/lan/port_front_lan.cpp:1659
+#: src117/port/lan/port_front_lan.cpp:1685
 msgid "The original’s screens"
 msgstr "原版的畫面"
 
-#: src117/port/lan/port_front_lan.cpp:1660
+#: src117/port/lan/port_front_lan.cpp:1686
 msgid "StarCraft’s own multiplayer screens, as the original draws them: Local Area Network, its game list and chat room. Hotkey: O"
 msgstr "StarCraft 自己的多人對戰畫面，依原版的繪製方式：區域網路、它的遊戲清單與聊天室。快速鍵：O"
 
-#: src117/port/lan/port_front_lan.cpp:1668
+#: src117/port/lan/port_front_lan.cpp:1694
 msgid "Host a Room"
 msgstr "主持房間"
 
-#: src117/port/lan/port_front_lan.cpp:1669
+#: src117/port/lan/port_front_lan.cpp:1695
 msgid "This machine hosts. Everyone else on the network joins with Hyperion installed, from Join a Room."
 msgstr "由這台機器主持。網路上的其他人只要安裝 Hyperion，從「加入房間」即可加入。"
 
-#: src117/port/lan/port_front_lan.cpp:1670
+#: src117/port/lan/port_front_lan.cpp:1696
 msgid "Your room is running: H opens its console."
 msgstr "你的房間正在執行：按 H 可開啟它的控制台。"
 
-#: src117/port/lan/port_front_lan.cpp:1671
+#: src117/port/lan/port_front_lan.cpp:1697
 msgid "Installed players cost the host next to nothing; as many as the network holds."
 msgstr "已安裝的玩家幾乎不會增加主持者的負擔；數量可達網路能承載的上限。"
 
-#: src117/port/lan/port_front_lan.cpp:1678
+#: src117/port/lan/port_front_lan.cpp:1704
 msgid "{0} room found on this network"
 msgid_plural "{0} rooms found on this network"
 msgstr[0] "在這個網路上找到 {0} 個房間"
 
-#: src117/port/lan/port_front_lan.cpp:1679
+#: src117/port/lan/port_front_lan.cpp:1705
 msgid "Join a Room"
 msgstr "加入房間"
 
-#: src117/port/lan/port_front_lan.cpp:1680
+#: src117/port/lan/port_front_lan.cpp:1706
 msgid "Play in a room on this network. Pick one below, or type its address. This copy plays there itself, as one of the room’s installed players."
 msgstr "加入這個網路上的一個房間。請在下方挑選一個，或輸入它的位址。這份複本會以房間中已安裝的玩家身分參加。"
 
-#: src117/port/lan/port_front_lan.cpp:1682
+#: src117/port/lan/port_front_lan.cpp:1708
 msgid "{0}, {1} this copy can join"
 msgstr "{0}，其中 {1} 個這份複本可以加入"
 
-#: src117/port/lan/port_front_lan.cpp:1746
+#: src117/port/lan/port_front_lan.cpp:1772
 msgid "Hosted on {0}"
 msgstr "由 {0} 主持"
 
-#: src117/port/lan/port_front_lan.cpp:1757
+#: src117/port/lan/port_front_lan.cpp:1783
 msgid "The Lobby"
 msgstr "遊戲房間"
 
-#: src117/port/lan/port_front_lan.cpp:1760
+#: src117/port/lan/port_front_lan.cpp:1786
 msgid "The lobby"
 msgstr "遊戲房間"
 
-#: src117/port/lan/port_front_lan.cpp:1761
+#: src117/port/lan/port_front_lan.cpp:1787
 msgid "The host seats you in a match; its lobby opens then."
 msgstr "主持者會把你安排到某場比賽的席位；屆時它的遊戲房間就會開啟。"
 
-#: src117/port/lan/port_front_lan.cpp:1766
+#: src117/port/lan/port_front_lan.cpp:1792
 msgid "Leave Room"
 msgstr "離開房間"
 
-#: src117/port/lan/port_front_lan.cpp:1770
+#: src117/port/lan/port_front_lan.cpp:1796
 msgid "Matches"
 msgstr "比賽"
 
-#: src117/port/lan/port_front_lan.cpp:1773
+#: src117/port/lan/port_front_lan.cpp:1799
 msgid "No match yet. The host opens one, and seats the room’s people in it."
 msgstr "還沒有任何比賽。主持者會開一場，並把房間中的人安排進去。"
 
-#: src117/port/lan/port_front_lan.cpp:1787
+#: src117/port/lan/port_front_lan.cpp:1813
 #: src117/port/lan/port_front_lanhost.cpp:543
 msgid "Choosing a map"
 msgstr "正在選擇地圖"
 
-#: src117/port/lan/port_front_lan.cpp:1788
+#: src117/port/lan/port_front_lan.cpp:1814
 msgid "in its lobby"
 msgstr "在它的遊戲房間中"
 
-#: src117/port/lan/port_front_lan.cpp:1789
+#: src117/port/lan/port_front_lan.cpp:1815
 #: src117/port/lan/port_front_lanhost.cpp:545
 msgid "starting"
 msgstr "正在開始"
 
-#: src117/port/lan/port_front_lan.cpp:1790
+#: src117/port/lan/port_front_lan.cpp:1816
 msgid "playing for {0}"
 msgstr "已進行 {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1791
+#: src117/port/lan/port_front_lan.cpp:1817
 #: src117/port/lan/port_front_lanhost.cpp:546
 msgid "ended"
 msgstr "已結束"
 
-#: src117/port/lan/port_front_lan.cpp:1792
+#: src117/port/lan/port_front_lan.cpp:1818
 #: src117/port/lan/port_front_lanhost.cpp:547
 msgid "ended: {0}"
 msgstr "已結束：{0}"
 
-#: src117/port/lan/port_front_lan.cpp:1809
+#: src117/port/lan/port_front_lan.cpp:1835
 #: src117/port/lan/port_front_lanhost.cpp:503
 msgid "Watch this match"
 msgstr "觀看這場比賽"
 
-#: src117/port/lan/port_front_lan.cpp:1812
+#: src117/port/lan/port_front_lan.cpp:1838
 msgid "From this machine, {0} s behind the players, with the replay player’s camera."
 msgstr "從這台機器觀看，畫面比玩家慢 {0} 秒，使用戰鬥錄影播放器的鏡頭。"
 
-#: src117/port/lan/port_front_lan.cpp:1818
+#: src117/port/lan/port_front_lan.cpp:1844
 msgid "In the Room"
 msgstr "房間中"
 
@@ -7857,32 +7907,34 @@ msgstr "你的房間仍然開著"
 msgid "This console is back in it."
 msgstr "這個控制台已回到其中。"
 
-#: src117/port/lan/port_front_lan.cpp:1945
+#: src117/port/lan/port_front_lan.cpp:1971
 msgid "The Match Did Not Come"
 msgstr "比賽資料未送達"
 
-#: src117/port/lan/port_front_lan.cpp:1945
+#: src117/port/lan/port_front_lan.cpp:1971
 msgid "The room sent nothing of it. It may have ended."
 msgstr "房間沒有送出任何相關資料。它可能已經結束。"
 
-#: src117/port/lan/port_front_lan.cpp:2093
+#: src117/port/lan/port_front_lan.cpp:2119
 msgid "The server stopped"
 msgstr "伺服器已停止"
 
-#: src117/port/lan/port_front_lan.cpp:2093
+#: src117/port/lan/port_front_lan.cpp:2119
 msgid "Nobody can join until it starts again."
 msgstr "在它重新啟動前沒有人能加入。"
 
-#: src117/port/lan/port_front_lan.cpp:2100
+#: src117/port/lan/port_front_lan.cpp:2126
 msgid "The match did not start"
 msgstr "比賽沒有開始"
 
-#: src117/port/lan/port_front_lan.cpp:2110
+#: src117/port/lan/port_front_lan.cpp:2139
+#: src117/port/lan/port_front_lan.cpp:2148
+#: src117/port/lan/port_front_lan.cpp:2162
 msgid "The match could not start here"
 msgstr "這裡無法開始比賽"
 
 #: src117/port/lan/port_front_lan.cpp:345
-#: src117/port/lan/port_front_lan.cpp:1178
+#: src117/port/lan/port_front_lan.cpp:1180
 #: src117/port/lan/port_front_lanhost.cpp:366
 #: src117/port/lan/port_front_lanhost.cpp:371
 msgid "This machine"
@@ -7927,9 +7979,9 @@ msgid "Playing {0}"
 msgstr "正在玩 {0}"
 
 #: src117/port/lan/port_front_lan.cpp:423
-#: src117/port/lan/port_front_lan.cpp:1799
+#: src117/port/lan/port_front_lan.cpp:1825
 #: src117/port/lan/port_front_lanhost.cpp:578
-#: src117/port/lan/port_lanlobby.cpp:104
+#: src117/port/lan/port_lanlobby.cpp:108
 msgid "a computer"
 msgid_plural "{0} computers"
 msgstr[0] "{0} 部電腦"
@@ -7972,7 +8024,7 @@ msgid "Getting the game from the host"
 msgstr "正在從主持者取得遊戲"
 
 #: src117/port/lan/port_front_lan.cpp:437
-#: src117/port/lan/port_front_lan.cpp:1198
+#: src117/port/lan/port_front_lan.cpp:1200
 #: src117/port/lan/port_front_landevices.cpp:30
 #: src117/port/lan/port_front_landevices.cpp:300
 #: src117/port/lan/port_front_lanhost.cpp:921
@@ -8196,7 +8248,7 @@ msgid "By time in the room"
 msgstr "依在房間中的時間"
 
 #: src117/port/lan/port_front_landevices.cpp:335
-#: src117/port/lan/port_lanroom_proto.cpp:688
+#: src117/port/lan/port_lanroom_proto.cpp:742
 msgid "That match is not being played now."
 msgstr "那場比賽目前沒有在進行。"
 
@@ -8344,10 +8396,6 @@ msgstr "接受連線的連接埠"
 #: src117/port/lan/port_front_lanhost.cpp:1233
 msgid "games on {0}, found on {1}"
 msgstr "遊戲使用 {0}，搜尋使用 {1}"
-
-#: src117/port/lan/port_front_lanhost.cpp:1235
-msgid "This network"
-msgstr "這個網路"
 
 #: src117/port/lan/port_front_lanhost.cpp:1235
 msgid "The internet"
@@ -8885,60 +8933,60 @@ msgstr "每一個都會在它的卡片上說明原因"
 msgid "Nobody has joined yet. The join card on the right says how."
 msgstr "還沒有人加入。右邊的加入卡片會說明方法。"
 
-#: src117/port/lan/port_lanclient.cpp:241
+#: src117/port/lan/port_lanclient.cpp:248
 msgid "Another version"
 msgstr "版本不同"
 
-#: src117/port/lan/port_lanclient.cpp:243
+#: src117/port/lan/port_lanclient.cpp:250
 msgid "Its host plays {0}, and this copy is {1}: the two compute the game differently."
 msgstr "它的主持者使用 {0}，而這份複本是 {1}：兩者計算遊戲的方式不同。"
 
-#: src117/port/lan/port_lanclient.cpp:245
+#: src117/port/lan/port_lanclient.cpp:252
 msgid "Its host's page offers its version to install beside this one."
 msgstr "它主持者的頁面提供它的版本，可與這一份並存安裝。"
 
-#: src117/port/lan/port_lanclient.cpp:247
+#: src117/port/lan/port_lanclient.cpp:254
 msgid "Needs a mod"
 msgstr "需要模組"
 
-#: src117/port/lan/port_lanclient.cpp:249
+#: src117/port/lan/port_lanclient.cpp:256
 msgid "This copy has the mod {0} active, and the room plays without one."
 msgstr "這份複本啟用了模組 {0}，而這個房間不使用任何模組。"
 
-#: src117/port/lan/port_lanclient.cpp:250
+#: src117/port/lan/port_lanclient.cpp:257
 msgid "Its host plays the mod {0}, which this copy does not have active."
 msgstr "它的主持者使用模組 {0}，而這份複本沒有啟用它。"
 
-#: src117/port/lan/port_lanclient.cpp:251
-#: src117/port/lan/port_lanroom_proto.cpp:368
+#: src117/port/lan/port_lanclient.cpp:258
+#: src117/port/lan/port_lanroom_proto.cpp:411
 msgid "Turn it off under Mods, then join."
 msgstr "請在「模組」中關閉它，然後再加入。"
 
-#: src117/port/lan/port_lanclient.cpp:252
+#: src117/port/lan/port_lanclient.cpp:259
 msgid "Activate {0} under Mods, then join."
 msgstr "請在「模組」中啟用 {0}，然後再加入。"
 
-#: src117/port/lan/port_lanclient.cpp:254
+#: src117/port/lan/port_lanclient.cpp:261
 msgid "Other game data"
 msgstr "遊戲資料不同"
 
-#: src117/port/lan/port_lanclient.cpp:256
+#: src117/port/lan/port_lanclient.cpp:263
 msgid "Its game data is not this copy's (fingerprint {0})."
 msgstr "它的遊戲資料與這份複本不同（指紋 {0}）。"
 
-#: src117/port/lan/port_lanclient.cpp:257
+#: src117/port/lan/port_lanclient.cpp:264
 msgid "Its host's page has the game data to install."
 msgstr "它主持者的頁面提供可安裝的遊戲資料。"
 
-#: src117/port/lan/port_lanclient.cpp:260
+#: src117/port/lan/port_lanclient.cpp:267
 msgid "Plays here"
 msgstr "可以在這裡進行"
 
-#: src117/port/lan/port_lanclient.cpp:390
+#: src117/port/lan/port_lanclient.cpp:397
 msgid "The host removed you from the room."
 msgstr "主持者已把你從房間中移除。"
 
-#: src117/port/lan/port_lanclient.cpp:392
+#: src117/port/lan/port_lanclient.cpp:399
 msgid "The room has closed."
 msgstr "房間已關閉。"
 
@@ -8962,64 +9010,64 @@ msgstr "{0} · 慢 {1} 秒"
 msgid "L goes back to {0} s behind"
 msgstr "按 L 可回到慢 {0} 秒的位置"
 
-#: src117/port/lan/port_lanlobby.cpp:110
+#: src117/port/lan/port_lanlobby.cpp:114
 #: src117/port/platform/port_discord.cpp:615
 msgid "{0}, {1}"
 msgstr "{0}，{1}"
 
-#: src117/port/lan/port_lanlobby.cpp:180
+#: src117/port/lan/port_lanlobby.cpp:184
 msgid "A match"
 msgstr "一場比賽"
 
-#: src117/port/lan/port_lanlobby.cpp:409
+#: src117/port/lan/port_lanlobby.cpp:699
 msgid "Starting the match"
 msgstr "正在開始比賽"
 
-#: src117/port/lan/port_lanroom_proto.cpp:322
+#: src117/port/lan/port_lanroom_proto.cpp:365
 msgid "The host's web\\play folder is from another build of Hyperion; play streamed meanwhile."
 msgstr "主持者的 web\\play 資料夾來自另一個 Hyperion 版本；在此期間請以串流方式進行。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:353
+#: src117/port/lan/port_lanroom_proto.cpp:396
 msgid "The room is not taking anyone now."
 msgstr "這個房間目前不接受新成員。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:354
+#: src117/port/lan/port_lanroom_proto.cpp:397
 msgid "Ask the host to start the server."
 msgstr "請主持者啟動伺服器。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:357
+#: src117/port/lan/port_lanroom_proto.cpp:400
 msgid "Choose another name."
 msgstr "請換一個名稱。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:359
+#: src117/port/lan/port_lanroom_proto.cpp:402
 msgid "The room asks for its password."
 msgstr "這個房間需要密碼。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:359
+#: src117/port/lan/port_lanroom_proto.cpp:402
 msgid "That is not the room's password."
 msgstr "這不是這個房間的密碼。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:360
+#: src117/port/lan/port_lanroom_proto.cpp:403
 msgid "The host's console shows it, under Join This Room."
 msgstr "主持者的控制台會在「加入這個房間」下顯示它。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:364
+#: src117/port/lan/port_lanroom_proto.cpp:407
 msgid "The host's page offers the room's version to install."
 msgstr "主持者的頁面提供這個房間的版本可供安裝。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:368
+#: src117/port/lan/port_lanroom_proto.cpp:411
 msgid "Activate it under Mods, then join."
 msgstr "請在「模組」中啟用它，然後再加入。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:371
+#: src117/port/lan/port_lanroom_proto.cpp:414
 msgid "The host's page has the game data to install."
 msgstr "主持者的頁面提供可安裝的遊戲資料。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:541
+#: src117/port/lan/port_lanroom_proto.cpp:587
 msgid "The room has a new password."
 msgstr "這個房間已更換密碼。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:558
+#: src117/port/lan/port_lanroom_proto.cpp:612
 msgid "The server stops after the last match; nobody new can join."
 msgstr "最後一場比賽結束後伺服器會停止；沒有新的人能加入。"
 
