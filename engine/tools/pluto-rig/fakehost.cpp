@@ -139,8 +139,25 @@ static void *__attribute__((thiscall)) UnitEmptySet(void *self, void *sret) {
 }
 
 // Logs the faulting context (the return address on the stack is the caller in the
-// bot's code) before the crash handler runs.
+// bot's code) before the crash handler runs. A call through NULL is redirected to a
+// ret stub (logged), so the bot can limp past broken slots and reveal the next one.
+__attribute__((naked)) static void NullStub(void) {
+  __asm__("ret");
+}
+
 static LONG CALLBACK VecHandler(EXCEPTION_POINTERS *e) {
+  if (e->ExceptionRecord->ExceptionAddress == reinterpret_cast<void *>(0)) {
+    static int s_nulls;
+    FILE *f = fopen("c:\\fault.log", "a");
+    if (f)
+      fprintf(f, "null-call #%d ret=%p\\n", ++s_nulls, *reinterpret_cast<void **>(e->ContextRecord->Esp)),
+      fclose(f);
+    if (s_nulls < 200) {
+      e->ContextRecord->Eip = reinterpret_cast<DWORD>(&NullStub);
+      return EXCEPTION_CONTINUE_EXECUTION;
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+  }
   FILE *f = fopen("c:\\fault.log", "a");
   if (f) {
     fprintf(f, "AV at eip=%p esp=%p ret=%p arg1=%p eax=%p ecx=%p edx=%p\\n",
@@ -150,6 +167,17 @@ static LONG CALLBACK VecHandler(EXCEPTION_POINTERS *e) {
             reinterpret_cast<void *>(e->ContextRecord->Eax),
             reinterpret_cast<void *>(e->ContextRecord->Ecx),
             reinterpret_cast<void *>(e->ContextRecord->Edx));
+    DWORD fp = e->ContextRecord->Ebp;
+    fprintf(f, "ebp-walk:");
+    for (int i = 0; i < 12 && fp > 0x10000 && fp < 0x80000000; ++i) {
+      DWORD old = *reinterpret_cast<DWORD *>(fp);
+      DWORD ret = *reinterpret_cast<DWORD *>(fp + 4);
+      fprintf(f, " %08x->%08x", fp, ret);
+      if (old <= fp)
+        break;
+      fp = old;
+    }
+    fprintf(f, "\\n");
     fclose(f);
   }
   return EXCEPTION_CONTINUE_SEARCH;
