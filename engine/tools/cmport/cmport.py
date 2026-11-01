@@ -652,6 +652,8 @@ def button_cards(mod_dir, tables, names, repo, researchable=frozenset()):
                 if act_var < kV117["upgrades"]:
                     continue  # the vanilla card already upgrades 1.17's
                 entry["upgrade"] = upref(act_var)
+            elif act_id in (kActMorphBuilding, kActMorphUnit):
+                entry["morph"] = uref(act_var)
             elif act_id in (kActUseTech, kActStim):
                 order = order_of_tech(act_var)
                 if order < 0:
@@ -1329,6 +1331,17 @@ def gen_types(tables, out_path, mod_dir):
     script_map, gen_map, iscript_notes = assemble_iscripts(
         mod_dir, tables, names, os.path.join(MOD_DATA, "iscript.txt"), iscript_ref)
     graft_targets.update(iscript_targets)
+
+    # the mod's own stat_txt: data/stat_txt.txt, one string per line, "<0>" empty
+    stat_path = os.path.join(mod_dir, "rez", "stat.txt")
+    if os.path.exists(stat_path):
+        lines = []
+        for ln in open(stat_path, encoding="utf-8", errors="replace"):
+            ln = ln.rstrip("\n")
+            lines.append("" if ln == "<0>" else ln)
+        with open(os.path.join(MOD_DATA, "stat_txt.txt"), "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        print(f"wrote {os.path.join(MOD_DATA, 'stat_txt.txt')} ({len(lines)} strings)")
     fields_of.missing = []
 
     def refs_of(table_id, r):

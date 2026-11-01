@@ -291,7 +291,9 @@ same keeps its card.
     }
 
 `position` is the card's slot, 1 to 9, left to right and top to bottom; `train` the mod's
-unit to train, `upgrade` the mod's upgrade to upgrade (shown while its next level is allowed),
+unit to train, `morph` the unit the card's morphs into (any unit the game has: the mod's,
+or one of the original's a mod's edit changes; the target's `requires` gate it, as the
+original's larva morphs do), `upgrade` the mod's upgrade to upgrade (shown while its next level is allowed),
 `research` the mod's tech to research, or one of the original's a mod's edit
 gives requirements (the button shows while the research is allowed, and goes
 once it is done, as 1.17's do), or `cast` the
@@ -442,6 +444,13 @@ replay nor the fingerprint has their files.
   (`terran_marine_tmayes00`, `tmarine`). An edit of an original sound or portrait changes it
   for every unit that has it, in a game with the mod.
 - `iscript.txt`'s `playsnd`, `playsndbtwn` and `playsndrand` take a sound's number or name.
+
+## The mod's stat_txt
+
+The data folder may hold `stat_txt.txt`: the mod's own strings, one per line, id 1 first
+(an empty line: none). In a game that has the mod, the game's strings come from it where it
+has one, and from the player's install otherwise (`ModStatTxt`, `status_get_str`). The lines
+keep the game's markup (`<N>` codes).
 
 ## Cinematics
 

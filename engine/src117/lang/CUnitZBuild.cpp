@@ -10,6 +10,7 @@
 #include <string.h>                 // memcpy -- the selection staging copy
 
 #include "../h/CUnitZBuild.h"
+#include "../port/data/port_moddata.h"  // Hyperion: ModMorphTarget, a mod's morphs
 #include "../h/CUnitBuild.h"
 #include "../h/CUnitTSpells.h"
 #include "../h/CUnitZSpells.h"
@@ -520,6 +521,26 @@ void CUnit::DispatchMorph()
   switch (this->bOrderState)
   {
   case 0:
+    // Hyperion: a mod's morph, the source straight into its target
+    if (this->wType != 0x23 && this->wType != 0x26 && this->wType != 0x2B) {
+      if (!ModMorphTarget(this->wType, this->wBuildQueue[this->bBuildQueueSlot]))
+        return;
+
+      if (!bldg_check_food(this->bPlayer, this->wBuildQueue[this->bBuildQueueSlot], 1))
+      {
+        RemoveAllBuildQueue();
+        SetOrder(gubUnitOrderGuard[this->wType]);
+        return;
+      }
+
+      count_remove_completion(this, 0);
+      this->dwFlags &= ~1;
+      this->wRemainingBuildTime =
+          guwUnitTimeToBuild[this->wBuildQueue[this->bBuildQueueSlot]];
+      this->bOrderState = 1;
+      break;
+    }
+
     if (this->wType != 0x23 && this->wType != 0x26 && this->wType != 0x2B)
       return;
 
