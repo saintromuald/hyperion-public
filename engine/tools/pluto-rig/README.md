@@ -92,3 +92,16 @@ Open (next session):
   machine) to see what sets eax/ebx before the call.
 - After that: the obs builder finishes per frame; BWRL_SHM dumps land in dump/ and
   the schema extraction starts.
+
+## State 2026-11-01 (session 2, third pass)
+
+The frame loop RUNS: after onStart the bot's onFrame executes hundreds of frames
+("frame 0/100/200/300"), with a vectored handler redirecting the one null-call to a
+ret stub so the bot limps on. The remaining crash shows the true scale of the ABI
+gap: the bot's fork has different BY-VALUE TYPE LAYOUTS than public BWAPI 4.4.0
+(UnitType, Race, Position, Order, ...). Those layouts are measurable directly: the
+bot's own static type instances (UnitTypes::Terran_Marine etc., 233 consecutive
+objects) live in the DLL's data — the spacing between consecutive statics gives each
+type's size, and the fields follow by diffing against known values. Next: measure the
+type layouts from the DLL's statics, then add shims for every by-value return, then
+the obs builder completes and dump/ captures begin.
