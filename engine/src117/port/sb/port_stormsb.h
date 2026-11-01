@@ -33,6 +33,10 @@ bool SbCreator(void);
 // LAN's map-download session is not part of the SB flow (the game's start gate
 // and the Start button read this, gluChat.cpp).
 bool SbMapFromLaunch(void);
+// The creator's header flags, from the launch blob (the 0x20-byte game-type
+// block at the header's +0x6D): the join path's listed header never carries
+// them, and without them the joiner reads the game as a scenario.
+bool SbLaunchHeader(BYTE *pbSubCategory, BYTE *pbScenarioFlag, BYTE *pbLadderGame);
 
 BOOL SbInitialize(void);
 void SbDestroy(void);
