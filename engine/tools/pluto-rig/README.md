@@ -199,12 +199,18 @@ The obs path is now mapped end to end; the schema extraction is one gate away.
 
 Open (next session):
 
-- The module's obs-state is the live one (module+0x10F4, seen at 0x7B203120); its
-  record list is a forward_list {head(+0x1E4), size(+0x1E8)}. In the rig it holds one
-  all-zero record: the builder runs but reads zeros from the host's units, so the
-  remaining gap is the fork-ABI unit getters (the slot audit covered the
-  set-returning ones; the builder's type/position/hp getters need the same audit,
-  via rigtrace.log's slot-numbered calls correlated with the unit fields).
-- Once the records fill, the walk completes, the writer's header (view+0xC0) fills
-  with N, and dump/ captures the observation; the differential scenarios (move a
-  unit, change resources) then name every field.
+- **The bot reads the real game's memory directly**, not through the host's BWAPI
+  impls: 133 absolute StarCraft 1.16.1 addresses, extracted from the patched DLL
+  (`sc-addresses.txt`), including the unit table at 0x59CCA8 (entry stride 0x150 =
+  336; the float writer reads entry+0x64 as the type, +0x10/+0x12 as position, and
+  more), the per-(type,player) attribute table at 0x58D2B0 (stride 0x2E per player),
+  per-player tables around 0x57EE..-0x586D.., and the game globals at 0x5124D8.
+  patch_pluto.py remaps all of them onto the rig's stand-in buffers, which are zero,
+  so the builder records zeros. The module's record list (module+0x10F4, a
+  forward_list {head(+0x1E4), size(+0x1E8)}) holds one all-zero record because of it.
+- Next: fill the stand-ins with a miniature 1.16.1 memory image — the unit table
+  entries for the scripted units (id, type, player, position, visibility), the
+  per-player tables, and the attribute tables the writer reads — then the records
+  fill, the writer's header (view+0xC0) fills with N, and dump/ captures the
+  observation; the differential scenarios (move a unit, change resources) name every
+  field.
