@@ -75,6 +75,7 @@
                (rules & 4 ? ', the same every game' : '') + (rules & 8 ? ', not announced' : ''));
     }
     if (u.units) out.push('unit limit ' + n(u.units));
+    if (u.antiMeta) out.push('anti-meta start');
     return out.filter(Boolean).join(', ');
   }
   var SPEED = { slowest: 'Slowest', slower: 'Slower', slow: 'Slow', normal: 'Normal', fast: 'Fast', faster: 'Faster', fastest: 'Fastest' };

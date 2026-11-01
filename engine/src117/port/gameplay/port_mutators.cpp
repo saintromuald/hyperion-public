@@ -24,6 +24,8 @@
 #include "../../h/typelimits.h"     // UnitTypeValid, UnitTypeMod, TechTypeValid, UpgradeTypeValid
 #include "../../h/CUnit.h"
 #include "../../h/poollimits.h"     // POOL_UNITS_117, POOL_UNITS_MAX
+#include "../../h/net_rand.h"       // net_get_fixed_seed, the roll the anti-meta start shares
+#include "../../h/TrigAct.h"        // map_msg_default, the roll's word at the game's start
 #include "../../gen/globals117.h"   // gbMultiPlayerMode, gPlayback, gpLoadGameFile, the time tables, gpSquareMap
 
 bool g_hxMutatorsOn = false;
@@ -31,6 +33,22 @@ bool g_hxMutatorsOn = false;
 namespace {
 
 const PortLogger Log("hyperion_mutators.log");
+
+// the anti-meta start's word, said once as the game begins (MutatorsFrame)
+std::string g_antiMessage;
+
+// A hash of the game's shared seed and one part's name, so the anti-meta start's three rolls
+// are each their own draw from the one seed every player has: the same mix the rich bases'
+// roll uses (port_richbases.cpp).
+DWORD Mix(DWORD a, DWORD b) {
+  DWORD h = a * 0x9E3779B1u ^ (b + 0x7F4A7C15u);
+  h ^= h >> 16;
+  h *= 0x85EBCA6Bu;
+  h ^= h >> 13;
+  h *= 0xC2B2AE35u;
+  h ^= h >> 16;
+  return h;
+}
 
 // a cap the mutator lifts, in halves: past any supply a game reaches, and a team captain's
 // cap (count_init, a slot's cap times the team's slots) still fits an int
@@ -60,10 +78,14 @@ const int kRadii[] = {32, 48, 64, 80, -25, -33, -50};
 // field upwards of 600 units with the mutator, so the table goes much higher
 const int kUnitLimits[] = {0, 3400, 6800, 13600, 27200, 54400, 108800, POOL_UNITS_MAX};
 
+// the anti-meta start's choices: Classic's, or the roll (MutatorChoose, below; the user,
+// 2026-11-01: 4 to 8 workers, 100 to 300 minerals and 0 to 125 gas, in steps of five)
+const char *const kAntis[] = {PT_("Classic"), PT_("Anti-meta")};  // MUT_ANTIMETA
+
 const char *const kNames[MUT_COUNT] = {PT_("Mineral fields"), PT_("Vespene geysers"), PT_("Start resources"),
                                        PT_("Supply cap"),     PT_("Start workers"),   PT_("Supply boost"),
                                        PT_("Fog of war"),     PT_("Build time"),      PT_("Tech and upgrades"),
-                                       PT_("Rich resources")};
+                                       PT_("Rich resources"), PT_("Anti-meta start")};
 const char *const kLines[MUT_COUNT] = {
     PT_("What each mineral field holds, or that it never runs dry. Classic: 1,500, the small ones 750."),
     PT_("What each geyser holds before it runs dry, or that it never does. Classic: 5,000."),
@@ -81,6 +103,9 @@ const char *const kLines[MUT_COUNT] = {
     PT_("Bases away from every start may turn rich: gold mineral fields and violet geysers that give 11 "
         "minerals and 16 gas a trip, and run dry sooner. Never a start's main or natural; bases that mirror "
         "each other turn rich together. Every base: all of them. Classic: none."),
+    PT_("The workers and the minerals and gas each player begins with, rolled fresh every game as it starts: "
+        "4 to 8 workers, 100 to 300 minerals and 0 to 125 gas, in steps of five. Classic: 4 workers, 50 "
+        "minerals and no gas."),
 };
 
 // the presets' names, which --mutators also reads (MutatorsChooseList) from the English
@@ -164,7 +189,8 @@ bool Same(const MutatorSet &a, const MutatorSet &b) {
          a.nTech == b.nTech && a.nRich == b.nRich &&
          (!RichRolled(a) || (a.nRichChance == b.nRichChance && a.nRichRules == b.nRichRules)) &&
          (a.nRich == MUTATOR_RICH_OFF || (a.nRichRules & MUTATOR_RICH_QUIET) == (b.nRichRules & MUTATOR_RICH_QUIET)) &&
-         (a.nRich != MUTATOR_RICH_RADIUS || a.nRichRadius == b.nRichRadius) && a.nUnits == b.nUnits;
+         (a.nRich != MUTATOR_RICH_RADIUS || a.nRichRadius == b.nRichRadius) && a.nUnits == b.nUnits &&
+         a.nAntiMeta == b.nAntiMeta;
 }
 
 // A radius in words: "48 tiles", "a quarter of the map"; in English for a log or a key.
@@ -300,6 +326,7 @@ MutatorSet MutatorsClamp(const MutatorSet &m) {
   c.nRichRadius = m.nRichRadius < 0 ? Clamp(m.nRichRadius, -75, -10) : m.nRichRadius == 0 ? c.nRichRadius
                                                                                           : Clamp(m.nRichRadius, 16, 256);
   c.nUnits = m.nUnits <= 0 ? 0 : Clamp(m.nUnits, POOL_UNITS_117, POOL_UNITS_MAX);
+  c.nAntiMeta = m.nAntiMeta != 0;
   return c;
 }
 
@@ -345,6 +372,7 @@ int MutatorChoices(int nMut) {
   case MUT_BUILD: return static_cast<int>(sizeof kBuilds / sizeof kBuilds[0]);
   case MUT_TECH: return static_cast<int>(sizeof kTechs / sizeof kTechs[0]);
   case MUT_RICH: return static_cast<int>(sizeof kRiches / sizeof kRiches[0]);
+  case MUT_ANTIMETA: return static_cast<int>(sizeof kAntis / sizeof kAntis[0]);
   case MUT_RICH_CHANCE: return static_cast<int>(sizeof kChances / sizeof kChances[0]);
   case MUT_RICH_RADIUS: return static_cast<int>(sizeof kRadii / sizeof kRadii[0]);
   }
@@ -365,6 +393,7 @@ std::string MutatorChoiceName(int nMut, int i) {
   case MUT_BUILD: return Share(kBuilds[i]);
   case MUT_TECH: return PortText(kTechs[i]);
   case MUT_RICH: return PortText(kRiches[i]);
+  case MUT_ANTIMETA: return PortText(kAntis[i]);
   case MUT_RICH_CHANCE: return PortTextF("{0}% chance", {std::to_string(kChances[i])});
   case MUT_RICH_RADIUS: return RadiusChip(kRadii[i]);
   }
@@ -391,6 +420,7 @@ int MutatorChoiceOf(const MutatorSet &m, int nMut) {
   case MUT_BUILD: return Nearest(kBuilds, MutatorChoices(nMut), m.nBuildTime);
   case MUT_TECH: return Clamp(m.nTech, 0, MutatorChoices(nMut) - 1);
   case MUT_RICH: return Clamp(m.nRich, 0, MutatorChoices(nMut) - 1);
+  case MUT_ANTIMETA: return Clamp(m.nAntiMeta, 0, MutatorChoices(nMut) - 1);
   case MUT_RICH_CHANCE: return Nearest(kChances, MutatorChoices(nMut), m.nRichChance);
   case MUT_RICH_RADIUS:
     for (int i = 0; i < MutatorChoices(nMut); i++)
@@ -418,6 +448,7 @@ void MutatorChoose(MutatorSet *pm, int nMut, int i) {
   case MUT_BUILD: pm->nBuildTime = kBuilds[i]; break;
   case MUT_TECH: pm->nTech = i; break;
   case MUT_RICH: pm->nRich = i; break;
+  case MUT_ANTIMETA: pm->nAntiMeta = i; break;
   case MUT_RICH_CHANCE: pm->nRichChance = kChances[i]; break;
   case MUT_RICH_RADIUS: pm->nRichRadius = kRadii[i]; break;
   }
@@ -464,6 +495,7 @@ bool MutatorOn(const MutatorSet &m, int nMut) {
   case MUT_BUILD: return m.nBuildTime != c.nBuildTime;
   case MUT_TECH: return m.nTech != c.nTech;
   case MUT_RICH: return m.nRich != c.nRich;
+  case MUT_ANTIMETA: return m.nAntiMeta != c.nAntiMeta;
   }
   return false;
 }
@@ -606,6 +638,8 @@ std::string MutatorsText(const MutatorSet &m, bool bShown) {
   }
   if (m.nUnits != s.nUnits)
     add(PT_("unit limit {0}"), {count(m.nUnits)});
+  if (m.nAntiMeta != s.nAntiMeta)
+    add(PT_("anti-meta start"));
   return out;
 }
 
@@ -617,7 +651,7 @@ std::string MutatorsJson(const MutatorSet &m) {
          ",\"build\":" + std::to_string(m.nBuildTime) + ",\"tech\":" + std::to_string(m.nTech) +
          ",\"rich\":" + std::to_string(m.nRich) + ",\"richChance\":" + std::to_string(m.nRichChance) +
          ",\"richRules\":" + std::to_string(m.nRichRules) + ",\"richRadius\":" + std::to_string(m.nRichRadius) +
-         ",\"units\":" + std::to_string(m.nUnits) + "}";
+         ",\"units\":" + std::to_string(m.nUnits) + ",\"antiMeta\":" + std::to_string(m.nAntiMeta) + "}";
 }
 
 MutatorSet MutatorsFromJson(const PortJson &j) {
@@ -638,6 +672,7 @@ MutatorSet MutatorsFromJson(const PortJson &j) {
   m.nRichRules = static_cast<int>(j["richRules"].Num(s.nRichRules));
   m.nRichRadius = static_cast<int>(j["richRadius"].Num(s.nRichRadius));
   m.nUnits = static_cast<int>(j["units"].Num(s.nUnits));
+  m.nAntiMeta = static_cast<int>(j["antiMeta"].Num(s.nAntiMeta));
   return MutatorsClamp(m);
 }
 
@@ -708,9 +743,11 @@ bool MutatorsChooseList(const char *pszList) {
     } else if (lstrcmpiA(key.c_str(), "richseed") == 0) {
       m.nRichRules = _strnicmp(pszValue, "map", 3) == 0 ? m.nRichRules | MUTATOR_RICH_SAME_MAP
                                                          : m.nRichRules & ~MUTATOR_RICH_SAME_MAP;
+    } else if (lstrcmpiA(key.c_str(), "antimeta") == 0 || lstrcmpiA(key.c_str(), "anti") == 0) {
+      m.nAntiMeta = ParseOn(pszValue) ? 1 : 0;
     } else {
       Log("--mutators: %s is none of minerals, gas, start, supply, workers, boost, fog, build, tech, rich, radius, "
-          "chance, fair, atleast, announce, richseed and units", key.c_str());
+          "chance, fair, atleast, announce, richseed, antimeta and units", key.c_str());
       continue;
     }
     bAny = true;
@@ -770,6 +807,8 @@ std::string MutatorsList(const MutatorSet &m) {
   }
   if (m.nUnits != c.nUnits)
     add("units", std::to_string(m.nUnits));
+  if (m.nAntiMeta != c.nAntiMeta)
+    add("antimeta", "on");
   return s;
 }
 
@@ -805,6 +844,25 @@ void MutatorsForGame(void) {
       g_game = g_net;
     else if (Session().bMutators)
       g_game = Session().mut;
+  }
+  // The anti-meta start: rolled here, once, from the fixed seed every player shares (the net
+  // game's, or the replay's and save's own), so every seat plays the same game, and the replay
+  // and save record the rolled values as any other mutator game's. A played-back or loaded game
+  // has the values in its record and no roll to make.
+  if (g_game.nAntiMeta) {
+    const DWORD dwSeed = static_cast<DWORD>(net_get_fixed_seed());
+    // each part its own draw, a word's mix, so no value follows from another (the user,
+    // 2026-11-01: 4 to 8 workers, 100 to 300 minerals, 0 to 125 gas, in steps of five)
+    const int nWorkers = 4 + static_cast<int>(Mix(dwSeed, 0x414E5449u /* "ANTI" */) % 5);
+    const int nMinerals = 100 + 5 * static_cast<int>(Mix(dwSeed, 0x4D455441u /* "META" */) % 41);
+    const int nGas = 5 * static_cast<int>(Mix(dwSeed, 0x53544152u /* "STAR" */) % 26);
+    g_game.nWorkers = nWorkers;
+    g_game.nStartMinerals = nMinerals;
+    g_game.nStartGas = nGas;
+    g_antiMessage = PortTextFill(PortText(PT_("Anti-meta start: {0} workers, {1} minerals, {2} gas.")),
+                                 {std::to_string(nWorkers), std::to_string(nMinerals), std::to_string(nGas)});
+    Log("anti-meta: seed %#lx rolls %d workers, %d minerals, %d gas", static_cast<unsigned long>(dwSeed),
+        nWorkers, nMinerals, nGas);
   }
   g_nRevision = bOld ? (g_bRecorded ? g_nRecordedRevision : 0) : MUTATOR_REVISION;
   g_bNet = false;
@@ -929,6 +987,14 @@ void MutatorsVisionRefresh(void) {
       if (bSeen)
         pHidden[i].Remove(s);
     }
+}
+
+void MutatorsFrame(void) {
+  if (g_antiMessage.empty())
+    return;
+  // the roll's word, as the rich bases say theirs (RichBasesFrame): on the map's message, once
+  map_msg_default(g_antiMessage.c_str(), 8000);
+  g_antiMessage.clear();
 }
 
 void MutatorsSave(unsigned char *pbOut) {

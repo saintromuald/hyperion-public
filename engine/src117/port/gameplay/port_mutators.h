@@ -22,7 +22,7 @@ MutatorSet MutatorsClamp(const MutatorSet &m);
 // choices on its card, the radius and the chance (MUT_RICH_RADIUS, MUT_RICH_CHANCE, past the
 // cards' count).
 enum { MUT_MINERALS, MUT_GAS, MUT_START, MUT_SUPPLY, MUT_WORKERS, MUT_BOOST, MUT_FOG, MUT_BUILD, MUT_TECH, MUT_RICH,
-       MUT_COUNT, MUT_RICH_CHANCE = MUT_COUNT, MUT_RICH_RADIUS };
+       MUT_ANTIMETA, MUT_COUNT, MUT_RICH_CHANCE = MUT_COUNT, MUT_RICH_RADIUS };
 // Rich bases' radius in tiles on a map nMapW by nMapH tiles: m's tiles, or its share of the
 // map's size, its width and height averaged.
 int MutatorRichRadiusTiles(const MutatorSet &m, int nMapW, int nMapH);
@@ -58,7 +58,7 @@ std::string MutatorsText(const MutatorSet &m, bool bShown = false);
 // A room's word on them (port_lanroom*.cpp, port_front_lan.cpp, web/lan/join.js): the set as
 // a JSON object, {"minerals":100,"gas":100,"startMinerals":50,"startGas":0,"supply":200,
 // "workers":4,"boost":0,"fog":0,"build":100,"tech":0,"rich":0,"richChance":50,"richRules":3,
-// "richRadius":48,"units":0},
+// "richRadius":48,"units":0,"antiMeta":0},
 // and back, a missing value 1.17's.
 std::string MutatorsJson(const MutatorSet &m);
 MutatorSet MutatorsFromJson(const PortJson &j);
@@ -67,7 +67,7 @@ MutatorSet MutatorsFromJson(const PortJson &j);
 void MutatorsChoose(const MutatorSet &m);
 // --mutators: a preset's name, or values by name, e.g. "plenty", "minerals=200,gas=endless,
 // start=1000/500,supply=400,workers=8,boost=50,fog=explored,build=x0.5,tech=all,rich=radius,
-// radius=64,chance=75"; fog is normal, explored or none, tech normal, all, noupgrades or
+// radius=64,chance=75,antimeta=on"; fog is normal, explored or none, tech normal, all, noupgrades or
 // noresearch, rich off, naturals, radius (middle, its name before 0.6.21, too), far or every,
 // radius in tiles or quarter, third or half (of the map), with fair=off, atleast=off and
 // richseed=map for the roll's rules and announce=off for no word at the start; units=auto or a
@@ -99,6 +99,9 @@ void MutatorsMapLoaded(void);
 // After each sight refresh puts the fog back over the map (gameloop, sub_46C180): the fog
 // mutator's tiles, explored, or seen and explored, for every player.
 void MutatorsVisionRefresh(void);
+// Each game frame (gameloop, next to RichBasesFrame): the anti-meta start's word on the roll,
+// said once as the game begins.
+void MutatorsFrame(void);
 
 // The unit limit's choices (MutatorSet::nUnits), Automatic first: the count of each, 0 for
 // Automatic, and its name; MutatorUnitLimitOf the index of the one nearest nUnits.
