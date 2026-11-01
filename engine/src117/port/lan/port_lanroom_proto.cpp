@@ -69,6 +69,7 @@ std::string MatchJson(const Match &m, uint64_t qwNow)
                   ",\"mapName\":" + PortJsonQuote(m.mapName) + ",\"type\":" + PortJsonQuote(m.type) + ",\"key\":" + std::to_string(m.nKey) +
                   ",\"speed\":" + PortJsonQuote(m.speed) + ",\"speedN\":" + std::to_string(m.nSpeed) +
                   ",\"rules\":" + PortJsonQuote(m.bHyperion ? "hyperion" : "classic") +
+                  ",\"transport\":" + PortJsonQuote(m.bSb ? "sb" : "lan") +
                   ",\"mutators\":" + MutatorsJson(m.mut) +
                   ",\"mapPlayers\":" + std::to_string(m.nMapPlayers) +
                   (m.pic.empty() ? std::string() : ",\"pic\":" + PortJsonQuote(m.pic) + ",\"picStarts\":" + m.picStarts) +
@@ -483,6 +484,8 @@ void Admin(Device &d, const std::string &t, const PortJson &j)
       m->nSpeed = static_cast<int>(j["speedN"].Num());
     if (j["rules"].kind == PortJson::STRING)
       m->bHyperion = j["rules"].Str() == "hyperion";
+    if (j["transport"].kind == PortJson::STRING)
+      m->bSb = j["transport"].Str() == "sb";
     if (j["mutators"].kind == PortJson::OBJECT)
       m->mut = MutatorsFromJson(j["mutators"]);
     if (j["name"].kind == PortJson::STRING)
