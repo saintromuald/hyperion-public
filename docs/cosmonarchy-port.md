@@ -99,8 +99,22 @@ Hyperion.exe --mod cosmonarchy                     # play it
    from the install into the mod's data folder; `cmport art`). The mod's new
    sounds use a display-name table whose file mapping still needs decoding;
    the engine treats missing sounds as silence.
-4. **Engine: gameplay-mod support** — main button for a data mod, extended
-   tilesets, mod strings for labels.
+4. **Engine: gameplay-mod support** — the first half is in: a data mod's
+   main button starts a game (any mod with data and no mode plays), add-on
+   requirements load through `{"addon": unit}` (34 units carry them), and
+   research buttons may name a mod's edits of the original's techs. The
+   mod's research itself flows through the original's research buttons with
+   the edited trees, as its own game does. The rest, deferred with notes:
+   - **morphs** — the original's morphs are hardcoded per-type machinery; a
+     data-driven mod morph table (from the graft's morph buttons) is a
+     designed future piece;
+   - **extended tilesets** — the mod's maps use tileset ids past the
+     original's (up to ~1000); support means the CV5/VF4/VX4/VR4 sets and
+     the mod's 65-row mapdata;
+   - **mod strings** — the mod's extended stat_txt lives in its patched exe,
+     not the data tree; needs extraction or recreation;
+   - **Orders.graft** — nothing to port: the original game never reads the
+     orders' requirements column; the graft feeds the mod's own exe only.
 5. **QoL port — LAST, and slow.** The GPTP/Plus plugin features (saturation
    overlays, Tab cycling, F11 HUD, idle-worker key, larva picker, custom
    triggers, Lua melee AI, the game modes). Some are already in Hyperion

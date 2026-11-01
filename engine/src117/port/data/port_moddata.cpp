@@ -1113,7 +1113,8 @@ bool ImageArt(const std::string &folder, Record &r, BCRYPT_HASH_HANDLE hHash) {
 }
 
 // One of a unit's requirements, in 1.17's form: "broodwar" (an expansion game), a unit the
-// player has finished, {"at": unit} (the unit that trains it) or {"tech": tech} (researched);
+// player has finished, {"at": unit} (the unit that trains it), {"addon": unit} (the add-on
+// it must have attached) or {"tech": tech} (researched);
 // and of a tech's use requirements, {"caster": unit} (the unit that casts it) and
 // "researched" (the tech itself).
 bool Requirement(const PortJson &v, const std::string &where, std::vector<WORD> *pOut) {
@@ -1126,6 +1127,10 @@ bool Requirement(const PortJson &v, const std::string &where, std::vector<WORD> 
     pOut->push_back(0xFF0F);
     return true;
   }
+  if (v.kind == PortJson::OBJECT && v["addon"].kind != PortJson::NONE) {
+    pOut->push_back(0xFF04);
+    n = Resolve("units", v["addon"], where);
+  } else {
   const PortJson &at = v["at"].kind != PortJson::NONE ? v["at"] : v["caster"];
   if (v.kind == PortJson::OBJECT && at.kind != PortJson::NONE) {
     pOut->push_back(0xFF02);
@@ -1135,6 +1140,7 @@ bool Requirement(const PortJson &v, const std::string &where, std::vector<WORD> 
     n = Resolve("techs", v["tech"], where);
   } else {
     n = Resolve("units", v, where);
+  }
   }
   if (n < 0 || n >= 0xFF00)
     return Fail(where + " names no unit or tech the mod or the original has");
@@ -1254,19 +1260,26 @@ bool Cards() {
         m.wIcon = static_cast<WORD>(b["icon"].Num(pUpgrade->cols[7][0] | pUpgrade->cols[7][1] << 8));
         name = pUpgrade->name;
       } else if (b["research"].kind != PortJson::NONE) {
-        // a research: one of the mod's techs that has research requirements
+        // a research: one of the mod's techs that has research requirements,
+        // or one of the original's a mod's edit gives requirements
         const int nTech = Resolve("techs", b["research"], where + ".research");
         const Record *pTech = nullptr;
         for (const Record &t : g_tables[TECHS].recs)
           if (t.id == nTech)
             pTech = &t;
-        if (!pTech || pTech->pJson->operator[]("requires").kind == PortJson::NONE)
+        const Record *pEdit = pTech ? nullptr : EditOf(TECHS, nTech);
+        const Record *pReq = pTech && pTech->pJson->operator[]("requires").kind != PortJson::NONE
+                                 ? pTech
+                             : pEdit && pEdit->pJson->operator[]("requires").kind != PortJson::NONE
+                                 ? pEdit
+                                 : nullptr;
+        if (!pReq)
           return Fail(where + ": a research names one of the mod's techs that has requires");
         m.wUnit = 0xFFFF;
         m.wTech = static_cast<WORD>(nTech);
         m.bResearch = true;
-        m.wIcon = static_cast<WORD>(b["icon"].Num(pTech->cols[6][0] | pTech->cols[6][1] << 8));
-        name = pTech->name;
+        m.wIcon = static_cast<WORD>(b["icon"].Num(pReq->cols[6][0] | pReq->cols[6][1] << 8));
+        name = pReq->name;
       } else {
         const int nUnit = Resolve("units", b["train"], where + ".train");
         if (nUnit < UNIT_TYPE_MOD_FIRST)
