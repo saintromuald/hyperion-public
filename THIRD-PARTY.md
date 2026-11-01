@@ -25,6 +25,7 @@ license, and every package carries the licenses of what it contains.
 | [OpenH264](https://github.com/cisco/openh264) | as `fetch_webrtc.py` pins it | BSD-2-Clause | video for the streamed seats |
 | [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) | as `fetch_webrtc.py` pins it | Apache-2.0 | encryption for the streamed seats |
 | [Opus](https://opus-codec.org/) | as `fetch_webrtc.py` pins it | BSD-3-Clause | sound for the streamed seats |
+| [rally-point2](https://github.com/ShieldBattery/rally-point2) | fork `saintromuald/rally-point2`, branch `bridge`, commit `95dd16f` (`engine/tools/rallypoint2/PINNED.md`) | MIT / Apache-2.0 | the online match's relay netcode; the `rally-point-bridge` static library links the client driver, and the relay and coordinator ship beside the engine (this one IS copied into the repository, as a subtree under `engine/tools/rallypoint2/`) |
 
 H.264, H.265 and AAC video are decoded by the system (Media Foundation on Windows, VideoToolbox
 on a Mac, the player's own FFmpeg on Linux); Hyperion carries none of their code.
