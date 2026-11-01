@@ -28,6 +28,7 @@
 #include "gametype.h"         // IsMeleeTemplate
 #include "gluChatSlot.h"      // CountSides
 #include "gluMap.h"           // PortCreateNetGame
+#include "../h/game.h"           // PreloadMap
 #include "grid.h"             // IsBroodwar
 #include "net_chat_cmds.h"    // create_net_cmd_change_race, create_net_cmd_change_slot
 #include "net_glue.h"         // NetInit, ListGames, LookupGameHdr, net_glue_OnInitData
@@ -334,7 +335,42 @@ bool PortSbLaunchNetGame(void)
       Log("the creator's header flags are adopted: subcategory %u, scenario %u, ladder %u", static_cast<unsigned>(bSub),
           static_cast<unsigned>(bFlag), static_cast<unsigned>(bLadder));
     }
+    // The launch blob also holds the creator's whole game-type block, which
+    // 1.17's join path cannot reproduce from the listed game's key: the
+    // joiner's sim must play by the creator's exact template (game type,
+    // resource mode, starting minerals), or the two sims diverge.
+    TGAMEPARAMS params;
+    if (SbLaunchParams(&params, sizeof params)) {
+      *reinterpret_cast<TGAMEPARAMS *>(&gGameHeader.bGameType) = params;
+      Log("the creator's game params are adopted: type %u, resource mode %u, starting minerals %u",
+          static_cast<unsigned>(gGameHeader.bGameType), static_cast<unsigned>(gGameHeader.bResourceMode),
+          static_cast<unsigned>(gGameHeader.dwStartingMinerals));
+    }
     Log("joined the relay match");
+    // The map is the launch's on every seat (the relay carries no map
+    // transfer, and the provider drops 0x4F messages), so the joiner
+    // preloads its own copy here: the LAN joiner's downloaded file would
+    // have published the map name when the download completed, and the
+    // game's LoadMapData reads nothing but that published name. Without
+    // this the joiner's game start fails its map load (0x61) and the seat
+    // drops out right after the lobby.
+    char szMapPath[MAX_PATH];
+    SStrCopy(szMapPath, o->szSbMap, MAX_PATH);
+    // the game's file layers want the Windows form: backslashes, and Z: for
+    // the root (port_posix.cpp's WinPath); a native path breaks the map load
+    for (char *p = szMapPath; *p; ++p)
+      if (*p == '/')
+        *p = '\\';
+    if (szMapPath[0] == '\\') {
+      memmove(szMapPath + 2, szMapPath, strlen(szMapPath) + 1);
+      szMapPath[0] = 'Z';
+      szMapPath[1] = ':';
+    }
+    BYTE abProbe[0x20];
+    if (!PreloadMap(szMapPath, abProbe, 0))
+      Log("the launch's map could not be preloaded from %s", szMapPath);
+    else
+      Log("the launch's map is preloaded from %s", szMapPath);
   }
   g_plan.bOn = true;
   g_why.clear();

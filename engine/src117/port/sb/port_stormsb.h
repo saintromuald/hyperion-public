@@ -37,6 +37,11 @@ bool SbMapFromLaunch(void);
 // block at the header's +0x6D): the join path's listed header never carries
 // them, and without them the joiner reads the game as a scenario.
 bool SbLaunchHeader(BYTE *pbSubCategory, BYTE *pbScenarioFlag, BYTE *pbLadderGame);
+// The creator's whole game-type block (the header's +0x6D..+0x8C, the
+// TGAMEPARAMS): 1.17's join re-derives the template from the listed game's
+// key, which does not reproduce the creator's (its game type, resource mode
+// and starting minerals differ), so the joiner adopts the block wholesale.
+bool SbLaunchParams(void *pvParams, size_t cbParams);
 
 BOOL SbInitialize(void);
 void SbDestroy(void);
