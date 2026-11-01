@@ -1,0 +1,45 @@
+# The online match's netcode, without the game: builds the vendored rally-point2
+# workspace, runs the bridge's C ABI test (two C clients exchange turns through
+# a real relay process), and checks the turn-command table conformance (the
+# relay's validation table vs Hyperion's receive and lobby walkers). The
+# two-seat game gates (engine/tools/sbtest/) need StarCraft's files, so they
+# stay on the developer's machine.
+name: SB netcode
+
+on:
+  push:
+    branches: [netcode/sb-rally-port]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  netcode:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install 1.95 --profile minimal
+          rustup default 1.95
+
+      - name: C compiler
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc clang lld
+
+      - name: Build the workspace
+        working-directory: engine/tools/rallypoint2
+        run: cargo build --release -p rally-point-bridge -p rally-point-relay -p rp-dev-setup
+
+      - name: The bridge's C ABI test
+        working-directory: engine/tools/rallypoint2
+        run: ./bridge/ctest/run.sh 5
+
+      - name: The command-table conformance check
+        working-directory: engine
+        run: ./tools/sbtest/cmdtable.sh
