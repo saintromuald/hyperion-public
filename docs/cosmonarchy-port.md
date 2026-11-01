@@ -25,9 +25,10 @@ Prerelease/`), which is what we actually play.
 | sounds, portraits | `mpq/arr/sfxdata.dat` + `sfxdata.txt`; `portdata.datex` + `portdata.tbl` | `types.json` sounds/portraits with resolved paths | **done** (files themselves: art step) |
 | tech trees, requirements, command cards | `mpq/datreq/*.graft` (binary) | `requires`/`use_requires`/`cards` in types.json | **done**: 560 requirement runs (426 units, 30 tech research, 52 use, upgrades) and 40 cards/138 buttons load with 0 errors. Gaps (engine work, not QoL): morph buttons, research buttons for edited techs on non-vanilla cards, add-on requirements (0xFF04, 4 units), cast buttons for the GPTP-handled spells without orders |
 | image scripts | `mpq/scripts/*.bin` + `.txt` forms | `data/iscript.txt` | **done**: 993 scripts assembled from the mod's own text iscripts (per-race files + the general/kogri vanilla rewrites), labels re-scoped to the flat namespace, the images name them |
-| unit/anim art, cmdicons, wireframes | `mpq/unit/`, `mpq/anim/`, `mpq/game/`, `mpq/cursor/`, `mpq/dlgs/` | GRP/PCX files in the mod's data folder (player-side `art/`) | TODO: art copier |
-| portraits (Smacker) | `mpq/portrait/*.smk` | mod data portraits | TODO: art copier |
-| sounds (WAV) | `mpq/sound/` (~533 MB) | mod data sounds | TODO: art copier |
+| unit/anim art | `mpq/unit/`, `mpq/anim/` | GRP files in the mod's data folder, `grp` on every new image record | **done**: 1274 pictures decode; rows whose art the mod replaces are promoted to new records so the frames load |
+| portraits (Smacker) | `mpq/portrait/*.smk` | mod data portraits | **done**: 623 videos decode, resolved case-insensitively against the tree |
+| sounds (WAV) | `mpq/sound/` (~533 MB) | mod data sounds | **partial**: 93 of the mod's own files link; the mod's new-sound table stores display names whose file mapping is still to be decoded — the engine plays the rest as silence, as it documents |
+| console art | `mpq/game/*.pcx` | `hud.json` console art | **done**: terran/zerg/protoss consoles linked and wired |
 | strings | the mod's stat_txt (in the exe's MPQs / `rez/`) | unit names via `name`; tech/upgrade/weapon labels, button texts | TODO: labels past vanilla ids need engine mod-strings |
 | QoL & gameplay code (GPTP + MTL + aise + hotloader: saturation, F11 HUD, Tab cycling, extended selections, custom triggers, Lua melee AI, game modes) | `~/Projects/gptp-fork` (C++, open) | engine C++, gated on the mod | **DEFERRED to last**, one feature at a time; several features already exist in Hyperion itself (mutators, HUD designs, zoom, 240-unit selection) — each item gets an "already present?" check first |
 | Plus QoL (idle-worker key, larva picker, zoom floor, anti-meta, rollback) | `~/Projects/cosmonarchy-plus` (Rust QDP) | engine C++, gated on the mod; anti-meta exists as a mutator already | **DEFERRED to last** with the QoL bucket above |
@@ -94,8 +95,10 @@ Hyperion.exe --mod cosmonarchy                     # play it
 2. ~~**iscript.txt**~~ — done: the mod ships complete text iscripts; the
    assembler appends all 993 with names, re-scoped labels and remapped
    arguments, and the images' script column names them.
-3. **Art pipeline** — copy GRPs/pcxs/smk/wav into the mod's data folder from
-   the install (player-side), wire paths.
+3. ~~**Art pipeline**~~ — done for images, portraits and consoles (symlinked
+   from the install into the mod's data folder; `cmport art`). The mod's new
+   sounds use a display-name table whose file mapping still needs decoding;
+   the engine treats missing sounds as silence.
 4. **Engine: gameplay-mod support** — main button for a data mod, extended
    tilesets, mod strings for labels.
 5. **QoL port — LAST, and slow.** The GPTP/Plus plugin features (saturation

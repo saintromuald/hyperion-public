@@ -522,6 +522,9 @@ kActBuildSubunit = 19
 kActMorphBuilding = 35
 kActMorphUnit = 38
 
+g_promoted = {}
+
+
 kButtonActionNames = {
     0: "cancel_infestation", 1: "rally", 2: "select_larva", 3: "train",
     4: "cancel_last", 5: "tank_mode", 6: "siege_mode", 7: "cancel_construction",
@@ -790,6 +793,9 @@ def iscript_arg_transforms(names, tables, ref_fn, line):
             table_id = {"IMG": "images", "SPR": "sprites", "FLI": "flingy",
                         "SND": "sounds", "WPN": "weapons"}[kind]
             v = int(val, 0)
+            if table_id == "images" and v in g_promoted:
+                out.append(g_promoted[v])
+                continue
             if v in kNoneMarkers.get(table_id, ()) or v < kV117[table_id]:
                 out.append(val)
             elif v < len(names[table_id]):
@@ -913,6 +919,165 @@ def assemble_iscripts(mod_dir, tables, names, out_path, ref_fn):
             f.write("\n".join(parts) + "\n")
         print(f"wrote {out_path} ({len(parts)} lines)")
     return script_map, gen_map, notes
+
+
+# ---------------------------------------------------------------------------
+# Art: an image's frames come from its grp value (1-based index into the
+# mod's images.tbl; 0 = none).  Vanilla-range image rows the mod redefines
+# art for cannot take art through an edit (the loader keeps an edit's grp),
+# so those rows are promoted to new records that carry the file, and every
+# reference to them resolves to the new record's name.
+# ---------------------------------------------------------------------------
+
+def read_images_tbl(path):
+    d = open(path, "rb").read()
+    n = struct.unpack_from("<H", d, 0)[0]
+    out = []
+    for i in range(n):
+        off = struct.unpack_from("<H", d, 2 + 2 * i)[0]
+        end = off
+        while end < len(d) and d[end] != 0:
+            end += 1
+        out.append(d[off:end].decode("latin1") if off < len(d) else "")
+    return out
+
+
+def image_art(mod_dir, tables, vanilla_tbl_path):
+    """{image row: art path} for rows whose art differs from the original's
+    (or is a mod file), and the full path map for the copier."""
+    tbl = read_images_tbl(os.path.join(mod_dir, "arr", "images.tbl"))
+    vanilla = read_images_tbl(vanilla_tbl_path) if vanilla_tbl_path and \
+        os.path.exists(vanilla_tbl_path) else []
+    grp = tables["images"].cols[0]
+    paths = {}
+    for r, g in enumerate(grp):
+        if g == 0 or g > len(tbl):
+            paths[r] = ""
+            continue
+        paths[r] = tbl[g - 1]
+    replaced = {}
+    for r in range(kV117["images"]):
+        p = paths[r]
+        if not p:
+            continue
+        g = grp[r]
+        v = vanilla[g - 1] if g - 1 < len(vanilla) else ""
+        if p.lower() != v.lower():
+            replaced[r] = p
+    return paths, replaced
+
+
+# ---------------------------------------------------------------------------
+# The art copier: links the mod's media files into the mod's data folder
+# (player-side, gitignored).  The mod's tree is lowercase on disk while the
+# string tables keep the MPQ's mixed case, so a case-folded index resolves
+# every path.
+# ---------------------------------------------------------------------------
+
+def tree_index(root):
+    idx = {}
+    for dirpath, _dirs, files in os.walk(root):
+        for f in files:
+            rel = os.path.relpath(os.path.join(dirpath, f), root)
+            idx[rel.lower()] = rel
+    return idx
+
+
+def link_art(mod_dir, data_dir, tables, img_paths, do_link=os.symlink):
+    """Link the referenced grps, sounds, portraits and console art into the
+    mod's data folder.  Returns (linked, missing)."""
+    root = mod_dir
+    idx = tree_index(root)
+    linked = []
+    missing = []
+
+    def link_one(src_rel, dst_rel):
+        key = src_rel.replace("\\", "/").lower()
+        if key not in idx:
+            missing.append(dst_rel)
+            return False
+        dst = os.path.join(data_dir, dst_rel.replace("/", os.sep))
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        if not os.path.exists(dst):
+            try:
+                do_link(os.path.join(root, idx[key]), dst)
+            except OSError:
+                import shutil
+                shutil.copyfile(os.path.join(root, idx[key]), dst)
+        linked.append(dst_rel)
+        return True
+
+    # 1. image frames: the tbl paths sit under the MPQ's unit\ folder;
+    # paths of the original's files are the player's own and are no miss
+    tbl = read_images_tbl(os.path.join(mod_dir, "arr", "images.tbl"))
+    vanilla = read_images_tbl(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                           "build", "vanilla-images.tbl"))
+    grp = tables["images"].cols[0]
+    vanilla_paths = {v.lower() for v in vanilla}
+    for r, p in img_paths.items():
+        if not p:
+            continue
+        if p.lower() in vanilla_paths:
+            continue  # the player's install has it
+        if not link_one(os.path.join("unit", p), "art/" + p.replace("\\", "/")):
+            if not link_one(os.path.join("anim", p), "art/" + p.replace("\\", "/")):
+                link_one(p, "art/" + p.replace("\\", "/"))
+
+    # 2. sounds
+    sfx = read_sfxdata_paths(mod_dir)
+    t = tables["sounds"]
+    filecol = t.cols[0]
+    seen = set()
+    for r, f in enumerate(filecol):
+        if f == 0 or f >= len(sfx):
+            continue
+        s = sfx[f]
+        if not s or s == "No sound":
+            continue
+        base = re.sub(r"\s*\(\d+\)\s*$", "", s)
+        if base in seen:
+            continue
+        seen.add(base)
+        link_one(os.path.join("sound", base), "sounds/" + base.replace("\\", "/"))
+
+    # 3. portraits: link the files the tbl names, under the tbl's own names
+    # (the engine adds the digit and tries the extensions), resolving the
+    # source case-insensitively against the lowercase tree
+    t = tables["portraits"]
+    port_tbl = read_tbl_binary(os.path.join(mod_dir, "arr", "portdata.tbl"))
+    idcol = t.cols[0]
+    tkcol = t.cols[1]
+    seen = set()
+    for r in range(t.rows):
+        for c in (idcol, tkcol):
+            if r >= len(c) or c[r] >= len(port_tbl):
+                continue
+            s = port_tbl[c[r]]
+            if not s or s in seen:
+                continue
+            seen.add(s)
+            s2 = s.replace("\\", "/")
+            base = ("portrait/" + s2).lower()
+            fam = [v for k, v in idx.items()
+                   if k == base + ".smk" or (k.startswith(base) and
+                                              re.search(r"\.[a-z0-9]{2,4}$", v))]
+            for v in fam:
+                ext = os.path.splitext(v)[1]
+                link_one(v, "portraits/" + s2 + ext)
+
+    # 4. console art + hud.json
+    for race, prefix in (("terran", "t"), ("zerg", "z"), ("protoss", "p")):
+        for pcx in (f"{prefix}console.pcx", f"{prefix}console_ws.pcx",
+                    f"{prefix}conover.pcx"):
+            if ("game/" + pcx).lower() in idx:
+                link_one("game/" + pcx, "art/game/" + pcx)
+    hud = {"console": {"art": {"terran": "art/game/tconsole.pcx",
+                               "zerg": "art/game/zconsole.pcx",
+                               "protoss": "art/game/pconsole.pcx"}}}
+    hud_path = os.path.join(data_dir, "hud.json")
+    with open(hud_path, "w", encoding="utf-8") as f:
+        json.dump(hud, f, indent=1)
+    return linked, missing
 
 
 def reference_costs(path=None):
@@ -1048,6 +1213,8 @@ def gen_types(tables, out_path, mod_dir):
             return r
         if table_id == "orders" and r == 0xFFFF:
             return 189  # the mod's "no order" is 0xFFFF; the original's is 189
+        if table_id == "images" and r in promoted:
+            return promoted[r]  # its art was replaced: the new record has it
         if r < kV117[table_id]:
             return r
         if r < len(names[table_id]):
@@ -1105,10 +1272,10 @@ def gen_types(tables, out_path, mod_dir):
                                               "damage_overlay", "special_overlay",
                                               "landing_dust_overlay", "liftoff_dust_overlay"):
                 # overlay columns have no ref table in this build: numbers only.
-                # An extended image's overlay -> the loader's assigned id.
-                if v >= kV117["images"]:
-                    key = names["images"][v] if v < len(names["images"]) else None
-                    if id_of is None or key not in id_of:
+                # An extended (or promoted) image's overlay -> the loader's id.
+                if v in promoted or v >= kV117["images"]:
+                    key = promoted.get(v) or (names["images"][v] if v < len(names["images"]) else None)
+                    if id_of is None or key is None or key not in id_of:
                         continue
                     out[f] = id_of[key]
                 else:
@@ -1143,6 +1310,16 @@ def gen_types(tables, out_path, mod_dir):
     researchable = frozenset(r for (t, r, f) in req_map if t == "techs" and f == "requires")
     cards, card_targets, card_notes = button_cards(mod_dir, tables, names, REPO, researchable)
     graft_targets.update(card_targets)
+
+    # Art: the rows whose frames the mod replaces (or gives of its own) become
+    # new records that carry the file, and references name them.
+    vanilla_tbl = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "build", "vanilla-images.tbl")
+    img_paths, img_replaced = image_art(mod_dir, tables, vanilla_tbl)
+    promoted = {r: names["images"][r] for r in img_replaced}
+    vanilla_img_paths = {v.lower() for v in read_images_tbl(vanilla_tbl)}
+    global g_promoted
+    g_promoted = promoted
 
     # The iscripts: assembled beside types.json; images name the scripts.
     iscript_targets = set()
@@ -1216,7 +1393,10 @@ def gen_types(tables, out_path, mod_dir):
     for t_id in tables:
         if t_id == "mapdata":
             continue
-        keys = sorted(names[t_id][r] for r in keep[t_id] if r >= kV117[t_id])
+        rows = {r for r in keep[t_id] if r >= kV117[t_id]}
+        if t_id == "images":
+            rows.update(promoted)
+        keys = sorted(names[t_id][r] for r in rows)
         id_of[t_id] = {k: kModFirst[t_id] + i for i, k in enumerate(keys)}
     for t_id in tables:
         if t_id == "mapdata":
@@ -1225,6 +1405,8 @@ def gen_types(tables, out_path, mod_dir):
         v117 = kV117[t_id]
         recs = {}
         for r in range(v117):
+            if t_id == "images" and r in promoted:
+                continue  # its art was replaced: a new record carries it
             rec = {"edit": r, **fields_of(t_id, r, id_of.get(t_id))}
             if t_id in ("sounds", "portraits"):
                 rec = {k: v for k, v in rec.items() if v is not None}
@@ -1234,13 +1416,19 @@ def gen_types(tables, out_path, mod_dir):
                 if (t_id, r, fld) in req_map:
                     rec[fld] = req_map[(t_id, r, fld)]
             recs[names[t_id][r]] = rec
-        for r in sorted(keep[t_id]):
-            if r < v117:
+        emit_rows = set(keep[t_id])
+        if t_id == "images":
+            emit_rows.update(promoted)
+        for r in sorted(emit_rows):
+            if r < v117 and not (t_id == "images" and r in promoted):
                 continue
             # a new record's base must be a row the loader can find: an
             # original row by number (edit records' names do not resolve)
-            rec = {"base": 0}
+            rec = {"base": 0 if r >= v117 else r}
             flds = fields_of(t_id, r, id_of.get(t_id))
+            if t_id == "images" and img_paths.get(r) and \
+                    img_paths[r].lower() not in vanilla_img_paths:
+                flds["grp"] = "art/" + img_paths[r].replace("\\", "/")
             if is_real_name(t, r):
                 flds["name"] = t.names[r].strip()
             if t_id == "sounds":
@@ -1307,6 +1495,17 @@ def main():
             named = sum(1 for n in t.names if n.strip())
             print(f"{t.id:10s} rows={t.rows:6d} names={named:6d} file={t.file}")
         verify(tables)
+    elif cmd == "art":
+        tables = load_all(mod_dir)
+        apply_ext(tables, mod_dir)
+        apply_rewrites(tables, mod_dir)
+        vanilla_tbl = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                   "build", "vanilla-images.tbl")
+        img_paths, _ = image_art(mod_dir, tables, vanilla_tbl)
+        linked, missing = link_art(mod_dir, MOD_DATA, tables, img_paths)
+        print(f"art: linked {len(linked)}, missing {len(missing)}")
+        for m in missing[:12]:
+            print("  missing:", m)
     elif cmd == "grafts":
         tables = load_all(mod_dir)
         apply_ext(tables, mod_dir)
