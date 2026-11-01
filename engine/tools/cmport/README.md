@@ -13,8 +13,13 @@ python engine/tools/cmport/cmport.py --mod <path-to-mpq> gen   # other build
 The default source is the local plus-prerelease install
 (`~/Games/cosmonarchy/prefix/drive_c/Cosmonarchy/Prerelease/mpq`).
 
-## What it decodes
+## Validation
 
+`Hyperion.exe --mod-check cosmonarchy` passes with 0 errors (the warnings are
+all media files the art step has not copied yet). The engine-side quirks the
+generator works around are documented in `docs/cosmonarchy-port.md`.
+
+## What it decodes
 - `arr/<table>.datex` — the mod's full extended dat tables, column-major (one
   file region per column, each region `rows x width` bytes). Layouts in
   `cmport.py` (kUnitsWidths and friends); every table is validated by exact
