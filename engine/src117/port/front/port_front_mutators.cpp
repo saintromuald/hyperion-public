@@ -58,16 +58,16 @@ UiColor Alpha(UiColor c, float a)
 
 // The list's order and its groups (mutators.js GROUPS), and what each one does in a sentence
 // over its picture (gist).
-const int kOrder[MUT_COUNT] = {MUT_MINERALS, MUT_GAS,   MUT_RICH, MUT_START, MUT_WORKERS,
+const int kOrder[MUT_COUNT] = {MUT_MINERALS, MUT_GAS,   MUT_RICH, MUT_START, MUT_WORKERS, MUT_ANTIMETA,
                                MUT_SUPPLY,   MUT_BOOST, MUT_FOG,  MUT_BUILD, MUT_TECH};
 struct Group {
   const char *pszName;
   int nFirst, nCount;  // in kOrder
 };
 const Group kGroups[] = {{PT_("Resources"), 0, 3},
-                         {PT_("The start"), 3, 2},
-                         {PT_("Supply"), 5, 2},
-                         {PT_("Fog, time and tech"), 7, 3}};
+                         {PT_("The start"), 3, 3},
+                         {PT_("Supply"), 6, 2},
+                         {PT_("Fog, time and tech"), 8, 3}};
 const char *const kGists[MUT_COUNT] = {
     PT_("How much each mineral field holds, so how long a base can be mined."),
     PT_("How much each geyser holds before it runs dry."),
@@ -79,6 +79,7 @@ const char *const kGists[MUT_COUNT] = {
     PT_("How fast everything is built, trained and researched."),
     PT_("Start with everything researched, or play without upgrades or research."),
     PT_("Some bases away from the starts get gold minerals and violet gas, which bring more each trip."),
+    PT_("How many workers and how much minerals and gas each player starts with, rolled fresh every game."),
 };
 
 int g_nSel = MUT_MINERALS;  // the mutator briefed
@@ -1180,6 +1181,7 @@ void DrawPicture(float x, float y, float w, float h, void *pCtx)
   case MUT_RICH: StillRich(p, m); break;
   case MUT_START: StillStart(p, m); break;
   case MUT_WORKERS: StillWorkers(p, m); break;
+  case MUT_ANTIMETA: StillStart(p, m); break;  // the workers and resources rolled, the start's picture
   case MUT_SUPPLY: StillSupply(p, m); break;
   case MUT_BOOST: StillBoost(p, m); break;
   case MUT_FOG: StillFog(p, m); break;
@@ -1688,9 +1690,9 @@ bool MutatorsTab(float x, float y, float w, float h, const MutatorsSetUp &s)
                                        (i == g_nSel ? 1 : 0) | (bHot ? 2 : 0) | (bOn ? 4 : 0) | (bHard ? 8 : 0));
       Open(row);
       Text(MutatorName(i), UI_FACE_BOLD, Fs(16), 0.0f, kScInkLabel);
-      // the new mutator's tag until it is chosen: then its choice takes the room ("Rich resources"
+      // the new mutators' tag until each is chosen: then its choice takes the room ("Rich resources"
       // and "Outside a radius" with the tag wrapped)
-      if (i == MUT_RICH && !bOn)
+      if ((i == MUT_RICH || i == MUT_ANTIMETA) && !bOn)
         NewTag();
       Spacer();
       Text(bOn ? Keep(MutatorValueName(m, i)) : PortText("Classic"), bOn ? UI_FACE_BOLD : UI_FACE_TEXT, Fs(15), 0.0f,
