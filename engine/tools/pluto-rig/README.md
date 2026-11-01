@@ -73,3 +73,22 @@ Open (next session):
   shim is in place and being adjusted).
 - After that: the observation builder completes per frame, `dump/` fills with
   BWRL_SHM captures, and the schema extraction begins (differential scenarios).
+
+## State 2026-11-01 (session 2, continued)
+
+- Slot audit (PMF encoding) corrected the shims: the set-returning Unit slots are
+  64 getLoadedUnits / 66 getInterceptors / 68 getLarva (the vtable has one more
+  leading entry than assumed; getHatchery=67, getTransport=63).
+- fakehost now installs a vectored exception handler: every fault logs eip/esp/ret/
+  eax/ecx/edx to fault.log (the caller address is the key to the bot's desynced
+  disassembly regions).
+- Remaining blocker: after a complete onStart (race, bandit, engine handshake, chat),
+  the bot crashes in its engine-launch continuation: caller 0x63f8d9c8 -> its
+  "probe" 0x63f815d0 -> the vt[1] mid-entry at 0x63f81490 (skips the null checks;
+  ebx must be self — set by the desynced real caller code), finally executing a null
+  function pointer. Next: single-step under winedbg (break 0x63f8d9c8, dump the
+  real code there — objdump and llvm-objdump both desync in that region), or
+  alternatively disassemble 0x63f8d9c8's real caller with ndisasm (present on the
+  machine) to see what sets eax/ebx before the call.
+- After that: the obs builder finishes per frame; BWRL_SHM dumps land in dump/ and
+  the schema extraction starts.
