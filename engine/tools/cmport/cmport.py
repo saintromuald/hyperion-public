@@ -493,7 +493,7 @@ def read_tbl_binary(path):
 
 
 def portrait_path(tbl_string):
-    """'tmarine\TMaFid0' -> 'portraits/tmarine/TMaFid' (the game adds the digit)."""
+    r"""'tmarine\TMaFid0' -> 'portraits/tmarine/TMaFid' (the game adds the digit)."""
     s = tbl_string.replace("\\", "/")
     s = re.sub(r"\d$", "", s)
     return f"portraits/{s}" if not s.startswith("portraits/") else s
@@ -510,13 +510,15 @@ def gen_types(tables, out_path, mod_dir):
             return r  # scripts: ids come from iscript.txt, kept numeric
         if r in kNoneMarkers.get(table_id, ()):
             return r
+        if table_id == "orders" and r == 0xFFFF:
+            return 189  # the mod's "no order" is 0xFFFF; the original's is 189
         if r < kV117[table_id]:
             return r
         if r < len(names[table_id]):
             return names[table_id][r]
         return r
 
-    def fields_of(table_id, r):
+    def fields_of(table_id, r, id_of=None):
         t = tables[table_id]
         row = t.row(r)
         out = {}
@@ -536,7 +538,33 @@ def gen_types(tables, out_path, mod_dir):
             if f == "bounds":
                 out[f] = [(v >> s) & 0xFFFF for s in (0, 16, 32, 48)]
                 continue
-            if f.startswith("unknown_"):
+            if f.startswith("unknown_") or (table_id == "sounds" and f == "unknown"):
+                continue
+            if table_id == "images" and f == "grp":
+                continue  # the mod's numeric grp index is meaningless to the
+                # loader: an edit keeps its vanilla art, a new record takes
+                # real art files (the art step, not the dat table)
+            if table_id == "images" and f == "script" and v >= 1000:
+                continue  # the mod's extended iscript ids (0x10000-based) need
+                # its iscript table; until the iscript step lands, the record
+                # keeps its base's script, as the loader's fallback provides
+            if table_id == "images" and f == "draw_function" and v >= 18:
+                continue  # the mod's extended draw functions need engine
+                # support; keep the base's until they are ported
+            if table_id == "images" and f == "remapping" and v >= 8:
+                continue  # the loader clamps remapping to 0..7
+            if table_id == "images" and f in ("shield_overlay", "attack_overlay",
+                                              "damage_overlay", "special_overlay",
+                                              "landing_dust_overlay", "liftoff_dust_overlay"):
+                # overlay columns have no ref table in this build: numbers only.
+                # An extended image's overlay -> the loader's assigned id.
+                if v >= kV117["images"]:
+                    key = names["images"][v] if v < len(names["images"]) else None
+                    if id_of is None or key not in id_of:
+                        continue
+                    out[f] = id_of[key]
+                else:
+                    out[f] = v
                 continue
             if table_id == "sounds" and f == "file":
                 s = sfx[v] if v < len(sfx) else ""
@@ -546,6 +574,9 @@ def gen_types(tables, out_path, mod_dir):
                 s = port_tbl[v] if v < len(port_tbl) else ""
                 out[f] = portrait_path(s) if s else None
                 continue
+            if table_id == "orders" and f == "animation" and v >= 28:
+                continue  # the mod's extended animations need the iscript
+                # step; keep the base's until then
             if ref_table:
                 v = ref(ref_table, v)
             out[f] = v
@@ -563,7 +594,17 @@ def gen_types(tables, out_path, mod_dir):
         row = t.row(r)
         out = set()
         for (f, _, ref_table) in t.widths:
-            if not ref_table or ref_table not in kV117:
+            if not ref_table:
+                # the images' overlay columns have no ref table in the build
+                # but still reference the images table's rows
+                if table_id == "images" and f in (
+                        "shield_overlay", "attack_overlay", "damage_overlay",
+                        "special_overlay", "landing_dust_overlay",
+                        "liftoff_dust_overlay"):
+                    ref_table = "images"
+                else:
+                    continue
+            if ref_table not in kV117:
                 continue
             v = row[f]
             if v in kNoneMarkers.get(ref_table, ()) or v < kV117[ref_table]:
@@ -594,6 +635,18 @@ def gen_types(tables, out_path, mod_dir):
 
     doc = {}
     stats = {}
+    # The loader's ids for the mod's new records: nModFirst + the record's
+    # place among the new records sorted by name.  Overlay refs (which the
+    # build only accepts as numbers) use these.
+    kModFirst = {"units": 256, "weapons": 131, "flingy": 209, "sprites": 517,
+                 "images": 999, "orders": 190, "techs": 45, "upgrades": 62,
+                 "sounds": 1144, "portraits": 110}
+    id_of = {}
+    for t_id in tables:
+        if t_id == "mapdata":
+            continue
+        keys = sorted(names[t_id][r] for r in keep[t_id] if r >= kV117[t_id])
+        id_of[t_id] = {k: kModFirst[t_id] + i for i, k in enumerate(keys)}
     for t_id in tables:
         if t_id == "mapdata":
             continue  # not a table the mod-data loader reads
@@ -601,15 +654,19 @@ def gen_types(tables, out_path, mod_dir):
         v117 = kV117[t_id]
         recs = {}
         for r in range(v117):
-            rec = {"edit": r, **fields_of(t_id, r)}
+            rec = {"edit": r, **fields_of(t_id, r, id_of.get(t_id))}
+            if t_id in ("sounds", "portraits"):
+                rec = {k: v for k, v in rec.items() if v is not None}
             if is_real_name(t, r):
                 rec["name"] = t.names[r].strip()
             recs[names[t_id][r]] = rec
         for r in sorted(keep[t_id]):
             if r < v117:
                 continue
-            rec = {"base": names[t_id][v117 - 1]}
-            flds = fields_of(t_id, r)
+            # a new record's base must be a row the loader can find: an
+            # original row by number (edit records' names do not resolve)
+            rec = {"base": 0}
+            flds = fields_of(t_id, r, id_of.get(t_id))
             if is_real_name(t, r):
                 flds["name"] = t.names[r].strip()
             if t_id == "sounds":
@@ -617,6 +674,8 @@ def gen_types(tables, out_path, mod_dir):
                 flds = {k: v for k, v in flds.items() if v is not None}
                 if not flds.get("file") and not is_real_name(t, r):
                     continue
+            if t_id == "portraits":
+                flds = {k: v for k, v in flds.items() if v is not None}
             rec.update(flds)
             recs[names[t_id][r]] = rec
         doc[t_id] = recs

@@ -57,6 +57,22 @@ Prerelease/`), which is what we actually play.
   differences are Plus-build balance changes vs the Release reference — rows
   93, 630, 651 — expected, not bugs).
 
+## Validation
+
+The engine builds on this branch and `Hyperion.exe --mod-check cosmonarchy`
+**plays with 0 errors** (5355 warnings, all "the mod's folder does not have"
+media files — sounds, portraits — which the art step provides). 663 units,
+324 weapons, 742 flingy, 1224 sprites, 2536 images, 190 orders, 55 techs,
+67 upgrades, 4679 sounds, 339 portraits load.
+
+Loader quirks the converter works around (engine-side, worth fixing when the
+port matures):
+- a new record's `base` cannot name an edit's record — the converter bases
+  new records on original row numbers;
+- the images' overlay columns take numbers only, and ids past 1.17's must be
+  the loader's assigned ids (name-sorted) — the converter emits those;
+- the mod's "no order" (0xFFFF) maps to the original's 189.
+
 ## Workflow
 
 ```
