@@ -47790,7 +47790,7 @@
    ],
    "target_range": 0,
    "sight_range": 8,
-   "armor_upgrade": 61,
+   "armor_upgrade": "forerunner_alloy",
    "size": 2,
    "armor": 1,
    "right_click": 1,
@@ -47869,7 +47869,7 @@
    ],
    "target_range": 0,
    "sight_range": 9,
-   "armor_upgrade": 61,
+   "armor_upgrade": "forerunner_alloy",
    "size": 2,
    "armor": 2,
    "right_click": 1,
@@ -47948,7 +47948,7 @@
    ],
    "target_range": 0,
    "sight_range": 9,
-   "armor_upgrade": 61,
+   "armor_upgrade": "forerunner_alloy",
    "size": 2,
    "armor": 1,
    "right_click": 1,
@@ -48027,7 +48027,7 @@
    ],
    "target_range": 0,
    "sight_range": 9,
-   "armor_upgrade": 61,
+   "armor_upgrade": "forerunner_alloy",
    "size": 2,
    "armor": 1,
    "right_click": 1,
@@ -48106,7 +48106,7 @@
    ],
    "target_range": 1,
    "sight_range": 7,
-   "armor_upgrade": 61,
+   "armor_upgrade": "forerunner_alloy",
    "size": 1,
    "armor": 1,
    "right_click": 4,
@@ -48185,7 +48185,7 @@
    ],
    "target_range": 0,
    "sight_range": 9,
-   "armor_upgrade": 61,
+   "armor_upgrade": "forerunner_alloy",
    "size": 2,
    "armor": 4,
    "right_click": 1,
@@ -171389,5 +171389,639 @@
    "idle_chance_3": 5,
    "name": "Hydrokor"
   }
+ },
+ "cards": {
+  "terran_command_center": [
+   {
+    "position": 3,
+    "train": "terran_ogun_worker_mode"
+   }
+  ],
+  "terran_barracks": [
+   {
+    "position": 1,
+    "train": "terran_maverick_golden"
+   },
+   {
+    "position": 1,
+    "train": "terran_maverick_futurist"
+   },
+   {
+    "position": 1,
+    "train": "terran_maverick_upstart"
+   },
+   {
+    "position": 1,
+    "train": "terran_hotshot"
+   },
+   {
+    "position": 2,
+    "train": "terran_harakan_golden"
+   },
+   {
+    "position": 2,
+    "train": "terran_camazotz_nydus"
+   },
+   {
+    "position": 3,
+    "train": "terran_cyprian_hecaton"
+   },
+   {
+    "position": 3,
+    "train": "terran_cannibal_upstart"
+   },
+   {
+    "position": 4,
+    "train": "terran_cleric_futurist"
+   },
+   {
+    "position": 5,
+    "train": "terran_shaman_support_upstart"
+   },
+   {
+    "position": 7,
+    "train": "terran_eidolon_nydus"
+   },
+   {
+    "position": 7,
+    "train": "terran_morrigan_upstart"
+   }
+  ],
+  "terran_factory": [
+   {
+    "position": 1,
+    "train": "terran_vulture_hecaton"
+   },
+   {
+    "position": 1,
+    "train": "terran_vulture_upstart"
+   },
+   {
+    "position": 2,
+    "train": "terran_cyclops_futurist"
+   },
+   {
+    "position": 3,
+    "train": "terran_arhaun"
+   },
+   {
+    "position": 3,
+    "train": "terran_southpaw"
+   },
+   {
+    "position": 4,
+    "train": "terran_tiangou_base"
+   },
+   {
+    "position": 4,
+    "train": "terran_blackjack_golden"
+   },
+   {
+    "position": 5,
+    "train": "terran_matador_tank_mode"
+   },
+   {
+    "position": 5,
+    "train": "terran_cutlass_futurist"
+   },
+   {
+    "position": 5,
+    "train": "terran_memphis_tank"
+   },
+   {
+    "position": 7,
+    "train": "terran_ifrit_tank"
+   },
+   {
+    "position": 7,
+    "train": "terran_tarasque_nydus"
+   },
+   {
+    "position": 7,
+    "train": "terran_broadside_upstart"
+   },
+   {
+    "position": 8,
+    "train": "terran_madrigal_hecaton_imperioso"
+   }
+  ],
+  "terran_starport": [
+   {
+    "position": 3,
+    "train": "terran_pythean"
+   },
+   {
+    "position": 4,
+    "train": "terran_sundog"
+   },
+   {
+    "position": 8,
+    "train": "terran_serathiel_hecaton"
+   }
+  ],
+  "protoss_robotics_facility": [
+   {
+    "position": 1,
+    "train": "protoss_simulacrum_khalendric"
+   },
+   {
+    "position": 1,
+    "train": "protoss_simulacrum_astral"
+   },
+   {
+    "position": 2,
+    "train": "protoss_manifold_starbound"
+   },
+   {
+    "position": 3,
+    "train": "protoss_vassal"
+   },
+   {
+    "position": 3,
+    "train": "protoss_renesair"
+   },
+   {
+    "position": 5,
+    "train": "protoss_idol_khalendric"
+   }
+  ],
+  "protoss_observatory": [
+   {
+    "position": 2,
+    "train": "protoss_potentate"
+   },
+   {
+    "position": 3,
+    "train": "protoss_sycophant"
+   }
+  ],
+  "protoss_gateway": [
+   {
+    "position": 1,
+    "train": "protoss_zealot_starbound"
+   },
+   {
+    "position": 2,
+    "train": "protoss_dracadin_order"
+   },
+   {
+    "position": 3,
+    "train": "protoss_ecclesiast_khalendric_knights"
+   },
+   {
+    "position": 4,
+    "train": "protoss_adherent"
+   },
+   {
+    "position": 4,
+    "train": "protoss_cicatus_starbound"
+   },
+   {
+    "position": 5,
+    "train": "protoss_ashguard"
+   }
+  ],
+  "unused_protoss_bldg_161": [
+   {
+    "position": 2,
+    "train": "protoss_vestige_starbound"
+   }
+  ],
+  "protoss_templar_archives": [
+   {
+    "position": 2,
+    "train": "protoss_optecton"
+   },
+   {
+    "position": 3,
+    "train": "protoss_patriarch"
+   },
+   {
+    "position": 3,
+    "train": "protoss_athuzelon"
+   }
+  ],
+  "protoss_forge": [
+   {
+    "position": 4,
+    "train": "protoss_autocort"
+   }
+  ],
+  "protoss_stargate": [
+   {
+    "position": 1,
+    "train": "protoss_extatus"
+   },
+   {
+    "position": 5,
+    "train": "protoss_gladius_order"
+   }
+  ],
+  "stasis_cell_prison": [
+   {
+    "position": 2,
+    "train": "protoss_epigraph"
+   }
+  ],
+  "protoss_robotics_support_bay": [
+   {
+    "position": 3,
+    "train": "protoss_analogue"
+   }
+  ],
+  "terran_flag_beacon": [
+   {
+    "position": 7,
+    "train": "terran_anticthon"
+   },
+   {
+    "position": 8,
+    "train": "terran_aion"
+   }
+  ],
+  "protoss_flag_beacon": [
+   {
+    "position": 1,
+    "train": "terran_blackguard"
+   },
+   {
+    "position": 3,
+    "train": "terran_auriel"
+   }
+  ],
+  "start_location": [
+   {
+    "position": 3,
+    "train": "terran_ogun_worker_mode"
+   }
+  ],
+  "flag": [
+   {
+    "position": 3,
+    "train": "terran_ogun_worker_mode"
+   }
+  ],
+  "mineral_chunk_1": [
+   {
+    "position": 1,
+    "train": "protoss_servitor"
+   },
+   {
+    "position": 2,
+    "train": "protoss_positron"
+   },
+   {
+    "position": 3,
+    "train": "protoss_accantor"
+   }
+  ],
+  "vespene_tank_1": [
+   {
+    "position": 2,
+    "train": "protoss_herald"
+   }
+  ],
+  "terran_starpad": [
+   {
+    "position": 1,
+    "train": "terran_philoc"
+   },
+   {
+    "position": 2,
+    "train": "terran_valkyrie_hecaton"
+   },
+   {
+    "position": 2,
+    "train": "terran_quadriga_golden"
+   },
+   {
+    "position": 3,
+    "train": "terran_wendigo"
+   },
+   {
+    "position": 3,
+    "train": "terran_ancile"
+   },
+   {
+    "position": 4,
+    "train": "terran_qilin"
+   }
+  ],
+  "terran_nanite_assembly": [
+   {
+    "position": 4,
+    "train": "terran_hippogriff"
+   }
+  ],
+  "terran_mantle": [
+   {
+    "position": 1,
+    "train": "terran_ramesses"
+   },
+   {
+    "position": 2,
+    "train": "terran_durendal"
+   },
+   {
+    "position": 3,
+    "train": "terran_cataphract"
+   },
+   {
+    "position": 3,
+    "train": "terran_arquebus_hecaton"
+   },
+   {
+    "position": 4,
+    "train": "terran_triton"
+   }
+  ],
+  "terran_apothecary": [
+   {
+    "position": 1,
+    "train": "terran_dilettante"
+   },
+   {
+    "position": 2,
+    "train": "terran_sevenstep"
+   },
+   {
+    "position": 3,
+    "train": "terran_silvertongue"
+   },
+   {
+    "position": 4,
+    "train": "terran_hypnagogue"
+   }
+  ],
+  "protoss_unitary_union": [
+   {
+    "position": 1,
+    "train": "protoss_oscilliant"
+   },
+   {
+    "position": 2,
+    "train": "protoss_unar"
+   },
+   {
+    "position": 3,
+    "train": "protoss_vibrance"
+   }
+  ],
+  "zerg_ezigrisant": [
+   {
+    "position": 1,
+    "train": "police_intern"
+   },
+   {
+    "position": 2,
+    "train": "terran_matador_cinder_mode"
+   }
+  ],
+  "protoss_pennant": [
+   {
+    "position": 1,
+    "train": "terran_matador_cinder_mode"
+   }
+  ],
+  "omnivale": [
+   {
+    "position": 4,
+    "train": "askosi_pilgrim"
+   }
+  ],
+  "askosi_landlock": [
+   {
+    "position": 1,
+    "train": "askosi_pilgrim"
+   },
+   {
+    "position": 2,
+    "train": "askosi_proselyte"
+   },
+   {
+    "position": 2,
+    "train": "askosi_magian"
+   },
+   {
+    "position": 3,
+    "train": "askosi_dyad"
+   },
+   {
+    "position": 4,
+    "train": "askosi_constituent"
+   }
+  ],
+  "askosi_radix": [
+   {
+    "position": 1,
+    "train": "askosi_missionary"
+   },
+   {
+    "position": 2,
+    "train": "askosi_cardinal"
+   },
+   {
+    "position": 3,
+    "train": "askosi_mimic"
+   },
+   {
+    "position": 4,
+    "train": "askosi_vicar"
+   }
+  ],
+  "askosi_function": [
+   {
+    "position": 1,
+    "train": "askosi_rove"
+   },
+   {
+    "position": 2,
+    "train": "askosi_object"
+   },
+   {
+    "position": 3,
+    "train": "askosi_scepter"
+   },
+   {
+    "position": 4,
+    "train": "askosi_intendent"
+   },
+   {
+    "position": 4,
+    "train": "askosi_scralia"
+   }
+  ],
+  "askosi_cosmoscope": [
+   {
+    "position": 1,
+    "train": "askosi_helion"
+   },
+   {
+    "position": 2,
+    "train": "askosi_emissary"
+   },
+   {
+    "position": 3,
+    "train": "askosi_inkblot"
+   },
+   {
+    "position": 4,
+    "train": "askosi_tirade"
+   }
+  ],
+  "askosi_proscenium": [
+   {
+    "position": 1,
+    "train": "askosi_aphorist"
+   },
+   {
+    "position": 2,
+    "train": "askosi_thaumalogue"
+   },
+   {
+    "position": 3,
+    "train": "askosi_avatar"
+   },
+   {
+    "position": 4,
+    "train": "askosi_doronin"
+   }
+  ],
+  "askosi_zylode": [
+   {
+    "position": 1,
+    "train": "askosi_agonist"
+   },
+   {
+    "position": 2,
+    "train": "askosi_petract"
+   },
+   {
+    "position": 3,
+    "train": "askosi_phontis"
+   },
+   {
+    "position": 4,
+    "train": "askosi_zonguard"
+   }
+  ],
+  "askosi_astrolabe": [
+   {
+    "position": 1,
+    "train": "askosi_akreno"
+   },
+   {
+    "position": 2,
+    "train": "askosi_iconoclast"
+   },
+   {
+    "position": 3,
+    "train": "askosi_crematorium"
+   },
+   {
+    "position": 4,
+    "train": "askosi_paraclete"
+   }
+  ],
+  "askosi_panoply": [
+   {
+    "position": 1,
+    "train": "askosi_insurant"
+   },
+   {
+    "position": 2,
+    "train": "askosi_silversoul"
+   },
+   {
+    "position": 3,
+    "train": "askosi_ghostwrit"
+   }
+  ],
+  "askosi_obelisk": [
+   {
+    "position": 1,
+    "train": "askosi_limire"
+   },
+   {
+    "position": 2,
+    "train": "askosi_endbore"
+   },
+   {
+    "position": 3,
+    "train": "askosi_tortare"
+   }
+  ],
+  "askosi_lotiro": [
+   {
+    "position": 1,
+    "train": "askosi_elgird"
+   },
+   {
+    "position": 2,
+    "train": "askosi_histrion"
+   },
+   {
+    "position": 3,
+    "train": "askosi_alacyne"
+   }
+  ],
+  "askosi_domain": [
+   {
+    "position": 1,
+    "train": "askosi_pilgrim"
+   },
+   {
+    "position": 2,
+    "train": "askosi_proselyte"
+   },
+   {
+    "position": 2,
+    "train": "askosi_magian"
+   },
+   {
+    "position": 3,
+    "train": "askosi_dyad"
+   },
+   {
+    "position": 4,
+    "train": "askosi_constituent"
+   }
+  ],
+  "forerunner_machinamentum": [
+   {
+    "position": 1,
+    "train": "forerunner_athla"
+   },
+   {
+    "position": 2,
+    "train": "forerunner_ferrum"
+   },
+   {
+    "position": 3,
+    "train": "forerunner_chalyb"
+   },
+   {
+    "position": 4,
+    "train": "forerunner_circitor"
+   },
+   {
+    "position": 5,
+    "train": "forerunner_exigo"
+   },
+   {
+    "position": 6,
+    "train": "forerunner_vicere"
+   }
+  ],
+  "forerunner_molaris": [
+   {
+    "position": 1,
+    "upgrade": "forerunner_capacitors"
+   },
+   {
+    "position": 2,
+    "upgrade": "forerunner_alloy"
+   }
+  ]
  }
 }

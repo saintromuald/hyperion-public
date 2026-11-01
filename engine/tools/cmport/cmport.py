@@ -503,6 +503,178 @@ def graft_requires(mod_dir, tables, names):
     return req_map, keep_targets, unsupported
 
 
+# ---------------------------------------------------------------------------
+# Button grafts (mpq/datreq/Buttons.graft): the command cards.  Layout per
+# GPTP's load_button_grafts: u32 button_count, set_count, stat_count, then
+# that many Buttons (position u16, icon u16, req_id u32, act_id u32,
+# req_var u16, act_var u16, req_str u16, act_str u16), then ButtonSets
+# (buttons_in_set u32, first_button u32 - an index, connected_unit u32).
+# The action ids index button_act_funcs[] in the same order as
+# ButtonActions (button_functions.h).
+# ---------------------------------------------------------------------------
+
+kActTrain = 3
+kActResearch = 22
+kActUpgrade = 26
+kActUseTech = 24
+kActStim = 25
+kActBuildSubunit = 19
+kActMorphBuilding = 35
+kActMorphUnit = 38
+
+kButtonActionNames = {
+    0: "cancel_infestation", 1: "rally", 2: "select_larva", 3: "train",
+    4: "cancel_last", 5: "tank_mode", 6: "siege_mode", 7: "cancel_construction",
+    8: "cancel_morph", 9: "move", 10: "stop", 11: "attack", 12: "attack_suicide",
+    13: "attack_building", 14: "carrier_move", 15: "carrier_stop", 16: "reaver_stop",
+    17: "carrier_attack", 18: "reaver_attack", 19: "build_subunit", 20: "patrol",
+    21: "hold", 22: "research", 23: "cancel_research", 24: "use_tech", 25: "stimpack",
+    26: "upgrade", 27: "cancel_upgrade", 28: "cancel_addon", 29: "build_terran",
+    30: "place_cop", 31: "build_protoss", 32: "create_addon", 33: "build_zerg",
+    34: "place_nydus", 35: "building_morph", 36: "land", 37: "repair", 38: "unit_morph",
+    39: "gather", 40: "return_cargo", 41: "burrow", 42: "unburrow", 43: "cloak",
+    44: "decloak", 45: "lift", 46: "load", 47: "unload", 48: "archon_warp",
+    49: "dark_archon_meld", 50: "recharge_shields", 51: "nuke", 52: "cancel_nuke",
+    53: "heal", 54: "replay_slow", 55: "replay_play_pause", 56: "replay_fast",
+    57: "cancel", 58: "cancel_place", 59: "change_buttons",
+}
+
+
+def read_hxm_unit_names(repo):
+    """The original's 1.17 unit names by id, from port_hxm_names.h."""
+    path = os.path.join(repo, "engine", "src117", "port", "data", "port_hxm_names.h")
+    src = open(path).read()
+    m = re.search(r"\{0, \"terran_marine\"\},(.*?)\n\};", src, re.S)
+    pairs = [(0, "terran_marine")]
+    for mm in re.finditer(r"\{(\d+), \"([a-z0-9_]+)\"\}", m.group(1)):
+        pairs.append((int(mm.group(1)), mm.group(2)))
+    names = [""] * 228
+    for i, n in pairs:
+        if i < 228:
+            names[i] = n
+    return names
+
+
+def button_cards(mod_dir, tables, names, repo, researchable=frozenset()):
+    """Decode Buttons.graft into cards: {card unit -> [buttons]}, plus notes."""
+    path = os.path.join(mod_dir, "datreq", "Buttons.graft")
+    if not os.path.exists(path):
+        path = os.path.join(mod_dir, "datreq", "buttons.graft")
+    if not os.path.exists(path):
+        return {}, []
+    raw = open(path, "rb").read()
+    (n_buttons, n_sets, n_stats) = struct.unpack_from("<III", raw, 0)
+    at = 12
+    buttons = []
+    for _ in range(n_buttons):
+        pos, icon, req_id, act_id, req_var, act_var, req_str, act_str = \
+            struct.unpack_from("<HHIIHHHH", raw, at)
+        buttons.append((pos, icon, req_id, act_id, req_var, act_var))
+        at += 20
+    sets = []
+    for _ in range(n_sets):
+        count, first, unit = struct.unpack_from("<III", raw, at)
+        sets.append((count, first, unit))
+        at += 12
+
+    hxm = read_hxm_unit_names(repo)
+    orders = tables["orders"]
+
+    def uref(v):
+        if v in kNoneMarkers["units"] or v < kV117["units"]:
+            return v
+        if v < len(names["units"]):
+            keep_targets.add(("units", v))
+            return names["units"][v]
+        return v
+
+    def tref(v):
+        if v == 44 or v < kV117["techs"]:
+            return v
+        if v < len(names["techs"]):
+            keep_targets.add(("techs", v))
+            return names["techs"][v]
+        return v
+
+    def upref(v):
+        if v < kV117["upgrades"]:
+            return v
+        if v < len(names["upgrades"]):
+            keep_targets.add(("upgrades", v))
+            return names["upgrades"][v]
+        return v
+
+    def oref(v):
+        if v == 189 or v < kV117["orders"]:
+            return v
+        if v < len(names["orders"]):
+            keep_targets.add(("orders", v))
+            return names["orders"][v]
+        return v
+
+    def order_of_tech(tech):
+        for r in range(orders.rows):
+            if orders.cols[14][r] == tech:  # tech column
+                return r
+        return -1
+
+    keep_targets = set()
+    cards = {}
+    notes = []
+    skipped = {}
+    for unit, (count, first, _connected) in enumerate(sets):
+        # the sets array is positional: set[i] is unit i's card, the way the
+        # game indexes its button-set table; connected_unit is the original
+        # game's field and the mod leaves it 0xFFFF
+        if unit >= 3000:
+            continue
+        if count == 0:
+            continue
+        key = hxm[unit] if unit < 228 and hxm[unit] else \
+            (names["units"][unit] if unit < len(names["units"]) else None)
+        if key is None:
+            continue
+        card = []
+        for b in buttons[first:first + count]:
+            pos, icon, req_id, act_id, req_var, act_var = b
+            entry = {"position": pos}
+            if act_id == kActTrain:
+                if act_var < kV117["units"]:
+                    continue  # the vanilla card already trains 1.17's units
+                entry["train"] = uref(act_var)
+            elif act_id == kActResearch:
+                if act_var < kV117["techs"] or act_var not in researchable:
+                    continue  # 1.17's techs are on the vanilla card already,
+                    # and the loader needs the tech's research requires
+                entry["research"] = tref(act_var)
+            elif act_id == kActUpgrade:
+                if act_var < kV117["upgrades"]:
+                    continue  # the vanilla card already upgrades 1.17's
+                entry["upgrade"] = upref(act_var)
+            elif act_id in (kActUseTech, kActStim):
+                order = order_of_tech(act_var)
+                if order < 0:
+                    notes.append((key, f"tech {act_var} has no order; button skipped"))
+                    continue
+                if order < kV117["orders"]:
+                    continue  # a vanilla order's button is on the card already
+                entry["cast"] = oref(order)
+                if orders.cols[1][order]:  # use_weapon_targeting
+                    entry["target"] = True
+            else:
+                skipped[kButtonActionNames.get(act_id, hex(act_id))] = \
+                    skipped.get(kButtonActionNames.get(act_id, hex(act_id)), 0) + 1
+                continue
+            card.append(entry)
+        if card:
+            cards[key] = card
+            if unit >= kV117["units"]:
+                keep_targets.add(("units", unit))
+    for kind, n in sorted(skipped.items(), key=lambda kv: -kv[1]):
+        notes.append((f"{n} buttons", f"kind {kind} has no card expression yet"))
+    return cards, keep_targets, notes
+
+
 def reference_costs(path=None):
     path = path or os.path.expanduser("~/Games/cosmonarchy/CMBW-reference.txt")
     rows = {}
@@ -575,7 +747,9 @@ kNoneMarkers = {
     "weapons": frozenset((130,)),
     "orders": frozenset((189,)),
     "techs": frozenset((44,)),
-    "upgrades": frozenset((61,)),
+    # upgrades: 61 is the original's "none" for the in-progress slot, but the
+    # mod's row 61 is its first extended upgrade and its dat columns and
+    # buttons reference the row, so no marker here
 }
 
 
@@ -714,6 +888,9 @@ def gen_types(tables, out_path, mod_dir):
     # The requirement grafts: tech trees and use requirements, and their
     # subjects and operands join the kept rows.
     req_map, graft_targets, graft_notes = graft_requires(mod_dir, tables, names)
+    researchable = frozenset(r for (t, r, f) in req_map if t == "techs" and f == "requires")
+    cards, card_targets, card_notes = button_cards(mod_dir, tables, names, REPO, researchable)
+    graft_targets.update(card_targets)
 
     def refs_of(table_id, r):
         t = tables[table_id]
@@ -820,6 +997,10 @@ def gen_types(tables, out_path, mod_dir):
         print(f"graft note: {note[0]} {note[1]}: {note[2]}")
     if len(graft_notes) > 40:
         print(f"graft note: ... {len(graft_notes) - 40} more")
+    for note in card_notes:
+        print(f"cards note: {note[0]}: {note[1]}")
+    if cards:
+        doc["cards"] = cards
 
     out = json.dumps(doc, indent=1, ensure_ascii=False)
     if out_path:
