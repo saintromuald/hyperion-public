@@ -169,6 +169,7 @@ int g_nSub;
 int g_nSpeed = 6;
 int g_nWatchMul = 1;  // a watched game's speed past Fastest, x2 to x16 (port_watchgame.h)
 int g_nRules = -1;                  // the Rules pulldown: 1 Hyperion, 0 classic, -1 not read yet
+bool g_bSb = false;                 // the room's lobby: the match plays online (the host's toggle)
 MutatorSet g_mut;                   // the mutators, 1.17's when none is chosen (port_mutators.h)
 int g_nView;                        // the right column's tab: 0 Game Options and the map, 1 Mutators
 int g_nDensity;                     // the slot list: 0 auto, 1 rows, 2 compact
@@ -3012,6 +3013,32 @@ void SetupStep(void)
   const bool bStart = ScButton(start, PortText(pszStart), 'G', true);
   Decl back = At("skback2", 40 + fStartW + 6, fFootY, 250, 52);
   const bool bBack = ScButton(back, Guest() ? PortText("Leave") : PortText("Back"), 'B', false);
+  // the match's transport, the host's choice and the guest's to see: the room's own relay
+  // (this network, everyone in the room) or the rally-point stack (online — the room's
+  // coordinator mints the session at the start)
+  if (g_pHost != NULL) {
+    const float fTrX = 40 + fStartW + 250 + 6 + 24;
+    Decl tr = At("sktransport", fTrX, fFootY, 0, 52);
+    tr.d.layout.sizing.width = Fit();
+    tr.d.layout.padding = Pad(Fs(22), Fs(22), 0, 0);
+    tr.d.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
+    if (g_bSb) {
+      tr.d.backgroundColor = Col(kLbInner);
+      tr.d.border = Border(kLbHyperionRim, Fs(2), Fs(2), Fs(2), Fs(2));
+    } else {
+      tr.d.border = Border(kLbInnerRim, Fs(2), Fs(2), Fs(2), Fs(2));
+    }
+    Radius(tr, 4);
+    Open(tr);
+    Text(g_bSb ? PortText("ONLINE (RELAY)") : PortText("THIS NETWORK"), UI_FACE_WIDE, Fs(15), 0.04f,
+         g_bSb ? kScInkAccept : kScInkOff);
+    Close();
+    if (!Guest() && Clicked(tr.d.id))
+      g_bSb = !g_bSb;
+    TipOn(Id("sktransport"), g_bSb ? PortText("Online (relay)") : PortText("This network"),
+          g_bSb ? PortText("The host set this match to play online: at its start the room asks its coordinator for a session, and every seat joins it over the internet. The host toggles this.")
+                : PortText("The host set this match to play on the room's own network relay. The host toggles this."));
+  }
   // the rules' mark, only where a choice requires Hyperion's (a mod, a team game, a computer
   // level, mutators): its name alone, the reason in its tip. The rules chosen in Game Options,
   // Classic's or the default Hyperion's, leave the place empty (the user, 2026-10-26)
@@ -3306,6 +3333,7 @@ bool SkirmishRoomNow(SkirmishRoomSetUp *pOut)
     r.seats.push_back(seat);
   }
   r.bHyperion = HyperionRules();
+  r.bSb = g_bSb;
   r.mut = g_mut;
   *pOut = r;
   return true;
@@ -3395,6 +3423,7 @@ void SkirmishGuestSetUp(const SkirmishRoomSetUp &r)
     }
   g_nSpeed = r.nSpeed >= 0 && r.nSpeed <= 6 ? r.nSpeed : 6;
   g_nRules = r.bHyperion ? 1 : 0;
+  g_bSb = r.bSb;
   g_mut = r.mut;
   SkirmishRoomSeats(r.seats);
 }

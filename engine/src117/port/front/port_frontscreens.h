@@ -91,6 +91,7 @@ struct SkirmishRoomSetUp {
   std::string map, title, type;  // the map's path here, its title, the game type's name
   int nKey = 0, nSpeed = 6, nPlayers = 0;
   bool bHyperion = false;  // the match plays by Hyperion's rules, the host's choice
+  bool bSb = false;        // and online, through the rally-point stack (the host's)
   MutatorSet mut;          // and its mutators, the host's
   std::vector<SkirmishRoomSeat> seats;
 };

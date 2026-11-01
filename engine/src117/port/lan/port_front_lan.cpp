@@ -926,6 +926,7 @@ void HostSync(void)
                             PortJsonQuote(kSpeedIds[r.nSpeed >= 0 && r.nSpeed <= 6 ? r.nSpeed : 6]) +
                             ",\"speedN\":" + std::to_string(r.nSpeed) + ",\"name\":" + PortJsonQuote(r.title) +
                             ",\"rules\":" + PortJsonQuote(r.bHyperion ? "hyperion" : "classic") +
+                            ",\"transport\":" + PortJsonQuote(r.bSb ? "sb" : "lan") +
                             ",\"mutators\":" + MutatorsJson(r.mut) + "}";
     if (msg != g_sent.match) {
       LanClientSay(msg);
@@ -1002,6 +1003,7 @@ void GuestSync(void)
   r.nSpeed = static_cast<int>((*m)["speedN"].Num(6));
   r.type = (r.nKey & 0xFF) == 3 ? "Free For All" : "Melee";
   r.bHyperion = (*m)["rules"].Str() == "hyperion";
+  r.bSb = (*m)["transport"].Str() == "sb";
   r.mut = MutatorsFromJson((*m)["mutators"]);
   r.seats = RoomSeats(*m);
   SkirmishGuestSetUp(r);
