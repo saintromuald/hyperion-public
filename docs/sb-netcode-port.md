@@ -1,6 +1,6 @@
 # Porting ShieldBattery netcode (rally-point2) into Hyperion
 
-Status: **planning** · Branch: `netcode/sb-rally-port` · Owner: saintromuald
+Status: **in progress** (Phases 0–4 and 6 done; Phase 5 next) · Branch: `netcode/sb-rally-port` · Owner: saintromuald
 
 This document is the ground-up plan for giving Hyperion internet multiplayer by
 integrating ShieldBattery's netcode v2 ("rally-point2"). It records the
@@ -445,12 +445,38 @@ with no manual steps beyond the toolchain installs.
       the signed `POST /session/create` API. The `--coordinated` game gate
       passes with the coordinator's decision maker alive (latency-buffer
       directives now reach the provider and are applied).
-- [ ] **Open**: the joiner's final transition — its game completes the whole
-      handshake, countdown and chat-room close (identical close path to the
-      creator's) but its glue never enters main_game_run; the creator's game
-      runs. A game-front-end integration item (likely the launch's seating
-      data vs the room flow's), not netcode. Tracked here; the desync drill
-      (desync.sh, --coordinated) needs both seats in-game to fire the relay's
-      0x37 comparator.
-- [ ] Phase 5: the room's online launch; Phase 6: reconnect/leave matrix;
-      Phase 7: pinning, CI, packaging.
+- [x] **The joiner's final transition** (the item above, resolved): three
+      fixes, each found by a gate that had been passing falsely:
+      - The joiner's game start failed its map load (no published map name —
+        the LAN joiner's downloaded file publishes it; the SB flow has no
+        transfer) and left via the 0x61 popup. The joiner now preloads the
+        launch's own map copy at the launch.
+      - The joiner's game-type block (TGAMEPARAMS) differed from the
+        creator's: 1.17's join re-derives the template from the listed
+        game's key, which does not reproduce the creator's (game type,
+        resource mode, starting minerals), so the sims diverged at the first
+        checksum (relay-side desync, frame ~35). The launch blob's whole
+        32-byte block is adopted (`SbLaunchParams`).
+      - The join-time stat-string copy was unbounded: the creator sends
+        strlen bytes (no NUL) and SStrCopy ran past the payload into the poll
+        buffer's next events, which the list parser read as the string's
+        tail — deterministic once RP_EV_CONNECT events joined the stream.
+- [x] **Both seats truly in-game**: `run_game.sh --coordinated` now holds two
+      healthy games (600+ steps each, zero relay-side desyncs, no drop
+      requests) — the earlier gates had passed on the creator alone while the
+      joiner silently dropped out after the lobby.
+- [x] **The desync drill** (`desync.sh --coordinated`): divergent starting
+      resources make the 0x37 checksums differ; the relay's authority logs
+      `relay-side desync detected` (sync_ordinal=1).
+- [x] **Phase 6 part 1 — reconnect**: `reconnect.sh --coordinated` kills the
+      relay mid-game and restarts it (same cert/tenant); the drivers re-dial,
+      the games resume, neither seat plays on alone.
+- [x] **Phase 6 part 2 — the drop**: `drop.sh --coordinated` SIGKILLs the
+      joiner mid-game; the survivor sees the peer's link-down stamp
+      (RP_EV_CONNECT), asks the relay's authority for a synced drop after a
+      10 s grace (retried every 5 s — the relay refuses below its 30 s unlock
+      floor), the EV_LEAVE clears the departed slot's step gate, and the
+      survivor keeps playing. `rp_request_drop`, `rp_turn_consumed` and
+      `RP_EV_CONNECT` are bridge additions (`saintromuald/rally-point2`
+      branch `bridge`), subtree-pulled.
+- [ ] Phase 5: the room's online launch; Phase 7: pinning, CI, packaging.
