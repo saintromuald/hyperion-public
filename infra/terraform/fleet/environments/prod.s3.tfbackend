@@ -1,0 +1,7 @@
+# Backend config for the prod fleet stack. Pass at init:
+#   terraform init -backend-config=environments/prod.s3.tfbackend
+bucket       = "shieldbattery-rp2-tfstate"
+key          = "rp2/fleet-prod.tfstate"
+region       = "us-east-1"
+encrypt      = true
+use_lockfile = true

@@ -1,0 +1,654 @@
+//! [`SessionSetup`] — the registries and per-session maps every session
+//! operation reads and mutates — plus the accessors and membership-retirement
+//! methods that guard them. Grouped here because the locking discipline these
+//! methods establish (the outermost assignment lock, the single-acquisition
+//! membership take) is what create, rehome, and close all build on.
+
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+
+use parking_lot::Mutex;
+use rally_point_proto::control::TenantId;
+use rally_point_proto::ids::{RelayId, SessionId, SlotId};
+
+use crate::attest::LoadStateAttest;
+use crate::descriptors::{RelayDescriptors, RelayReaps};
+use crate::endpoint_limits::{
+    EVIDENCE_BURST, EVIDENCE_REFILL_INTERVAL, EndpointLimiter, LoadStateLimiter, RehomeLimiter,
+};
+use crate::pair_rtts::PairRttStore;
+use crate::presence::PresenceStore;
+use crate::registry::RelayRegistry;
+use crate::tenant::TenantStore;
+
+use super::create::first_session_id;
+use super::gate::{CachedCreate, ProvisionGate};
+use super::{SessionRefsStore, SessionRelays};
+
+/// The inputs to session setup: the registries the coordinator holds.
+#[derive(Clone)]
+pub struct SessionSetup {
+    /// The relay registry — which relays have phoned home.
+    pub(super) registry: RelayRegistry,
+    /// The tenant store — per-tenant signing keys + policy.
+    pub(super) tenants: TenantStore,
+    /// Which relays serve which session. Populated by `create_session`,
+    /// read by `descriptor_for`.
+    pub(super) session_relays: SessionRelays,
+    /// The tenant's correlation ids per session. Populated by `create_session`,
+    /// read by [`session_refs`] when a departure webhook is built.
+    pub(super) session_refs: SessionRefsStore,
+    pub(super) closed_evidence_assignments:
+        Arc<Mutex<super::evidence_history::ClosedEvidenceAssignments>>,
+    /// Per-relay descriptor outbox — what each relay should currently apply on
+    /// its mesh links. Populated by `create_session`; read by the relay's
+    /// descriptor-fetch endpoint.
+    pub(super) descriptors: RelayDescriptors,
+    /// Per-relay reap outbox — the pending `CloseSlot` directives the reap
+    /// policies arm, held as declarative per-relay state and re-synced on
+    /// reconnect. Drained by the relay's control connection alongside the
+    /// descriptor set.
+    reaps: RelayReaps,
+    /// The load-state attestation broker — the per-relay question channel the
+    /// control connections drain and the correlation map the load-state read waits
+    /// on. Held here alongside the other per-relay outboxes it is shaped after.
+    attest: LoadStateAttest,
+    /// Active-player presence — the connected slots relays report on their
+    /// heartbeats. Fed by the relay control connections, read by the tenant's
+    /// `POST /presence/query`. Held here alongside the registry it is fenced
+    /// against (both are the coordinator's live view of the fleet).
+    presence: PresenceStore,
+    /// The session-id counter, seeded from wall-clock time at construction.
+    /// Monotonic within this coordinator's lifetime; scoped per `SessionSetup`
+    /// instance. Session ids are unique within a tenant but not globally (two
+    /// tenants can both share a session id) — the relay keys its routing
+    /// groups on `SessionKey` (tenant + session) for exactly this reason.
+    pub(super) next_session: Arc<AtomicU64>,
+    /// Idempotency record for coordinator-mediated re-homes: maps a
+    /// `(tenant, session, dead_relay)` to the replacement relay chosen for it, so
+    /// a concurrent or repeated `rehome` naming the same dead relay returns the
+    /// same target without re-mutating the session's relay set. Retired with the
+    /// session's other state (see [`forget_rehomes`]).
+    pub(super) rehomes: Arc<Mutex<HashMap<RehomeKey, RelayId>>>,
+    /// The per-session rate limiter for the tenant-authenticated re-home endpoint
+    /// (`POST /session/rehome`). Held here — rather than only in the api-level
+    /// `CoordinatorState` — so the lifecycle can drop a closed session's bucket at
+    /// the same point it retires the session's other per-session state, keeping the
+    /// bucket map bounded by live re-homing sessions.
+    rehome_limiter: RehomeLimiter,
+    /// The per-tenant rate limiter for the tenant-authenticated load-state read
+    /// (`POST /session/load-state`). Keyed on the tenant rather than the session
+    /// because the cost it bounds is fleet-wide — each read questions every relay
+    /// serving the named session — so a caller reading a thousand different
+    /// sessions is exactly the load worth capping. Nothing retires its buckets at
+    /// session close: they are per-tenant and pruned by their own idle sweep.
+    load_state_limiter: LoadStateLimiter,
+    /// The per-tenant cached observation budget, independent of relay snapshot reads.
+    evidence_limiter: EndpointLimiter<TenantId>,
+    /// Linearizes an assignment's registry-read→commit span against a relay's drain
+    /// mark, closing the coordinated-drain race. The window is: [`create_session`]
+    /// (and [`rehome`]) reads the registry to pick a relay, then commits — records
+    /// `session_relays` membership and stages the descriptors that name it. If a
+    /// relay's drain mark landed *between* the pick and the commit, the session
+    /// would name a relay about to exit, and a never-started session on a gone relay
+    /// is unrecoverable client-side. So the pick→commit span and the drain mark
+    /// each hold this one lock and are therefore mutually exclusive: after the mark,
+    /// every session that will ever name the relay has already staged its descriptor
+    /// in the relay's outbox, and any create still mid-flight re-reads the registry
+    /// under the lock and sees the relay draining.
+    ///
+    /// **Outermost lock.** The fine-grained locks (`session_relays`, the registry
+    /// mutex, the descriptor outbox, `rehomes`) nest *under* this one; nothing
+    /// acquires this while already holding one of them. It guards only await-free
+    /// sync bodies, so the guard never crosses an await point.
+    assignment_lock: Arc<Mutex<()>>,
+    /// Idempotency record for `POST /session/create`: a tenant-scoped
+    /// `external_id` already bound to a still-live session replies with that
+    /// exact original response rather than minting a duplicate — an ordinary
+    /// tenant HTTP retry inside the signed-request's replay window must not
+    /// create a second session for the same game. Each entry caches the
+    /// original response *and* the [`CreateFingerprint`] of the request that
+    /// produced it, so a replay is honored only when the incoming request's
+    /// fingerprint matches: a second create that reuses the `external_id` for a
+    /// different roster is a conflict, not a retry, and must not be handed the
+    /// first roster's tokens. Checked and (on a fresh create) recorded under
+    /// [`assignment_lock`](Self::assignment_lock), so two near-simultaneous
+    /// requests for the same `external_id` can't both race past the check and
+    /// each mint their own session. Entries are removed at the same point
+    /// session membership is retired
+    /// ([`take_session_membership`](Self::take_session_membership)), so a
+    /// tenant may legitimately reuse an `external_id` once the prior session
+    /// is actually gone (a rematch, say). A request with no `external_id` is
+    /// never recorded here and is therefore never idempotent — see
+    /// [`SessionRequest::external_id`]'s own doc.
+    pub(super) create_idempotency: Arc<Mutex<HashMap<(TenantId, String), CachedCreate>>>,
+    /// The provisioning gate: the shared warm-demand store, its TTL, and (when a
+    /// provisioning loop is running) the per-create hold cap. Consulted by
+    /// hold-until-ready create and by `POST /regions/warm`. Dormant — an orphan
+    /// warm store and no hold — on a coordinator with no provisioning loop, which
+    /// keeps every hold-until-ready behavior off.
+    pub(super) provision: ProvisionGate,
+    /// First-hold timestamps (Unix seconds) for creates currently held for a cold
+    /// region, keyed `(tenant, external_id)`. Stamped when a create is first held
+    /// and consulted on every retry to enforce the hold cap; dropped when the
+    /// create finally places (in-region or via fallback), when the cap elapses, or
+    /// by a lazy prune of abandoned anchors. Empty and unused on a coordinator with
+    /// no provisioning loop.
+    pub(super) pending_creates: Arc<Mutex<HashMap<(TenantId, String), u64>>>,
+    /// The global cap on concurrently live sessions across every tenant, or
+    /// `None` for uncapped. An emergency brake for the coordinator as a whole:
+    /// at the cap a fresh create is refused
+    /// ([`SessionSetupError::SessionCeilingReached`]) until sessions close, so
+    /// a runaway caller or an abuse burst degrades into refused creates
+    /// instead of unbounded session/descriptor/lifecycle growth. Idempotent
+    /// replays of a still-live session are exempt — they mint nothing.
+    pub(super) session_ceiling: Option<usize>,
+    /// Whether new sessions on capable cohorts enable the finalized-drop
+    /// handshake. Cohort placement is unconditional; only the feature bit is
+    /// gated. See [`with_finalized_drops`](Self::with_finalized_drops).
+    pub(super) finalize_feature: bool,
+    /// The backbone-RTT pair table relays fill from their heartbeats. Placement
+    /// and re-home read it to send a slot whose region has no available relay to
+    /// the nearest region that has one. Empty (every such slot takes the
+    /// lowest-id pick) until relays report or the ledger seeds it; see
+    /// [`with_pair_rtts`](Self::with_pair_rtts).
+    pub(super) pair_rtts: PairRttStore,
+}
+
+/// The key of a recorded rehome decision: which dead relay, for which session.
+type RehomeKey = (rally_point_proto::control::TenantId, SessionId, RelayId);
+
+impl SessionSetup {
+    /// Creates a session-setup context from the coordinator's registries, with the
+    /// production re-home rate limiter ([`RehomeLimiter::default`]).
+    pub fn new(registry: RelayRegistry, tenants: TenantStore) -> Self {
+        Self {
+            registry,
+            tenants,
+            session_relays: Arc::new(Mutex::new(HashMap::new())),
+            session_refs: Arc::new(Mutex::new(HashMap::new())),
+            closed_evidence_assignments: Arc::new(Mutex::new(Default::default())),
+            descriptors: RelayDescriptors::new(),
+            reaps: RelayReaps::new(),
+            attest: LoadStateAttest::new(),
+            presence: crate::presence::PresenceStore::new(),
+            next_session: Arc::new(AtomicU64::new(first_session_id())),
+            rehomes: Arc::new(Mutex::new(HashMap::new())),
+            rehome_limiter: RehomeLimiter::default(),
+            load_state_limiter: LoadStateLimiter::default(),
+            evidence_limiter: EndpointLimiter::new(EVIDENCE_BURST, EVIDENCE_REFILL_INTERVAL),
+            assignment_lock: Arc::new(Mutex::new(())),
+            create_idempotency: Arc::new(Mutex::new(HashMap::new())),
+            provision: ProvisionGate::dormant(),
+            pending_creates: Arc::new(Mutex::new(HashMap::new())),
+            session_ceiling: None,
+            finalize_feature: true,
+            pair_rtts: PairRttStore::new(),
+        }
+    }
+
+    /// Shares `store` as the backbone-RTT table placement and re-home rank
+    /// fallback regions by. Production passes the same table the heartbeat
+    /// ingest fills and `GET /regions` serves.
+    #[must_use]
+    pub fn with_pair_rtts(mut self, store: PairRttStore) -> Self {
+        self.pair_rtts = store;
+        self
+    }
+
+    /// The backbone-RTT table placement reads (see
+    /// [`with_pair_rtts`](Self::with_pair_rtts)).
+    pub fn pair_rtts(&self) -> &PairRttStore {
+        &self.pair_rtts
+    }
+
+    /// Sets whether new sessions on capable cohorts run the finalized-drop
+    /// handshake. Placement still keeps build-class cohorts apart either way;
+    /// this only decides whether a capable cohort's sessions actually enable
+    /// the feature. Production wires this from the coordinator's
+    /// `--enable-finalized-drops` switch (default OFF until the coordinated
+    /// rehome fence exists — see the flag's doc); the constructor default is
+    /// ON so the feature's own tests exercise it without ceremony.
+    #[must_use]
+    pub fn with_finalized_drops(mut self, enabled: bool) -> Self {
+        self.finalize_feature = enabled;
+        self
+    }
+
+    /// Sets the global live-session ceiling (see the field docs). `None` — the
+    /// default — is uncapped.
+    pub fn with_session_ceiling(mut self, ceiling: Option<usize>) -> Self {
+        self.session_ceiling = ceiling;
+        self
+    }
+
+    /// Installs the provisioning gate, enabling hold-until-ready create and giving
+    /// `POST /regions/warm` the warm store the reconcile loop shares. Called once
+    /// at construction on a coordinator whose provisioning loop is running; a
+    /// coordinator with no loop keeps the dormant gate and every hold-until-ready
+    /// behavior stays off.
+    pub fn with_provision_gate(mut self, gate: ProvisionGate) -> Self {
+        self.provision = gate;
+        self
+    }
+
+    /// The provisioning gate — the warm store, warm TTL, and create-hold cap the
+    /// warm endpoint and hold-until-ready create consult.
+    pub fn provision(&self) -> &ProvisionGate {
+        &self.provision
+    }
+
+    /// Exposes the relay registry (the coordinator's API needs it to build
+    /// the `CoordinatorState`).
+    pub fn registry(&self) -> &RelayRegistry {
+        &self.registry
+    }
+
+    /// Exposes the tenant store (the coordinator's API needs it to build
+    /// the `CoordinatorState`).
+    pub fn tenants(&self) -> &TenantStore {
+        &self.tenants
+    }
+
+    /// Exposes the per-relay descriptor outbox (the descriptor-fetch endpoint
+    /// reads the current set a relay should apply).
+    pub fn descriptors(&self) -> &RelayDescriptors {
+        &self.descriptors
+    }
+
+    /// Exposes the per-relay reap outbox (the control connection drains it, and
+    /// the reap policies push `CloseSlot` directives into it).
+    pub fn reaps(&self) -> &RelayReaps {
+        &self.reaps
+    }
+
+    /// Exposes the load-state attestation broker (the control connection drains a
+    /// relay's questions and resolves its answers; the load-state read asks).
+    pub fn attest(&self) -> &LoadStateAttest {
+        &self.attest
+    }
+
+    /// Exposes the active-player presence store (the control connection applies
+    /// heartbeat rosters into it; the presence-query endpoint reads it).
+    pub fn presence(&self) -> &PresenceStore {
+        &self.presence
+    }
+
+    /// The relays serving `session`, as recorded at `create_session` — the
+    /// distinct home relays of its slots — or empty if the session was never
+    /// created here. The reap policies fan a `CloseSlot` out to all of these; a
+    /// relay that does not hold a named slot ignores it.
+    pub fn serving_relays(
+        &self,
+        tenant: &rally_point_proto::control::TenantId,
+        session: SessionId,
+    ) -> Vec<RelayId> {
+        self.session_relays
+            .lock()
+            .get(&(tenant.clone(), session))
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Marks the session's lobby epoch settled only while its serving set still
+    /// matches `expected` and `still_current` confirms the caller's other
+    /// lifecycle evidence, then republishes every current descriptor with the
+    /// monotonic latch. The assignment lock linearizes both checks and this cut
+    /// against rehomes.
+    pub fn settle_lobby(
+        &self,
+        tenant: &TenantId,
+        session: SessionId,
+        expected: &[RelayId],
+        still_current: impl FnOnce() -> bool,
+    ) -> bool {
+        let _assignment = self.lock_assignment();
+        let mut serving = self.serving_relays(tenant, session);
+        serving.sort_unstable();
+        let mut expected = expected.to_vec();
+        expected.sort_unstable();
+        if serving != expected || serving.is_empty() || !still_current() {
+            return false;
+        }
+        {
+            let mut refs = self.session_refs.lock();
+            let Some(refs) = refs.get_mut(&(tenant.clone(), session)) else {
+                return false;
+            };
+            refs.lobby_settled = true;
+        }
+        for relay in serving {
+            if let Some(descriptor) = super::descriptor_for(self, tenant, session, relay) {
+                self.descriptors.record(relay, descriptor);
+            }
+        }
+        true
+    }
+    /// Installs authoritative membership for lifecycle tests that intentionally
+    /// bypass [`create_session`]. Keeping this seam test-only ensures production
+    /// close handling never fabricates membership from its cached lifecycle view.
+    #[cfg(test)]
+    pub(crate) fn set_session_membership_for_test(
+        &self,
+        tenant: &TenantId,
+        session: SessionId,
+        relays: Vec<RelayId>,
+    ) {
+        self.session_relays
+            .lock()
+            .insert((tenant.clone(), session), relays);
+    }
+
+    /// Whether `relay` — the relay identity a control connection enrolled as —
+    /// is allowed to report a per-session notice for `(tenant, session)`. A
+    /// notice carries attacker-influenceable `tenant`/`session`/payload, and each
+    /// one drives a webhook signed with the tenant's own key; without this gate
+    /// any connected relay could name a victim tenant + session and have the
+    /// coordinator sign and deliver forged bytes to that tenant's webhook.
+    ///
+    /// The rule: the reporting relay must be one of the session's serving relays.
+    /// When the coordinator holds **no** serving-relay record for the session, the
+    /// notice is allowed through — this is the routine post-restart tail case,
+    /// where a relay still holds a session created in a previous coordinator
+    /// lifetime and reports its closing events, but the in-memory serving set was
+    /// wiped, so there is nothing to check the reporter against. Enforcement
+    /// therefore applies only when serving-relay information exists this lifetime.
+    ///
+    /// Residual gap: the unverifiable no-record path still trusts the reporter,
+    /// and the shared bootstrap secret authenticates "a relay," not a specific
+    /// relay id, so a secret holder could forge a tail notice for a session with
+    /// no live serving record. Fully closing that needs per-relay identity — the
+    /// same work that binds a control connection to its claimed relay id.
+    pub fn relay_serves_session(
+        &self,
+        relay: RelayId,
+        tenant: &TenantId,
+        session: SessionId,
+    ) -> bool {
+        let serving = self.serving_relays(tenant, session);
+        serving.is_empty() || serving.contains(&relay)
+    }
+
+    /// Whether `relay` is the current authoritative home for `slot`. Unlike a
+    /// serving-set check, this requires a live session record: a slot-specific
+    /// security notice cannot be attributed safely after coordinator restart
+    /// amnesia, when both its home and its tenant correlation ids are unknown.
+    pub fn relay_homes_slot(
+        &self,
+        relay: RelayId,
+        tenant: &TenantId,
+        session: SessionId,
+        slot: SlotId,
+    ) -> bool {
+        self.session_refs
+            .lock()
+            .get(&(tenant.clone(), session))
+            .and_then(|refs| refs.homes.get(&slot))
+            .is_some_and(|&home| home == relay)
+    }
+
+    pub(crate) fn has_session_refs(&self, tenant: &TenantId, session: SessionId) -> bool {
+        self.session_refs
+            .lock()
+            .contains_key(&(tenant.clone(), session))
+    }
+
+    /// The revision of a slot's current assignment, only for its authoritative home.
+    pub(crate) fn evidence_assignment(
+        &self,
+        relay: RelayId,
+        tenant: &TenantId,
+        session: SessionId,
+        slot: SlotId,
+    ) -> Option<u64> {
+        let refs = self.session_refs.lock();
+        let refs = refs.get(&(tenant.clone(), session))?;
+        (refs.homes.get(&slot) == Some(&relay))
+            .then(|| refs.evidence_assignments.get(&slot).copied().unwrap_or(0))
+    }
+
+    pub(crate) fn evidence_assignments(
+        &self,
+        tenant: &TenantId,
+        session: SessionId,
+    ) -> std::collections::BTreeMap<SlotId, (RelayId, u64)> {
+        let refs = self.session_refs.lock();
+        let Some(refs) = refs.get(&(tenant.clone(), session)) else {
+            return Default::default();
+        };
+        refs.homes
+            .iter()
+            .map(|(&slot, &relay)| {
+                (
+                    slot,
+                    (
+                        relay,
+                        refs.evidence_assignments.get(&slot).copied().unwrap_or(0),
+                    ),
+                )
+            })
+            .collect()
+    }
+
+    /// The number of live sessions `relay` currently serves — how many recorded
+    /// serving sets, across every tenant, name it. Zero means the relay homes no
+    /// session's slots right now: a reconcile scale-down reads this to find a relay
+    /// safe to drain, and re-reads it after marking the relay draining to catch a
+    /// session that landed in the placement race. Counts a session once even if the
+    /// relay were to appear in its set more than once (it never is — a serving set
+    /// is the session's distinct home relays).
+    pub fn session_count_for_relay(&self, relay: RelayId) -> usize {
+        self.session_relays
+            .lock()
+            .values()
+            .filter(|relays| relays.contains(&relay))
+            .count()
+    }
+
+    /// How many sessions are currently live: recorded serving sets, across
+    /// every tenant, that still name at least one relay. Read the same way the
+    /// idempotent-replay liveness check reads a single session — a set that is
+    /// empty (or gone) is a session that already closed.
+    pub(super) fn live_session_count(&self) -> usize {
+        self.session_relays
+            .lock()
+            .values()
+            .filter(|relays| !relays.is_empty())
+            .count()
+    }
+
+    /// Forgets any recorded rehome decisions for `session` — called when the
+    /// session's lifecycle state is removed, so the idempotency record stays
+    /// bounded by the coordinator's live sessions (the sibling of
+    /// [`RelayReaps::retire`](crate::descriptors::RelayReaps::retire)).
+    pub fn forget_rehomes(&self, tenant: &TenantId, session: SessionId) {
+        self.rehomes
+            .lock()
+            .retain(|(t, s, _), _| !(t == tenant && *s == session));
+    }
+
+    /// Takes — removes and returns — a closing session's relay membership: its
+    /// `session_relays` entry for `(tenant, session)`, or an empty vec if none is
+    /// recorded. The `session_refs` entry is dropped in the same call.
+    ///
+    /// The removal-and-return of `session_relays` happens under a **single** lock
+    /// acquisition, which is what makes the close path's clean-up race-free. A
+    /// concurrent [`rehome`](fn@crate::session::rehome) re-validates membership under this same lock before it
+    /// mutates, so relative to this take it lands wholly before or wholly after:
+    ///
+    /// - A rehome that observes the membership **gone** (it ran after this take)
+    ///   fails its under-lock re-validation and returns `Unavailable` — it neither
+    ///   pushes a descriptor nor records a rehome, so there is nothing left to clean.
+    /// - A rehome that completed **before** this take had already added its target
+    ///   relay to the membership, so that relay is in the vec this take returns — the
+    ///   close's descriptor removal over the returned set therefore covers the
+    ///   resumed descriptor that rehome pushed, and the close's
+    ///   [`forget_rehomes`](Self::forget_rehomes) (run after the take) clears the
+    ///   idempotency entry it recorded.
+    ///
+    /// Retiring `session_relays` is also what refuses a *later* re-home for the
+    /// closed session: with no serving relays recorded, [`rehome`](fn@crate::session::rehome)'s
+    /// `serving.is_empty() → Unavailable` guard fires, so a straggler whose token has
+    /// not yet expired can no longer pick a replacement relay and resurrect a dead
+    /// game. No separate liveness flag is needed — the empty membership *is* the
+    /// terminal state. The `session_refs` clear takes its own lock afterward; only
+    /// the take-and-clear of `session_relays` needs to be atomic (it is the map the
+    /// racing rehome re-validates against), so nothing hinges on the two being
+    /// retired under one lock.
+    ///
+    /// Also frees the session's `external_id` for reuse: if the taken refs
+    /// carried one, its `create_idempotency` entry is removed too — but only
+    /// if that entry still points at *this* session, so a concurrent create
+    /// that already reused the freed `external_id` for a fresh session (a
+    /// legitimate rematch racing this close) is never evicted by a close that
+    /// started before it.
+    pub fn take_session_membership(&self, tenant: &TenantId, session: SessionId) -> Vec<RelayId> {
+        let key = (tenant.clone(), session);
+        let taken = self.session_relays.lock().remove(&key).unwrap_or_default();
+        let refs = self.session_refs.lock().remove(&key);
+        if let Some(refs) = &refs {
+            self.closed_evidence_assignments
+                .lock()
+                .retain_session(tenant, session, refs);
+        }
+        if let Some(external_id) = refs.and_then(|refs| refs.external_id) {
+            let idem_key = (tenant.clone(), external_id);
+            let mut idempotency = self.create_idempotency.lock();
+            if idempotency
+                .get(&idem_key)
+                .is_some_and(|cached| cached.response.session == session)
+            {
+                idempotency.remove(&idem_key);
+            }
+        }
+        taken
+    }
+
+    /// Retires every trace of a session that is gone, in the one order that is
+    /// safe, and returns the serving relays it took (the set whose descriptors it
+    /// dropped). Both close paths — the all-relays-closed terminal close and the
+    /// idle webhook-only reap — run exactly this, so neither can drift from the
+    /// other or leave a map behind.
+    ///
+    /// The steps, in order:
+    ///
+    /// 1. Retire the session's pending reap directives, so none is replayed to a
+    ///    relay that reconnects after this. A directive already delivered stays
+    ///    applied — a closed link does not reopen.
+    /// 2. **Take** (remove-and-return) the session's relay membership, atomically
+    ///    with the serving-set snapshot.
+    /// 3. Drop each taken relay's descriptor for the session.
+    /// 4. Clear the recorded re-home decisions.
+    /// 5. Drop the session's re-home rate-limit bucket.
+    ///
+    /// **Take membership before clearing descriptors or recorded rehomes.**
+    /// Ordering matters against a concurrent
+    /// [`rehome`](fn@crate::session::rehome), which re-validates membership under
+    /// the same `session_relays` lock the take acquires:
+    ///
+    /// - Once the membership is gone (after the take), any racing rehome fails its
+    ///   under-lock re-validation: it can neither push a descriptor nor record a
+    ///   rehome, so there is nothing of its left to clean up.
+    /// - A rehome that completed *before* the take had already added its target
+    ///   relay to the membership, so that relay is in the taken set — the
+    ///   descriptor removal therefore covers the resumed descriptor it pushed, and
+    ///   the rehome clear (run after the take) drops the idempotency entry it
+    ///   recorded.
+    ///
+    /// Every interleaving is thus covered. Removing the descriptor also stops a
+    /// relay reconnecting after the close from being re-synced the dead session's
+    /// stale descriptor and re-applying it — the relay-side reconciler only ends
+    /// sessions ABSENT from the pushed set, so a present-but-dead descriptor would
+    /// otherwise resurrect the session on that relay. Retiring the membership is
+    /// also what makes every subsequent re-home ask honestly answer `Unavailable`
+    /// (the empty serving set trips `session::rehome`'s guard), and dropping the
+    /// rate-limit bucket keeps that map bounded by live sessions.
+    ///
+    /// A session with no recorded membership — one this coordinator lifetime never
+    /// created, so only a webhook-only state ever existed for it — retires
+    /// harmlessly: the take returns an empty set, the descriptor loop is empty, and
+    /// the remaining steps are no-ops.
+    pub fn retire_session(&self, tenant: &TenantId, session: SessionId) -> Vec<RelayId> {
+        self.reaps.retire(tenant, session);
+        let serving = self.take_session_membership(tenant, session);
+        for relay_id in &serving {
+            self.descriptors.remove(*relay_id, tenant, session);
+        }
+        self.forget_rehomes(tenant, session);
+        self.rehome_limiter.forget(tenant, session);
+        serving
+    }
+
+    /// Forgets every per-relay shell this setup holds for `relay`: its descriptor
+    /// outbox, its reap outbox, its load-state attestation channel, and the
+    /// registry's remembered process identity for the id.
+    ///
+    /// Reserved for a relay id that has been **permanently** retired — one the
+    /// ledger has tombstoned, so it can never enroll again. A relay that merely
+    /// lost its connection may legitimately reconnect under the same id and must
+    /// keep its state. Without this the per-relay maps grow one shell per relay id
+    /// for the coordinator's entire uptime — every launched task mints a fresh id,
+    /// so a long-running coordinator under steady scale-to-zero churn accumulates a
+    /// shell per task ever launched, and session cleanup that scans every relay's
+    /// state pays for all of that history on every session close.
+    ///
+    /// Presence is deliberately not cleared here: a presence entry is scoped to the
+    /// relay's control-connection generation and is dropped when that connection
+    /// ends, which necessarily precedes the id's retirement.
+    pub fn forget_relay(&self, relay: RelayId) {
+        self.descriptors.forget(relay);
+        self.reaps.forget(relay);
+        self.attest.forget(relay);
+        crate::registry::forget_boot_id(&self.registry, relay);
+    }
+
+    /// The per-session re-home rate limiter, so the api handler can charge a token
+    /// and the lifecycle can drop a closed session's bucket.
+    pub fn rehome_limiter(&self) -> &RehomeLimiter {
+        &self.rehome_limiter
+    }
+
+    /// The per-tenant load-state read rate limiter, so the api handler can charge a
+    /// token and answer a refused read with the interval to retry after.
+    pub fn load_state_limiter(&self) -> &LoadStateLimiter {
+        &self.load_state_limiter
+    }
+
+    /// Replaces the load-state read limiter, so a test can inject a smaller burst or
+    /// shorter refill than production's without waiting real seconds.
+    #[must_use]
+    pub fn with_load_state_limiter(mut self, limiter: LoadStateLimiter) -> Self {
+        self.load_state_limiter = limiter;
+        self
+    }
+
+    /// The per-tenant cached observation limiter, separate from relay snapshot reads.
+    pub fn evidence_limiter(&self) -> &EndpointLimiter<TenantId> {
+        &self.evidence_limiter
+    }
+
+    /// Replaces the cached observation limiter for callers with a different budget.
+    #[must_use]
+    pub fn with_evidence_limiter(mut self, limiter: EndpointLimiter<TenantId>) -> Self {
+        self.evidence_limiter = limiter;
+        self
+    }
+
+    /// Locks the assignment lock — the outermost lock that linearizes an
+    /// assignment's pick→commit span against a relay's drain mark (see the field
+    /// docs). The coordinator's control connection acquires it around
+    /// [`registry::mark_draining`](crate::registry::mark_draining) so a drain mark
+    /// lands wholly before or wholly after any in-flight `create_session`/`rehome`.
+    /// Returns a guard held only across await-free sync work.
+    pub fn lock_assignment(&self) -> parking_lot::MutexGuard<'_, ()> {
+        self.assignment_lock.lock()
+    }
+
+    /// Whether anyone holds the assignment lock right now — for a test that must
+    /// prove some read happens inside the lock's hold rather than race against it.
+    #[cfg(test)]
+    pub(crate) fn assignment_is_locked(&self) -> bool {
+        self.assignment_lock.is_locked()
+    }
+}

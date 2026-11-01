@@ -1,0 +1,377 @@
+//! Session-scoped lifecycle steps a slot's arrival or a directive triggers:
+//! deciding when the session-start directive goes out, announcing a fresh slot's
+//! presence, signalling slots to close, and the two teardowns for admissions that
+//! were refused or never claimed by a descriptor. The pushes themselves live in
+//! [`fan_out`].
+
+use super::*;
+
+use crate::consensus;
+
+use std::sync::atomic::Ordering;
+
+/// Delivers the session-start directive session-wide: fans it to every local
+/// slot ([`fan_out_session_start`]) and broadcasts it across the mesh so every
+/// peer relay fans it to its own local slots ([`crate::mesh::fan_out_session_start`]).
+/// The one call the authority makes when full slot presence is reached, and the
+/// same one an authority-churn re-evaluation makes. Both legs carry the maker's
+/// stored initial buffer depth (the authority sized it at the coverage latch),
+/// so every local slot and every peer relay learns the same stamped depth.
+pub(crate) fn deliver_session_start(
+    sessions: &Sessions,
+    decision_makers: &consensus::DecisionMakers,
+    mesh_links: &crate::mesh::MeshLinks,
+    key: &SessionKey,
+) {
+    let initial_buffer_turns = decision_makers.initial_buffer_turns(key);
+    fan_out_session_start(sessions, key, initial_buffer_turns);
+    crate::mesh::fan_out_session_start(mesh_links, key, initial_buffer_turns);
+}
+
+/// Does what a relay owes a session after an authority change (a descriptor push or
+/// a presence change that may have promoted it). Two things a promotion can leave
+/// undone:
+///
+/// - The session start: a newly promoted authority that now covers the expected
+///   set fires the start the previous authority never got to, session-wide.
+/// - A rollback session's clock: this relay's copy goes to every peer relay at
+///   once, so a newly promoted authority hears every stop the others know of
+///   before the next heartbeat would bring it.
+///
+/// The start is a no-op on a relay that isn't the authority and on an already
+/// started session; the clock, on an unanchored one. A caller can't always tell a
+/// promotion from a push that changed nothing, and needn't: re-announcing an
+/// unchanged clock costs a frame per peer, and merging one is idempotent.
+pub fn after_authority_change(
+    sessions: &Sessions,
+    decision_makers: &consensus::DecisionMakers,
+    mesh_links: &crate::mesh::MeshLinks,
+    key: &SessionKey,
+) {
+    if decision_makers.reevaluate_start(key) {
+        deliver_session_start(sessions, decision_makers, mesh_links, key);
+    }
+    if let Some(clock) = decision_makers.session_clock_frame(key) {
+        crate::mesh::fan_out_session_clock(mesh_links, key, clock);
+    }
+}
+
+/// Announces a freshly registered slot's presence and, if the session has already
+/// started, re-delivers the start directive to it.
+///
+/// Broadcasts a `SlotPresent` to the session's mesh peers, records the slot into
+/// the session's live-slot set, and — when that completes the authority's expected
+/// set — delivers the `SessionStart` directive session-wide (every local slot plus
+/// every peer relay). If the session already started before this slot arrived (a
+/// late or reconnecting slot), pushes `SessionStart` straight down this slot's own
+/// control stream so it is not left waiting. A session run without descriptors (no
+/// maker, no expected set) does nothing here.
+pub fn announce_slot_present(
+    sessions: &Sessions,
+    decision_makers: &consensus::DecisionMakers,
+    mesh_links: &crate::mesh::MeshLinks,
+    key: &SessionKey,
+    slot: SlotId,
+) {
+    // Tell every peer relay this slot is here, so the authority (wherever it is)
+    // can accumulate it toward the expected set.
+    crate::mesh::fan_out_slot_present(mesh_links, key, slot);
+    // Record it locally. On the authority, completing the expected set fires the
+    // directive session-wide; otherwise, if the session already started, this
+    // late slot still needs the directive pushed to it directly.
+    if decision_makers.note_slot_present(key, slot) {
+        deliver_session_start(sessions, decision_makers, mesh_links, key);
+    } else if decision_makers.is_started(key) {
+        let initial_buffer_turns = decision_makers.initial_buffer_turns(key);
+        deliver_session_start_to_slot(sessions, key, slot, initial_buffer_turns);
+    }
+}
+
+/// Fires the shutdown signal for each of `slots` in the `key` routing group, so
+/// each named slot's link task closes its connection and leaves. This serves both
+/// coordinator reaps and a final mesh leave that outran the subject's local link.
+/// A slot this relay does not currently hold (never homed it, or already departed)
+/// is simply absent from the roster and skipped. The closed link then flows through
+/// the ordinary link-death path (a synced leave, a departure notice), making either
+/// terminal path self-resolving.
+///
+/// Signals rather than yanking the roster entry, exactly like `fan_out`'s lagging-
+/// peer path: the slot stays occupied until its own task acts on the signal and
+/// deregisters itself, so no replacement can register a second sender in the interim.
+pub fn close_slots(sessions: &Sessions, key: &SessionKey, slots: &[SlotId]) {
+    signal_close(
+        sessions,
+        key,
+        slots,
+        SlotCloseReason::Revoked,
+        "closing slot link after terminal directive",
+    );
+}
+
+/// Closes a slot whose bounded turn retention overflowed. Its lost turn cannot
+/// be recovered by a same-relay resume; this is not an administrative revocation.
+pub(crate) fn close_slots_for_overflow(sessions: &Sessions, key: &SessionKey, slots: &[SlotId]) {
+    signal_close(
+        sessions,
+        key,
+        slots,
+        SlotCloseReason::LaggingSlot,
+        "closing slot link after turn retention overflow",
+    );
+}
+
+/// Evicts `slot`'s link in the `key` routing group, if it is still the
+/// `connection_epoch` generation, because its client stopped producing turns
+/// while the session advanced past it and its link kept receiving frames (see
+/// [`crate::routing::run_silence_watch`]). The stamped reason makes the link task
+/// mark the eviction — refusing every later dial — and close with
+/// [`close_codes::SILENT_SLOT`]: a client whose game thread hung has a perfectly
+/// healthy link, and its log should say so. The task marks it only if this
+/// signal is what ends its link, so a link already ending as a disconnect stays
+/// one.
+pub fn close_silent_slot_link(
+    sessions: &Sessions,
+    key: &SessionKey,
+    slot: SlotId,
+    connection_epoch: u64,
+) {
+    signal_close_generation(
+        sessions,
+        key,
+        slot,
+        connection_epoch,
+        SlotCloseReason::SilentSlot,
+        "closing slot link after silent-slot eviction",
+    );
+}
+
+/// Ends `slot`'s link in the `key` routing group, if it is still the
+/// `connection_epoch` generation, as an ordinary lost connection: its turns
+/// stopped and it has received nothing past the transport's idle timeout, which
+/// has not closed it yet (see [`crate::routing::run_silence_watch`]). Nothing is
+/// marked, so the client may resume from the drop hold its disconnect leaves.
+pub fn close_quiet_slot_link(
+    sessions: &Sessions,
+    key: &SessionKey,
+    slot: SlotId,
+    connection_epoch: u64,
+) {
+    signal_close_generation(
+        sessions,
+        key,
+        slot,
+        connection_epoch,
+        SlotCloseReason::QuietLink,
+        "closing silent slot link that outlasted the transport idle timeout",
+    );
+}
+
+/// [`signal_close`] for one slot, and only while its seat still belongs to
+/// `connection_epoch`: a verdict read off one connection must never end the
+/// connection that replaced it. The generation is checked under the same
+/// roster lock the signal is fired under, so no replacement can take the seat
+/// in between.
+fn signal_close_generation(
+    sessions: &Sessions,
+    key: &SessionKey,
+    slot: SlotId,
+    connection_epoch: u64,
+    reason: SlotCloseReason,
+    message: &'static str,
+) {
+    signal_close_matching(
+        sessions,
+        key,
+        &[slot],
+        Some(connection_epoch),
+        reason,
+        message,
+    );
+}
+
+/// Closes the links of `slots` in the `key` routing group because a rollback
+/// verdict named them (see [`crate::routing::run_state_hash_watch`]). Identical
+/// to [`close_slots`] but for the reason it stamps, which makes the closed
+/// connection carry [`close_codes::DESYNC_EVICTED`]: the client's link was
+/// healthy, and its log should say its game state was the problem.
+pub fn close_slots_for_desync(sessions: &Sessions, key: &SessionKey, slots: &[SlotId]) {
+    signal_close(
+        sessions,
+        key,
+        slots,
+        SlotCloseReason::DesyncEvicted,
+        "closing slot link after desync eviction",
+    );
+}
+
+/// Closes a home slot whose pre-start lobby command violated the descriptor
+/// policy, preserving the specific 0x0F close reason even when the violation
+/// is found while a provisional journal drains after the client has dialed.
+pub fn close_slots_for_lobby_violation(sessions: &Sessions, key: &SessionKey, slots: &[SlotId]) {
+    signal_close(
+        sessions,
+        key,
+        slots,
+        SlotCloseReason::LobbyViolation,
+        "closing slot link after lobby-policy violation",
+    );
+}
+
+/// Stamps `reason` on each named slot's roster entry and fires its shutdown
+/// signal, logging `message`. Administrative cancellation and normal departure
+/// take precedence over technical failures. The stamp lands before the signal,
+/// so the woken task sees the selected cause.
+fn signal_close(
+    sessions: &Sessions,
+    key: &SessionKey,
+    slots: &[SlotId],
+    reason: SlotCloseReason,
+    message: &'static str,
+) {
+    signal_close_matching(sessions, key, slots, None, reason, message);
+}
+
+/// [`signal_close`], skipping any seat whose connection is not
+/// `connection_epoch` when one is given.
+fn signal_close_matching(
+    sessions: &Sessions,
+    key: &SessionKey,
+    slots: &[SlotId],
+    connection_epoch: Option<u64>,
+    reason: SlotCloseReason,
+    message: &'static str,
+) {
+    let roster = sessions.lock();
+    let Some(group) = roster.get(key) else {
+        return;
+    };
+    for slot in slots {
+        let entry = group
+            .get(slot)
+            .filter(|entry| connection_epoch.is_none_or(|epoch| entry.connection_epoch == epoch));
+        if let Some(entry) = entry {
+            tracing::info!(
+                tenant = key.tenant.as_ref(),
+                session = key.session.0,
+                slot = slot.0,
+                "{message}",
+            );
+            let previous = SlotCloseReason::from_raw(entry.close_reason.load(Ordering::Acquire));
+            // A departure or administrative cancellation cannot become a client
+            // failure just because an eviction verdict arrives before teardown.
+            if !matches!(
+                previous,
+                SlotCloseReason::Revoked | SlotCloseReason::SlotDeparted
+            ) || matches!(
+                reason,
+                SlotCloseReason::Revoked | SlotCloseReason::SlotDeparted
+            ) {
+                entry.close_reason.store(reason as u8, Ordering::Release);
+            }
+            entry.shutdown.notify_one();
+        }
+    }
+}
+
+/// Light teardown for an admission the relay REFUSED after its registration
+/// attempt had already created per-session scaffolding — the ingress gate on
+/// first touch, and possibly an empty journal reservation. With no other
+/// live slot, no maker, and nothing journaled or sealed, that scaffolding is
+/// discarded; otherwise everything is left exactly as found. Without this,
+/// every distinct valid session refused past the journal's session ceiling
+/// would leave a live gate (and its map entry) behind forever — an
+/// unbounded-memory vector one registry over from the one the ceiling
+/// closes. Deliberately NOT the full emptied-session close: nothing was
+/// served, so there is nothing to report, announce, or flush.
+///
+/// The ownership checks and the removal are ONE exclusive gate section
+/// ([`SessionGates::discard_if`](crate::session::gate::SessionGates)), which
+/// is what makes them trustworthy. A concurrent dial commits its roster seat
+/// and its journal reservation inside ingress sections, so under the write
+/// side either it already registered (the roster check sees the seat and
+/// refuses the discard) or it is still waiting on the gate and will retry
+/// onto a fresh one after the rotation — its admission then builds fresh
+/// state that this cleanup, already finished, can never erase. A retirement
+/// orders against the same write side: one that landed first leaves a
+/// tombstone the discard refuses to touch, and one that arrives during the
+/// rotation re-stamps the registry's current entry rather than the removed
+/// orphan. Checking these signals over separate locks — the shape this
+/// replaced — let a refusal erase a concurrent admission's reservation after
+/// its `HANDSHAKE_OK`, or delete a tombstone installed between the check and
+/// the removal.
+///
+/// The journal check remains [`ProvisionalTurnPen::discard_if_empty`]
+/// (entries, an active drain, or a seal refuse it), so an emptied journal
+/// reservation is dropped in the same breath as the gate.
+///
+/// [`ProvisionalTurnPen::discard_if_empty`]: crate::session::provisional_turns::ProvisionalTurnPen::discard_if_empty
+pub(crate) fn abandon_refused_admission(
+    sessions: &Sessions,
+    mesh: &crate::mesh::MeshState,
+    key: &SessionKey,
+) {
+    let _ = mesh.session.gates.discard_if(key, || {
+        if sessions.lock().contains_key(key) {
+            return false;
+        }
+        if mesh.session.decision_makers.maker_exists(key) {
+            return false;
+        }
+        if !mesh.session.provisional_turns.discard_if_empty(key) {
+            return false;
+        }
+        mesh.session.provisional.clear(key);
+        true
+    });
+}
+
+/// Fires the provisional-reap signal for each of `key`'s currently-registered
+/// slots, closing every connection with [`close_codes::PROVISIONAL_EXPIRED`] -- the
+/// bounded-admission sweep's teardown when no descriptor named a provisionally
+/// admitted session before its deadline (see [`crate::session::provisional`]). A
+/// session absent from the roster (already gone) is simply a no-op.
+///
+/// Signals rather than yanking the roster entry, exactly like [`close_slots`]:
+/// each slot's own link task closes its connection and deregisters itself, so
+/// no replacement can register a second sender in the interim.
+pub(crate) fn reap_provisional(sessions: &Sessions, key: &SessionKey) {
+    let roster = sessions.lock();
+    let Some(group) = roster.get(key) else {
+        return;
+    };
+    for entry in group.values() {
+        entry
+            .close_reason
+            .store(SlotCloseReason::Revoked as u8, Ordering::Release);
+        entry.provisional_reap.notify_one();
+    }
+}
+
+/// Records one completed attempt to write a leave to a local client's control
+/// stream. A successful write only proves local QUIC acceptance; client receipt
+/// and native application are separate observations.
+pub(super) fn record_leave_control_write(
+    decision_makers: &consensus::DecisionMakers,
+    key: &SessionKey,
+    recipient: SlotId,
+    connection_epoch: u64,
+    leave: &LeaveDirective,
+    replayed: bool,
+    succeeded: bool,
+) {
+    decision_makers.flight_recorder().record(
+        key,
+        crate::observability::flight_recorder::FlightEvent::LeaveControlWrite {
+            recipient: recipient.0,
+            connection_epoch,
+            slot: leave.slot as u8,
+            reason: leave.reason,
+            apply_frame: leave.apply_at_frame,
+            leave_seq: leave.leave_seq,
+            finalized: leave.finalized,
+            final_turn_count: leave.final_turn_count,
+            replayed,
+            succeeded,
+        },
+    );
+}

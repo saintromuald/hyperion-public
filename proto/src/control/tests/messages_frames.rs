@@ -1,0 +1,303 @@
+use super::*;
+
+#[test]
+fn coordinator_to_relay_descriptors_roundtrips_json() {
+    let message = CoordinatorToRelay::Descriptors {
+        ack_id: None,
+        staged_at_unix_ms: None,
+        descriptors: vec![a_descriptor()],
+    };
+    let json = serde_json::to_string(&message).unwrap();
+    // The tagged frame is self-describing: a `type` discriminator names the
+    // variant so the channel can grow new message kinds.
+    assert!(json.contains("\"type\":\"descriptors\""));
+    let back: CoordinatorToRelay = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, message);
+}
+
+#[test]
+fn coordinator_to_relay_descriptors_staging_stamp_roundtrips_and_defaults_absent() {
+    // A stamped set round-trips carrying the millisecond stamp.
+    let stamped = CoordinatorToRelay::Descriptors {
+        ack_id: None,
+        descriptors: vec![],
+        staged_at_unix_ms: Some(1_700_000_000_123),
+    };
+    let json = serde_json::to_string(&stamped).unwrap();
+    assert!(json.contains("\"staged_at_unix_ms\":1700000000123"));
+    assert_eq!(
+        serde_json::from_str::<CoordinatorToRelay>(&json).unwrap(),
+        stamped
+    );
+
+    // An absent stamp stays off the wire (byte-identical to the pre-field form)
+    // and round-trips back to `None`.
+    let unstamped = CoordinatorToRelay::Descriptors {
+        ack_id: None,
+        descriptors: vec![],
+        staged_at_unix_ms: None,
+    };
+    let json = serde_json::to_string(&unstamped).unwrap();
+    assert!(!json.contains("staged_at_unix_ms"));
+    assert_eq!(
+        serde_json::from_str::<CoordinatorToRelay>(&json).unwrap(),
+        unstamped
+    );
+
+    // An old coordinator's frame — one that predates the field entirely —
+    // parses with the stamp absent rather than erroring, so a new relay reads
+    // it as "no lag sample".
+    let old = r#"{"type":"descriptors","descriptors":[]}"#;
+    assert_eq!(
+        serde_json::from_str::<CoordinatorToRelay>(old).unwrap(),
+        unstamped,
+    );
+}
+
+#[test]
+fn coordinator_to_relay_descriptor_delta_roundtrips_json() {
+    // A steady-state delta carrying an upsert, a removal, and the staging stamp
+    // round-trips through its tagged frame intact.
+    let message = CoordinatorToRelay::DescriptorDelta {
+        ack_id: None,
+        staged_at_unix_ms: Some(1_700_000_000_123),
+        upserts: vec![a_descriptor()],
+        removals: vec![DescriptorKey {
+            tenant: TenantId("sb-staging".to_owned()),
+            session: SessionId(7),
+        }],
+    };
+    let json = serde_json::to_string(&message).unwrap();
+    assert!(json.contains("\"type\":\"descriptor_delta\""));
+    assert!(json.contains("\"staged_at_unix_ms\":1700000000123"));
+    let back: CoordinatorToRelay = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, message);
+}
+
+#[test]
+fn coordinator_to_relay_descriptor_delta_without_stamp_omits_empty_fields_and_defaults() {
+    // A removal-only delta with no stamp keeps the stamp and the (empty) upserts
+    // off the wire, and round-trips back to the same value.
+    let removal_only = CoordinatorToRelay::DescriptorDelta {
+        ack_id: None,
+        staged_at_unix_ms: None,
+        upserts: vec![],
+        removals: vec![DescriptorKey {
+            tenant: TenantId("sb-staging".to_owned()),
+            session: SessionId(7),
+        }],
+    };
+    let json = serde_json::to_string(&removal_only).unwrap();
+    assert!(!json.contains("staged_at_unix_ms"));
+    assert!(!json.contains("upserts"));
+    assert_eq!(
+        serde_json::from_str::<CoordinatorToRelay>(&json).unwrap(),
+        removal_only,
+    );
+
+    // A bare delta naming only its type — every list field defaulting — parses
+    // rather than erroring, so a minimal frame stays readable.
+    let bare = r#"{"type":"descriptor_delta"}"#;
+    assert_eq!(
+        serde_json::from_str::<CoordinatorToRelay>(bare).unwrap(),
+        CoordinatorToRelay::DescriptorDelta {
+            ack_id: None,
+            staged_at_unix_ms: None,
+            upserts: vec![],
+            removals: vec![],
+        },
+    );
+}
+
+#[test]
+fn coordinator_to_relay_unknown_type_decodes_to_unknown_not_an_error() {
+    // Forward compatibility: a message kind a newer coordinator added, which
+    // this build predates, must decode to `Unknown` rather than failing — so
+    // an older relay skips it instead of tearing down its control connection.
+    let json = r#"{"type":"some_future_message","extra":123}"#;
+    let decoded: CoordinatorToRelay = serde_json::from_str(json).unwrap();
+    assert_eq!(decoded, CoordinatorToRelay::Unknown);
+}
+
+#[test]
+fn coordinator_to_relay_close_slot_roundtrips_json() {
+    let message = CoordinatorToRelay::CloseSlot {
+        tenant: TenantId("sb-staging".to_owned()),
+        session: SessionId(42),
+        slots: vec![SlotId(1), SlotId(3)],
+    };
+    let json = serde_json::to_string(&message).unwrap();
+    assert!(json.contains("\"type\":\"close_slot\""));
+    let back: CoordinatorToRelay = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, message);
+}
+
+#[test]
+fn coordinator_to_relay_mesh_peers_roundtrips_json() {
+    let message = CoordinatorToRelay::MeshPeers {
+        peers: vec![
+            MeshPeerIdentity {
+                relay_id: RelayId(1),
+                cert_sha256: [0x11; 32],
+            },
+            MeshPeerIdentity {
+                relay_id: RelayId(2),
+                cert_sha256: [0x22; 32],
+            },
+        ],
+    };
+    let json = serde_json::to_string(&message).unwrap();
+    assert!(json.contains("\"type\":\"mesh_peers\""));
+    let back: CoordinatorToRelay = serde_json::from_str(&json).unwrap();
+    // Full equality covers the fingerprints the acceptor pins on.
+    assert_eq!(back, message);
+}
+
+#[test]
+fn coordinator_to_relay_tenant_keys_roundtrips_json() {
+    let message = CoordinatorToRelay::TenantKeys {
+        keys: vec![
+            TenantVerifyingKey {
+                kid: KeyId("staging-key-1".to_owned()),
+                tenant: TenantId("sb-staging".to_owned()),
+                verifying_key: vec![0x11; PUBLIC_KEY_LEN],
+            },
+            TenantVerifyingKey {
+                kid: KeyId("dev-key-1".to_owned()),
+                tenant: TenantId("sb-dev".to_owned()),
+                verifying_key: vec![0x22; PUBLIC_KEY_LEN],
+            },
+        ],
+    };
+    let json = serde_json::to_string(&message).unwrap();
+    assert!(json.contains("\"type\":\"tenant_keys\""));
+    let back: CoordinatorToRelay = serde_json::from_str(&json).unwrap();
+    // Full equality covers the verifying-key bytes the relay checks tokens
+    // against.
+    assert_eq!(back, message);
+}
+
+#[test]
+fn coordinator_to_relay_identity_challenge_roundtrips_json() {
+    let message = CoordinatorToRelay::IdentityChallenge { nonce: [0x7A; 32] };
+    let json = serde_json::to_string(&message).unwrap();
+    assert!(json.contains("\"type\":\"identity_challenge\""));
+    let back: CoordinatorToRelay = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, message);
+}
+
+#[test]
+fn relay_to_coordinator_hello_roundtrips_json() {
+    let message = RelayToCoordinator::Hello(RelayHello::new(
+        RelayId(3),
+        SocketAddr::from((Ipv4Addr::LOCALHOST, 14900)),
+        ProtocolVersion::CURRENT,
+        vec![0xDE, 0xAD, 0xBE, 0xEF],
+    ));
+    let json = serde_json::to_string(&message).unwrap();
+    // The Hello's fields ride alongside the tag (internally tagged).
+    assert!(json.contains("\"type\":\"hello\""));
+    assert!(json.contains("\"relay_id\""));
+    let back: RelayToCoordinator = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, message);
+}
+
+#[test]
+fn relay_to_coordinator_identity_proof_roundtrips_json() {
+    let message = RelayToCoordinator::IdentityProof {
+        signature: vec![0x30, 0x45, 0x02, 0x21, 0x00],
+    };
+    let json = serde_json::to_string(&message).unwrap();
+    assert!(json.contains("\"type\":\"identity_proof\""));
+    let back: RelayToCoordinator = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, message);
+}
+
+#[test]
+fn relay_to_coordinator_draining_roundtrips_json() {
+    let message = RelayToCoordinator::Draining;
+    let json = serde_json::to_string(&message).unwrap();
+    // A payload-free drain request: just the tag, like a heartbeat.
+    assert_eq!(json, r#"{"type":"draining"}"#);
+    let back: RelayToCoordinator = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, message);
+}
+
+#[test]
+fn coordinator_to_relay_drain_ack_roundtrips_json() {
+    let message = CoordinatorToRelay::DrainAck;
+    let json = serde_json::to_string(&message).unwrap();
+    // A payload-free acknowledgement: just the tag.
+    assert_eq!(json, r#"{"type":"drain_ack"}"#);
+    let back: CoordinatorToRelay = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, message);
+}
+
+#[test]
+fn relay_to_coordinator_unknown_type_decodes_to_unknown_not_an_error() {
+    // The up direction is forward-compatible too: a frame a newer relay sends
+    // that an older coordinator predates decodes to `Unknown`, not an error.
+    let json = r#"{"type":"future_up_frame","x":1}"#;
+    let decoded: RelayToCoordinator = serde_json::from_str(json).unwrap();
+    assert_eq!(decoded, RelayToCoordinator::Unknown);
+}
+
+#[test]
+fn relay_to_coordinator_session_closed_roundtrips_json() {
+    let message = RelayToCoordinator::SessionClosed {
+        tenant: TenantId("sb-staging".to_owned()),
+        session: SessionId(42),
+    };
+    let json = serde_json::to_string(&message).unwrap();
+    assert!(json.contains("\"type\":\"session_closed\""));
+    let back: RelayToCoordinator = serde_json::from_str(&json).unwrap();
+    assert_eq!(back, message);
+}
+
+#[test]
+fn descriptor_acknowledgements_are_optional_and_roundtrip() {
+    for (kind, mut frame) in [
+        (
+            "descriptors",
+            serde_json::json!({"type": "descriptors", "descriptors": []}),
+        ),
+        (
+            "descriptor_delta",
+            serde_json::json!({"type": "descriptor_delta"}),
+        ),
+    ] {
+        let legacy: CoordinatorToRelay = serde_json::from_value(frame.clone()).unwrap();
+        assert!(
+            serde_json::to_value(&legacy)
+                .unwrap()
+                .get("ack_id")
+                .is_none()
+        );
+        frame["ack_id"] = serde_json::json!(42);
+        let requested: CoordinatorToRelay = serde_json::from_value(frame).unwrap();
+        assert!(matches!(
+            requested,
+            CoordinatorToRelay::Descriptors {
+                ack_id: Some(42),
+                ..
+            } | CoordinatorToRelay::DescriptorDelta {
+                ack_id: Some(42),
+                ..
+            }
+        ));
+        let serialized = serde_json::to_value(&requested).unwrap();
+        assert_eq!(serialized["type"], kind);
+        assert_eq!(serialized["ack_id"], 42);
+        assert_eq!(
+            serde_json::from_value::<CoordinatorToRelay>(serialized).unwrap(),
+            requested
+        );
+    }
+    let ack = RelayToCoordinator::DescriptorsApplied { ack_id: 42 };
+    let json = serde_json::to_string(&ack).unwrap();
+    assert_eq!(json, r#"{"type":"descriptors_applied","ack_id":42}"#);
+    assert_eq!(
+        serde_json::from_str::<RelayToCoordinator>(&json).unwrap(),
+        ack
+    );
+}

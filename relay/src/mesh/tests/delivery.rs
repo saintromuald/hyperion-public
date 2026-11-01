@@ -1,0 +1,473 @@
+//! The shared local-delivery path: the replay ring's bounds, the region-label
+//! release gate, and the consensus feeds a duplicate turn must not disturb.
+
+use super::*;
+
+/// Builds a single-command turn payload carrying one `0x37` sync command
+/// (`ring` = the ordinal mod 16), plus a made-up `game_frame_count`.
+fn sync_payload(seq: u64, slot: u8, ordinal: u8, value: [u8; 5]) -> Payload {
+    let kind = if ordinal.is_multiple_of(2) { 1 } else { 2 };
+    let mut commands = vec![0x37u8, ((ordinal % 16) << 4) | kind];
+    commands.extend_from_slice(&value);
+    Payload {
+        seq,
+        slot: u32::from(slot),
+        commands: commands.into(),
+        game_frame_count: Some(1000 + u32::from(ordinal)),
+        ..Default::default()
+    }
+}
+
+/// The replay ring's bounds must follow the session's actual shape through
+/// the production path: `deliver_turn_to_locals` reads the decision-maker's
+/// slot count and sizes the ring with it, so a 2-slot session's ring caps
+/// at the 2-slot bound rather than the largest-game bound. Exercised
+/// through the choke point itself (not `TurnRing` in isolation) to prove
+/// the count actually arrives there.
+#[test]
+fn the_replay_ring_is_bounded_by_the_sessions_actual_slot_count() {
+    use crate::consensus::{self, Authority};
+    use rally_point_proto::control::BufferBounds;
+
+    let sessions = routing::Sessions::default();
+    let mesh = MeshState::default();
+    let decision_makers = mesh.session.decision_makers.clone();
+    let key = control_key();
+    let _ = decision_makers.sync_maker(
+        &key,
+        consensus::MakerSync {
+            expected_slots: [SlotId(0), SlotId(1)].into(),
+            ..consensus::MakerSync::new(BufferBounds::new(1, 6).unwrap(), Authority::SelfRelay)
+        },
+    );
+    decision_makers.mark_started(&key);
+
+    // Overfill past the 2-slot count bound (empty commands, so the byte
+    // bound never binds): the ring holds exactly the 2-slot cap, proving
+    // it was not sized for the largest possible game.
+    let cap = crate::session::turn_ring::max_turns(2);
+    for seq in 0..(cap + 5) as u64 {
+        deliver_turn_to_locals(
+            &sessions,
+            &mesh,
+            &key,
+            SlotId(0),
+            Payload {
+                seq,
+                slot: 0,
+                ..Default::default()
+            },
+            crate::consensus::delivery::DeliveryHome::Local,
+        );
+    }
+    assert_eq!(mesh.session.turn_ring.len(&key), cap);
+    assert!(
+        cap < crate::session::turn_ring::max_turns(crate::session::turn_ring::MAX_GAME_SLOTS),
+        "the 2-slot bound is genuinely tighter than the full-game bound",
+    );
+}
+
+/// The registries the production turn path runs against, wired to a maker
+/// whose region-label release delay is `region_delay` — `Duration::ZERO` for a
+/// gate that is open the instant the session starts, a long delay for one that
+/// never opens during the test. Returns them plus the label map the descriptor
+/// recorded.
+fn delivery_relay(
+    region_delay: std::time::Duration,
+) -> (
+    routing::Sessions,
+    MeshState,
+    SessionKey,
+    Vec<rally_point_proto::messages::RegionLabel>,
+) {
+    use crate::consensus::{self, Authority};
+    use rally_point_proto::control::BufferBounds;
+    use rally_point_proto::messages::RegionLabel;
+
+    let sessions = routing::Sessions::default();
+    let mesh = MeshState::new(crate::session::SessionState::with_tunables(
+        crate::session::Tunables {
+            region_release_delay: region_delay,
+            ..Default::default()
+        },
+    ));
+    let decision_makers = mesh.session.decision_makers.clone();
+    let key = control_key();
+    let _ = decision_makers.sync_maker(
+        &key,
+        consensus::MakerSync::new(BufferBounds::new(1, 6).unwrap(), Authority::SelfRelay),
+    );
+    let labels = vec![
+        RegionLabel {
+            relay_id: 1,
+            region: "us-east".to_owned(),
+        },
+        RegionLabel {
+            relay_id: 2,
+            region: "eu-central".to_owned(),
+        },
+    ];
+    assert_eq!(
+        decision_makers.set_region_labels(&key, labels.clone()),
+        None,
+        "a descriptor alone never releases the labels",
+    );
+    (sessions, mesh, key, labels)
+}
+
+/// The region-label release gate is evaluated on the production turn path, so
+/// this drives that path to prove: nothing reaches a client before the session
+/// starts, nothing reaches one before the release delay elapses (including
+/// when a turn forges an enormous frame), the map that does reach them is the
+/// descriptor's, and it is fanned out exactly once.
+///
+/// Two relays rather than a wait: the delay is injected, so a gate that is
+/// meant to stay shut gets one long enough never to open, and a gate that is
+/// meant to be open gets none at all.
+#[test]
+fn region_labels_reach_local_slots_only_once_the_release_delay_has_elapsed() {
+    let turn = |seq: u64, frame: u32| Payload {
+        seq,
+        slot: 0,
+        game_frame_count: Some(frame),
+        ..Default::default()
+    };
+
+    // A relay whose release delay outlasts the test: the gate never opens.
+    {
+        let (sessions, mesh, key, _labels) = delivery_relay(std::time::Duration::from_secs(3600));
+        let decision_makers = mesh.session.decision_makers.clone();
+        let (_reg0, mut inbox0) = routing::register(&sessions, &key, SlotId(0), 1).unwrap();
+        let (_reg1, mut inbox1) = routing::register(&sessions, &key, SlotId(1), 1).unwrap();
+        let deliver = |payload: Payload| {
+            deliver_turn_to_locals(
+                &sessions,
+                &mesh,
+                &key,
+                SlotId(0),
+                payload,
+                crate::consensus::delivery::DeliveryHome::Local,
+            );
+        };
+
+        // Turns flowing before the session has started: no clock to measure
+        // from, so nothing is released.
+        deliver(turn(0, 1));
+        assert_eq!(inbox0.try_recv_region_labels(), None);
+        assert_eq!(inbox1.try_recv_region_labels(), None);
+
+        // The session starts, but the delay has not elapsed — and a turn
+        // forging an enormous frame does not change that. The gate reads no
+        // part of a payload, so a claim a client controls cannot advance it.
+        decision_makers.mark_started(&key);
+        deliver(turn(1, u32::MAX));
+        assert_eq!(
+            inbox0.try_recv_region_labels(),
+            None,
+            "a forged game frame does not open the gate",
+        );
+        assert_eq!(inbox1.try_recv_region_labels(), None);
+    }
+
+    // A relay whose delay has elapsed by construction: the next delivered turn
+    // opens the gate and every local slot gets the descriptor's map, verbatim.
+    let (sessions, mesh, key, labels) = delivery_relay(std::time::Duration::ZERO);
+    let decision_makers = mesh.session.decision_makers.clone();
+    let (_reg0, mut inbox0) = routing::register(&sessions, &key, SlotId(0), 1).unwrap();
+    let (_reg1, mut inbox1) = routing::register(&sessions, &key, SlotId(1), 1).unwrap();
+    let deliver = |payload: Payload| {
+        deliver_turn_to_locals(
+            &sessions,
+            &mesh,
+            &key,
+            SlotId(0),
+            payload,
+            crate::consensus::delivery::DeliveryHome::Local,
+        );
+    };
+
+    decision_makers.mark_started(&key);
+    deliver(turn(2, 5));
+    assert_eq!(inbox0.try_recv_region_labels().as_ref(), Some(&labels));
+    assert_eq!(inbox1.try_recv_region_labels().as_ref(), Some(&labels));
+
+    // Play continues; the gate does not re-fire.
+    deliver(turn(3, 6));
+    assert_eq!(inbox0.try_recv_region_labels(), None);
+    assert_eq!(inbox1.try_recv_region_labels(), None);
+
+    // A slot registering after the release reads the map off the maker and is
+    // pushed it directly — the path a late or reconnecting slot's link task
+    // takes, so it is not left without labels every other member holds.
+    let (_reg2, mut inbox2) = routing::register(&sessions, &key, SlotId(2), 1).unwrap();
+    let late = decision_makers
+        .released_region_labels(&key)
+        .expect("the gate is open, so a late slot has labels to receive");
+    routing::deliver_region_labels_to_slot(&sessions, &key, SlotId(2), late);
+    assert_eq!(inbox2.try_recv_region_labels().as_ref(), Some(&labels));
+}
+
+/// The gate reads nothing out of the turn that triggers its evaluation, so a
+/// frameless turn drives it exactly like a framed one. This pins the gate's
+/// placement outside the frame-observation block: were it moved back inside,
+/// a session whose turns carried no frames would seal its labels forever.
+#[test]
+fn a_frameless_turn_drives_the_region_label_gate_like_any_other() {
+    let (sessions, mesh, key, labels) = delivery_relay(std::time::Duration::ZERO);
+    let decision_makers = mesh.session.decision_makers.clone();
+    let (_reg0, mut inbox0) = routing::register(&sessions, &key, SlotId(0), 1).unwrap();
+
+    decision_makers.mark_started(&key);
+
+    deliver_turn_to_locals(
+        &sessions,
+        &mesh,
+        &key,
+        SlotId(0),
+        Payload {
+            seq: 0,
+            slot: 0,
+            game_frame_count: None,
+            ..Default::default()
+        },
+        crate::consensus::delivery::DeliveryHome::Local,
+    );
+    assert_eq!(inbox0.try_recv_region_labels().as_ref(), Some(&labels));
+}
+
+/// The desync comparator must observe each distinct `(slot, seq)` turn
+/// exactly once, even though the mesh legitimately delivers the same turn
+/// to the authority via more than one path. `deliver_turn_to_locals` is
+/// the one choke point every turn-delivery path funnels through (client
+/// edge, mesh datagram, mesh oversize), so the comparator's feed lives
+/// there, right after the `mark_seen` dedup — this proves a redelivered
+/// duplicate doesn't reach it twice (which would silently drift the
+/// slot's ordinal count and eventually misalign an otherwise-honest
+/// comparison into a false desync).
+#[test]
+fn duplicate_turn_delivery_does_not_double_count_the_desync_comparator() {
+    use crate::consensus::{self, Authority};
+    use rally_point_proto::control::BufferBounds;
+
+    let sessions = routing::Sessions::default();
+    let mesh = MeshState::default();
+    let decision_makers = mesh.session.decision_makers.clone();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    decision_makers.set_notice_notifier(tx);
+    let key = control_key();
+    let _ = decision_makers.sync_maker(
+        &key,
+        consensus::MakerSync::new(BufferBounds::new(1, 6).unwrap(), Authority::SelfRelay),
+    );
+
+    // Slot 0's very first turn (seq 0, sync ordinal 0), delivered twice at
+    // the exact choke point every ingress path funnels through — simulating
+    // link-replacement or resume overlap, not a sender bug.
+    let value = [1, 2, 3, 4, 5];
+    let first = sync_payload(0, 0, 0, value);
+    assert!(
+        deliver_turn_to_locals(
+            &sessions,
+            &mesh,
+            &key,
+            SlotId(0),
+            first.clone(),
+            crate::consensus::delivery::DeliveryHome::Local,
+        )
+        .is_some(),
+        "the first delivery is fresh",
+    );
+    assert!(
+        deliver_turn_to_locals(
+            &sessions,
+            &mesh,
+            &key,
+            SlotId(0),
+            first,
+            crate::consensus::delivery::DeliveryHome::Local,
+        )
+        .is_none(),
+        "the redelivery is caught by mark_seen and never reaches the comparator",
+    );
+
+    // Slot 1 agrees at ordinal 0, then both slots race forward in
+    // lockstep agreement far enough to clear the comparator's evaluation
+    // margin. If the duplicate above had been double-counted, slot 0's
+    // internal ordinal count would run one ahead of its true progress and
+    // this honest agreement would eventually misalign into a false
+    // mismatch.
+    deliver_turn_to_locals(
+        &sessions,
+        &mesh,
+        &key,
+        SlotId(1),
+        sync_payload(0, 1, 0, value),
+        crate::consensus::delivery::DeliveryHome::Local,
+    );
+    for ordinal in 1..12u8 {
+        deliver_turn_to_locals(
+            &sessions,
+            &mesh,
+            &key,
+            SlotId(0),
+            sync_payload(u64::from(ordinal), 0, ordinal, value),
+            crate::consensus::delivery::DeliveryHome::Local,
+        );
+        deliver_turn_to_locals(
+            &sessions,
+            &mesh,
+            &key,
+            SlotId(1),
+            sync_payload(u64::from(ordinal), 1, ordinal, value),
+            crate::consensus::delivery::DeliveryHome::Local,
+        );
+    }
+
+    assert!(
+        rx.try_recv().is_err(),
+        "no desync notice: the duplicate delivery did not perturb ordinal alignment",
+    );
+}
+
+/// The leave-frame clamp's history must record each distinct `(slot, seq)`
+/// turn exactly once even when a reconnect/resume overlap repeats a peer's
+/// direct copy. The history is a bounded append — unlike
+/// the per-slot frame max, which is a harmless monotone — so duplicates
+/// walked twice would evict genuine low-seq history and leave
+/// `reachable_frame` with nothing at or below its threshold, pushing its
+/// fallback frames too high: exactly the opening a departing slot's
+/// inflated frame claim needs to strand survivors past a reachable frame.
+#[test]
+fn duplicate_turn_delivery_does_not_corrupt_the_leave_frame_clamp_history() {
+    use crate::consensus::{self, Authority};
+    use rally_point_proto::control::BufferBounds;
+
+    let sessions = routing::Sessions::default();
+    let mesh = MeshState::default();
+    let decision_makers = mesh.session.decision_makers.clone();
+    let key = control_key();
+    let _ = decision_makers.sync_maker(
+        &key,
+        consensus::MakerSync::new(BufferBounds::new(1, 6).unwrap(), Authority::Peer),
+    );
+
+    // The survivor's turns each arrive twice: the home peer's direct copy,
+    // then the same copy replayed after a link replacement. Only the first
+    // passes the session-level dedup; the replay must leave no trace in the
+    // frame history.
+    for seq in 0..=21u64 {
+        let payload = Payload {
+            seq,
+            slot: 0,
+            game_frame_count: Some(100 + seq as u32),
+            commands: vec![0x05].into(),
+            ..Default::default()
+        };
+        assert!(
+            deliver_turn_to_locals(
+                &sessions,
+                &mesh,
+                &key,
+                SlotId(0),
+                payload.clone(),
+                crate::consensus::delivery::DeliveryHome::Peer(RelayId(2)),
+            )
+            .is_some(),
+            "the direct copy is fresh",
+        );
+        assert!(
+            deliver_turn_to_locals(
+                &sessions,
+                &mesh,
+                &key,
+                SlotId(0),
+                payload,
+                crate::consensus::delivery::DeliveryHome::Peer(RelayId(2)),
+            )
+            .is_none(),
+            "the replacement-link replay is a session-level duplicate",
+        );
+    }
+
+    // With bounds max 6 the history keeps 10 entries (seqs 12..=21) and the
+    // frontier is seq 21, so the proven-executed threshold is seq 15: the
+    // survivor's provable frame is 115. Doubled appends would have evicted
+    // everything at or below the threshold (leaving seqs 17..=21 twice) and
+    // pushed the fallback to 117 — past what the survivor provably reached.
+    assert_eq!(
+        decision_makers.reachable_frame(&key, SlotId(1)),
+        Some(115),
+        "the clamp ceiling reflects single-counted history",
+    );
+}
+
+#[test]
+fn checksum_sequence_gaps_never_hold_gameplay_delivery() {
+    let (sessions, mesh, key, _) = delivery_relay(std::time::Duration::from_secs(60));
+    let (_registration, mut inbox) = routing::register(&sessions, &key, SlotId(1), 1).unwrap();
+
+    // Sequence 1 waits on 0 in the checksum observer. Sequence 4096 then
+    // exceeds its recoverable window. Both must reach the player immediately.
+    for seq in [1, 4096, 0] {
+        let payload = sync_payload(seq, 0, seq as u8, [1, 2, 3, 4, 5]);
+        let delivered = deliver_turn_to_locals(
+            &sessions,
+            &mesh,
+            &key,
+            SlotId(0),
+            payload.clone(),
+            crate::consensus::delivery::DeliveryHome::Local,
+        )
+        .expect("checksum availability cannot suppress mesh delivery");
+        assert_eq!(delivered.seq, seq);
+        let forwarded = inbox
+            .try_recv_forward()
+            .expect("gameplay must not wait for the gap");
+        assert_eq!(forwarded.seq, seq);
+        assert_eq!(forwarded.commands, payload.commands);
+    }
+}
+
+/// The relay's own load evidence comes off the shared delivery path: a home
+/// client's turn counts as forwarded whether it is a frameless pipe seed or a
+/// framed loop turn, and a peer-homed turn records nothing — the peer's home
+/// records its own clients first-hand.
+#[test]
+fn delivered_home_turns_record_the_slot_as_forwarded() {
+    use crate::consensus::delivery::DeliveryHome;
+    use crate::consensus::{self, Authority};
+    use rally_point_proto::control::BufferBounds;
+
+    let sessions = routing::Sessions::default();
+    let mesh = MeshState::default();
+    let decision_makers = mesh.session.decision_makers.clone();
+    let key = control_key();
+    let _ = decision_makers.sync_maker(
+        &key,
+        consensus::MakerSync {
+            expected_slots: [SlotId(0), SlotId(1), SlotId(2)].into(),
+            ..consensus::MakerSync::new(BufferBounds::new(1, 6).unwrap(), Authority::SelfRelay)
+        },
+    );
+    let turn = |seq: u64, slot: u8, frame: Option<u32>| Payload {
+        seq,
+        slot: u32::from(slot),
+        game_frame_count: frame,
+        ..Default::default()
+    };
+    let deliver = |slot: u8, payload: Payload, home: DeliveryHome| {
+        deliver_turn_to_locals(&sessions, &mesh, &key, SlotId(slot), payload, home);
+    };
+
+    // Slot 0 seeds its pipe and its loop never steps.
+    deliver(0, turn(0, 0, None), DeliveryHome::Local);
+    deliver(0, turn(1, 0, None), DeliveryHome::Local);
+    // Slot 1's first turn to get through is one its running loop framed.
+    deliver(1, turn(4, 1, Some(0)), DeliveryHome::Local);
+    // Slot 2 is homed on a peer: its turns reach this relay over the mesh.
+    deliver(2, turn(0, 2, None), DeliveryHome::Peer(RelayId(9)));
+    deliver(2, turn(1, 2, Some(0)), DeliveryHome::Peer(RelayId(9)));
+
+    let load = decision_makers.retained_load_state(&key);
+    assert_eq!(load.forwarded, vec![SlotId(0), SlotId(1)]);
+}
