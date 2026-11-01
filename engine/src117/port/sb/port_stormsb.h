@@ -29,6 +29,10 @@ bool SbSessionStart(const char *pszWho);
 // In a game over the SB relay, and whether this player made it.
 bool SbInMatch(void);
 bool SbCreator(void);
+// The map is the launch's: every seat holds the same file out of band, so the
+// LAN's map-download session is not part of the SB flow (the game's start gate
+// and the Start button read this, gluChat.cpp).
+bool SbMapFromLaunch(void);
 
 BOOL SbInitialize(void);
 void SbDestroy(void);

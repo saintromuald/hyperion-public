@@ -4,6 +4,7 @@
 // in another TU, so none is inlined.
 
 #include "oc_data.h"  // Hyperion: OC_VA
+#include "../port/sb/port_stormsb.h"  // Hyperion: SbMapFromLaunch
 #include "uiMulti.h"          // the 18 rows' declarations
 #include "charactr.h"         // DeleteCharacterFile
 #include "net_cmds.h"         // PlayerData, the 36-byte slot record
@@ -231,8 +232,13 @@ BOOL StartNetGame() {
   DWORD dwMode;
   DWORD cbBytes;
 
+  // Hyperion: the SB relay launch hands every seat the map out of band, so the
+  // LAN's map-download session never completes there and must not gate the
+  // start (the chat room's Start button and the room tick share this, as does
+  // gluChat.cpp).
   if (dword_672960 != 0 &&
-      !IsSessionComplete(dword_672960))
+      !IsSessionComplete(dword_672960) &&
+      !SbMapFromLaunch())
     return FALSE;
 
   if (!SNetGetGameInfo(4, &dwMode, 4, (int *)&cbBytes)) {

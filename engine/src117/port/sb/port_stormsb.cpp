@@ -215,7 +215,10 @@ void TraceCall(const char *pszCall, bool bResult, bool bFailed)
 
 // The provider's caps: Storm's message size less its header, 8 players, and the
 // relay's buffer depth as the turns in transit, which the game's pacing reads.
-const DWORD kCaps[9] = {0x24, 0, 0x1F0, 0x10, kPlayers, 0x300000, 0, 0x1E, 2};
+// The max message size bounds the map-download chunks the fd layer sends over
+// SNet messages, so it stays under the relay's 64 KB control-frame cap (a
+// chunk each message rides there).
+const DWORD kCaps[9] = {0x24, 0, 0x1F0, 0x10, kPlayers, 0x4000, 0, 0x1E, 2};
 
 struct Player {
   bool bIn = false;
@@ -277,6 +280,18 @@ std::deque<Event> g_events;
 // a step, once every slot has one (the local turn is queued at SendTurn, the
 // relay never echoes it back).
 std::deque<std::vector<uint8_t>> g_slotTurns[kPlayers];
+// The players a step waits on: the local player from the start, and each peer
+// the moment its first turn arrives — the LAN relay's semantics, where the
+// creator's early steps form alone and a joiner joins the steps from its
+// arrival. A peer's first turn also raises EVENT_JOIN, which starts 1.17's
+// lobby handshake (the creator's state is 4 by then, from its own slot
+// commands in its own early steps).
+bool g_bInStep[kPlayers] = {false};
+// Peers whose join event waits for the step their first turn rode in to be
+// read: 1.17's join handler kicks a joiner when the creator's lobby state is
+// not 4 yet, and the creator reaches 4 by processing its own early steps, so
+// the event must trail the step, as the LAN relay's JOINED frame does.
+std::deque<BYTE> g_pendingJoins;
 std::deque<std::pair<BYTE, std::vector<uint8_t>>> g_messages;  // chat, in arrival order
 std::vector<uint8_t> g_turnsOut[kPlayers];                     // stable pointers handed to the game
 std::vector<uint8_t> g_messageOut;
@@ -377,6 +392,9 @@ void Reset()
   for (DWORD i = 0; i < kPlayers; ++i)
     g_turnsOut[i].clear();
   g_gameData.clear();
+  for (DWORD i = 0; i < kPlayers; ++i)
+    g_bInStep[i] = false;
+  g_pendingJoins.clear();
 }
 
 void Fire(Event e)
@@ -437,6 +455,11 @@ bool Pump()
         if (p + len > end)
           p = end;
         else if (slot < kPlayers && g_players[slot].bIn) {
+          if (slot != g_bLocal && !g_bInStep[slot]) {
+            g_bInStep[slot] = true;
+            Log("player %u is in the game; its join event waits for the step", slot);
+            g_pendingJoins.push_back(static_cast<BYTE>(slot));
+          }
           g_slotTurns[slot].push_back(std::vector<uint8_t>(p, p + len));
           p += len;
         } else
@@ -477,26 +500,25 @@ bool Pump()
           // The creator's framed launch blobs (kind byte + LE length + bytes):
           // 1 the init data (GetGameInfo(5), which 1.17's join reads), 2 the
           // stat string (the game list's entry, which its parser requires).
-          // Kept only while none has arrived; the relay replays each exactly
-          // once, so a repeat would only mean the framing is not ours.
+          // Anything else is a game message (1.17's binary SNet messages ride
+          // the same channel), queued for ReceiveMessage.
           if (len >= 5) {
             const uint8_t kind = p[0];
             const uint32_t cb = static_cast<uint32_t>(p[1]) | (static_cast<uint32_t>(p[2]) << 8) |
                                 (static_cast<uint32_t>(p[3]) << 16) | (static_cast<uint32_t>(p[4]) << 24);
-            if (cb == len - 5) {
+            if (cb == len - 5 && (kind == 1 || kind == 2)) {
               if (kind == 1 && g_gameData.empty()) {
                 g_gameData.assign(p + 5, p + len);
                 Log("the game's init data arrived from slot %u (%u bytes)", slot, cb);
               } else if (kind == 2 && g_szStats[0] == '\0') {
                 SStrCopy(g_szStats, reinterpret_cast<const char *>(p + 5), TEXT_MAX);
                 Log("the game's stat string arrived from slot %u (%u bytes)", slot, cb);
-              } else
-                Log("lobby command from slot %u (%u bytes)", slot, len);
+              }
               p += len;
               break;
             }
           }
-          Log("lobby command from slot %u (%u bytes)", slot, len);
+          g_messages.push_back(std::make_pair(static_cast<BYTE>(slot), std::vector<uint8_t>(p, p + len)));
           p += len;
         } else
           p = end;
@@ -510,11 +532,14 @@ bool Pump()
   return rp_status(g_session) == RP_STAT_RUNNING;
 }
 
-// A step is ready once every in-game slot has a turn queued.
+// A step is ready once every in-step player has a turn queued: the local
+// player from the start, a peer from its first turn. The creator's early steps
+// form alone, as the LAN relay's do; a joiner joins the steps from its
+// arrival.
 bool StepReady()
 {
-  for (DWORD i = 0; i < g_dwMaxPlayers && i < kPlayers; ++i)
-    if (g_players[i].bIn && g_slotTurns[i].empty())
+  for (DWORD i = 0; i < kPlayers; ++i)
+    if (g_bInStep[i] && g_slotTurns[i].empty())
       return false;
   return true;
 }
@@ -572,6 +597,11 @@ bool SbInMatch(void)
 bool SbCreator(void)
 {
   return g_bCreator;
+}
+
+bool SbMapFromLaunch(void)
+{
+  return g_launch.bOn;
 }
 
 // ---------------------------------------------------------------------------
@@ -697,6 +727,7 @@ BOOL SbCreateGame(const char *pszGameName, const char *pszPassword, const char *
   g_gameData.assign(static_cast<const uint8_t *>(pvGameData), static_cast<const uint8_t *>(pvGameData) + cbGameData);
   g_nNames = 0;
   *pdwPlayerId = g_bLocal;
+  g_bInStep[g_bLocal] = true;
   rp_game_started(g_session);
   // The init data and the stat string ride lobby commands: the relay replays
   // them to every member, including a joiner that was not connected when the
@@ -806,6 +837,7 @@ BOOL SbJoinGame(DWORD dwGameId, const char *pszPassword, const char *pszPlayerNa
   SStrCopy(g_szGameName, JsonString(g_launch.setup, "gameName", "").c_str(), TEXT_MAX);
   g_nNames = 0;
   *pdwPlayerId = g_bLocal;
+  g_bInStep[g_bLocal] = true;
   rp_game_started(g_session);
   Log("joiner: slot %u, in a game of %u players, as %s", static_cast<unsigned>(g_bLocal), g_dwMaxPlayers, pszPlayerName);
   return TRUE;
@@ -1005,7 +1037,7 @@ BOOL SbReceiveTurns(DWORD nFirst, DWORD nPlayers, const void **ppvData, DWORD *p
   if (!StepReady()) {
     // who the step waits for: present, and answering once a turn of theirs is in
     for (DWORD i = nFirst; i < nFirst + nPlayers && i < kPlayers; ++i)
-      if (g_players[i].bIn) {
+      if (g_bInStep[i]) {
         DWORD dwFlags = TURN_PRESENT;
         if (i == g_bLocal || !g_slotTurns[i].empty())
           dwFlags |= TURN_ANSWERING;
@@ -1016,7 +1048,7 @@ BOOL SbReceiveTurns(DWORD nFirst, DWORD nPlayers, const void **ppvData, DWORD *p
     return b;
   }
   for (DWORD i = 0; i < kPlayers; ++i)
-    if (g_players[i].bIn) {
+    if (g_bInStep[i]) {
       g_turnsOut[i] = std::move(g_slotTurns[i].front());
       g_slotTurns[i].pop_front();
       if (i == g_bLocal) {
@@ -1029,12 +1061,18 @@ BOOL SbReceiveTurns(DWORD nFirst, DWORD nPlayers, const void **ppvData, DWORD *p
       g_turnsOut[i].resize(g_turnsOut[i].size() + kTurnSlack, 0);
     }
   for (DWORD i = nFirst; i < nFirst + nPlayers && i < kPlayers; ++i) {
-    if (!g_players[i].bIn)
+    if (!g_bInStep[i])
       continue;
     ppvData[i - nFirst] = g_turnsOut[i].data();
     pcbData[i - nFirst] = static_cast<DWORD>(g_turnsOut[i].size() - kTurnSlack);
     pdwFlags[i - nFirst] = TURN_PRESENT | TURN_READY | TURN_ANSWERING;
   }
+  // the join events now: the game has processed this step (its own slot
+  // commands included), so the creator's lobby state is what the join handler
+  // expects
+  for (const BYTE slot : g_pendingJoins)
+    g_events.push_back({EVENT_JOIN, slot, {}});
+  g_pendingJoins.clear();
   return TRUE;
 }
 
@@ -1055,11 +1093,12 @@ BOOL SbSendMessage(DWORD dwPlayer, const void *pvData, DWORD cbData)
   }
   if (g_session == NULL)
     return TRUE;
-  // The relay fans chat to every member; the game's -1/-2 (all / allies) targets
-  // are honoured by the receiver's own chat routing, so every line is sent as-is.
-  rp_chat_send(g_session, static_cast<const uint8_t *>(pvData), cbData);
-  TraceCall("SendMessage", TRUE, false);
-  return TRUE;
+  // 1.17's messages are raw binary packets (the lobby handshake's 0x4A state,
+  // the chat's own framing), so they ride the relay's binary lobby-command
+  // channel, not the text chat channel; the relay fans each to every member.
+  const int rc = rp_lobby_send(g_session, static_cast<const uint8_t *>(pvData), cbData);
+  TraceCall("SendMessage", rc == RP_OK || rc == RP_ERR_TURN_FULL, rc != RP_OK && rc != RP_ERR_TURN_FULL);
+  return rc == RP_ERR_TURN_ENDED ? FALSE : TRUE;
 }
 
 BOOL SbReceiveMessage(int *pnPlayer, const void **ppvData, DWORD *pcbData)

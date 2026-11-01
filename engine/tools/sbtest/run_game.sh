@@ -10,7 +10,9 @@
 # same bytes. Each seat's log and replay land in the seat's data folder.
 set -euo pipefail
 cd "$(dirname "$0")/../.."            # engine/
-MAP="${1:?usage: run_game.sh <map.scm> [seconds]}"
+COORDINATED=0
+if [ "${1:-}" = "--coordinated" ]; then COORDINATED=1; shift; fi
+MAP="${1:?usage: run_game.sh [--coordinated] <map.scm> [seconds]}"
 LIMIT="${2:-150}"
 HX="$(pwd)/src117/build/linux-x64/Hyperion.x86_64"
 GAME="${HYPERION_GAME:-}"
@@ -19,10 +21,41 @@ R2="$(pwd)/tools/rallypoint2"
 TARGET="$(pwd)/src117/build/linux-x64/rallypoint"
 
 echo "[game] building the dev harness"
-cargo build -q --release -p rp-dev-setup -p rally-point-relay \
+CARGO_NET_OFFLINE=true pkill -9 -x rally-point-coo 2>/dev/null || true
+pkill -9 -x rally-point-rel 2>/dev/null || true
+sleep 0.2
+cargo build -q --release -p rp-dev-setup -p rally-point-relay -p rally-point-coordinator \
     --manifest-path "$R2/Cargo.toml" --target-dir "$TARGET"
 BIN="$TARGET/release"
 
+# --- the coordinated stack (--coordinated): a dev-tenant coordinator and one
+# enrolled relay mint the session through the signed API; the setups land in the
+# same paths the standalone flow writes. ---
+stack_up() {
+  echo "[game] coordinated stack: coordinator + enrolled relay"
+  "$BIN/rp_dev_setup" gen-cert --cert "$WORK/cert.pem" --key "$WORK/key.pem"
+  "$BIN/rp_dev_setup" gen-tenant > "$WORK/tenant.txt"
+  TENANT_PKCS8="$(sed -n '1p' "$WORK/tenant.txt")"
+  CLIENT_SEED="$(head -c 32 /dev/urandom | xxd -p -c 64)"
+  "$BIN/rally-point-coordinator" --listen 127.0.0.1:14910       --dev-tenant --tenant hyperion-dev --kid dev-key-1       --allow-insecure-control --tenant-key "$TENANT_PKCS8"       --dev-tenant-client-key "$CLIENT_SEED" > "$WORK/coordinator.log" 2>&1 &
+  COORD_PID=$!
+  PORT=$((15000 + RANDOM % 1000))
+  "$BIN/rally-point-relay" --listen "127.0.0.1:$PORT"       --relay-id 1 --coordinator-url http://127.0.0.1:14910       --cert "$WORK/cert.pem" --key "$WORK/key.pem" > "$WORK/relay.log" 2>&1 &
+  RELAY_PID=$!
+  for i in $(seq 1 20); do
+    sleep 0.5
+    if "$BIN/rp_dev_setup" coord-create --coordinator http://127.0.0.1:14910         --tenant hyperion-dev --kid dev-key-1 --client-seed "$CLIENT_SEED"         --slots 2 --name "SB Relay Test" --out-dir "$WORK" > "$WORK/mint.log" 2>&1; then
+      return 0
+    fi
+  done
+  echo "[game] the coordinated session was not minted" >&2
+  tail -10 "$WORK/coordinator.log" >&2
+  return 1
+}
+
+if [ "$COORDINATED" -eq 1 ]; then
+  stack_up
+else
 echo "[game] generating the relay cert and tenant key"
 "$BIN/rp_dev_setup" gen-cert --cert "$WORK/cert.pem" --key "$WORK/key.pem"
 "$BIN/rp_dev_setup" gen-tenant > "$WORK/tenant.txt"
@@ -38,7 +71,7 @@ echo "[game] starting the relay on 127.0.0.1:$PORT"
     --tenant-pubkey "$TENANT_PUB" --kid dev-key-1 --tenant hyperion-dev \
     > "$WORK/relay.log" 2>&1 &
 RELAY_PID=$!
-trap 'kill -9 ${C0_PID:-} ${C1_PID:-} $RELAY_PID 2>/dev/null || true; wait $RELAY_PID 2>/dev/null || true' EXIT
+trap 'kill -9 ${C0_PID:-} ${C1_PID:-} ${RELAY_PID:-} ${COORD_PID:-} 2>/dev/null || true; wait $RELAY_PID 2>/dev/null || true' EXIT
 sleep 1
 
 echo "[game] minting the two seats' launches"
@@ -48,6 +81,7 @@ echo "[game] minting the two seats' launches"
 "$BIN/rp_dev_setup" setup --tenant-pkcs8 "$TENANT_PKCS8" --kid dev-key-1 --tenant hyperion-dev \
     --session 1 --slot 1 --relay "127.0.0.1:$PORT" --server-name localhost \
     --cert-file "$WORK/cert.pem" --players 2 --name "SB Relay Test" --out "$WORK/s1.json"
+fi
 
 mkdir -p "$WORK/seat0/maps" "$WORK/seat1/maps"
 # the map keeps its own file name: the game resolves the map by the name
@@ -88,6 +122,7 @@ for i in $(seq 1 "$LIMIT"); do
             fi
         done
         if kill -0 "$C0_PID" 2>/dev/null && kill -0 "$C1_PID" 2>/dev/null &&
+           grep -q "MutatorsForGame" "$WORK/seat0/hyperion_mutators.log" 2>/dev/null &&
            ! grep -qi "desync" "$WORK/relay.log" &&
            ! grep -q "left (reason" "$WORK/seat0/hyperion_sb.log" 2>/dev/null &&
            ! grep -q "left (reason" "$WORK/seat1/hyperion_sb.log" 2>/dev/null; then
