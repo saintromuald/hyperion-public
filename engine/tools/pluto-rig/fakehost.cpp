@@ -528,6 +528,40 @@ int main(int argc, char **argv) {
   V0 onFrame = reinterpret_cast<V0>(vt[3]);
   printf("[fakehost] driving the module (vt[1]=%p vt[2]=%p vt[3]=%p)\n", vt[1], vt[2], vt[3]);
   fflush(stdout);
+  // Dump the bot's unit-record list at [client+0x1EC] for the record-format work.
+  {
+    unsigned char *c = reinterpret_cast<unsigned char *>(0x7b1e4160);
+    unsigned head;
+    memcpy(&head, c + 0x1EC, 4);
+    FILE *f = fopen("dump/unitlist.txt", "w");
+    if (f) {
+      fprintf(f, "list head at client+0x1EC: %08x\n", head);
+      unsigned node = head;
+      for (int i = 0; i < 12 && node > 0x10000 && node < 0x80000000; ++i) {
+        unsigned char *n = reinterpret_cast<unsigned char *>(node);
+        fprintf(f, "node %d (%p):", i, reinterpret_cast<void *>(node));
+        for (int k = 0; k < 24; k += 4) {
+          unsigned v;
+          memcpy(&v, n + k, 4);
+          fprintf(f, " %08x", v);
+        }
+        fprintf(f, "\n");
+        memcpy(&node, n, 4);
+      }
+      fclose(f);
+    }
+  }
+  // The bot's client (a static object at base+0x54160) never got its shm view
+  // pointer (+0x18) or its send flag (+0x1C) from the handshake in the rig; the view
+  // is the bot's own .data page holding the PLO1 header (base+0x54000).
+  {
+    unsigned *client = reinterpret_cast<unsigned *>(0x7b1e4160);
+    printf("[fakehost] client: view-slot %08x flag %02x -> setting view+flag\n",
+           client[6], *reinterpret_cast<unsigned char *>(client + 7));
+    fflush(stdout);
+    client[6] = 0x7b1e4000;
+    *reinterpret_cast<unsigned char *>(client + 7) = 1;
+  }
   for (int f = 0; f < 1200; ++f) {
     g->frameCount = f;
     g->elapsedTime = f * 42;
@@ -551,6 +585,16 @@ int main(int argc, char **argv) {
     if (f % 100 == 0)
       printf("[fakehost] frame %d\n", f);
     Sleep(16);
+  }
+  {
+    // The client is a static object at base+0x54160 (the onFrame loads ecx=0x7b1e4160
+    // for the writer); dump it and its neighbourhood.
+    unsigned char *base = reinterpret_cast<unsigned char *>(0x7b190000);
+    FILE *f = fopen("dump/client.bin", "wb");
+    if (f) {
+      fwrite(base + 0x54100, 1, 0x200, f);
+      fclose(f);
+    }
   }
   onEnd(mod, 1);
   {
