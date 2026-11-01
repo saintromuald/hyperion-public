@@ -73,6 +73,11 @@ def main() -> int:
         if not (DEST / "spirv_msl.cpp").exists():
             print(f"unexpected archive layout: no spirv_msl.cpp under {DEST}")
             return 1
+    if sys.platform != "win32":
+        # cl builds spirv-cross.exe for Windows; Linux and the Mac build it
+        # themselves (build_engine_linux.py, shader_msl.py) when needed.
+        print(f"spirv-cross {TAG} source in {DEST}; build is Windows-only, skipped")
+        return 0
     return build()
 
 
