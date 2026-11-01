@@ -107,13 +107,29 @@ New this session, read from the binaries and the running rig:
   and code, and guard-page taps (PAGE_GUARD + the vectored handler) on the driver,
   walk and writer pages that log every execution with the register context.
 
-Open (next session): **the bot reads the real game's memory directly** — 133 absolute
-StarCraft 1.16.1 addresses (inventoried in `tools/pluto-rig/sc-addresses.txt`),
-including the unit table at 0x59CCA8 (stride 0x150; type at +0x64, position at
-+0x10/+0x12, and more, as the per-unit writer reads them) and the per-(type,player)
-attribute table at 0x58D2B0 (stride 0x2E per player). patch_pluto.py remaps them onto
-the rig's zero stand-in buffers, so the module's record list (a forward_list,
-module+0x10F4) gets one all-zero record. Next: fill the stand-ins with a miniature
-1.16.1 memory image (the scripted units' table entries, per-player tables, attribute
-tables), then the records fill, the writer fills view+0xC0 with N, and the
-differential scenarios name every field.
+## The rig (tools/pluto-rig) — status 2026-11-01, session 4: the pipeline runs
+
+The miniature 1.16.1 memory image in the stand-ins unblocked the whole bot: it plays
+200 inference steps (33 ms a step) against the scripted state, issues its orders as
+raw net commands, and the rig captures both directions.
+
+- **The obs request**, captured from the bot's own BWRL_SHM mapping: header at +0xC0
+  (N units, W, H), the per-unit feature block from +0xC100 (one 436-byte entry a
+  unit; x, y scaled by 1/4096, then float flags), 32x32 feature planes at
+  +0x79100/+0x79500, small vectors at +0x79900/+0x79940/+0x79A40, a 128x128 u16
+  map plane at +0x79F00, a 128x128 byte plane at +0x81F00, globals/counts from
+  +0x85F00.
+- **The action reply** is the classic net command language: 0x09 Select (count, u16
+  unit ids), 0x14 RightClick (x, y, target, type, queued), 0x15 Action (x, y,
+  target, type, order, queued) — Hyperion's net_cmds.cpp already parses these. The
+  bot's unit ids are its own; Hyperion echoes them from its obs.
+- **The rig emulates what the bot reads directly** (it does not use BWAPI's impls):
+  the unit table at 0x59CCA8 (linked through the visible-unit list at 0x628430),
+  Players, BWGame's minerals/gas/map size/frame/supplies/counts, a tile array behind
+  the pointer at 0x6D1260, and a ret stub where the bot calls SC's sendTurn.
+
+Open (next session): the exact per-unit field list from the feature writer's
+disassembly (base+0x307F0), then the Hyperion side: the obs builder, the engine as
+an owned helper process (the lab's pattern), the action executor over the reply's
+net commands, AI_LEVEL_PLUTO in port_ai.h, the skirmish row and --ai-levels, and the
+replay/save record — the multiplayer computer seat follows the same level.
