@@ -229,8 +229,15 @@ the runbook.
 
 - [x] `pre-release` branch created off `netcode/sb-rally-port`.
 - [x] Plan documented here.
-- [ ] ShieldBattery vendored at the pinned rev (Phase 0).
-- [ ] Hyperion game source in the vendored server (Phase 1).
+- [x] ShieldBattery vendored at the pinned rev (Phase 0); typecheck and the
+      touched modules' unit tests are green in the vendored tree.
+- [x] Hyperion game path in the vendored server (Phase 1 code): the
+      `hyperion` client type, the `engine` config flag, self-reported
+      (`localOnly`-style) loads and `POST /:gameId/results`.
+- [x] The Phase 1 gate script (`engine/tools/shieldbattery/tools/hyperion-gate/`);
+      **not yet run end to end** (needs Docker for Postgres).
+- [ ] The Phase 1 gate passes (a scripted two-client match lands reconciled
+      rating and points changes).
 - [ ] Engine platform client (Phase 2).
 - [ ] In-game screens (Phase 3).
 - [ ] Rust rating port + parity (Phase 4).
