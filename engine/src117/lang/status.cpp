@@ -255,7 +255,9 @@ void status_get_new_selection() {
 // 0x4A7D70 status_get_str (13 B). One string out of this console's table. A
 // shape-insensitive leaf.
 char *__fastcall status_get_str(WORD wStringId) {
-  // Hyperion: a mod's strings, past stat_txt's
+  // Hyperion: a mod's own stat_txt, and a mod's strings, past stat_txt's
+  if (const char *pszMod = ModStatTxt(wStringId))
+    return const_cast<char *>(pszMod);
   if (const char *pszMod = ModString(wStringId))
     return const_cast<char *>(pszMod);
   return reinterpret_cast<char *>(str_get_string(sgpStatStrs, wStringId));

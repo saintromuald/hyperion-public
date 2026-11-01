@@ -89,6 +89,8 @@ extern void *gpLoadGameFile;  // 0x6A5E34
 extern DWORD g_LocalNationID;
 extern PlayerTable<PlayerData, PlayerTagData> gPlayerData;  // 0x6726C8
 
+bool StatTxtLoad(const std::string &folder);  // below, beside ModStatTxt
+
 namespace {
 
 struct Column {
@@ -284,6 +286,7 @@ Trees g_trees;
 std::map<int, std::string> g_unitNames;    // the name an edit gives a unit, ModUnitName and ModUnitEditName
 std::vector<std::string> g_strings;        // ModString
 std::vector<ModCardButton> g_buttons;      // ModCardButtons
+std::vector<std::pair<WORD, WORD>> g_morphs;  // a morph: the source, its target (Cards)
 std::string g_loadKey;     // the submission being loaded: its mod's id, which its paths are named by
 std::string g_loadFolder;  // and its data folder
 std::map<std::string, std::string> g_mediaFolders;  // each mod's data folder by its id (ModDataFilePath)
@@ -1280,7 +1283,20 @@ bool Cards() {
         m.bResearch = true;
         m.wIcon = static_cast<WORD>(b["icon"].Num(pReq->cols[6][0] | pReq->cols[6][1] << 8));
         name = pReq->name;
+      } else if (b["morph"].kind != PortJson::NONE) {
+        // a morph: the source morphs into wUnit, which may be any unit the
+        // game has (the mod's, or one of the original's a mod's edit changes)
+        const int nUnit = Resolve("units", b["morph"], where + ".morph");
+        if (nUnit < 0)
+          return Fail(where + ": a morph names a unit the mod or the original has");
+        m.wUnit = static_cast<WORD>(nUnit);
+        m.bMorph = true;
+        m.wIcon = static_cast<WORD>(b["icon"].Num(ModUnitLooks(static_cast<unsigned>(nUnit))));
+        m.bUnitIcon = b["icon"].kind == PortJson::NONE;
+        name = ModUnitName(static_cast<unsigned>(nUnit));
+        g_morphs.push_back(std::make_pair(static_cast<WORD>(nCard), static_cast<WORD>(nUnit)));
       } else {
+        // a train: one of the mod's units
         const int nUnit = Resolve("units", b["train"], where + ".train");
         if (nUnit < UNIT_TYPE_MOD_FIRST)
           return Fail(where + ": a button trains one of the mod's units, casts one of its orders, or researches or upgrades one of its techs or upgrades");
@@ -1454,6 +1470,10 @@ bool Load(const std::string &key, const std::string &folder, const std::string *
     for (size_t i = 0; i < headers.size(); ++i)
       g_scripts[headers[i].name] = 1000 + g_nScripts + static_cast<int>(i);
   }
+
+  // the mod's own stat_txt (data/stat_txt.txt): the game's strings in a game that has it
+  if (!StatTxtLoad(folder))
+    return false;
 
   // the edits first, so a new record based on a row an edit changes starts from the change
   std::vector<Record *> changed[TABLES];
@@ -2556,6 +2576,41 @@ const char *const kModAiFinders[MOD_AI_FINDERS] = {
 const ModCardButton *ModCardButtons(int *pnCount) {
   *pnCount = static_cast<int>(g_buttons.size());
   return g_buttons.data();
+}
+
+bool ModMorphTarget(unsigned nSource, unsigned nTarget) {
+  for (const auto &m : g_morphs)
+    if (m.first == nSource && m.second == nTarget)
+      return true;
+  return false;
+}
+
+// The mod's own stat_txt (data/stat_txt.txt): one string per line, id 1 first, an empty
+// line none. The game's strings in a game that has the mod; "" for an id it has none of.
+std::vector<std::string> g_statTxt;
+const char *ModStatTxt(unsigned nId) {
+  if (nId == 0 || nId > g_statTxt.size() || g_statTxt[nId - 1].empty())
+    return nullptr;
+  return g_statTxt[nId - 1].c_str();
+}
+
+bool StatTxtLoad(const std::string &folder) {
+  g_statTxt.clear();
+  std::string text;
+  if (!PortReadFile(folder + "stat_txt.txt", &text))
+    return true;  // no strings of the mod's own: the game's stand
+  size_t at = 0;
+  while (at <= text.size()) {
+    size_t nl = text.find('\n', at);
+    if (nl == std::string::npos)
+      nl = text.size();
+    std::string s = text.substr(at, nl - at);
+    if (!s.empty() && s.back() == '\r')
+      s.pop_back();
+    g_statTxt.push_back(s == "<0>" ? std::string() : s);
+    at = nl + 1;
+  }
+  return true;
 }
 
 int ModTypeByName(const char *pszTable, const char *pszName) {

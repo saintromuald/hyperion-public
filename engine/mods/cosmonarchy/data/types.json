@@ -174591,6 +174591,144 @@
   }
  },
  "cards": {
+  "norad_ii": [
+   {
+    "position": 6,
+    "morph": "zerg_algoztalisk"
+   }
+  ],
+  "zerg_larva": [
+   {
+    "position": 1,
+    "morph": 41
+   },
+   {
+    "position": 2,
+    "morph": 42
+   },
+   {
+    "position": 3,
+    "morph": "zerg_agrileth"
+   },
+   {
+    "position": 3,
+    "morph": "zerg_yblyleth_zorthos"
+   },
+   {
+    "position": 4,
+    "morph": 40
+   },
+   {
+    "position": 5,
+    "morph": 57
+   },
+   {
+    "position": 6,
+    "morph": "zerg_malkothrokor"
+   }
+  ],
+  "zerg_egg": [
+   {
+    "position": 1,
+    "morph": 41
+   },
+   {
+    "position": 2,
+    "morph": 42
+   },
+   {
+    "position": 3,
+    "morph": 57
+   }
+  ],
+  "zerg_zergling": [
+   {
+    "position": 6,
+    "morph": 128
+   },
+   {
+    "position": 6,
+    "morph": "zerg_zethalor_orkoti"
+   }
+  ],
+  "zerg_hydralisk": [
+   {
+    "position": 6,
+    "morph": 129
+   }
+  ],
+  "zerg_drone": [
+   {
+    "position": 6,
+    "morph": 47
+   }
+  ],
+  "zerg_overlord": [
+   {
+    "position": 6,
+    "morph": 222
+   }
+  ],
+  "zerg_mutalisk": [
+   {
+    "position": 6,
+    "morph": "zerg_tosgrilisk"
+   }
+  ],
+  "zerg_guardian": [
+   {
+    "position": 6,
+    "morph": 48
+   }
+  ],
+  "zerg_queen": [
+   {
+    "position": 6,
+    "morph": 218
+   }
+  ],
+  "unclean_one": [
+   {
+    "position": 5,
+    "morph": "zerg_okrimnilisk"
+   }
+  ],
+  "devouring_one": [
+   {
+    "position": 6,
+    "morph": 51
+   }
+  ],
+  "kukulza_guardian": [
+   {
+    "position": 6,
+    "morph": "zerg_zarcavrokor"
+   }
+  ],
+  "ragnasaur": [
+   {
+    "position": 6,
+    "morph": 112
+   }
+  ],
+  "ursadon": [
+   {
+    "position": 7,
+    "morph": "zerg_kethrostalor"
+   }
+  ],
+  "zerg_lurker_egg": [
+   {
+    "position": 6,
+    "morph": 39
+   }
+  ],
+  "zerg_lurker": [
+   {
+    "position": 6,
+    "morph": "zerg_zobriolisk"
+   }
+  ],
   "terran_command_center": [
    {
     "position": 3,
@@ -174719,6 +174857,92 @@
     "train": "terran_serathiel_hecaton"
    }
   ],
+  "norad_ii_crashed": [
+   {
+    "position": 6,
+    "morph": "zerg_cherbrathalor"
+   }
+  ],
+  "zerg_hatchery": [
+   {
+    "position": 4,
+    "morph": 132
+   },
+   {
+    "position": 5,
+    "morph": 133
+   }
+  ],
+  "zerg_hydralisk_den": [
+   {
+    "position": 7,
+    "morph": "zerg_skibact_scab"
+   }
+  ],
+  "zerg_queens_nest": [
+   {
+    "position": 7,
+    "morph": 139
+   }
+  ],
+  "zerg_ultralisk_cavern": [
+   {
+    "position": 7,
+    "morph": "zerg_zozarc_gorge"
+   }
+  ],
+  "zerg_spire": [
+   {
+    "position": 7,
+    "morph": 197
+   }
+  ],
+  "zerg_spawning_pool": [
+   {
+    "position": 7,
+    "morph": "zerg_vornath_pond"
+   }
+  ],
+  "zerg_creep_colony": [
+   {
+    "position": 1,
+    "morph": 146
+   },
+   {
+    "position": 2,
+    "morph": 144
+   },
+   {
+    "position": 3,
+    "morph": "zerg_kazitrith_cesiant"
+   },
+   {
+    "position": 4,
+    "morph": 216
+   },
+   {
+    "position": 5,
+    "morph": 134
+   }
+  ],
+  "zerg_spore_colony": [
+   {
+    "position": 7,
+    "morph": "zerg_spirtith_cesiant"
+   }
+  ],
+  "zerg_sunken_colony": [
+   {
+    "position": 7,
+    "morph": "zerg_skortrith_cesiant"
+   }
+  ],
+  "zerg_extractor": [
+   {
+    "position": 7,
+    "morph": "zerg_ezigrisant"
+   }
+  ],
   "protoss_robotics_facility": [
    {
     "position": 1,
@@ -174823,10 +175047,40 @@
     "train": "protoss_epigraph"
    }
   ],
+  "protoss_arbiter_tribunal": [
+   {
+    "position": 7,
+    "morph": "zerg_chokral_chazsal"
+   }
+  ],
   "protoss_robotics_support_bay": [
    {
     "position": 3,
     "train": "protoss_analogue"
+   }
+  ],
+  "cave_in": [
+   {
+    "position": 6,
+    "morph": "zerg_tethzorokor"
+   }
+  ],
+  "cantina": [
+   {
+    "position": 7,
+    "morph": 152
+   }
+  ],
+  "jump_gate": [
+   {
+    "position": 6,
+    "morph": 62
+   }
+  ],
+  "protoss_marker": [
+   {
+    "position": 7,
+    "morph": 140
    }
   ],
   "terran_flag_beacon": [
@@ -174849,6 +175103,148 @@
     "train": "terran_auriel"
    }
   ],
+  "right_upper_level_door": [
+   {
+    "position": 1,
+    "morph": 37
+   },
+   {
+    "position": 1,
+    "morph": "zerg_sovrokor_goszirith"
+   },
+   {
+    "position": 1,
+    "morph": "zerg_zethalisk_orkoti"
+   },
+   {
+    "position": 2,
+    "morph": 95
+   },
+   {
+    "position": 2,
+    "morph": "zerg_quazrokor"
+   },
+   {
+    "position": 3,
+    "morph": 54
+   },
+   {
+    "position": 3,
+    "morph": "zerg_nathrelisk_zorthos"
+   },
+   {
+    "position": 4,
+    "morph": "zerg_cikralisk"
+   },
+   {
+    "position": 5,
+    "morph": "zerg_protathalor"
+   },
+   {
+    "position": 6,
+    "morph": 43
+   },
+   {
+    "position": 7,
+    "morph": "zerg_mortothrokor"
+   },
+   {
+    "position": 8,
+    "morph": 191
+   },
+   {
+    "position": 9,
+    "morph": "zerg_sasyrvoleth"
+   }
+  ],
+  "left_pit_door": [
+   {
+    "position": 1,
+    "morph": 38
+   },
+   {
+    "position": 1,
+    "morph": "zerg_hydrokor_goszirith"
+   },
+   {
+    "position": 1,
+    "morph": "zerg_hydralisk_orkoti"
+   },
+   {
+    "position": 2,
+    "morph": 180
+   },
+   {
+    "position": 2,
+    "morph": "zerg_rozirokor_imicren"
+   },
+   {
+    "position": 2,
+    "morph": "zerg_iziralisk_zorthos"
+   },
+   {
+    "position": 3,
+    "morph": 185
+   },
+   {
+    "position": 4,
+    "morph": 126
+   },
+   {
+    "position": 5,
+    "morph": 52
+   },
+   {
+    "position": 6,
+    "morph": 29
+   },
+   {
+    "position": 7,
+    "morph": 96
+   },
+   {
+    "position": 8,
+    "morph": 44
+   }
+  ],
+  "right_pit_door": [
+   {
+    "position": 1,
+    "morph": 97
+   },
+   {
+    "position": 1,
+    "morph": "zerg_inzorthrokor_imicren"
+   },
+   {
+    "position": 2,
+    "morph": 103
+   },
+   {
+    "position": 3,
+    "morph": 56
+   },
+   {
+    "position": 3,
+    "morph": "zerg_azanthrokor_orkoti"
+   },
+   {
+    "position": 4,
+    "morph": 217
+   },
+   {
+    "position": 5,
+    "morph": "zerg_vilgorokor"
+   },
+   {
+    "position": 6,
+    "morph": 45
+   },
+   {
+    "position": 8,
+    "morph": "zerg_ogroszaleth"
+   }
+  ],
   "start_location": [
    {
     "position": 3,
@@ -174859,6 +175255,24 @@
    {
     "position": 3,
     "train": "terran_ogun_worker_mode"
+   }
+  ],
+  "young_chrysalis": [
+   {
+    "position": 4,
+    "morph": "zerg_ocsal_cesiant"
+   }
+  ],
+  "psi_emitter": [
+   {
+    "position": 6,
+    "morph": "zerg_tetcaerokor"
+   }
+  ],
+  "khaydarin_crystal": [
+   {
+    "position": 7,
+    "morph": "zerg_kethraj_keep"
    }
   ],
   "mineral_chunk_1": [
@@ -174873,6 +175287,12 @@
    {
     "position": 3,
     "train": "protoss_accantor"
+   }
+  ],
+  "vespene_sac_1": [
+   {
+    "position": 7,
+    "morph": 152
    }
   ],
   "vespene_tank_1": [
@@ -174911,6 +175331,24 @@
    {
     "position": 4,
     "train": "terran_hippogriff"
+   }
+  ],
+  "zerg_protathalor": [
+   {
+    "position": 6,
+    "morph": 123
+   }
+  ],
+  "zerg_vilgorokor": [
+   {
+    "position": 6,
+    "morph": 46
+   }
+  ],
+  "zerg_cikralisk": [
+   {
+    "position": 6,
+    "morph": "zerg_ghitorokor"
    }
   ],
   "terran_mantle": [
@@ -174967,6 +175405,118 @@
     "train": "protoss_vibrance"
    }
   ],
+  "zerg_ocsal_larva": [
+   {
+    "position": 1,
+    "morph": 47
+   },
+   {
+    "position": 2,
+    "morph": 222
+   },
+   {
+    "position": 3,
+    "morph": "zerg_scrylyleth_zorthos"
+   }
+  ],
+  "btn_ocsal_larva_swarm": [
+   {
+    "position": 1,
+    "morph": 128
+   },
+   {
+    "position": 1,
+    "morph": "zerg_zethalor_orkoti"
+   },
+   {
+    "position": 1,
+    "morph": "zerg_garvrokor_goszirith"
+   },
+   {
+    "position": 2,
+    "morph": 112
+   },
+   {
+    "position": 3,
+    "morph": 51
+   },
+   {
+    "position": 4,
+    "morph": "zerg_ghitorokor"
+   },
+   {
+    "position": 5,
+    "morph": 123
+   },
+   {
+    "position": 6,
+    "morph": "zerg_tosgrilisk"
+   }
+  ],
+  "btn_ocsal_larva_assault": [
+   {
+    "position": 1,
+    "morph": 129
+   },
+   {
+    "position": 2,
+    "morph": "zerg_tethzorokor"
+   },
+   {
+    "position": 3,
+    "morph": 62
+   },
+   {
+    "position": 4,
+    "morph": "zerg_cherbrathalor"
+   },
+   {
+    "position": 5,
+    "morph": "zerg_okrimnilisk"
+   },
+   {
+    "position": 6,
+    "morph": "zerg_algoztalisk"
+   },
+   {
+    "position": 7,
+    "morph": "zerg_kethrostalor"
+   },
+   {
+    "position": 8,
+    "morph": 48
+   }
+  ],
+  "btn_ocsal_larva_control": [
+   {
+    "position": 1,
+    "morph": 39
+   },
+   {
+    "position": 1,
+    "morph": "zerg_alzurokor_imicren"
+   },
+   {
+    "position": 2,
+    "morph": "zerg_zobriolisk"
+   },
+   {
+    "position": 3,
+    "morph": "zerg_zarcavrokor"
+   },
+   {
+    "position": 4,
+    "morph": "zerg_tetcaerokor"
+   },
+   {
+    "position": 5,
+    "morph": 46
+   },
+   {
+    "position": 6,
+    "morph": 218
+   }
+  ],
   "zerg_ezigrisant": [
    {
     "position": 1,
@@ -174989,6 +175539,48 @@
     "train": "askosi_pilgrim"
    }
   ],
+  "zerg_vornath_pond": [
+   {
+    "position": 7,
+    "morph": "zerg_kalkiir_lake_2"
+   }
+  ],
+  "zerg_skibact_scab": [
+   {
+    "position": 7,
+    "morph": 153
+   }
+  ],
+  "zerg_nathrelisk_zorthos": [
+   {
+    "position": 6,
+    "morph": 51
+   }
+  ],
+  "zerg_iziralisk_zorthos": [
+   {
+    "position": 6,
+    "morph": "zerg_tethzorokor"
+   }
+  ],
+  "zerg_inzorthrokor_imicren": [
+   {
+    "position": 6,
+    "morph": "zerg_alzurokor_imicren"
+   }
+  ],
+  "zerg_quazrokor": [
+   {
+    "position": 6,
+    "morph": 112
+   }
+  ],
+  "zerg_lakizilisk_zorthos": [
+   {
+    "position": 6,
+    "morph": "zerg_zobriolisk"
+   }
+  ],
   "askosi_landlock": [
    {
     "position": 1,
@@ -175009,6 +175601,18 @@
    {
     "position": 4,
     "train": "askosi_constituent"
+   }
+  ],
+  "zerg_hydralisk_orkoti": [
+   {
+    "position": 6,
+    "morph": 129
+   }
+  ],
+  "zerg_yblyleth_zorthos": [
+   {
+    "position": 6,
+    "morph": "zerg_scrylyleth_zorthos"
    }
   ],
   "askosi_radix": [
@@ -175067,6 +175671,18 @@
    {
     "position": 4,
     "train": "askosi_tirade"
+   }
+  ],
+  "zerg_azanthrokor_orkoti": [
+   {
+    "position": 6,
+    "morph": "zerg_zarcavrokor"
+   }
+  ],
+  "zerg_sovrokor_goszirith": [
+   {
+    "position": 6,
+    "morph": "zerg_garvrokor_goszirith"
    }
   ],
   "askosi_proscenium": [
@@ -175211,6 +175827,24 @@
    {
     "position": 6,
     "train": "forerunner_vicere"
+   }
+  ],
+  "zerg_rozirokor_imicren": [
+   {
+    "position": 6,
+    "morph": "zerg_tethzorokor"
+   }
+  ],
+  "zerg_hydrokor_goszirith": [
+   {
+    "position": 6,
+    "morph": 129
+   }
+  ],
+  "zerg_zethalisk_orkoti": [
+   {
+    "position": 6,
+    "morph": "zerg_zethalor_orkoti"
    }
   ],
   "forerunner_molaris": [

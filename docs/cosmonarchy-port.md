@@ -99,22 +99,27 @@ Hyperion.exe --mod cosmonarchy                     # play it
    from the install into the mod's data folder; `cmport art`). The mod's new
    sounds use a display-name table whose file mapping still needs decoding;
    the engine treats missing sounds as silence.
-4. **Engine: gameplay-mod support** — the first half is in: a data mod's
-   main button starts a game (any mod with data and no mode plays), add-on
-   requirements load through `{"addon": unit}` (34 units carry them), and
-   research buttons may name a mod's edits of the original's techs. The
-   mod's research itself flows through the original's research buttons with
-   the edited trees, as its own game does. The rest, deferred with notes:
-   - **morphs** — the original's morphs are hardcoded per-type machinery; a
-     data-driven mod morph table (from the graft's morph buttons) is a
-     designed future piece;
-   - **extended tilesets** — the mod's maps use tileset ids past the
-     original's (up to ~1000); support means the CV5/VF4/VX4/VR4 sets and
-     the mod's 65-row mapdata;
-   - **mod strings** — the mod's extended stat_txt lives in its patched exe,
-     not the data tree; needs extraction or recreation;
+4. **Engine: gameplay-mod support** — done:
+   - a data mod's main button starts a game;
+   - add-on requirements load through `{"addon": unit}` (34 units);
+   - research buttons may name a mod's edits of the original's techs (the
+     mod's research itself flows through the original's buttons with the
+     edited trees, as its own game does);
+   - **morphs**: cards gain a `morph` kind; 128 morph buttons across 101
+     cards load, and the engine morphs the source into the target through
+     the original's own morph order and state machine (`ModMorphTarget`;
+     the larva's egg path stays the original's);
+   - **mod strings**: `data/stat_txt.txt` (the mod's full 2999-entry table,
+     extracted from its data tree) overrides the game's strings in mod
+     games;
    - **Orders.graft** — nothing to port: the original game never reads the
-     orders' requirements column; the graft feeds the mod's own exe only.
+     orders' requirements column.
+   - **Extended tilesets — the one remaining gap**: the mod's maps use
+     tileset ids past the original's (68, 998, ...), but its data tree ships
+     only the eight vanilla tileset sets; the extended ids map through its
+     patched exe's tileset table, which the tree does not carry. Needs that
+     table extracted (like the strings were) or the maps re-saved against
+     vanilla sets.
 5. **QoL port — LAST, and slow.** The GPTP/Plus plugin features (saturation
    overlays, Tab cycling, F11 HUD, idle-worker key, larva picker, custom
    triggers, Lua melee AI, the game modes). Some are already in Hyperion
