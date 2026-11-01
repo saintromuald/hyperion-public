@@ -1,0 +1,11 @@
+{
+  "id": "cosmonarchy",
+  "name": "Cosmonarchy",
+  "by": "the-no-frauds-club + saintromuald (Hyperion port)",
+  "version": "0.1",
+  "line": "The Cosmonarchy BW total conversion - its races, units, buildings, tech and quality of life - running on Hyperion's engine, toggleable as a mod.",
+  "holds": ["maps", "campaign"],
+  "rules": "changed",
+  "world": "char",
+  "data": "data/"
+}
