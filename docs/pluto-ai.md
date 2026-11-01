@@ -107,10 +107,13 @@ New this session, read from the binaries and the running rig:
   and code, and guard-page taps (PAGE_GUARD + the vectored handler) on the driver,
   walk and writer pages that log every execution with the register context.
 
-Open (next session): the module's obs-state (module+0x10F4) is the live one, and its
-record list — a forward_list {head(+0x1E4), size(+0x1E8)} — holds one all-zero record:
-the builder runs but reads zeros from the host's units. The remaining gap is the
-fork-ABI unit getters (the slot audit covered the set-returning slots; the builder's
-type/position/hp getters need the same audit). Once the records fill, the walk
-completes, the writer fills view+0xC0 with N, and the differential scenarios (move a
-unit, change resources) name every field.
+Open (next session): **the bot reads the real game's memory directly** — 133 absolute
+StarCraft 1.16.1 addresses (inventoried in `tools/pluto-rig/sc-addresses.txt`),
+including the unit table at 0x59CCA8 (stride 0x150; type at +0x64, position at
++0x10/+0x12, and more, as the per-unit writer reads them) and the per-(type,player)
+attribute table at 0x58D2B0 (stride 0x2E per player). patch_pluto.py remaps them onto
+the rig's zero stand-in buffers, so the module's record list (a forward_list,
+module+0x10F4) gets one all-zero record. Next: fill the stand-ins with a miniature
+1.16.1 memory image (the scripted units' table entries, per-player tables, attribute
+tables), then the records fill, the writer fills view+0xC0 with N, and the
+differential scenarios name every field.
