@@ -1,0 +1,338 @@
+import { SetRequired } from 'type-fest'
+import { SbChannelId } from '../../../common/chat'
+import { NotificationType } from '../../../common/notifications'
+import { RestrictionKind, RestrictionReason } from '../../../common/users/restrictions'
+import { SbUserId } from '../../../common/users/sb-user-id'
+import db from '../db/index'
+import { sql, sqlConcat, sqlRaw } from '../db/sql'
+import { Dbify } from '../db/types'
+
+export interface BaseNotificationData {
+  readonly type: NotificationType
+}
+
+type MakeSearchable<T extends BaseNotificationData> = SetRequired<
+  Partial<T>,
+  keyof BaseNotificationData
+>
+
+export type NotificationData =
+  | PartyInviteNotificationData
+  | FriendRequestNotificationData
+  | FriendStartNotificationData
+  | UserRestrictedNotificationData
+  | LeagueBanNotificationData
+  | LeagueUnbanNotificationData
+  | LeagueStartNotificationData
+  | ChannelKickNotificationData
+  | ChannelBanNotificationData
+  | ChannelUnbanNotificationData
+  | ChannelClosedNotificationData
+  | ChannelDeletedNotificationData
+  | GameReportActionedNotificationData
+  | GamePointsRefundedNotificationData
+  | MatchmakingBanNotificationData
+
+export interface FriendRequestNotificationData extends BaseNotificationData {
+  type: NotificationType.FriendRequest
+  from: SbUserId
+}
+
+type FriendRequestSearchNotificationData = MakeSearchable<FriendRequestNotificationData>
+
+export interface FriendStartNotificationData extends BaseNotificationData {
+  type: NotificationType.FriendStart
+  with: SbUserId
+}
+
+type FriendStartSearchNotificationData = MakeSearchable<FriendStartNotificationData>
+
+export interface PartyInviteNotificationData extends BaseNotificationData {
+  type: NotificationType.PartyInvite
+  from: SbUserId
+  partyId: string
+}
+
+type PartyInviteSearchNotificationData = MakeSearchable<PartyInviteNotificationData>
+
+export interface UserRestrictedNotificationData extends BaseNotificationData {
+  type: NotificationType.UserRestricted
+  kind: RestrictionKind
+  endTime: number
+  reason?: RestrictionReason
+}
+
+type UserRestrictedSearchNotificationData = MakeSearchable<UserRestrictedNotificationData>
+
+export interface LeagueBanNotificationData extends BaseNotificationData {
+  type: NotificationType.LeagueBan
+  leagueName: string
+}
+
+type LeagueBanSearchNotificationData = MakeSearchable<LeagueBanNotificationData>
+
+export interface LeagueUnbanNotificationData extends BaseNotificationData {
+  type: NotificationType.LeagueUnban
+  leagueName: string
+}
+
+type LeagueUnbanSearchNotificationData = MakeSearchable<LeagueUnbanNotificationData>
+
+export interface LeagueStartNotificationData extends BaseNotificationData {
+  type: NotificationType.LeagueStart
+  leagueName: string
+}
+
+type LeagueStartSearchNotificationData = MakeSearchable<LeagueStartNotificationData>
+
+export interface ChannelKickNotificationData extends BaseNotificationData {
+  type: NotificationType.ChannelKick
+  channelId: SbChannelId
+  channelName: string
+}
+
+type ChannelKickSearchNotificationData = MakeSearchable<ChannelKickNotificationData>
+
+export interface ChannelBanNotificationData extends BaseNotificationData {
+  type: NotificationType.ChannelBan
+  channelId: SbChannelId
+  channelName: string
+}
+
+type ChannelBanSearchNotificationData = MakeSearchable<ChannelBanNotificationData>
+
+export interface ChannelUnbanNotificationData extends BaseNotificationData {
+  type: NotificationType.ChannelUnban
+  channelId: SbChannelId
+  channelName: string
+}
+
+type ChannelUnbanSearchNotificationData = MakeSearchable<ChannelUnbanNotificationData>
+
+export interface ChannelClosedNotificationData extends BaseNotificationData {
+  type: NotificationType.ChannelClosed
+  channelId: SbChannelId
+  channelName: string
+}
+
+type ChannelClosedSearchNotificationData = MakeSearchable<ChannelClosedNotificationData>
+
+export interface ChannelDeletedNotificationData extends BaseNotificationData {
+  type: NotificationType.ChannelDeleted
+  channelId: SbChannelId
+  channelName: string
+}
+
+type ChannelDeletedSearchNotificationData = MakeSearchable<ChannelDeletedNotificationData>
+
+export interface GameReportActionedNotificationData extends BaseNotificationData {
+  type: NotificationType.GameReportActioned
+}
+
+type GameReportActionedSearchNotificationData = MakeSearchable<GameReportActionedNotificationData>
+
+export interface GamePointsRefundedNotificationData extends BaseNotificationData {
+  type: NotificationType.GamePointsRefunded
+}
+
+type GamePointsRefundedSearchNotificationData = MakeSearchable<GamePointsRefundedNotificationData>
+
+export interface MatchmakingBanNotificationData extends BaseNotificationData {
+  type: NotificationType.MatchmakingBan
+  bannedUntil?: number
+}
+
+type MatchmakingBanSearchNotificationData = MakeSearchable<MatchmakingBanNotificationData>
+
+/**
+ * Notification data type that can be used to retrieve notifications by.
+ */
+export type SearchNotificationData =
+  | FriendRequestSearchNotificationData
+  | FriendStartSearchNotificationData
+  | PartyInviteSearchNotificationData
+  | UserRestrictedSearchNotificationData
+  | LeagueBanSearchNotificationData
+  | LeagueUnbanSearchNotificationData
+  | LeagueStartSearchNotificationData
+  | ChannelKickSearchNotificationData
+  | ChannelBanSearchNotificationData
+  | ChannelUnbanSearchNotificationData
+  | ChannelClosedSearchNotificationData
+  | ChannelDeletedSearchNotificationData
+  | GameReportActionedSearchNotificationData
+  | GamePointsRefundedSearchNotificationData
+  | MatchmakingBanSearchNotificationData
+  | Record<string, never>
+
+export interface Notification {
+  id: string
+  userId: SbUserId
+  read: boolean
+  visible: boolean
+  createdAt: Date
+  data: NotificationData
+}
+
+type DbNotification = Dbify<Notification>
+
+function fromDbNotification(result: Readonly<DbNotification>): Notification {
+  return {
+    id: result.id,
+    userId: result.user_id,
+    read: result.read,
+    visible: result.visible,
+    createdAt: result.created_at,
+    data: result.data,
+  }
+}
+
+/**
+ * Retrieves the list of 100 visible notifications for a particular user by default, ordered by the
+ * time they were created. Additionally, the notifications can be filtered by any of their data
+ * properties.
+ */
+export async function retrieveNotifications({
+  userId,
+  data = {},
+  visible = true,
+  limit = 100,
+}: {
+  userId: SbUserId
+  data?: SearchNotificationData
+  visible?: boolean
+  limit?: number
+}): Promise<Notification[]> {
+  const { client, done } = await db()
+  try {
+    const query = sql`
+      SELECT id, user_id, read, visible, created_at, data
+      FROM notifications
+      WHERE user_id = ${userId} AND visible = ${visible}
+      ${sqlRaw(Object.keys(data).length > 0 ? ' AND ' : '')}
+      ${sqlConcat(
+        ' AND ',
+        Object.entries(data).map(([k, v]) => sql`data->>${k} = ${v}`),
+      )}
+      ORDER BY created_at DESC
+      LIMIT ${limit};
+    `
+
+    const result = await client.query<DbNotification>(query)
+    return result.rows.map(n => fromDbNotification(n))
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Creates a new notification with the given data and persists it to the DB. Notifications are
+ * created as unread, but visible by default.
+ */
+export async function addNotification({
+  userId,
+  data,
+  createdAt = new Date(),
+}: {
+  userId: SbUserId
+  data: NotificationData
+  createdAt?: Date
+}): Promise<Notification> {
+  const { client, done } = await db()
+  try {
+    const result = await client.query<DbNotification>(sql`
+      INSERT INTO notifications (user_id, created_at, data)
+      VALUES (${userId}, ${createdAt}, ${data})
+      RETURNING *;
+    `)
+
+    return fromDbNotification(result.rows[0])
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Creates the same notification for each of `userIds` in a single statement and persists them to
+ * the DB. Notifications are created as unread, but visible by default.
+ */
+export async function addNotificationForUsers({
+  userIds,
+  data,
+  createdAt = new Date(),
+}: {
+  userIds: ReadonlyArray<SbUserId>
+  data: NotificationData
+  createdAt?: Date
+}): Promise<Notification[]> {
+  if (!userIds.length) {
+    return []
+  }
+
+  const { client, done } = await db()
+  try {
+    const result = await client.query<DbNotification>(sql`
+      INSERT INTO notifications (user_id, created_at, data)
+      VALUES ${sqlConcat(
+        ', ',
+        userIds.map(userId => sql`(${userId}, ${createdAt}, ${data})`),
+      )}
+      RETURNING *;
+    `)
+
+    return result.rows.map(n => fromDbNotification(n))
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Marks the given notification(s) for a particular user as read.
+ */
+export async function markRead(
+  userId: SbUserId,
+  notificationIds: ReadonlyArray<string>,
+): Promise<void> {
+  const { client, done } = await db()
+  try {
+    await client.query(sql`
+      UPDATE notifications
+      SET read = true
+      WHERE user_id = ${userId} AND id = ANY(${notificationIds});
+    `)
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Marks all notifications before a given date for a particular user as not visible, i.e. cleared.
+ */
+export async function clearBefore(userId: SbUserId, date: Date): Promise<void> {
+  const { client, done } = await db()
+  try {
+    await client.query(sql`
+      UPDATE notifications
+      SET visible = false
+      WHERE user_id = ${userId} AND created_at <= ${date};
+    `)
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Marks the given notification for a particular user as not visible, i.e. cleared.
+ */
+export async function clearById(userId: SbUserId, notificationId: string): Promise<void> {
+  const { client, done } = await db()
+  try {
+    await client.query(sql`
+      UPDATE notifications
+      SET visible = false
+      WHERE user_id = ${userId} AND id = ${notificationId};
+    `)
+  } finally {
+    done()
+  }
+}

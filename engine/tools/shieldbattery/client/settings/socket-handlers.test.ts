@@ -1,0 +1,49 @@
+import type { NydusClient } from 'nydus-client'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
+import {
+  AccountSettingsUpdateEvent,
+  DEFAULT_ACCOUNT_SETTINGS,
+} from '../../common/settings/account-settings'
+import { makeSbUserId } from '../../common/users/sb-user-id'
+import { registerDispatch } from '../dispatch-registry'
+import { jotaiStore } from '../jotai-store'
+import { accountSettingsSyncedUserAtom } from './settings-atoms'
+import registerModule from './socket-handlers'
+
+const mocks = vi.hoisted(() => ({ writeCachedAccountSettings: vi.fn() }))
+vi.mock('./account-settings-cache', () => ({
+  writeCachedAccountSettings: mocks.writeCachedAccountSettings,
+}))
+
+const USER_ID = makeSbUserId(1)
+
+beforeEach(() => vi.clearAllMocks())
+
+describe('account settings updates', () => {
+  test('dispatches the new settings and writes them to the cache', () => {
+    const dispatched = vi.fn()
+    registerDispatch(dispatched)
+
+    const registerRoute = vi.fn()
+    registerModule({ siteSocket: { registerRoute } as unknown as NydusClient })
+    const [, receive] = registerRoute.mock.calls.find(
+      ([path]) => path === '/account-settings/:userId',
+    )!
+
+    const event: AccountSettingsUpdateEvent = {
+      action: 'update',
+      settings: { ...DEFAULT_ACCOUNT_SETTINGS, quietChannelsWhileInGame: false },
+    }
+    receive({ params: { userId: String(USER_ID) } }, event)
+
+    expect(dispatched).toHaveBeenCalledExactlyOnceWith({
+      type: '@settings/updateAccountSettings',
+      payload: event.settings,
+    })
+    expect(mocks.writeCachedAccountSettings).toHaveBeenCalledExactlyOnceWith(
+      USER_ID,
+      event.settings,
+    )
+    expect(jotaiStore.get(accountSettingsSyncedUserAtom)).toBe(USER_ID)
+  })
+})

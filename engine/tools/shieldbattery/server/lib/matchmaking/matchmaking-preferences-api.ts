@@ -1,0 +1,79 @@
+import { RouterContext } from '@koa/router'
+import httpErrors from 'http-errors'
+import Joi from 'joi'
+import { toMapInfoJson } from '../../../common/maps'
+import {
+  ALL_MATCHMAKING_TYPES,
+  GetPreferencesResponse,
+  MatchmakingType,
+} from '../../../common/matchmaking'
+import { httpApi, httpBeforeAll } from '../http/http-api'
+import { httpPost } from '../http/route-decorators'
+import { getMapInfos } from '../maps/map-models'
+import ensureLoggedIn from '../session/ensure-logged-in'
+import { validateRequest } from '../validation/joi-validator'
+import { filterMapSelections } from './map-selections'
+import { getCurrentMapPool } from './matchmaking-map-pools-models'
+import MatchmakingPreferencesService from './matchmaking-preferences-service'
+import { matchmakingPreferencesValidator } from './matchmaking-validators'
+
+@httpApi('/matchmaking-preferences')
+@httpBeforeAll(ensureLoggedIn)
+export class MatchmakingPreferencesApi {
+  constructor(private matchmakingPreferencesService: MatchmakingPreferencesService) {}
+
+  @httpPost('/:matchmakingType')
+  async upsertPreferences(ctx: RouterContext): Promise<GetPreferencesResponse> {
+    const { params, body } = validateRequest(ctx, {
+      params: Joi.object<{ matchmakingType: MatchmakingType }>({
+        matchmakingType: Joi.valid(...ALL_MATCHMAKING_TYPES).required(),
+      }).required(),
+      body: matchmakingPreferencesValidator(ctx.session!.user.id).required(),
+    })
+
+    if (params.matchmakingType !== body.matchmakingType) {
+      throw new httpErrors.BadRequest('Matchmaking type in params and body must match')
+    }
+
+    const currentMapPool = await getCurrentMapPool(params.matchmakingType)
+    if (!currentMapPool) {
+      throw new httpErrors.BadRequest('invalid matchmaking type')
+    }
+
+    if (
+      (body.matchmakingType === MatchmakingType.Match1v1 ||
+        body.matchmakingType === MatchmakingType.Match1v1Fastest) &&
+      body.data
+    ) {
+      const {
+        race,
+        data: { useAlternateRace },
+      } = body
+      if (race === 'r' && useAlternateRace === true) {
+        throw new httpErrors.BadRequest('cannot use alternate race as random')
+      }
+    }
+
+    // Editing settings doesn't change which modes are selected, so we just echo the stored
+    // `selected` flag back (the upsert leaves it untouched).
+    const { preferences, selected } = await this.matchmakingPreferencesService.upsertPreferences({
+      userId: ctx.session!.user.id,
+      matchmakingType: body.matchmakingType as any,
+      race: body.race,
+      mapPoolId: currentMapPool.id,
+      mapSelections: body.mapSelections
+        ? filterMapSelections(currentMapPool, body.mapSelections)
+        : undefined,
+      data: body.data,
+    })
+
+    const mapInfos = (await getMapInfos(preferences.mapSelections)).map(m => toMapInfoJson(m))
+
+    return {
+      preferences,
+      currentMapPoolId: currentMapPool.id,
+      mapInfos,
+      selected,
+    }
+  }
+}

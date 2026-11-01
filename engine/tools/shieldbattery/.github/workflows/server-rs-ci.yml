@@ -1,0 +1,199 @@
+name: server-rs CI
+
+on:
+  push:
+    paths:
+      - '.github/workflows/server-rs-ci.yml'
+      - 'common/typeshare.ts'
+      - 'migrations/**'
+      - 'schema.graphql'
+      - 'server-rs/**'
+  pull_request:
+    paths:
+      - '.github/workflows/server-rs-ci.yml'
+      - 'common/typeshare.ts'
+      - 'migrations/**'
+      - 'schema.graphql'
+      - 'server-rs/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clippy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./server-rs
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./server-rs
+
+      - name: clippy
+        run: cargo clippy --all-targets --workspace -- -D warnings
+
+  fmt:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./server-rs
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./server-rs
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./server-rs
+
+      - name: cargo test
+        run: cargo test --all-targets --no-fail-fast
+
+      - name: cargo run --bin gen-schema
+        id: gen-schema
+        run: cargo run --bin gen-schema -- --fail-on-update
+
+      - name: Display graphql error
+        if: ${{ failure() && steps.gen-schema.conclusion == 'failure' }}
+        run: |
+          echo '::error::The generated graphql files seem outdated. Please run `pnpm gen-schema && pnpm gen-graphql` in the directory root and commit the updated files.'
+          exit 1
+
+  typeshare:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Using pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Using Node.js 24.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: 'pnpm'
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install typeshare-cli
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: typeshare-cli
+
+      - name: Run typeshare
+        id: gen-typeshare
+        run: pnpm gen-typeshare
+
+      - name: Check typeshare
+        id: check-typeshare
+        run: echo "matches=$(git status --porcelain -- 'common/typeshare.ts' | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Display typeshare
+        if: ${{ steps.check-typeshare.outputs.matches != '' || failure() && steps.gen-typeshare.conclusion == 'failure' }}
+        run: |
+          git diff -- common/typeshare.ts
+          echo '::error::The typeshare types seem outdated. Please run "pnpm gen-typeshare" in the directory root and commit the updated files. You may need to run "cargo install typeshare-cli" to get an updated version first.'
+          exit 1
+
+  sqlx-prepare:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./server-rs
+    strategy:
+      fail-fast: false
+    env:
+      DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/shieldbattery'
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+          SB_DB: shieldbattery
+          SB_DB_USER: shieldbattery
+          SB_DB_PASSWORD: shieldbattery
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./server-rs
+
+      - name: Install sqlx-cli
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: sqlx-cli
+
+      - name: Get Postgres container ID
+        id: get_postgres_id
+        run: echo "CONTAINER_ID=$(docker ps --filter 'ancestor=postgres:17' --format '{{.ID}}' | head -n 1)" >> $GITHUB_ENV
+
+      - name: Wait for Postgres to be ready
+        run: |
+          for i in {1..30}; do
+            docker exec $CONTAINER_ID pg_isready && exit 0
+            sleep 1
+          done
+          exit 1
+
+      - name: Copy init script into container
+        run: docker cp ../deployment/appserver/db/init-scripts/20200505-create-user-and-db.sh $CONTAINER_ID:/docker-entrypoint-initdb.d/20200505-create-user-and-db.sh
+
+      - name: Run init script in container
+        run: docker exec -u postgres $CONTAINER_ID bash /docker-entrypoint-initdb.d/20200505-create-user-and-db.sh
+
+      - name: Run migrations
+        run: cargo sqlx migrate run --source ../migrations
+
+      - name: Check sqlx prepare
+        run: cargo sqlx prepare --check --workspace -- --all-targets --all-features

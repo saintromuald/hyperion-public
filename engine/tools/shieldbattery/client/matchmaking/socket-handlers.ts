@@ -1,0 +1,414 @@
+import { NydusClient, RouteHandler, RouteInfo } from 'nydus-client'
+import { MatchmakingResultsEvent } from '../../common/games/games'
+import { TypedIpcRenderer } from '../../common/ipc'
+import {
+  GetPreferencesResponse,
+  MatchmakingEvent,
+  MatchmakingStatusJson,
+  MatchmakingType,
+} from '../../common/matchmaking'
+import { audioManager, AvailableSound } from '../audio/audio-manager'
+import { closeDialog, openDialog, openSimpleDialog } from '../dialogs/action-creators'
+import { DialogType } from '../dialogs/dialog-type'
+import { dispatch, Dispatchable } from '../dispatch-registry'
+import windowFocus from '../dom/window-focus'
+import { lastGameAtom } from '../games/game-atoms'
+import i18n from '../i18n/i18next'
+import { jotaiStore } from '../jotai-store'
+import logger from '../logging/logger'
+import { externalShowSnackbar } from '../snackbars/snackbar-controller-registry'
+import { DURATION_LONG } from '../snackbars/snackbar-durations'
+import { closeAcceptMatchDialog, getCurrentMapPool, openAcceptMatchDialog } from './action-creators'
+import {
+  addDraftChatMessage,
+  completeDraft,
+  draftMatchmakingTypeAtom,
+  draftStateAtom,
+  resetDraftState,
+  updateCurrentPickerAtom,
+  updateLockedPickAtom,
+  updateProvisionalPickAtom,
+} from './draft-atoms'
+import {
+  acceptedPlayersAtom,
+  canceledMatchAtom,
+  clearMatchmakingState,
+  currentSearchInfoAtom,
+  foundMatchAtom,
+  handledLobbyViolationPenaltyGamesAtom,
+  launchingMatchmakingTypeAtom,
+  matchLaunchingAtom,
+} from './matchmaking-atoms'
+
+const ipcRenderer = new TypedIpcRenderer()
+
+type EventToActionMap = {
+  [E in MatchmakingEvent['type']]: (
+    event: Extract<MatchmakingEvent, { type: E }>,
+  ) => Dispatchable | undefined | void
+}
+
+/** Exported for tests; the socket routes are registered by the default export. */
+export const eventToAction: EventToActionMap = {
+  matchFound: event => (dispatch, getState) => {
+    logger.debug(
+      `Match found, showing accept dialog. ${event.acceptTimeLeftMillis}ms left, ` +
+        `${event.acceptedPlayers} / ${event.numPlayers} accepted. ` +
+        `Self accepted: ${event.hasAccepted}`,
+    )
+    if (getState().settings.account.flashTaskbar) {
+      ipcRenderer.send('userAttentionRequired')
+    }
+    audioManager.playSound(AvailableSound.MatchFound)
+
+    jotaiStore.set(foundMatchAtom, {
+      matchmakingType: event.matchmakingType,
+      numPlayers: event.numPlayers,
+      acceptStart:
+        window.performance.now() - (event.acceptTimeTotalMillis - event.acceptTimeLeftMillis),
+      acceptTimeTotalMillis: event.acceptTimeTotalMillis,
+
+      acceptedPlayers: event.acceptedPlayers,
+      hasAccepted: event.hasAccepted,
+    })
+
+    // We clear out this state so that we don't e.g. show the user a dialog about their previous
+    // match that prevents them from accepting the new match.
+    jotaiStore.set(lastGameAtom, undefined)
+    // Notices about a previous match falling apart are stale once a new one is found, and one left
+    // open would sit under the accept dialog and then over the draft screen.
+    dispatch(closeDialog(DialogType.MatchCanceled))
+    dispatch(closeDialog(DialogType.FailedToAcceptMatch))
+
+    dispatch(openAcceptMatchDialog())
+  },
+
+  draftStarted: event => (dispatch, getState) => {
+    logger.debug(`Draft started`)
+    dispatch(closeAcceptMatchDialog())
+
+    dispatch({
+      type: '@maps/loadMapInfos',
+      payload: [event.mapInfo],
+    })
+
+    // The accept phase is over once the draft begins, and `foundMatchAtom` describes only that
+    // phase. Only `matchFound` names the match's type, so the draft carries it on from there.
+    const matchmakingType = jotaiStore.get(foundMatchAtom)?.matchmakingType
+    jotaiStore.set(foundMatchAtom, undefined)
+
+    resetDraftState(jotaiStore)
+    jotaiStore.set(draftStateAtom, event.draftState)
+    jotaiStore.set(draftMatchmakingTypeAtom, matchmakingType)
+
+    if (getState().settings.account.flashTaskbar) {
+      ipcRenderer.send('userAttentionRequired')
+    }
+  },
+
+  draftPickStarted: event => {
+    jotaiStore.set(updateCurrentPickerAtom, {
+      team: event.teamId,
+      slot: event.index,
+    })
+  },
+
+  draftProvisionalPick: event => {
+    jotaiStore.set(updateProvisionalPickAtom, {
+      teamId: event.teamId,
+      index: event.index,
+      race: event.race,
+    })
+  },
+
+  draftPickLocked: event => {
+    jotaiStore.set(updateLockedPickAtom, {
+      teamId: event.teamId,
+      index: event.index,
+      race: event.race,
+    })
+  },
+
+  draftCompleted: event => {
+    completeDraft(jotaiStore)
+  },
+
+  draftCancel: event => {
+    logger.debug(`Draft canceled: ${event.reason}`)
+    resetDraftState(jotaiStore)
+    jotaiStore.set(canceledMatchAtom, { phase: 'draft', reason: event.reason })
+  },
+
+  draftChatMessage: event => (dispatch, getState) => {
+    const {
+      auth,
+      relationships: { blocks },
+      settings: { account: accountSettings },
+    } = getState()
+
+    const isBlocked = blocks.has(event.message.from)
+    if (!isBlocked) {
+      ipcRenderer.send('chatNewMessage', {
+        urgent: event.mentions.some(m => m.id === auth.self!.user.id),
+        flashTaskbar: accountSettings.flashTaskbar,
+      })
+    }
+
+    dispatch({
+      type: '@messaging/loadMentions',
+      payload: {
+        mentions: event.mentions,
+        channelMentions: event.channelMentions,
+      },
+    })
+
+    addDraftChatMessage(jotaiStore, event.message)
+
+    if (!isBlocked && accountSettings.playMessageSounds && !windowFocus.isFocused()) {
+      audioManager.playSound(AvailableSound.MessageAlert)
+    }
+  },
+
+  playerAccepted: event => {
+    logger.debug(`Player accepted, ${event.acceptedPlayers} players now ready`)
+    jotaiStore.set(acceptedPlayersAtom, event.acceptedPlayers)
+  },
+
+  acceptTimeout: event => dispatch => {
+    logger.debug(`Timed out accepting match, showing failure dialog`)
+    dispatch(closeAcceptMatchDialog())
+    dispatch(openDialog({ type: DialogType.FailedToAcceptMatch }))
+  },
+
+  startSearch: event => {
+    logger.debug(`Matchmaking search started`)
+    audioManager.playSound(AvailableSound.EnteredQueue)
+    jotaiStore.set(currentSearchInfoAtom, {
+      searchedTypes: new Map(event.searchedTypes.map(s => [s.matchmakingType, s.race])),
+      startTime: window.performance.now(),
+    })
+  },
+
+  requeue: event => (dispatch, getState) => {
+    logger.debug(`Re-entered matchmaking queue`)
+    audioManager.playSound(AvailableSound.EnteredQueue)
+
+    // A requeue can follow any phase of a match falling apart. A match canceled during the draft or
+    // game load leaves its cause in `canceledMatchAtom`, and the StarCraft window or draft screen
+    // closing on the player needs an explanation that stays up until they've read it.
+    const canceledMatch = jotaiStore.get(canceledMatchAtom)
+    if (canceledMatch) {
+      jotaiStore.set(canceledMatchAtom, undefined)
+      dispatch(openDialog({ type: DialogType.MatchCanceled, initData: canceledMatch }))
+      return
+    }
+
+    // `foundMatchAtom` is only set during the accept phase, so its presence here is what identifies
+    // a requeue caused by players failing to ready up.
+    const failedToAccept = !!jotaiStore.get(foundMatchAtom)
+    jotaiStore.set(foundMatchAtom, undefined)
+
+    // If the accept-match dialog was dismissed, it won't be around to show its own "returning to
+    // queue" message, so show a snackbar with the same information instead.
+    const dialogOpen = getState().dialog.history.some(d => d.type === DialogType.AcceptMatch)
+    if (failedToAccept && !dialogOpen) {
+      externalShowSnackbar(
+        i18n.t(
+          'matchmaking.acceptMatch.returningToQueue',
+          "Some players didn't ready up in time or failed to load. Returning to the matchmaking " +
+            'queue…',
+        ),
+        DURATION_LONG,
+      )
+    }
+  },
+
+  matchReady: event => (dispatch, getState) => {
+    logger.debug(`Match is now ready, closing accept dialog`)
+    dispatch(closeAcceptMatchDialog())
+    // A drafted match's found match was cleared when its draft began, so its type is the draft's.
+    const matchmakingType =
+      jotaiStore.get(foundMatchAtom)?.matchmakingType ?? jotaiStore.get(draftMatchmakingTypeAtom)
+    resetDraftState(jotaiStore)
+
+    jotaiStore.set(foundMatchAtom, undefined)
+    jotaiStore.set(matchLaunchingAtom, true)
+    jotaiStore.set(launchingMatchmakingTypeAtom, matchmakingType)
+    dispatch(openDialog({ type: DialogType.LaunchingGame }))
+  },
+
+  cancelLoading: event => (dispatch, getState) => {
+    logger.debug(`Match loading canceled`)
+    resetDraftState(jotaiStore)
+    jotaiStore.set(matchLaunchingAtom, false)
+    jotaiStore.set(launchingMatchmakingTypeAtom, undefined)
+    dispatch(closeDialog(DialogType.LaunchingGame))
+    jotaiStore.set(canceledMatchAtom, {
+      phase: 'load',
+      reason: event.reason,
+      ...(event.penalty ? { penalty: event.penalty } : {}),
+    })
+  },
+
+  lobbyViolationPenalty: event => dispatch => {
+    const handledGames = jotaiStore.get(handledLobbyViolationPenaltyGamesAtom)
+    if (handledGames.has(event.gameId)) {
+      return
+    }
+
+    const recentGames = new Set(handledGames).add(event.gameId)
+    if (recentGames.size > 100) {
+      recentGames.delete(recentGames.values().next().value!)
+    }
+    jotaiStore.set(handledLobbyViolationPenaltyGamesAtom, recentGames)
+    logger.debug(`Applying late lobby-violation penalty for game ${event.gameId}`)
+    if (event.queueRemoved) {
+      resetDraftState(jotaiStore)
+      clearMatchmakingState(jotaiStore)
+      dispatch(closeAcceptMatchDialog())
+      dispatch(closeDialog(DialogType.LaunchingGame))
+    }
+    dispatch(
+      openDialog({
+        type: DialogType.MatchCanceled,
+        initData: {
+          phase: 'load',
+          reason: 'gameAnomaly',
+          penalty: event.penalty,
+          requeued: false,
+          queueRemoved: event.queueRemoved,
+        },
+      }),
+    )
+  },
+
+  gameStarted: event => (dispatch, getState) => {
+    logger.debug(`Match started successfully`)
+    clearMatchmakingState(jotaiStore)
+    dispatch(closeDialog(DialogType.LaunchingGame))
+  },
+
+  queueStatus: event => dispatch => {
+    logger.debug(
+      `Matchmaking queue status received: ${event.matchmaking ? JSON.stringify(event.matchmaking) : 'Not in queue'}`,
+    )
+    if (!event.matchmaking) {
+      // A canceled anomaly is explained after the server has established whether this client was
+      // requeued or removed. Other load failures use a concise notification.
+      const canceledMatch = jotaiStore.get(canceledMatchAtom)
+      if (canceledMatch?.phase === 'load' && canceledMatch.reason === 'gameAnomaly') {
+        jotaiStore.set(canceledMatchAtom, undefined)
+        dispatch(
+          openDialog({
+            type: DialogType.MatchCanceled,
+            initData: { ...canceledMatch, requeued: false },
+          }),
+        )
+      } else if (canceledMatch?.phase === 'load') {
+        // A failed load is the moment this client's logs say the most about why, so the app offers
+        // a bug report (which uploads them) right on the notice. The web client has no logs to send.
+        externalShowSnackbar(
+          i18n.t('matchmaking.match.gameFailedToLoad', 'The game has failed to load.'),
+          IS_ELECTRON ? DURATION_LONG : undefined,
+          IS_ELECTRON
+            ? {
+                action: {
+                  label: i18n.t('matchmaking.match.reportBug', 'Report a bug'),
+                  onClick: () => dispatch(openDialog({ type: DialogType.BugReport })),
+                },
+              }
+            : undefined,
+        )
+      }
+      clearMatchmakingState(jotaiStore)
+    }
+    // NOTE(tec27): Any other state updates will be handled by `startSearch`
+  },
+
+  matchmakingServiceError: event => dispatch => {
+    logger.error('Matchmaking service error received — matchmaking was interrupted')
+    clearMatchmakingState(jotaiStore)
+    dispatch(
+      openSimpleDialog(
+        i18n.t('matchmaking.serviceError.dialogTitle', 'Matchmaking error'),
+        i18n.t(
+          'matchmaking.serviceError.removedFromQueue',
+          'Matchmaking was interrupted due to a server error. Please re-queue to find a match.',
+        ),
+        true,
+      ),
+    )
+  },
+}
+
+export default function registerModule({ siteSocket }: { siteSocket: NydusClient }) {
+  const matchmakingHandler: RouteHandler = (route: RouteInfo, event: MatchmakingEvent) => {
+    if (!eventToAction[event.type]) return
+
+    const action = eventToAction[event.type]!(event as any)
+    if (action) dispatch(action)
+  }
+  siteSocket.registerRoute('/matchmaking/:userId', matchmakingHandler)
+  siteSocket.registerRoute('/matchmaking/:userId/:clientId', matchmakingHandler)
+
+  // After a match has been found
+  siteSocket.registerRoute('/matchmaking/matches/:matchId', matchmakingHandler)
+  siteSocket.registerRoute('/matchmaking/matches/:matchId/teams/:teamId', matchmakingHandler)
+
+  siteSocket.registerRoute(
+    '/matchmakingStatus',
+    (route: RouteInfo, event: MatchmakingStatusJson[]) => {
+      dispatch({
+        type: '@matchmaking/statusUpdate',
+        payload: event,
+      })
+    },
+  )
+
+  siteSocket.registerRoute(
+    '/matchmaking-preferences/:userId/:matchmakingType',
+    (route: RouteInfo, event: GetPreferencesResponse) => {
+      const type = route.params.matchmakingType as MatchmakingType
+
+      dispatch((_, getState) => {
+        const {
+          mapPools: { byType },
+        } = getState()
+
+        if (!byType.has(type) || byType.get(type)!.id !== event.currentMapPoolId) {
+          dispatch(getCurrentMapPool(type))
+        }
+
+        dispatch({
+          type: '@matchmaking/initPreferences',
+          payload: event,
+          meta: { type },
+        })
+      })
+    },
+  )
+
+  siteSocket.registerRoute(
+    '/matchmaking-results/:userId',
+    (_route: RouteInfo, event: MatchmakingResultsEvent) => {
+      dispatch((dispatch, getState) => {
+        const lastGame = jotaiStore.get(lastGameAtom)
+
+        if (event.game.id === lastGame?.id) {
+          dispatch(
+            openDialog({
+              type: DialogType.PostMatch,
+              initData: {
+                game: event.game,
+                mmrChange: event.mmrChange,
+                leagueChanges: event.leagueChanges,
+                leagues: event.leagues,
+                season: event.season,
+              },
+            }),
+          )
+        }
+      })
+    },
+  )
+}

@@ -1,0 +1,464 @@
+import { TFunction } from 'i18next'
+import { assertUnreachable } from '../assert-unreachable'
+import { GameServerRegionId } from '../game-server-regions'
+import { Announcer, ConsoleSkin, DisplayMode, IngameSkin } from './blizz-settings'
+
+/**
+ * Settings related to the ShieldBattery Electron app (that will not be exposed to users in the
+ * settings dialog).
+ */
+export interface ShieldBatteryAppSettings {
+  version: number
+  winX: number
+  winY: number
+  winWidth: number
+  winHeight: number
+  winMaximized: boolean
+}
+
+export enum StartingFog {
+  ShowTerrainAndResources = 'transparent',
+  ShowResources = 'showResources',
+  Legacy = 'legacy',
+}
+
+export const ALL_STARTING_FOG: Readonly<StartingFog[]> = Object.values(StartingFog)
+
+/**
+ * Which set of values ShieldBattery's own gameplay settings start on. `Recommended` is
+ * ShieldBattery's tuned defaults; `Legacy` reproduces stock Battle.net/Remastered behavior. See
+ * `common/settings/game-defaults.ts` for the settings each preset covers and their values.
+ */
+export enum GameDefaultsPreset {
+  Recommended = 'recommended',
+  Legacy = 'legacy',
+}
+
+export const ALL_GAME_DEFAULTS_PRESETS: Readonly<GameDefaultsPreset[]> =
+  Object.values(GameDefaultsPreset)
+
+/** How a windowed game places its window when it opens. */
+export enum GameWindowPlacement {
+  /** Where the window was last, at the size it was last. */
+  Remember = 'remember',
+  /** At the size the window was last, centered on its monitor. */
+  RememberSize = 'rememberSize',
+  /** With a play area of `gameWinSetSize`, centered on its monitor. */
+  SetSize = 'setSize',
+}
+
+export const ALL_GAME_WINDOW_PLACEMENTS: Readonly<GameWindowPlacement[]> =
+  Object.values(GameWindowPlacement)
+
+export function getGameWindowPlacementLabel(placement: GameWindowPlacement, t: TFunction): string {
+  switch (placement) {
+    case GameWindowPlacement.Remember:
+      return t('settings.game.video.windowPlacement.remember', 'Remember position and size')
+    case GameWindowPlacement.RememberSize:
+      return t('settings.game.video.windowPlacement.rememberSize', 'Remember size, centered')
+    case GameWindowPlacement.SetSize:
+      return t('settings.game.video.windowPlacement.setSize', 'Set size, centered')
+    default:
+      return assertUnreachable(placement)
+  }
+}
+
+/** How the game paces the frames it draws while in a game. */
+export enum FramePacing {
+  /** As many frames as SC:R's own frame limit allows. */
+  Off = 'off',
+  /**
+   * One frame per refresh of the display, each drawn just before the display shows it, with the
+   * newest input.
+   */
+  Display = 'display',
+  /**
+   * A little under the display's refresh rate without timing frames to its refreshes, for
+   * displays with variable refresh rate (G-SYNC, FreeSync), which show each frame as it arrives.
+   */
+  VariableRefresh = 'variableRefresh',
+}
+
+/** The size of the game's play area, not counting the window's title bar and borders. */
+export interface GameWindowSize {
+  width: number
+  height: number
+}
+
+export interface GameWindowPresetGroup {
+  aspectRatio: string
+  sizes: ReadonlyArray<Readonly<GameWindowSize>>
+}
+
+/**
+ * Preset play area sizes up to 4K, grouped by shape. 4:3 comes first since it's the game's native
+ * aspect ratio, and includes the exact multiples of its 640x480 resolution.
+ */
+export const GAME_WINDOW_PRESET_GROUPS: ReadonlyArray<Readonly<GameWindowPresetGroup>> = [
+  {
+    aspectRatio: '4:3',
+    sizes: [
+      { width: 1024, height: 768 },
+      { width: 1280, height: 960 },
+      { width: 1440, height: 1080 },
+      { width: 1920, height: 1440 },
+      { width: 2560, height: 1920 },
+      { width: 2880, height: 2160 },
+    ],
+  },
+  {
+    aspectRatio: '16:9',
+    sizes: [
+      { width: 1280, height: 720 },
+      { width: 1600, height: 900 },
+      { width: 1920, height: 1080 },
+      { width: 2560, height: 1440 },
+      { width: 3840, height: 2160 },
+    ],
+  },
+]
+
+export function getStartingFogLabel(fog: StartingFog, t: TFunction): string {
+  switch (fog) {
+    case StartingFog.ShowTerrainAndResources:
+      return t(
+        'settings.game.gameplay.startingFog.showTerrainAndResources',
+        'Show terrain and resources',
+      )
+    case StartingFog.ShowResources:
+      return t('settings.game.gameplay.startingFog.showResources', 'Show resources')
+    case StartingFog.Legacy:
+      return t('settings.game.gameplay.startingFog.legacy', 'Legacy')
+    default:
+      return assertUnreachable(fog)
+  }
+}
+
+/**
+ * The minimap player-color mode, cycled in-game with Shift+Tab. The numeric values match the game's
+ * internal `minimap_color_mode` global so they can be written/read directly. The non-Standard modes
+ * apply the user's color preset (on the minimap, or on the minimap and game view).
+ */
+export enum MinimapColorMode {
+  /** Default player colors everywhere. */
+  Standard = 0,
+  /** Apply the color preset on the minimap only. */
+  PresetOnMinimapOnly = 1,
+  /** Apply the color preset on both the minimap and the game view. */
+  Preset = 2,
+}
+
+export const ALL_MINIMAP_COLOR_MODES: Readonly<MinimapColorMode[]> = [
+  MinimapColorMode.Standard,
+  MinimapColorMode.PresetOnMinimapOnly,
+  MinimapColorMode.Preset,
+]
+
+export function getMinimapColorModeLabel(mode: MinimapColorMode, t: TFunction): string {
+  switch (mode) {
+    case MinimapColorMode.Standard:
+      return t('settings.game.gameplay.teamColors.mode.standard', 'Off')
+    case MinimapColorMode.PresetOnMinimapOnly:
+      return t('settings.game.gameplay.teamColors.mode.presetOnMinimap', 'On for the minimap only')
+    case MinimapColorMode.Preset:
+      return t('settings.game.gameplay.teamColors.mode.presetEverywhere', 'On everywhere')
+    default:
+      return assertUnreachable(mode)
+  }
+}
+
+/**
+ * Which built-in palette the team-axis colors (self/allies/enemies) are drawn from, or `Custom` to
+ * source them from `customTeamColors` instead. Built-in preset color values live in
+ * `common/settings/team-colors.ts`, the single source of truth for all preset colors.
+ */
+export enum TeamColorPreset {
+  LegacyDiplomacy = 'legacyDiplomacy',
+  CoolVsWarm = 'coolVsWarm',
+  WarmVsCool = 'warmVsCool',
+  ColorblindSafe = 'colorblindSafe',
+  Custom = 'custom',
+}
+
+export const ALL_TEAM_COLOR_PRESETS: Readonly<TeamColorPreset[]> = Object.values(TeamColorPreset)
+
+/**
+ * Which built-in palette non-team contexts (FFAs, and team contexts `teamColorUsage` excludes) draw
+ * player colors from, or `Custom` to source them from `customFfaColors` instead. Built-in preset
+ * color values live in `common/settings/team-colors.ts`.
+ */
+export enum FfaColorPreset {
+  Jewel = 'jewel',
+  Arcade = 'arcade',
+  Resurrect = 'resurrect',
+  Pear = 'pear',
+  Neon = 'neon',
+  ColorblindSafe = 'colorblindSafe',
+  Custom = 'custom',
+}
+
+export const ALL_FFA_COLOR_PRESETS: Readonly<FfaColorPreset[]> = Object.values(FfaColorPreset)
+
+/**
+ * When the team-axis colors (`teamColorPreset`/`customTeamColors`) apply to a game, versus the
+ * FFA-axis colors (`ffaColorPreset`/`customFfaColors`). A game is in team context if it starts with
+ * allies already set (matchmaking, TvB forces, UMS forces); a plain 1v1 only counts as team context
+ * when this is `Always`. Switching this never changes color values, only which pool applies.
+ */
+export enum TeamColorUsage {
+  /** Apply team colors in team games and in 1v1s. */
+  Always = 'always',
+  /** Apply team colors in team games only; 1v1s use the FFA colors. */
+  ExceptIn1v1 = 'exceptIn1v1',
+  /** Never apply team colors; every game uses the FFA colors. */
+  Never = 'never',
+}
+
+export const ALL_TEAM_COLOR_USAGES: Readonly<TeamColorUsage[]> = Object.values(TeamColorUsage)
+
+/**
+ * A user's custom team-color scheme: the color the local player is drawn in (in team contexts),
+ * and the ordered color pools allied/enemy players draw from. `allies`/`enemies` wrap when a game
+ * needs more colors than they contain, so a duplicate-color pool (e.g. length 1) is a valid,
+ * intentional "everyone on this side looks the same" scheme rather than an error.
+ */
+export interface CustomTeamColors {
+  /** The color the local player is drawn in, in team contexts. '#RRGGBB'. */
+  self: string
+  /** Ordered pool of colors for allied players, length 1-8. '#RRGGBB' each. */
+  allies: string[]
+  /** Ordered pool of colors for enemy players, length 1-8. '#RRGGBB' each. */
+  enemies: string[]
+  /**
+   * The color for units no player in the game owns (critters, eggs, and other map-placed neutral
+   * units). '#RRGGBB'.
+   */
+  neutral: string
+}
+
+/** The highest rollback target a player can choose (see `LocalSettings.rollbackTarget`). */
+export const MAX_ROLLBACK_TARGET = 4
+
+export interface LocalSettings extends ShieldBatteryAppSettings {
+  runAppAtSystemStart: boolean
+  runAppAtSystemStartMinimized: boolean
+  quitOnClose: boolean
+  /**
+   * Whether the app window minimizes while a game is running, and comes back once every game has
+   * exited.
+   */
+  minimizeWhilePlaying: boolean
+  /**
+   * Whether StarCraft is told to prefer the high-performance GPU while ShieldBattery runs it, on
+   * machines that have more than one. A GPU the user picked in Windows' settings still wins.
+   */
+  preferHighPerformanceGpu: boolean
+  starcraftPath: string
+  masterVolume: number
+  gameWinX?: number
+  gameWinY?: number
+  gameWinWidth?: number
+  gameWinHeight?: number
+  gameWinPlacement: GameWindowPlacement
+  gameWinSetSize: GameWindowSize
+  monitorId?: number
+  quickOpenReplays: boolean
+  /**
+   * The preset the user chose for ShieldBattery's gameplay defaults. Choosing one applies its
+   * values to the settings it covers, and later migrations that add a new gameplay setting use it
+   * to pick between that setting's recommended and legacy default. Undefined until the user has
+   * chosen (a freshly created settings file); the app prompts for a choice while it's unset.
+   * Installs that predate the preset are migrated to `Recommended`, since that's what they've been
+   * running on.
+   */
+  gameDefaultsPreset?: GameDefaultsPreset
+  startingFog: StartingFog
+  /**
+   * The minimap player-color mode, cycled in-game with Shift+Tab. Saved when a game exits and
+   * restored on the next launch.
+   */
+  minimapColorMode: MinimapColorMode
+  /** Which built-in team-color palette (or Custom) the non-Standard team-colors modes apply. */
+  teamColorPreset: TeamColorPreset
+  /** Which built-in FFA-color palette (or Custom) non-team contexts draw colors from. */
+  ffaColorPreset: FfaColorPreset
+  /** When team colors apply to a game versus the FFA colors; see {@link TeamColorUsage}. */
+  teamColorUsage: TeamColorUsage
+  /** Whether to apply a per-game random shuffle to each active color pool. */
+  shuffleColors: boolean
+  /** The user's custom team-color scheme, used when `teamColorPreset` is `Custom`. */
+  customTeamColors: CustomTeamColors
+  /** The user's custom FFA-color pool (length 8-16), used when `ffaColorPreset` is `Custom`. */
+  customFfaColors: string[]
+  /**
+   * The neutral-unit color that goes with `customFfaColors`, used when `ffaColorPreset` is
+   * `Custom`. '#RRGGBB'.
+   */
+  customFfaNeutralColor: string
+  /**
+   * A fixed self color for team contexts, overriding the active team-color preset's self color
+   * (any preset, not just `Custom`), or undefined to use the preset's self color as normal. With
+   * `shuffleColors` on and this unset, the local player instead draws from the team's full pool
+   * (self + allies) like an ally would. Unlike `ffaSelfColor`, this is never consumed from the
+   * allies pool -- team pools wrap by design, so a color collision with an ally is the user's own
+   * aesthetic choice. '#RRGGBB'.
+   */
+  teamSelfColor?: string
+  /**
+   * A fixed self color for FFA contexts, or undefined to draw from the FFA pool like everyone
+   * else. If set and present in the active FFA pool, it's consumed (skipped when assigning other
+   * players) rather than causing a collision. '#RRGGBB'.
+   */
+  ffaSelfColor?: string
+  /**
+   * Whether the minimap terrain is hidden, toggled in-game with Tab. Matches the game's internal
+   * flag (`true` means terrain is blanked on the minimap). Saved/restored across game launches.
+   */
+  minimapTerrainHidden: boolean
+  /**
+   * Whether to use Blizzard's cursor sizing algorithm (that maxes out at 64px) instead of our fixed
+   * version that allows larger cursors and keeps all the cursors the same scale.
+   */
+  legacyCursorSizing: boolean
+  /** Whether to use the customCursorSize scale value instead of one based on game height. */
+  useCustomCursorSize: boolean
+  /**
+   * If `useCustomCursorSize` is on, will be used to scale cursors down from their 4K resolution.
+   */
+  customCursorSize: number
+
+  /**
+   * Whether `grabPanSensitivity` applies to grab pan (panning the camera by holding the middle
+   * mouse button and dragging). When off, grab pan keeps the game's built-in fixed (very fast)
+   * behavior; this only gates the custom sensitivity, not grab pan itself.
+   */
+  grabPanSensitivityOn: boolean
+  /**
+   * A 0-150 slider position controlling grab pan sensitivity, used when `grabPanSensitivityOn` is
+   * on. Mapped exponentially to a camera-pixels-per-mouse-pixel gain, from about an eighth of the
+   * cursor's speed at 0 (precise) through 1:1 at 50 up to a very fast sweep at 150.
+   */
+  grabPanSensitivity: number
+  /**
+   * Whether the grab pan direction is reversed (dragging left moves the camera right, etc.), like
+   * touchpad-style "natural" scrolling. Only applies while `grabPanSensitivityOn` is on, since the
+   * game's built-in pan behavior runs untouched otherwise.
+   */
+  grabPanInverted: boolean
+
+  /**
+   * The manually-selected game server region id (see `common/game-server-regions.ts`), or
+   * undefined for Auto (the client homes on the lowest-measured-latency region). A value that's no
+   * longer in the server-provided region list is treated the same as undefined.
+   */
+  gameServerRegion?: GameServerRegionId
+
+  /**
+   * In games that roll back, how many frames of other players' lateness the game hides by
+   * simulating ahead of their commands and correcting, rather than by delaying the local player's
+   * own commands. From 0 to `MAX_ROLLBACK_TARGET`.
+   */
+  rollbackTarget: number
+
+  /**
+   * Whether the local player's commands always take at least as long to run as on Battle.net at
+   * turn rate 24 with Low latency (two frames at the Fastest speed), even when their connection
+   * allows less. Only changes the local player's own game.
+   */
+  emulateTurnRate24Delay: boolean
+
+  /**
+   * Whether every game starts in SD graphics regardless of the saved HD graphics setting. The saved
+   * setting is untouched, so toggling HD in game still works and still persists.
+   */
+  alwaysStartSd: boolean
+
+  /**
+   * How the game paces the frames it draws in game. Pacing replaces SC:R's own frame limit, and
+   * runs logic steps on time regardless of when frames are drawn.
+   */
+  framePacing: FramePacing
+  /**
+   * Which of the in-game observer panels the user last left on screen, saved by the game as they
+   * change them and handed back at the next launch. Opaque to the app: the game owns the shape and
+   * fills in anything missing. Undefined until the user first changes one.
+   */
+  observerPanels?: Record<string, boolean | string>
+
+  /**
+   * Whether to launch the 32-bit game client instead of the (default) 64-bit one. Discouraged;
+   * exists as an escape hatch for systems where the 64-bit client doesn't work.
+   */
+  launch32Bit: boolean
+
+  /**
+   * Whether replays keep running when another game launches, so replays can run alongside each
+   * other and alongside a game the user takes part in. Off by default since running several game
+   * processes at once is taxing on the machine. When off, only one game runs at a time, and a
+   * replay can't be started while a game the user takes part in is running.
+   */
+  keepReplaysAlongsideGames: boolean
+
+  /**
+   * Absolute paths of the folders indexed by the replay library. `undefined` means the user has
+   * never configured folders: the default folder, `Documents/Starcraft/maps/replays`, is used and
+   * presented as a regular (removable) entry. An empty array means the user removed every
+   * configured folder: nothing is indexed, and the setting persists across launches until a folder
+   * is added again.
+   */
+  replayLibraryFolders?: ReadonlyArray<string>
+
+  // Dev-only settings. These are stripped from non-dev clients when read, so they can only ever
+  // be turned on by running a dev client.
+  visualizeNetworkStalls?: boolean
+  disableHd?: boolean
+}
+
+export interface ScrSettings {
+  version: number
+  keyboardScrollSpeed: number
+  mouseScrollSpeed: number
+  mouseSensitivityOn: boolean
+  mouseSensitivity: number
+  mouseScalingOn: boolean
+  hardwareCursorOn: boolean
+  mouseConfineOn: boolean
+  musicOn: boolean
+  musicVolume: number
+  soundOn: boolean
+  soundVolume: number
+  unitSpeechOn: boolean
+  unitAcknowledgementsOn: boolean
+  backgroundSoundsOn: boolean
+  buildingSoundsOn: boolean
+  gameSubtitlesOn: boolean
+  cinematicSubtitlesOn: boolean
+  originalVoiceOversOn: boolean
+  displayMode: DisplayMode
+  gamma: number
+  fpsLimitOn: boolean
+  fpsLimit: number
+  sdGraphicsFilter: number
+  vsyncOn: number
+  hdGraphicsOn: boolean
+  environmentEffectsOn: boolean
+  realTimeLightingOn: boolean
+  smoothUnitTurningOn: boolean
+  shadowStackingOn: boolean
+  pillarboxOn: boolean
+  gameTimerOn: boolean
+  colorCyclingOn: boolean
+  unitPortraits: number // TODO(tec27): type this more narrowly/use an enum
+  minimapPosition: boolean
+  apmDisplayOn: boolean
+  apmAlertOn: boolean
+  apmAlertValue: number
+  apmAlertColorOn: boolean
+  apmAlertSoundOn: boolean
+  consoleSkin: ConsoleSkin
+  selectedSkin: IngameSkin
+  showBonusSkins: boolean
+  selectedAnnouncer: Announcer
+  showFps: boolean
+  showTurnRate: boolean
+}

@@ -1,0 +1,37 @@
+build/
+coverage/
+dist/
+node_modules/
+server-dist/
+test-results/
+test-state/
+server/.env
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.react-email/
+.env
+.env-build
+npm-debug.log
+yarn-error.log
+electron-builder.env
+*.afdesign~lock~
+
+.claude/settings.local.json
+
+# playwright-cli scratch output (snapshots, console logs) from verify-app/verify-pr runs
+.playwright-cli/
+
+CLAUDE.local.md
+.claude-scratch/
+.mcp.json
+
+# The Discord Social SDK is downloaded by `pnpm run fetch-discord-sdk` and release builds, and never
+# committed: its license only covers shipping it inside the app. See docs/DISCORD_SDK.md.
+/discord-sdk/
+**/discord_partner_sdk.*
+**/discordpp.h
+**/cdiscord.h
+
+# Rust build output (server-rs); the ladder port's addition to the vendored tree
+target/

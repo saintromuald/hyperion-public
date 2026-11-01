@@ -1,0 +1,119 @@
+import { SbPermissions } from '../../../common/users/permissions'
+import { SbUserId } from '../../../common/users/sb-user-id'
+import db, { DbClient } from '../db'
+import { sql } from '../db/sql'
+import { Dbify } from '../db/types'
+
+type DbPermissions = Dbify<SbPermissions>
+
+function convertFromDb(props: DbPermissions): SbPermissions {
+  return {
+    editPermissions: props.edit_permissions,
+    debug: props.debug,
+    useDevelopmentClient: props.use_development_client ?? false,
+    banUsers: props.ban_users,
+    manageLeagues: props.manage_leagues,
+    manageMaps: props.manage_maps,
+    manageMapPools: props.manage_map_pools,
+    manageMatchmaking: props.manage_matchmaking,
+    manageMatchmakingSeasons: props.manage_matchmaking_seasons,
+    manageMatchmakingTimes: props.manage_matchmaking_times,
+    massDeleteMaps: props.mass_delete_maps,
+    moderateChatChannels: props.moderate_chat_channels,
+    manageNews: props.manage_news,
+    manageBugReports: props.manage_bug_reports,
+    manageGameReports: props.manage_game_reports,
+    manageRestrictedNames: props.manage_restricted_names,
+    manageSignupCodes: props.manage_signup_codes,
+    manageLiveStreams: props.manage_live_streams,
+  }
+}
+
+export async function createPermissions(
+  dbClient: DbClient,
+  userId: SbUserId,
+): Promise<SbPermissions> {
+  const query = sql`
+    INSERT INTO permissions (user_id) VALUES (${userId}) RETURNING *;
+  `
+
+  const result = await dbClient.query(query)
+  if (!result.rowCount) throw new Error('No rows returned')
+  return convertFromDb(result.rows[0])
+}
+
+export async function getPermissions(
+  userId: SbUserId,
+  withClient?: DbClient,
+): Promise<SbPermissions | undefined> {
+  const query = sql`
+    SELECT user_id, edit_permissions, debug, ban_users, manage_leagues, manage_maps,
+        manage_map_pools, mass_delete_maps, manage_matchmaking, manage_matchmaking_times,
+        moderate_chat_channels, manage_matchmaking_seasons, manage_news,
+        manage_bug_reports, manage_game_reports, manage_restricted_names, manage_signup_codes,
+        manage_live_streams, use_development_client
+    FROM permissions
+    WHERE user_id = ${userId};
+  `
+
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<DbPermissions>(query)
+    return result.rows.length ? convertFromDb(result.rows[0]) : undefined
+  } finally {
+    done()
+  }
+}
+
+export async function updatePermissions(
+  userId: SbUserId,
+  perms: SbPermissions,
+): Promise<SbPermissions | undefined> {
+  const query = sql`
+    UPDATE permissions
+    SET
+      edit_permissions = ${!!perms.editPermissions},
+      debug = ${!!perms.debug},
+      use_development_client = ${!!perms.useDevelopmentClient},
+      ban_users = ${!!perms.banUsers},
+      manage_leagues = ${!!perms.manageLeagues},
+      manage_maps = ${!!perms.manageMaps},
+      manage_map_pools = ${!!perms.manageMapPools},
+      manage_matchmaking = ${!!perms.manageMatchmaking},
+      mass_delete_maps = ${!!perms.massDeleteMaps},
+      manage_matchmaking_times = ${!!perms.manageMatchmakingTimes},
+      moderate_chat_channels=${!!perms.moderateChatChannels},
+      manage_matchmaking_seasons=${!!perms.manageMatchmakingSeasons},
+      manage_news=${!!perms.manageNews},
+      manage_bug_reports=${!!perms.manageBugReports},
+      manage_game_reports=${!!perms.manageGameReports},
+      manage_restricted_names=${!!perms.manageRestrictedNames},
+      manage_signup_codes=${!!perms.manageSignupCodes},
+      manage_live_streams=${!!perms.manageLiveStreams}
+    WHERE user_id = ${userId}
+    RETURNING *;
+  `
+
+  const { client, done } = await db()
+  try {
+    const result = await client.query<DbPermissions>(query)
+    return convertFromDb(result.rows[0])
+  } finally {
+    done()
+  }
+}
+
+export async function getDevelopmentClientUsers(userIds: SbUserId[]): Promise<Set<SbUserId>> {
+  if (!userIds.length) return new Set()
+
+  const { client, done } = await db()
+  try {
+    const result = await client.query<{ user_id: SbUserId }>(sql`
+      SELECT user_id FROM permissions
+      WHERE user_id = ANY(${userIds}) AND use_development_client;
+    `)
+    return new Set(result.rows.map(row => row.user_id))
+  } finally {
+    done()
+  }
+}

@@ -1,0 +1,368 @@
+import { Suspense, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+import styled from 'styled-components'
+import { useQuery } from 'urql'
+import { openDialog } from '../dialogs/action-creators'
+import { DialogType } from '../dialogs/dialog-type'
+import { LiveGameEntry, LiveGames_FeedFragment } from '../games/live-game-entry'
+import { FragmentType, graphql, useFragment } from '../gql'
+import GithubIcon from '../icons/brands/github.svg?react'
+import KofiIcon from '../icons/brands/kofi-color.svg?react'
+import PatreonIcon from '../icons/brands/patreon.svg?react'
+import { MaterialIcon } from '../icons/material/material-icon'
+import { LeagueHomeFeed } from '../leagues/league-home-feed'
+import { OutlinedButton, TextButton } from '../material/button'
+import { LinkButton } from '../material/link-button'
+import { elevationPlus1 } from '../material/shadows'
+import { Tooltip } from '../material/tooltip'
+import { NewsFeed } from '../news/news-feed'
+import { localizeUrgentMessage } from '../news/urgent-message'
+import { LoadingDotsArea } from '../progress/dots'
+import { useAppDispatch } from '../redux-hooks'
+import { CenteredContentContainer } from '../styles/centered-container'
+import { ContainerLevel, containerStyles } from '../styles/colors'
+import { singleLine, titleSmall } from '../styles/typography'
+import { LIVE_STREAMS_POLL_INTERVAL_MS, useQueryPolling } from '../twitch/live-state'
+import {
+  FeaturedLiveStreamEntry,
+  LiveStreamEntry,
+  LiveStreams_FeedFragment,
+} from '../twitch/live-stream-entry'
+import { BottomLinks } from './bottom-links'
+import { HomeSection, HomeSectionTitle } from './home-section'
+import { useLastSeenUrgentMessage } from './last-seen-urgent-message'
+import { SplashContent } from './splash'
+
+const Root = styled.div`
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+`
+
+const GridLayout = styled(CenteredContentContainer)`
+  height: auto;
+  padding-top: 24px;
+
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: 1fr auto;
+  gap: 40px;
+
+  @media (max-width: 940px) {
+    column-gap: 24px;
+  }
+
+  @media (max-width: 860px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+`
+
+const LeftSection = styled.div`
+  grid-column: span 3;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+`
+
+const RightSection = styled.div`
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+
+  @media (max-width: 860px) {
+    display: none;
+  }
+`
+const SupportSection = styled.div`
+  ${elevationPlus1};
+  ${containerStyles(ContainerLevel.Low)};
+  min-height: 56px;
+  padding-inline: 16px 4px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  border-radius: 4px;
+`
+
+const SupportText = styled.div`
+  ${titleSmall};
+  padding-block: 16px;
+`
+
+const SupportIcons = styled.div`
+  display: flex;
+  align-items: center;
+
+  & a {
+    &,
+    &:link,
+    &:visited {
+      width: 56px;
+      height: 48px;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      border-radius: 8px;
+      color: var(--theme-on-surface);
+      text-align: center;
+    }
+
+    &:hover,
+    &:active {
+      background-color: var(--theme-container-low);
+    }
+  }
+`
+
+const StyledGithubIcon = styled(GithubIcon)`
+  height: 32px;
+`
+
+const StyledKofiIcon = styled(KofiIcon)`
+  height: 32px;
+`
+
+const StyledPatreonIcon = styled(PatreonIcon)`
+  height: 32px;
+  color: #fff;
+`
+const BottomLinksArea = styled.div`
+  grid-column: 1 / -1;
+`
+
+const HomeQuery = graphql(/* GraphQL */ `
+  query HomePageContent {
+    urgentMessage {
+      ...UrgentMessage_HomeDisplayFragment
+    }
+
+    ...Leagues_HomeFeedFragment
+    ...News_HomeFeedFragment
+  }
+`)
+
+const HomeLiveQuery = graphql(/* GraphQL */ `
+  query HomePageLiveContent {
+    ...LiveGames_FeedFragment
+    ...LiveStreams_FeedFragment
+  }
+`)
+
+export function Home() {
+  const { t } = useTranslation()
+  const [{ data: homeData, error: homeError }] = useQuery({
+    query: HomeQuery,
+    context: { ttl: 10 * 1000 },
+  })
+  const [{ data: liveData }, reexecuteLiveQuery] = useQuery({
+    query: HomeLiveQuery,
+    context: { ttl: 10 * 1000 },
+  })
+  // Keeps the live sections (live games and streams) fresh while Home stays mounted.
+  useQueryPolling(reexecuteLiveQuery, LIVE_STREAMS_POLL_INTERVAL_MS)
+
+  const hasSplash = !IS_ELECTRON
+
+  return (
+    <>
+      <Root>
+        <Suspense fallback={<LoadingDotsArea />}>
+          {hasSplash ? <SplashContent /> : null}
+          <GridLayout>
+            <LeftSection>
+              <UrgentMessageView urgentMessage={homeData?.urgentMessage ?? undefined} />
+              <NewsFeed query={homeData} hasError={!!homeError} />
+            </LeftSection>
+            <RightSection>
+              <SupportSection>
+                <SupportText>{t('home.supportTitle', 'Support the project')}</SupportText>
+                <SupportIcons>
+                  <Tooltip text={'GitHub Sponsors'} position='bottom' tabIndex={-1}>
+                    <a
+                      href='https://github.com/sponsors/ShieldBattery'
+                      target='_blank'
+                      rel='noopener'>
+                      <StyledGithubIcon />
+                    </a>
+                  </Tooltip>
+                  <Tooltip text={'Patreon'} position='bottom' tabIndex={-1}>
+                    <a href='https://patreon.com/tec27' target='_blank' rel='noopener'>
+                      <StyledPatreonIcon />
+                    </a>
+                  </Tooltip>
+                  <Tooltip text={'Ko-fi'} position='bottom' tabIndex={-1}>
+                    <a href='https://ko-fi.com/tec27' target='_blank' rel='noopener'>
+                      <StyledKofiIcon />
+                    </a>
+                  </Tooltip>
+                </SupportIcons>
+              </SupportSection>
+              <LiveGamesFeed query={liveData} />
+              <LiveStreamsFeed query={liveData} />
+              <LeagueHomeFeed query={homeData} />
+            </RightSection>
+            <BottomLinksArea>
+              <BottomLinks />
+            </BottomLinksArea>
+          </GridLayout>
+        </Suspense>
+      </Root>
+    </>
+  )
+}
+
+const UrgentMessageRoot = styled.div`
+  ${elevationPlus1};
+  ${containerStyles(ContainerLevel.Low)};
+  height: 56px;
+  padding-inline: 16px 8px;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  border-radius: 4px;
+  color: var(--theme-amber);
+`
+
+const UrgentMessageSpaceHolder = styled.div`
+  height: 56px;
+`
+
+const UrgentMessageText = styled.div`
+  ${singleLine};
+  ${titleSmall};
+  flex-grow: 1;
+  flex-shrink: 1;
+`
+
+const UrgentMessage_HomeDisplayFragment = graphql(/* GraphQL */ `
+  fragment UrgentMessage_HomeDisplayFragment on UrgentMessage {
+    id
+    title
+    message
+    translations {
+      language
+      title
+      message
+    }
+  }
+`)
+
+function UrgentMessageView(props: {
+  urgentMessage?: FragmentType<typeof UrgentMessage_HomeDisplayFragment>
+}) {
+  const { t, i18n } = useTranslation()
+  const dispatch = useAppDispatch()
+  const urgentMessage = useFragment(UrgentMessage_HomeDisplayFragment, props.urgentMessage)
+  const [lastSeenId, markSeen] = useLastSeenUrgentMessage()
+  const localizedMessage = urgentMessage
+    ? localizeUrgentMessage(urgentMessage, i18n.language)
+    : undefined
+
+  useEffect(() => {
+    if (urgentMessage && urgentMessage.id !== lastSeenId) {
+      markSeen(urgentMessage.id)
+    }
+  }, [lastSeenId, markSeen, urgentMessage])
+
+  return localizedMessage ? (
+    <UrgentMessageRoot>
+      <MaterialIcon icon='priority_high' />
+      <UrgentMessageText>{localizedMessage.title}</UrgentMessageText>
+      <TextButton
+        label={t('common.actions.read', 'Read')}
+        onClick={() => {
+          dispatch(
+            openDialog({
+              type: DialogType.Markdown,
+              initData: {
+                title: localizedMessage.title,
+                markdownContent: localizedMessage.message,
+              },
+            }),
+          )
+        }}
+      />
+    </UrgentMessageRoot>
+  ) : (
+    <UrgentMessageSpaceHolder />
+  )
+}
+
+const LiveGamesRoot = styled.div`
+  ${containerStyles(ContainerLevel.Low)};
+  border-radius: 4px;
+`
+
+export function LiveGamesFeed({ query }: { query?: FragmentType<typeof LiveGames_FeedFragment> }) {
+  const { t } = useTranslation()
+  const { liveGames } = useFragment(LiveGames_FeedFragment, query) ?? { liveGames: [] }
+
+  return liveGames.length > 0 ? (
+    <HomeSection>
+      <HomeSectionTitle>{t('games.liveGames.title', 'Live games')}</HomeSectionTitle>
+      <LiveGamesRoot>
+        {liveGames.slice(0, 5).map(liveGame => (
+          <LiveGameEntry key={liveGame.id} query={liveGame} />
+        ))}
+      </LiveGamesRoot>
+    </HomeSection>
+  ) : null
+}
+
+const LiveStreamsRoot = styled.div`
+  ${containerStyles(ContainerLevel.Low)};
+  border-radius: 4px;
+  overflow: hidden;
+`
+
+const SeeAllContainer = styled.div`
+  padding-block: 8px 4px;
+  text-align: center;
+`
+
+export function LiveStreamsFeed({
+  query,
+}: {
+  query?: FragmentType<typeof LiveStreams_FeedFragment>
+}) {
+  const { t } = useTranslation()
+  const { liveStreams } = useFragment(LiveStreams_FeedFragment, query) ?? { liveStreams: [] }
+
+  if (liveStreams.length === 0) {
+    return null
+  }
+
+  // The most-watched stream is featured as a hero card; the rest become compact rows.
+  const sorted = [...liveStreams].sort((a, b) => b.viewerCount - a.viewerCount)
+  const [featured, ...rest] = sorted
+
+  return (
+    <HomeSection>
+      <HomeSectionTitle>{t('twitch.liveStreams.title', 'Live streams')}</HomeSectionTitle>
+      <LiveStreamsRoot>
+        <FeaturedLiveStreamEntry key={featured.twitchLogin} query={featured} />
+        {rest.slice(0, 4).map(stream => (
+          <LiveStreamEntry key={stream.twitchLogin} query={stream} />
+        ))}
+        <SeeAllContainer>
+          <LinkButton href='/live'>
+            <OutlinedButton
+              styledAs='div'
+              label={t('twitch.liveStreams.seeAll', 'See all live streams')}
+              tabIndex={0}
+            />
+          </LinkButton>
+        </SeeAllContainer>
+      </LiveStreamsRoot>
+    </HomeSection>
+  )
+}

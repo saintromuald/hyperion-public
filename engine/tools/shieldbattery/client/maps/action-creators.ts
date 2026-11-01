@@ -1,0 +1,300 @@
+import prettyBytes from 'pretty-bytes'
+import { getErrorStack } from '../../common/errors'
+import { FilesErrorCode } from '../../common/files'
+import {
+  GetBatchMapInfoResponse,
+  GetFavoritedMapsQueryParams,
+  GetFavoritesResponse,
+  GetMapsQueryParams,
+  GetMapsResponse,
+  MapServiceErrorCode,
+  MAX_MAP_FILE_SIZE_BYTES,
+  SbMapId,
+  UpdateMapResponse,
+  UpdateMapServerRequest,
+  UploadMapResponse,
+} from '../../common/maps'
+import { apiUrl, urlPath } from '../../common/urls'
+import { openDialog, openSimpleDialog } from '../dialogs/action-creators'
+import { DialogType } from '../dialogs/dialog-type'
+import { ThunkAction } from '../dispatch-registry'
+import i18n from '../i18n/i18next'
+import logger from '../logging/logger'
+import { abortableThunk, RequestHandlingSpec } from '../network/abortable-thunk'
+import { MicrotaskBatchRequester } from '../network/batch-requests'
+import { fetchJson } from '../network/fetch'
+import { isFetchError } from '../network/fetch-errors'
+import { ClientSideUploadError, upload } from './upload'
+
+async function uploadMap(filePath: string) {
+  if (IS_ELECTRON) {
+    return upload<UploadMapResponse>(filePath, apiUrl`maps`, MAX_MAP_FILE_SIZE_BYTES)
+  } else {
+    throw new Error('cannot upload maps on non-electron clients')
+  }
+}
+
+export function uploadLocalMap(
+  path: string,
+  spec: RequestHandlingSpec<UploadMapResponse>,
+): ThunkAction {
+  return abortableThunk(spec, async dispatch => {
+    try {
+      const result = await uploadMap(path)
+
+      dispatch({
+        type: '@maps/uploadLocalMap',
+        payload: result,
+        meta: { path },
+      })
+
+      return result
+    } catch (err) {
+      let message = i18n.t(
+        'maps.local.uploadMapError',
+        'An unknown error occurred while uploading the map. Please try again later.',
+      )
+
+      if (err instanceof ClientSideUploadError || (isFetchError(err) && err.code)) {
+        if (err.code === FilesErrorCode.MaxFileSizeExceeded) {
+          message = i18n.t('maps.local.mapFileSizeErrorMessage', {
+            defaultValue: "The map's file size exceeds the maximum allowed size of {{fileSize}}.",
+            fileSize: prettyBytes(MAX_MAP_FILE_SIZE_BYTES),
+          })
+        } else if (err.code === MapServiceErrorCode.NoPlayerSlots) {
+          message = i18n.t(
+            'maps.local.uploadMapNoPlayerSlotsError',
+            'This map has no start locations or usable player slots, so it can never be ' +
+              'played. Add start locations to the map and try again.',
+          )
+        } else if (err.code === MapServiceErrorCode.InvalidMapFile) {
+          message = i18n.t(
+            'maps.local.uploadMapInvalidFileError',
+            "This file couldn't be read as a StarCraft map. It may be corrupted or protected in a " +
+              'way we cannot read.',
+          )
+        }
+      }
+
+      dispatch(
+        openSimpleDialog(
+          i18n.t('maps.local.uploadMapErrorTitle', 'Error uploading the map'),
+          message,
+          true,
+        ),
+      )
+
+      throw err
+    }
+  })
+}
+
+export function getMaps(
+  params: GetMapsQueryParams,
+  spec: RequestHandlingSpec<GetMapsResponse>,
+): ThunkAction {
+  return abortableThunk(spec, async dispatch => {
+    const { visibility, sort, numPlayers, tilesets, q, offset } = params
+
+    const queryParams = new URLSearchParams()
+    if (visibility) {
+      queryParams.set('visibility', visibility)
+    }
+    if (sort !== undefined) {
+      queryParams.set('sort', sort.toString())
+    }
+    if (numPlayers) {
+      for (const playerCount of numPlayers) {
+        queryParams.append('numPlayers', playerCount.toString())
+      }
+    }
+    if (tilesets) {
+      for (const tileset of tilesets) {
+        queryParams.append('tilesets', tileset.toString())
+      }
+    }
+    if (q) {
+      queryParams.set('q', q)
+    }
+    if (offset !== undefined) {
+      queryParams.set('offset', offset.toString())
+    }
+
+    const result = await fetchJson<GetMapsResponse>(apiUrl`maps?${queryParams}`, {
+      signal: spec.signal,
+    })
+
+    dispatch({
+      type: '@maps/getMaps',
+      payload: result,
+      meta: params,
+    })
+
+    return result
+  })
+}
+
+export function getFavorites(
+  params: GetFavoritedMapsQueryParams,
+  spec: RequestHandlingSpec<GetFavoritesResponse>,
+): ThunkAction {
+  return abortableThunk(spec, async dispatch => {
+    const { sort, numPlayers, tilesets, q } = params
+
+    const queryParams = new URLSearchParams()
+    if (sort !== undefined) {
+      queryParams.set('sort', sort.toString())
+    }
+    if (numPlayers) {
+      for (const playerCount of numPlayers) {
+        queryParams.append('numPlayers', playerCount.toString())
+      }
+    }
+    if (tilesets) {
+      for (const tileset of tilesets) {
+        queryParams.append('tilesets', tileset.toString())
+      }
+    }
+    if (q) {
+      queryParams.set('q', q)
+    }
+
+    const result = await fetchJson<GetFavoritesResponse>(apiUrl`maps/favorites?${queryParams}`, {
+      signal: spec.signal,
+    })
+
+    dispatch({
+      type: '@maps/getFavoritedMaps',
+      payload: result,
+      meta: params,
+    })
+
+    return result
+  })
+}
+
+export function addToFavorites(mapId: SbMapId, spec: RequestHandlingSpec<void>): ThunkAction {
+  return abortableThunk(spec, async dispatch => {
+    await fetchJson<void>(apiUrl`maps/${mapId}/favorite`, {
+      method: 'POST',
+      signal: spec.signal,
+    })
+
+    dispatch({
+      type: '@maps/addToFavorites',
+      payload: mapId,
+    })
+  })
+}
+
+export function removeFromFavorites(mapId: SbMapId, spec: RequestHandlingSpec<void>): ThunkAction {
+  return abortableThunk(spec, async dispatch => {
+    await fetchJson<void>(apiUrl`maps/${mapId}/favorite`, {
+      method: 'DELETE',
+      signal: spec.signal,
+    })
+
+    dispatch({
+      type: '@maps/removeFromFavorites',
+      payload: mapId,
+    })
+  })
+}
+
+export function removeMap(mapId: SbMapId, spec: RequestHandlingSpec<void>): ThunkAction {
+  return abortableThunk(spec, async dispatch => {
+    return fetchJson<void>(apiUrl`maps/${mapId}`, {
+      method: 'DELETE',
+      signal: spec.signal,
+    })
+  })
+}
+
+export function regenMapImage(mapId: SbMapId, spec: RequestHandlingSpec<void>): ThunkAction {
+  return abortableThunk(spec, async dispatch => {
+    return fetchJson<void>(apiUrl`maps/${mapId}/regenerate`, {
+      method: 'POST',
+      signal: spec.signal,
+    })
+  })
+}
+
+export function updateMap(
+  mapId: SbMapId,
+  params: UpdateMapServerRequest,
+  spec: RequestHandlingSpec<UpdateMapResponse>,
+): ThunkAction {
+  return abortableThunk(spec, async dispatch => {
+    const result = await fetchJson<UpdateMapResponse>(apiUrl`maps/${mapId}`, {
+      method: 'PATCH',
+      signal: spec.signal,
+      body: JSON.stringify(params),
+    })
+
+    dispatch({
+      type: '@maps/updateMap',
+      payload: result,
+      meta: params,
+    })
+
+    return result
+  })
+}
+
+const MAX_BATCH_MAP_REQUESTS = 50
+
+const mapsBatchRequester = new MicrotaskBatchRequester<string>(
+  MAX_BATCH_MAP_REQUESTS,
+  (dispatch, items) => {
+    const params = items.map(m => urlPath`m=${m}`).join('&')
+    const promise = fetchJson<GetBatchMapInfoResponse>(apiUrl`maps/batch-info` + '?' + params)
+    dispatch({
+      type: '@maps/getBatchMapInfo',
+      payload: promise,
+    })
+
+    return promise
+  },
+  err => {
+    logger.error('error while batch requesting maps: ' + getErrorStack(err))
+  },
+)
+
+/**
+ * Queues a request to the server for map information, if necessary. This will batch multiple
+ * requests that happen close together into one request to the server.
+ */
+export function batchGetMapInfo(mapId: SbMapId, maxCacheAgeMillis = 60000): ThunkAction {
+  return (dispatch, getState) => {
+    const {
+      maps: { byId, lastRetrieved },
+    } = getState()
+
+    if (
+      !byId.has(mapId) ||
+      !lastRetrieved.has(mapId) ||
+      window.performance.now() - lastRetrieved.get(mapId)! > maxCacheAgeMillis
+    ) {
+      mapsBatchRequester.request(dispatch, mapId)
+    }
+  }
+}
+
+export function openMapPreviewDialog(mapId: SbMapId) {
+  return openDialog({ type: DialogType.MapPreview, initData: { mapId } })
+}
+
+export function openMapDownloadDialog(mapId: SbMapId) {
+  return openDialog({ type: DialogType.MapDownload, initData: { mapId } })
+}
+
+export function getMapDownloadUrl(mapId: SbMapId, spec: RequestHandlingSpec<string>): ThunkAction {
+  return abortableThunk(spec, async () => {
+    const result = await fetchJson<{ url: string }>(apiUrl`maps/${mapId}/download-url`, {
+      method: 'POST',
+      signal: spec.signal,
+    })
+
+    return result.url
+  })
+}

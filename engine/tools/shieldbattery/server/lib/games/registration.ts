@@ -1,0 +1,89 @@
+import { GameConfig } from '../../../common/games/configuration'
+import { computeMatchupString, getTeamsFromConfig } from '../../../common/games/matchups'
+import { SbMapId } from '../../../common/maps'
+import { SbUserId } from '../../../common/users/sb-user-id'
+import transact from '../db/transaction'
+import { createGameUserRecord } from '../models/games-users'
+import { createGameRecord } from './game-models'
+import { genResultCode } from './gen-result-code'
+
+/**
+ * Registers a game in the database so that results can be collected for it.
+ *
+ * @param mapId the ID of the map being played on, as stored in the `uploaded_maps` table
+ * @param gameSource a string representing the source of the game, e.g. Matchmaking
+ * @param gameSourceExtra extra information about the source of the game, such as the matchmaking
+ *   type
+ * @param gameConfig an object describing the configuration of the game
+ * @param startTime the time the game is being started at. Optional, defaults to the current time.
+ *
+ * @returns an object containing the generated `gameId` and a map of `resultCodes` indexed by
+ *   player name
+ */
+export async function registerGame(mapId: SbMapId, gameConfig: GameConfig, startTime = new Date()) {
+  const humanPlayers = gameConfig.teams.reduce((r, team) => {
+    const humans = team.filter(p => !p.isComputer)
+    r.push(...humans)
+    return r
+  }, [])
+
+  // Unlike `useNetcodeV2` (only decided once the game loads), a game's team composition is already
+  // known from the config's teams, so this is set here rather than later. This is mutated directly
+  // onto the passed-in config (rather than building a new object to persist) so that the caller's
+  // reference — which the loader later re-persists via `updateGameConfig` once `useNetcodeV2` is
+  // decided — still carries it forward instead of losing it on that overwrite.
+  //
+  // A tracked game is always a multi-human, all-human game: a computer player has no account to
+  // rank, and a lone human player has no opponent's result to compare against, so there's nothing
+  // for either to reconcile. Every multi-human game goes through the netcode-v2 relay (see
+  // `useNetcodeV2` in game-loader.ts), which decides "multi-human" from the load's full player set
+  // (playing humans plus any observers) — a strict superset of `humanPlayers` here — so a game this
+  // exemption marks non-exempt is always also relay-eligible.
+  const hasComputerPlayer = gameConfig.teams.some(team => team.some(p => p.isComputer))
+  gameConfig.resultsExempt = hasComputerPlayer || humanPlayers.length < 2
+
+  const resultCodes = new Map(humanPlayers.map(p => [p.id, genResultCode()]))
+
+  const teams = getTeamsFromConfig(gameConfig)
+  const selectedMatchup = teams
+    ? computeMatchupString(teams.map(team => team.map(p => p.race)))
+    : null
+
+  // Which team each player was on, denormalized onto their row so that reading ally-vs-opponent
+  // later doesn't mean fetching this game's config back out of JSONB.
+  //
+  // Derived from the same `teams` the matchup string is, so the two can't disagree about how the
+  // game was divided. Stays empty when `getTeamsFromConfig` returns null (Melee with more than two
+  // players, where there are no teams to record), leaving those rows NULL rather than guessing.
+  const teamByPlayer = new Map<SbUserId, number>()
+  for (const [index, team] of (teams ?? []).entries()) {
+    for (const player of team) {
+      teamByPlayer.set(player.id, index)
+    }
+  }
+
+  // NOTE(tec27): the value here makes the linter happy, but this will actually be set in the
+  // transaction below
+  let gameId = ''
+
+  await transact(async client => {
+    gameId = await createGameRecord(client, {
+      startTime,
+      mapId,
+      config: gameConfig,
+      selectedMatchup,
+    })
+    for (const p of humanPlayers) {
+      await createGameUserRecord(client, {
+        userId: p.id,
+        gameId,
+        startTime,
+        selectedRace: p.race,
+        resultCode: resultCodes.get(p.id)!,
+        team: teamByPlayer.get(p.id) ?? null,
+      })
+    }
+  })
+
+  return { gameId, resultCodes }
+}

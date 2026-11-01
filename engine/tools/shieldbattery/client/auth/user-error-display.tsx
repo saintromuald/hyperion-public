@@ -1,0 +1,186 @@
+import { Trans, useTranslation } from 'react-i18next'
+import styled from 'styled-components'
+import { UserErrorCode } from '../../common/users/user-network'
+import { longTimestamp } from '../i18n/date-formats'
+import { TransInterpolation } from '../i18n/i18next'
+import { useFormat } from '../i18n/locale-formats'
+import { FetchError, isFetchError } from '../network/fetch-errors'
+import { useAppDispatch } from '../redux-hooks'
+import { openSettings } from '../settings/action-creators'
+import { GameSettingsPage } from '../settings/settings-page'
+import { TitleMedium } from '../styles/typography'
+
+const BanReason = styled.div`
+  margin-top: 8px;
+  margin-bottom: 8px;
+`
+
+const ErrorsContainer = styled.div`
+  color: var(--theme-error);
+`
+
+export interface UserErrorDisplayProps {
+  className?: string
+  error: Error
+}
+
+function UserError({ error }: { error: FetchError }) {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const longTimestampFormat = useFormat(longTimestamp)
+
+  // Cast is just for checking we've handle all the cases
+  const _error = error as FetchError & { code: UserErrorCode }
+
+  switch (_error.code) {
+    case UserErrorCode.ClientSetupRequired:
+      return (
+        <span>
+          {t(
+            'auth.userErrorDisplay.clientSetupRequired',
+            'Please finish setting up StarCraft in Settings, then try creating your account again.',
+          )}{' '}
+          {IS_ELECTRON ? (
+            <a
+              href='#'
+              onClick={event => {
+                event.preventDefault()
+                dispatch(openSettings(GameSettingsPage.StarCraft))
+              }}>
+              {t('auth.userErrorDisplay.openStarcraftSettings', 'Open StarCraft settings')}
+            </a>
+          ) : null}
+        </span>
+      )
+    case UserErrorCode.InvalidCredentials:
+      return (
+        <span>
+          {t('auth.userErrorDisplay.invalidCredentials', 'Incorrect username or password')}
+        </span>
+      )
+    case UserErrorCode.AccountBanned: {
+      const banReason = error.body
+        ? (error.body as any).reason
+        : t('auth.userErrorDisplay.banWithoutReason', 'No reason specified')
+      return (
+        <div data-testid='user-banned-text'>
+          <Trans t={t} i18nKey='auth.userErrorDisplay.accountBanned'>
+            This account has been banned.
+            <BanReason>
+              <TitleMedium>Reason:</TitleMedium>
+              <span>{{ banReason } as TransInterpolation}</span>
+            </BanReason>
+            <span>
+              The ban will expire at{' '}
+              {
+                {
+                  expireTime: longTimestampFormat.format((error.body as any).expiration),
+                } as TransInterpolation
+              }
+              .
+            </span>
+          </Trans>
+        </div>
+      )
+    }
+    case UserErrorCode.SessionExpired:
+      return <span>{t('auth.userErrorDisplay.sessionExpired', 'Session expired')}</span>
+    case UserErrorCode.MachineBanned:
+      // TODO(tec27): Show expiration date?
+      return (
+        <span>
+          {t(
+            'auth.userErrorDisplay.machineBanned',
+            'This machine is banned from creating new accounts.',
+          )}
+        </span>
+      )
+    case UserErrorCode.UsernameTakenOrRestricted:
+      return (
+        <span>{t('auth.userErrorDisplay.usernameTaken', 'The username is not available.')}</span>
+      )
+    case UserErrorCode.InvalidCode:
+      return (
+        <span data-testid='invalid-code-text'>
+          {t(
+            'auth.userErrorDisplay.invalidCode',
+            'The provided code is invalid. It may have expired.',
+          )}
+        </span>
+      )
+    case UserErrorCode.TooManyAccounts:
+      return (
+        <span data-testid='too-many-accounts'>
+          {t(
+            'auth.userErrorDisplay.tooManyAccounts',
+            'This machine has reached the limit of created accounts. If you have a signup code, ' +
+              'you can enter it to bypass this limit.',
+          )}
+        </span>
+      )
+    case UserErrorCode.ClientVerificationFailed:
+      return (
+        <span>
+          {t(
+            'auth.userErrorDisplay.clientVerificationFailed',
+            "This copy of ShieldBattery couldn't be verified. Please reinstall it from " +
+              'shieldbattery.net and try again.',
+          )}
+        </span>
+      )
+    case UserErrorCode.ClientUpdateRequired:
+      return (
+        <span>
+          {t(
+            'auth.userErrorDisplay.clientUpdateRequired',
+            'A newer version of ShieldBattery is available. Please update it and try again.',
+          )}
+        </span>
+      )
+
+    // InappropriateImage and AvatarUploadRestricted are only produced by the avatar upload flow,
+    // which surfaces its own messages (see account-settings.tsx); they never reach this
+    // auth-focused display.
+    case UserErrorCode.InappropriateImage:
+    case UserErrorCode.AvatarUploadRestricted:
+    case UserErrorCode.NotAllowedOnSelf:
+    case UserErrorCode.NotFound:
+      break
+    default:
+      _error.code satisfies never
+  }
+
+  return (
+    <span>
+      <Trans t={t} i18nKey='auth.userErrorDisplay.defaultError'>
+        An error occurred: {{ status: error.status }} {{ statusText: error.statusText }}
+      </Trans>
+    </span>
+  )
+}
+
+export function UserErrorDisplay({ className, error }: UserErrorDisplayProps) {
+  const { t } = useTranslation()
+
+  const errorMessage =
+    error.message === 'Failed to fetch'
+      ? t(
+          'auth.userErrorDisplay.noConnectionErrorMessage',
+          'Failed to connect to the server. Please check your internet connection and try again.',
+        )
+      : error.message
+
+  return (
+    <ErrorsContainer className={className} data-testid='errors-container'>
+      {isFetchError(error) ? (
+        <UserError error={error} />
+      ) : (
+        <span>
+          <Trans t={t} i18nKey='auth.userErrorDisplay.genericError'>
+            An error occurred: {{ errorMessage }}
+          </Trans>
+        </span>
+      )}
+    </ErrorsContainer>
+  )
+}

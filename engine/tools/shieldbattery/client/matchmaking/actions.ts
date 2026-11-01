@@ -1,0 +1,80 @@
+import {
+  GetMatchmakingSeasonsResponse,
+  GetPreferencesResponse,
+  MatchmakingSeasonJson,
+  MatchmakingStatusJson,
+  MatchmakingType,
+} from '../../common/matchmaking'
+import { GetMatchmakingMapPoolResponse } from '../../common/matchmaking/matchmaking-map-pools'
+import { BaseFetchFailure } from '../network/fetch-errors'
+
+export type MatchmakingActions =
+  | GetCurrentMapPoolBegin
+  | GetCurrentMapPoolSuccess
+  | GetCurrentMapPoolFailure
+  | InitPreferences
+  | UpdatePreferencesSuccess
+  | UpdatePreferencesFailure
+  | MatchmakingStatusUpdate
+  | GetMatchmakingSeasons
+  | GetCurrentMatchmakingSeason
+
+export interface GetCurrentMapPoolBegin {
+  type: '@matchmaking/getCurrentMapPoolBegin'
+  payload: {
+    type: MatchmakingType
+  }
+}
+
+export interface GetCurrentMapPoolSuccess {
+  type: '@matchmaking/getCurrentMapPool'
+  payload: GetMatchmakingMapPoolResponse
+  meta: {
+    type: MatchmakingType
+  }
+  error?: false
+}
+
+export interface GetCurrentMapPoolFailure extends BaseFetchFailure<'@matchmaking/getCurrentMapPool'> {
+  meta: {
+    type: MatchmakingType
+  }
+}
+
+/**
+ * Initialize the user's matchmaking preferences when they connect to the application. If they don't
+ * have any preferences saved yet, the server synthesizes defaults, so this always carries a full
+ * preferences object.
+ */
+export interface InitPreferences {
+  type: '@matchmaking/initPreferences'
+  payload: GetPreferencesResponse
+  meta: { type: MatchmakingType }
+}
+
+export interface UpdatePreferencesSuccess {
+  type: '@matchmaking/updatePreferences'
+  payload: GetPreferencesResponse
+  error?: false
+  meta: { type: MatchmakingType }
+}
+
+export interface UpdatePreferencesFailure extends BaseFetchFailure<'@matchmaking/updatePreferences'> {
+  meta: { type: MatchmakingType }
+}
+
+/** The status (enabled/disabled) of one or more types of matchmaking has changed. */
+export interface MatchmakingStatusUpdate {
+  type: '@matchmaking/statusUpdate'
+  payload: MatchmakingStatusJson[]
+}
+
+export interface GetMatchmakingSeasons {
+  type: '@matchmaking/getMatchmakingSeasons'
+  payload: GetMatchmakingSeasonsResponse
+}
+
+export interface GetCurrentMatchmakingSeason {
+  type: '@matchmaking/getCurrentMatchmakingSeason'
+  payload: MatchmakingSeasonJson
+}

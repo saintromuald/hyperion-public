@@ -1,0 +1,174 @@
+import KoaRouter, { RouterContext } from '@koa/router'
+import httpErrors from 'http-errors'
+import yaml from 'js-yaml'
+import Koa from 'koa'
+import koaConvert from 'koa-convert'
+import koaStatic from 'koa-static'
+import { readFile as readLocalFile } from 'node:fs/promises'
+import path from 'path'
+import { container } from 'tsyringe'
+import { ServerConfig } from '../common/server-config'
+import { toSelfUserJson } from '../common/users/sb-user'
+import { ClientSessionInfo } from '../common/users/session'
+import './http-apis'
+import { getClientShellTemplate, renderClientShell } from './lib/client-shell/client-shell'
+import isDev from './lib/env/is-dev'
+import { getUrl, readFile } from './lib/files'
+import { FileStoreType, PublicAssetsConfig } from './lib/files/public-assets-config'
+import { GameCommendNotificationService } from './lib/games/game-commend-notification-service'
+import { GameReportNotificationService } from './lib/games/game-report-notification-service'
+import { applyApiRoutes, resolveAllHttpApis } from './lib/http/http-api'
+import { NewsService } from './lib/news/news-service'
+import { PageMetadataContext, resolvePageMetadata } from './lib/page-metadata/page-metadata'
+import { getCspNonce } from './lib/security/csp'
+import { getJwt } from './lib/session/jwt-session-middleware'
+import { monotonicNow } from './lib/time/monotonic-now'
+
+function send404() {
+  throw new httpErrors.NotFound()
+}
+
+function sendDisabledRobotsTxt(ctx: RouterContext) {
+  ctx.body = 'User-agent: *\nDisallow: /\n'
+}
+
+interface LatestYaml {
+  path: string
+  releaseDate: string
+}
+
+export default function applyRoutes(app: Koa, graphqlOrigin: string) {
+  // TODO(tec27): Move this somewhere better if we have any other news-related stuff and/or
+  // services that don't have an attached HTTP API to hang off of
+  container.resolve(NewsService)
+  // Have no HTTP API of their own; resolved here so their Redis subscriptions are set up at boot.
+  container.resolve(GameReportNotificationService)
+  container.resolve(GameCommendNotificationService)
+
+  const router = new KoaRouter()
+  app.use(router.routes()).use(router.allowedMethods())
+
+  // injected API handlers
+  const httpApis = resolveAllHttpApis()
+  for (const httpApi of httpApis) {
+    applyApiRoutes(router, httpApi)
+  }
+
+  // error out on any API URIs that haven't been explicitly handled, so that we don't end up
+  // sending back HTML due to the wildcard rule below
+  router.all('/api{/*param}', send404)
+
+  // common requests that we don't want to return the regular page for
+  const crawlersDisabled = (process.env.SB_DISABLE_CRAWLERS ?? '').toLowerCase() === 'true'
+  router
+    .get('/robots.txt', crawlersDisabled ? sendDisabledRobotsTxt : send404)
+    .get('/favicon.ico', send404)
+
+  const publicAssetsConfig = container.resolve(PublicAssetsConfig)
+  const serverConfig: ServerConfig = {
+    publicAssetsUrl: publicAssetsConfig.publicAssetsUrl,
+    graphqlOrigin,
+  }
+  const pageMetadataContext: PageMetadataContext = {
+    canonicalHost: process.env.SB_CANONICAL_HOST!.replace(/\/$/, ''),
+    publicAssetsUrl: publicAssetsConfig.publicAssetsUrl,
+  }
+
+  router.get('/config', async ctx => {
+    ctx.body = serverConfig
+    ctx.type = 'application/json'
+  })
+
+  router.get('/installer.msi', async ctx => {
+    ctx.set('Location', '/download')
+    ctx.status = 301
+  })
+
+  const MAX_INSTALLER_CACHE_TIME = 5 * 60 * 1000
+  let cachedInstallerUrl: string | undefined
+  let installerUrlTime = 0
+
+  // NOTE(tec27): This is where we redirect downloads to, since we don't know what the current
+  // exe path is. It maps to where we *used to* upload these files to manually.
+  router.get('/published_artifacts/win/ShieldBattery.latest.exe', async ctx => {
+    const curTime = monotonicNow()
+    if (!cachedInstallerUrl || curTime - installerUrlTime > MAX_INSTALLER_CACHE_TIME) {
+      const updateYaml = await readFile('app/latest.yml')
+      const parsed = yaml.load(updateYaml.toString('utf8')) as Partial<LatestYaml>
+
+      if (!parsed.path) {
+        throw new Error('Could not find file path on update YAML')
+      }
+      if (!parsed.releaseDate) {
+        throw new Error('Could not find release date on update YAML')
+      }
+
+      cachedInstallerUrl =
+        getUrl(`app/${parsed.path}`) + `?${encodeURIComponent(parsed.releaseDate)}`
+      installerUrlTime = curTime
+    }
+
+    ctx.set('Location', cachedInstallerUrl)
+    ctx.status = 301
+  })
+
+  if (isDev) {
+    // The specifier is assembled at runtime so the compiler leaves this require inside the
+    // condition: statically analyzable requires get hoisted into unconditional module imports,
+    // and the i18n module's i18next packages are development-only and absent from production
+    // installs.
+    const devOnlyI18nPath = './lib/i18n/i18next'
+    const { handleMissingTranslationKeys } = require(devOnlyI18nPath)
+    router.post('/locales/add/:lng/:ns', handleMissingTranslationKeys)
+  }
+
+  // Written next to the shell by the web client build (see vite.config.ts), for the client's
+  // licenses page. Development servers that haven't run that build have none.
+  const thirdPartyLicensesPath = path.join(__dirname, 'client-shell', 'third-party-licenses.json')
+  router.get('/third-party-licenses.json', async ctx => {
+    try {
+      ctx.body = await readLocalFile(thirdPartyLicensesPath)
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') send404()
+      throw err
+    }
+    ctx.type = 'json'
+    ctx.set('Cache-Control', 'public, max-age=3600')
+  })
+
+  const packageJson = require('../package.json')
+  // catch-all for the remainder, first tries static files, then if not found, renders the index and
+  // expects the client to handle routing
+  router.get(
+    '{/*param}',
+    koaConvert(koaStatic(path.join(__dirname, 'public'))),
+    async (ctx: RouterContext) => {
+      const initData: { serverConfig: ServerConfig; session?: ClientSessionInfo } = {
+        serverConfig,
+        session:
+          ctx.session && ctx.state.jwtData
+            ? {
+                user: toSelfUserJson(ctx.session.user),
+                permissions: ctx.session.permissions,
+                jwt: await getJwt(ctx),
+              }
+            : undefined,
+      }
+      const pageMeta = await resolvePageMetadata(ctx.path, pageMetadataContext)
+      ctx.type = 'html'
+      ctx.body = renderClientShell(await getClientShellTemplate(ctx.url), {
+        initData,
+        pageMeta,
+        cspNonce: getCspNonce(ctx),
+        analyticsId: process.env.SB_ANALYTICS_ID,
+        deepLinkScheme: process.env.SB_DEEP_LINK_SCHEME,
+        assetsOrigin:
+          publicAssetsConfig.type !== FileStoreType.FileSystem
+            ? publicAssetsConfig.origin
+            : undefined,
+        publicAssetsUrl: publicAssetsConfig.publicAssetsUrl,
+        version: packageJson.version,
+      })
+    },
+  )
+}

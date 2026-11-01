@@ -1,0 +1,386 @@
+import KoaRouter from '@koa/router'
+import Joi from 'joi'
+import koaBody from 'koa-body'
+import { assertUnreachable } from '../../../common/assert-unreachable'
+import {
+  NetcodeV2DepartureNotification,
+  NetcodeV2DesyncNotification,
+  NetcodeV2GameEvent,
+  NetcodeV2LobbyViolationNotification,
+  NetcodeV2ResultNotification,
+  NetcodeV2SessionClosedNotification,
+  NetcodeV2SessionStartedNotification,
+  NetcodeV2SlotConnectedNotification,
+  NetcodeV2SlotEvidenceNotification,
+  NetcodeV2SlotStartedNotification,
+} from '../../../common/games/netcode-v2'
+import log from '../logging/logger'
+import createThrottle from '../throttle/create-throttle'
+import throttleMiddleware, { throttleByIp, throttleMiddlewareFunc } from '../throttle/middleware'
+import { validateRequest } from '../validation/joi-validator'
+import {
+  EVIDENCE_OBSERVATION_SCHEMA,
+  EVIDENCE_TIMESTAMP_SCHEMA,
+  parseSlotEvidenceList,
+} from './evidence-schema'
+import {
+  checkGameEventWebhookAuth,
+  recordDepartureNotification,
+  recordDesyncNotification,
+  recordLobbyViolationNotification,
+  recordResultNotification,
+  recordSessionClosedNotification,
+  recordSessionStartedNotification,
+  recordSlotConnectedEvidenceNotification,
+  recordSlotConnectedNotification,
+  recordSlotEvidenceNotification,
+  recordSlotStartedNotification,
+} from './netcode-v2-game-event-service'
+
+// Bound parsing and signature-verification work before reading the body. This per-IP budget
+// accommodates both authenticated budgets (100 samples/s and 60 lifecycle events/minute), with
+// headroom for retries and their combined bursts. The caller cannot select it through body fields.
+const requestThrottle = createThrottle('netcodeV2GameEventRequests', {
+  rate: 120,
+  burst: 600,
+  window: 1000,
+})
+
+const gameEventsThrottle = createThrottle('netcodeV2GameEvents', {
+  rate: 60,
+  burst: 300,
+  window: 60000,
+})
+
+const periodicEvidenceThrottle = createThrottle('netcodeV2PeriodicEvidence', {
+  rate: 100,
+  burst: 300,
+  window: 1000,
+})
+
+// A small JSON-only body parser, deliberately separate from the app-wide `koaBody()` in app.ts
+// (which this route is mounted ahead of): webhook callers send a small JSON payload, never
+// multipart/urlencoded, so there's no reason to pay for (or expose) that parsing here.
+// `includeUnparsed` keeps the exact raw body bytes around (as `ctx.request.rawBody`) alongside the
+// parsed JSON, since signature verification must run over exactly what was sent, not a
+// re-serialization of the parsed value.
+const gameEventBody = koaBody({
+  json: true,
+  multipart: false,
+  urlencoded: false,
+  text: false,
+  jsonLimit: '64kb',
+  includeUnparsed: true,
+})
+
+// Postgres BIGINT bounds; syncOrdinal is persisted to a BIGINT column, so rejecting fractional or
+// out-of-range values here (rather than passing them to the DB and 500ing on every at-least-once
+// webhook retry) keeps a malformed/malicious delivery from ever reaching a query.
+const MAX_SAFE_BIGINT = Number.MAX_SAFE_INTEGER
+// A generous but finite bound on the webhook's `detectedAtMs`/epoch-ms fields, so a wildly
+// out-of-range value can't produce `new Date(huge)` -> an Invalid Date that throws downstream (e.g.
+// when persisted or formatted) instead of failing validation up front. Year ~2286.
+const MAX_EPOCH_MS = 10_000_000_000_000
+const MAX_DIVERGED_SLOTS = 16
+// The relay caps a result report at 4 KiB before it ever reaches the coordinator; base64 inflates
+// that by ~4/3, so 8192 chars comfortably covers a legitimate payload without accepting an
+// unbounded body.
+const MAX_RESULT_PAYLOAD_BASE64_CHARS = 8192
+const MAX_SLOT = 15
+
+// Shared by RESULT_EVENT_SCHEMA and DEPARTURE_EVENT_SCHEMA's embedded `result`: both carry the
+// exact same relay-forwarded report shape, so they validate it identically rather than each
+// declaring their own copy.
+const RESULT_PAYLOAD_FIELDS = {
+  payload: Joi.string().base64().max(MAX_RESULT_PAYLOAD_BASE64_CHARS).required(),
+  arrivalMs: Joi.number().integer().min(0).max(MAX_EPOCH_MS).required(),
+  sessionFrame: Joi.number().integer().min(0),
+  slotFrame: Joi.number().integer().min(0),
+}
+
+const DEPARTURE_EVENT_SCHEMA = Joi.object<NetcodeV2DepartureNotification>({
+  event: Joi.string().valid('departure').required(),
+  tenant: Joi.string().required(),
+  session: Joi.number().integer().min(0).required(),
+  externalId: Joi.string(),
+  slot: Joi.number().integer().min(0).required(),
+  externalRef: Joi.string(),
+  kind: Joi.string().valid('left', 'dropped').required(),
+  reason: Joi.number().integer().min(0).required(),
+  leaveSeq: Joi.number().integer().min(0).required(),
+  result: Joi.object(RESULT_PAYLOAD_FIELDS),
+})
+  // The coordinator's control protos don't `deny_unknown_fields`, so this endpoint shouldn't
+  // either — an old app server shouldn't break on a newer coordinator's extra webhook fields.
+  .unknown(true)
+
+const DESYNC_EVENT_SCHEMA = Joi.object<NetcodeV2DesyncNotification>({
+  event: Joi.string().valid('desync').required(),
+  tenant: Joi.string().required(),
+  session: Joi.number().integer().min(0).required(),
+  externalId: Joi.string(),
+  syncOrdinal: Joi.number().integer().min(0).max(MAX_SAFE_BIGINT).required(),
+  gameFrame: Joi.number().integer().min(0),
+  detectedAtMs: Joi.number().integer().min(0).max(MAX_EPOCH_MS).required(),
+  noMajority: Joi.boolean().required(),
+  diverged: Joi.array()
+    .items(
+      Joi.object({
+        slot: Joi.number().integer().min(0).required(),
+        externalRef: Joi.string(),
+      }).unknown(true),
+    )
+    .max(MAX_DIVERGED_SLOTS)
+    .required(),
+  missing: Joi.array()
+    .items(
+      Joi.object({
+        slot: Joi.number().integer().min(0).required(),
+        externalRef: Joi.string(),
+      }).unknown(true),
+    )
+    .max(MAX_DIVERGED_SLOTS),
+})
+  // See DEPARTURE_EVENT_SCHEMA's comment: same no-`deny_unknown_fields` interop reasoning.
+  .unknown(true)
+
+const RESULT_EVENT_SCHEMA = Joi.object<NetcodeV2ResultNotification>({
+  event: Joi.string().valid('result').required(),
+  tenant: Joi.string().required(),
+  session: Joi.number().integer().min(0).required(),
+  externalId: Joi.string(),
+  slot: Joi.number().integer().min(0).max(MAX_SLOT).required(),
+  externalRef: Joi.string(),
+  ...RESULT_PAYLOAD_FIELDS,
+})
+  // See DEPARTURE_EVENT_SCHEMA's comment: same no-`deny_unknown_fields` interop reasoning.
+  .unknown(true)
+
+const SESSION_CLOSED_EVENT_SCHEMA = Joi.object<NetcodeV2SessionClosedNotification>({
+  event: Joi.string().valid('sessionClosed').required(),
+  tenant: Joi.string().required(),
+  session: Joi.number().integer().min(0).required(),
+  externalId: Joi.string(),
+})
+  // See DEPARTURE_EVENT_SCHEMA's comment: same no-`deny_unknown_fields` interop reasoning.
+  .unknown(true)
+
+type SlotConnectedEnvelope = Omit<NetcodeV2SlotConnectedNotification, 'evidence'> & {
+  evidence?: unknown
+}
+
+const SLOT_CONNECTED_EVENT_SCHEMA = Joi.object<SlotConnectedEnvelope>({
+  event: Joi.string().valid('slotConnected').required(),
+  tenant: Joi.string().required(),
+  session: Joi.number().integer().min(0).required(),
+  externalId: Joi.string(),
+  slot: Joi.number().integer().min(0).max(MAX_SLOT).required(),
+  externalRef: Joi.string(),
+  resumed: Joi.boolean().required(),
+  connectedAtMs: Joi.number().integer().min(0).max(MAX_EPOCH_MS).required(),
+  // Observation validation is independent so unsupported evidence cannot suppress a connection.
+  evidence: Joi.any(),
+})
+  // See DEPARTURE_EVENT_SCHEMA's comment: same no-`deny_unknown_fields` interop reasoning.
+  .unknown(true)
+
+const SLOT_EVIDENCE_ENVELOPE_SCHEMA = Joi.object<NetcodeV2SlotEvidenceNotification>({
+  event: Joi.string().valid('slotEvidence').required(),
+  tenant: Joi.string().required(),
+  session: Joi.number().integer().min(0).max(MAX_SAFE_BIGINT).strict().required(),
+  externalId: Joi.string(),
+  slot: Joi.number().integer().min(0).max(MAX_SLOT).strict().required(),
+  externalRef: Joi.string(),
+  observedAtMs: EVIDENCE_TIMESTAMP_SCHEMA.required(),
+  evidence: Joi.any().required(),
+}).unknown(true)
+
+const CONNECTION_EVIDENCE_SCHEMA = EVIDENCE_OBSERVATION_SCHEMA.keys({
+  sampleId: Joi.number().valid(0).strict(),
+})
+
+const SESSION_STARTED_EVENT_SCHEMA = Joi.object<NetcodeV2SessionStartedNotification>({
+  event: Joi.string().valid('sessionStarted').required(),
+  tenant: Joi.string().required(),
+  session: Joi.number().integer().min(0).required(),
+  externalId: Joi.string(),
+  startedAtMs: Joi.number().integer().min(0).max(MAX_EPOCH_MS).required(),
+  initialBufferTurns: Joi.number().integer().min(0),
+})
+  // See DEPARTURE_EVENT_SCHEMA's comment: same no-`deny_unknown_fields` interop reasoning.
+  .unknown(true)
+
+const LOBBY_VIOLATION_EVENT_SCHEMA = Joi.object<NetcodeV2LobbyViolationNotification>({
+  event: Joi.string().valid('lobbyViolation').required(),
+  tenant: Joi.string().required(),
+  session: Joi.number().integer().min(0).max(MAX_SAFE_BIGINT).required(),
+  externalId: Joi.string(),
+  slot: Joi.number().integer().min(0).max(MAX_SLOT).required(),
+  externalRef: Joi.string(),
+  arrivalMs: Joi.number().integer().min(0).max(MAX_EPOCH_MS).required(),
+}).unknown(true)
+
+const SLOT_STARTED_EVENT_SCHEMA = Joi.object<NetcodeV2SlotStartedNotification>({
+  event: Joi.string().valid('slotStarted').required(),
+  tenant: Joi.string().required(),
+  session: Joi.number().integer().min(0).required(),
+  externalId: Joi.string(),
+  slot: Joi.number().integer().min(0).max(MAX_SLOT).required(),
+  externalRef: Joi.string(),
+  arrivalMs: Joi.number().integer().min(0).max(MAX_EPOCH_MS).required(),
+  sessionFrame: Joi.number().integer().min(0),
+  slotFrame: Joi.number().integer().min(0),
+})
+  // See DEPARTURE_EVENT_SCHEMA's comment: same no-`deny_unknown_fields` interop reasoning.
+  .unknown(true)
+
+type LifecycleEvent =
+  | Exclude<
+      NetcodeV2GameEvent,
+      NetcodeV2SlotEvidenceNotification | NetcodeV2SlotConnectedNotification
+    >
+  | SlotConnectedEnvelope
+
+/**
+ * Validates a lifecycle notification body. Periodic observations use a separate envelope.
+ * Joi tries each alternative in order and reports the combined errors if
+ * neither matches, so an unrecognized `event` value (or a body missing it) is rejected.
+ */
+export const GAME_EVENT_BODY_SCHEMA = Joi.alternatives<LifecycleEvent>(
+  DEPARTURE_EVENT_SCHEMA,
+  DESYNC_EVENT_SCHEMA,
+  RESULT_EVENT_SCHEMA,
+  SESSION_CLOSED_EVENT_SCHEMA,
+  SLOT_CONNECTED_EVENT_SCHEMA,
+  SESSION_STARTED_EVENT_SCHEMA,
+  SLOT_STARTED_EVENT_SCHEMA,
+  LOBBY_VIOLATION_EVENT_SCHEMA,
+)
+
+/**
+ * Registers the rally-point2 coordinator's mid-game notification webhook (`POST
+ * /netcode-v2/game-events`, relative to the webhook router's mount) onto a webhook router. No
+ * login is required — the caller is the trusted coordinator service, not an end user — so
+ * authentication is an Ed25519 signature over the request rather than a session; see
+ * `netcode-v2-game-event-service.ts` for the auth + classification logic this handler delegates to.
+ *
+ * One endpoint carries every notification kind (discriminated by `event`) — the coordinator's
+ * notice pipe is a single generalized channel rather than one route per event kind.
+ */
+export function registerGameEventWebhookRoutes(router: KoaRouter) {
+  router.post(
+    '/netcode-v2/game-events',
+    throttleMiddleware(requestThrottle, throttleByIp),
+    gameEventBody,
+    async (ctx, next) => {
+      // Auth/feature-gate before schema validation: netcode v2 not being configured must 404, and a
+      // bad signature must not get a validation-error oracle into the expected body shape. This
+      // needs the raw body bytes (not the parsed JSON), which `gameEventBody` above already
+      // captured as `ctx.request.rawBody`; that's still just *reading* the body, not validating its
+      // shape, so it doesn't undermine the auth-before-schema-validation order. Note that
+      // `gameEventBody` itself still runs ahead of this handler like any koa-body route, so a body
+      // over the `jsonLimit` gets a 413 before auth ever runs.
+      const authStatus = await checkGameEventWebhookAuth(
+        ctx.get('x-rp2-timestamp'),
+        ctx.get('x-rp2-signature'),
+        Buffer.from(ctx.request.rawBody ?? '', 'utf8'),
+      )
+      if (authStatus !== null) {
+        ctx.status = authStatus
+        return
+      }
+
+      await next()
+    },
+    (ctx, next) => {
+      // Only authenticated callers can spend these independent delivery budgets. Periodic
+      // observations must not consume the tokens reserved for lifecycle notifications.
+      const body = ctx.request.body
+      const throttle =
+        body && typeof body === 'object' && 'event' in body && body.event === 'slotEvidence'
+          ? periodicEvidenceThrottle
+          : gameEventsThrottle
+      return throttleMiddlewareFunc(throttle, throttleByIp, ctx, next)
+    },
+    async ctx => {
+      const input = ctx.request.body
+      if (
+        input &&
+        typeof input === 'object' &&
+        'event' in input &&
+        input.event === 'slotEvidence'
+      ) {
+        const { body } = validateRequest(ctx, { body: SLOT_EVIDENCE_ENVELOPE_SCHEMA })
+        const samples = parseSlotEvidenceList([
+          {
+            slot: body.slot,
+            observedAtMs: body.observedAtMs,
+            historical: body.historical,
+            failureCount: body.failureCount,
+            observation: body.evidence,
+          },
+        ])
+        const sample = samples?.[0]
+        // A newer coordinator may emit observation kinds this server cannot yet interpret.
+        // Acknowledge those samples without routing them into storage or lifecycle handlers.
+        if (!sample?.observation.sampleId) {
+          ctx.status = 204
+          return
+        }
+        const result = await recordSlotEvidenceNotification({
+          ...body,
+          evidence: sample.observation,
+        })
+        ctx.status = result === 'pending' ? 503 : 204
+        return
+      }
+
+      const { body } = validateRequest(ctx, { body: GAME_EVENT_BODY_SCHEMA })
+      switch (body.event) {
+        case 'lobbyViolation':
+          await recordLobbyViolationNotification(body)
+          break
+        case 'departure':
+          await recordDepartureNotification(body)
+          break
+        case 'desync':
+          await recordDesyncNotification(body)
+          break
+        case 'result':
+          await recordResultNotification(body)
+          break
+        case 'sessionClosed':
+          await recordSessionClosedNotification(body)
+          break
+        case 'slotConnected': {
+          const { evidence, ...notification } = body
+          recordSlotConnectedNotification(notification)
+          if (evidence !== undefined) {
+            const parsed = CONNECTION_EVIDENCE_SCHEMA.validate(evidence)
+            if (parsed.error) {
+              log.warn('Ignoring unsupported or malformed connection observation')
+            } else if (
+              (await recordSlotConnectedEvidenceNotification({
+                ...notification,
+                evidence: parsed.value,
+              })) === 'pending'
+            ) {
+              ctx.status = 503
+              return
+            }
+          }
+          break
+        }
+        case 'sessionStarted':
+          recordSessionStartedNotification(body)
+          break
+        case 'slotStarted':
+          recordSlotStartedNotification(body)
+          break
+        default:
+          assertUnreachable(body)
+      }
+      ctx.status = 204
+    },
+  )
+}

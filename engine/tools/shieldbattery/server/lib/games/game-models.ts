@@ -1,0 +1,1217 @@
+import { GameConfig, GameSource } from '../../../common/games/configuration'
+import {
+  GameDurationFilter,
+  GameFormat,
+  GameSortOption,
+  GameSourceFilter,
+  getTeamSizeForFormat,
+  MatchupFilter,
+  MIN_GAME_LENGTH_MS,
+} from '../../../common/games/game-filters'
+import { GameCancellationReason, GameRecord } from '../../../common/games/games'
+import { expandMatchupFilter, MatchupString } from '../../../common/games/matchups'
+import { NetcodeV2RelayEvent, NetcodeV2RequestedRegion } from '../../../common/games/netcode-v2'
+import { ReconciledPlayerResult, ReconciledResults } from '../../../common/games/results'
+import { LeagueId } from '../../../common/leagues/leagues'
+import { LobbyVisibility } from '../../../common/lobbies/lobby-visibility'
+import { SbUserId } from '../../../common/users/sb-user-id'
+import db, { DbClient } from '../db'
+import { escapeSearchString } from '../db/escape-search-string'
+import { sql, sqlConcat, sqlRaw, SqlTemplate } from '../db/sql'
+import transact from '../db/transaction'
+import { Dbify } from '../db/types'
+
+/**
+ * A row shape for the `games` table. `manually_resolved` has no physical column behind it — it's
+ * derived from `manually_resolved_at`, so every query producing these rows must select
+ * `manually_resolved_at IS NOT NULL AS manually_resolved` alongside the real columns.
+ */
+type DbGameRecord = Dbify<GameRecord>
+
+export type CreateGameRecordData = Pick<
+  GameRecord,
+  'startTime' | 'mapId' | 'config' | 'selectedMatchup'
+>
+
+function convertFromDb(row: DbGameRecord): GameRecord {
+  return {
+    id: row.id,
+    startTime: row.start_time,
+    mapId: row.map_id,
+    config: row.config,
+    disputable: row.disputable,
+    disputeRequested: row.dispute_requested,
+    disputeReviewed: row.dispute_reviewed,
+    gameLength: row.game_length,
+    // Some legacy rows store `results` as an empty object `{}` rather than an array (or null);
+    // normalize those to null so the runtime value matches the declared type and downstream
+    // consumers (e.g. `new Map(results)`) don't choke on a non-iterable.
+    results: Array.isArray(row.results) ? row.results : null,
+    selectedMatchup: row.selected_matchup,
+    assignedMatchup: row.assigned_matchup,
+    canceledAt: row.canceled_at ?? null,
+    cancellationReason: row.cancellation_reason ?? null,
+    manuallyResolved: row.manually_resolved,
+  }
+}
+
+/**
+ * Creates a new record in the `games` table using the specified client. This is intended to be used
+ * inside a transaction while also creating records for each user's game results.
+ */
+export async function createGameRecord(
+  client: DbClient,
+  { startTime, mapId, config, selectedMatchup }: CreateGameRecordData,
+): Promise<string> {
+  // TODO(tec27): We could make some type of TransactionClient transformation to enforce this is
+  // done in a transaction
+  const result = await client.query<{ id: string }>(sql`
+    INSERT INTO games (
+      start_time, map_id, config, disputable, dispute_requested, dispute_reviewed, game_length,
+      selected_matchup
+    ) VALUES (
+      ${startTime}, ${mapId}, ${config}, FALSE, FALSE, FALSE, NULL,
+      ${selectedMatchup}
+    ) RETURNING id
+  `)
+
+  return result.rows[0].id
+}
+
+/**
+ * Returns a `GameRecord` for the specificied ID, or `undefined` if one could not be found.
+ */
+export async function getGameRecord(
+  gameId: string,
+  inputClient?: DbClient,
+): Promise<GameRecord | undefined> {
+  const { client, done } = await db(inputClient)
+  try {
+    const result = await client.query<DbGameRecord>(sql`
+      SELECT id, start_time, map_id, config, disputable, dispute_requested, dispute_reviewed,
+        game_length, results, selected_matchup, assigned_matchup, canceled_at, cancellation_reason,
+        manually_resolved_at IS NOT NULL AS manually_resolved
+      FROM games
+      WHERE id = ${gameId}`)
+    return result.rowCount ? convertFromDb(result.rows[0]) : undefined
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Returns whether a user took part in a game, either as a player (who has a `games_users` row) or
+ * as an observer (who is recorded only in the game config's `observers`, never as a row).
+ */
+export async function wasUserInGame(gameId: string, userId: SbUserId): Promise<boolean> {
+  const { client, done } = await db()
+  try {
+    const result = await client.query(sql`
+      SELECT 1
+      FROM games g
+      WHERE g.id = ${gameId}
+        AND (
+          EXISTS (SELECT 1 FROM games_users gu WHERE gu.game_id = g.id AND gu.user_id = ${userId})
+          OR g.config->'observers' @> ${JSON.stringify([userId])}::jsonb
+        )
+    `)
+    return (result.rowCount ?? 0) > 0
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Marks an unreconciled game as cancelled. The first cancellation reason is retained so retried
+ * cleanup paths cannot overwrite the event that originally ended the game.
+ */
+export async function cancelGame(gameId: string, reason: GameCancellationReason): Promise<void> {
+  const { client, done } = await db()
+  try {
+    await client.query(sql`
+      UPDATE games
+      SET canceled_at = NOW(), cancellation_reason = ${reason}
+      WHERE id = ${gameId} AND results IS NULL AND canceled_at IS NULL
+    `)
+  } finally {
+    done()
+  }
+}
+
+/** Persists an authoritative setup decision before a caller assigns ordinary failure penalties. */
+export async function finalizeGameSetupCancellation(
+  gameId: string,
+  reason: GameCancellationReason,
+): Promise<boolean> {
+  return await transact(async client => {
+    await client.query(sql`SET LOCAL lock_timeout = '2s'`)
+    await client.query(sql`SET LOCAL statement_timeout = '5s'`)
+    const result = await client.query(sql`
+      UPDATE games
+      SET canceled_at = NOW(), cancellation_reason = ${reason}, setup_resolution_final = TRUE
+      WHERE id = ${gameId} AND results IS NULL AND canceled_at IS NULL
+      RETURNING id
+    `)
+    return !!result.rowCount
+  })
+}
+
+/** Whether a failed setup already has an authoritative decision that excludes later evidence. */
+export async function hasFinalGameSetupResolution(gameId: string): Promise<boolean> {
+  const { client, done } = await db()
+  try {
+    const result = await client.query<{ setup_resolution_final: boolean }>(sql`
+      SELECT setup_resolution_final FROM games WHERE id = ${gameId}
+    `)
+    return result.rows[0]?.setup_resolution_final ?? false
+  } finally {
+    done()
+  }
+}
+
+/** The locked game state needed to stage an anomaly cancellation. */
+export interface LockedGameForLobbyViolation {
+  config: GameConfig
+  results: unknown
+  canceledAt: Date | null
+  cancellationReason: GameCancellationReason | null
+  setupResolutionFinal: boolean
+}
+
+export async function lockGameForLobbyViolation(
+  client: DbClient,
+  gameId: string,
+): Promise<LockedGameForLobbyViolation | undefined> {
+  const result = await client.query<{
+    config: GameConfig
+    results: unknown
+    canceled_at: Date | null
+    cancellation_reason: GameCancellationReason | null
+    setup_resolution_final: boolean
+  }>(sql`
+    SELECT config, results, canceled_at, cancellation_reason, setup_resolution_final
+    FROM games
+    WHERE id = ${gameId}
+    FOR UPDATE
+  `)
+  const row = result.rows[0]
+  return row
+    ? {
+        config: row.config,
+        results: row.results,
+        canceledAt: row.canceled_at,
+        cancellationReason: row.cancellation_reason,
+        setupResolutionFinal: row.setup_resolution_final,
+      }
+    : undefined
+}
+
+/** Writes an already-locked cancellation with an externally observed event timestamp. */
+export async function setGameCancellation(
+  client: DbClient,
+  gameId: string,
+  reason: GameCancellationReason,
+  canceledAt: Date,
+): Promise<void> {
+  await client.query(sql`
+    UPDATE games
+    SET canceled_at = ${canceledAt}, cancellation_reason = ${reason}
+    WHERE id = ${gameId}
+  `)
+}
+/**
+ * Locks a game's row for the remainder of the current transaction and returns whether the game
+ * already has reconciled results (also `true` if the game row no longer exists). Reconciliation can
+ * be triggered concurrently from several places (result submission, relay session close, the
+ * periodic sweeps), and each trigger works from a game snapshot taken before its transaction began,
+ * so writers must take this lock and re-check before applying result-derived changes — otherwise
+ * two triggers can both see an unreconciled snapshot and apply additive side effects (e.g. win/loss
+ * stat counters) twice.
+ */
+export async function lockGameAndCheckReconciled(
+  client: DbClient,
+  gameId: string,
+): Promise<boolean> {
+  const result = await client.query<{ results: unknown }>(sql`
+    SELECT results FROM games WHERE id = ${gameId} FOR UPDATE
+  `)
+  return result.rows.length === 0 || result.rows[0].results !== null
+}
+/**
+ * Locks a game for normal reconciliation. A cancelled game is terminal for that path even though
+ * an anomaly penalty may still need to write its deliberately limited result later.
+ */
+export async function lockGameAndCheckUnavailableForReconciliation(
+  client: DbClient,
+  gameId: string,
+): Promise<boolean> {
+  const result = await client.query<{ results: unknown; canceled_at: Date | null }>(sql`
+    SELECT results, canceled_at FROM games WHERE id = ${gameId} FOR UPDATE
+  `)
+  return (
+    result.rows.length === 0 ||
+    result.rows[0].results !== null ||
+    result.rows[0].canceled_at !== null
+  )
+}
+
+/**
+ * Sets the reconciled (and probably final) result for a particular game. This is intended
+ * to be executed in a transaction that updates all the users and the full game results at once.
+ */
+export async function setReconciledResult(
+  client: DbClient,
+  gameId: string,
+  results: ReconciledResults,
+  assignedMatchup: MatchupString | null,
+): Promise<void> {
+  await client.query(sql`
+    UPDATE games
+    SET
+      results = ${JSON.stringify(Array.from(results.results.entries()))},
+      game_length = ${results.time},
+      disputable = ${results.disputed},
+      dispute_requested = false,
+      dispute_requested_at = NULL,
+      dispute_reviewed = false,
+      assigned_matchup = ${assignedMatchup}
+    WHERE id = ${gameId}
+  `)
+}
+
+/**
+ * Locks a game's row for the remainder of the current transaction and returns the dispute state a
+ * manual resolution has to decide against, or `undefined` if the game row no longer exists. Reading
+ * this under the lock is what makes two admins resolving the same game concurrently safe: the first
+ * to commit clears `disputable`, so the second sees a game that can no longer be resolved instead
+ * of applying the additive side effects (win/loss counters, rating changes) a second time.
+ */
+export async function lockGameForManualResolution(
+  client: DbClient,
+  gameId: string,
+): Promise<
+  { disputable: boolean; results: [SbUserId, ReconciledPlayerResult][] | null } | undefined
+> {
+  const result = await client.query<{
+    disputable: boolean
+    results: [SbUserId, ReconciledPlayerResult][] | null
+  }>(sql`
+    SELECT disputable, results FROM games WHERE id = ${gameId} FOR UPDATE
+  `)
+  if (result.rows.length === 0) {
+    return undefined
+  }
+
+  const row = result.rows[0]
+  return {
+    disputable: row.disputable,
+    // Some legacy rows store `results` as an empty object `{}` rather than an array (or null);
+    // normalize those to null so the runtime value matches the declared type.
+    results: Array.isArray(row.results) ? row.results : null,
+  }
+}
+
+/**
+ * Overwrites a game's results with outcomes an admin assigned by hand, clearing its disputable
+ * state and recording who resolved it and when. Intended to be executed in the same transaction
+ * that applies the result-derived side effects.
+ *
+ * `dispute_requested` is left alone: it's the historical record of whether players actually asked
+ * for a review. `game_length` is left alone too — manual resolution only decides outcomes.
+ *
+ * `results` and `assigned_matchup` are written as given, `null` matchup included. A disputed game's
+ * stored races can include a fabricated one for a player who appeared in no report, so a caller that
+ * establishes every player's race from a trustworthy source passes those races in `results` and the
+ * matchup they form; a caller that can't establish them passes the stored races back unchanged and a
+ * `null` matchup. The two must always agree, since the stored races are what a game's result display
+ * is drawn from. The matchup column is already NULL for a disputed game, so writing NULL is a no-op
+ * in practice.
+ */
+export async function setManuallyResolvedResult(
+  client: DbClient,
+  gameId: string,
+  results: Map<SbUserId, ReconciledPlayerResult>,
+  assignedMatchup: MatchupString | null,
+  resolvedBy: SbUserId,
+  resolvedAt: Date,
+): Promise<void> {
+  await client.query(sql`
+    UPDATE games
+    SET
+      results = ${JSON.stringify(Array.from(results.entries()))},
+      disputable = false,
+      dispute_reviewed = true,
+      assigned_matchup = ${assignedMatchup},
+      manually_resolved_by = ${resolvedBy},
+      manually_resolved_at = ${resolvedAt}
+    WHERE id = ${gameId}
+  `)
+}
+
+/**
+ * Records that a participant asked an admin to review a disputed game's results. Only a game that
+ * is still disputed and has never had a review requested is updated, so concurrent requests (or a
+ * request racing a manual resolution) record at most one request.
+ *
+ * @returns whether the request was recorded
+ */
+export async function setReviewRequested(gameId: string, requestedAt: Date): Promise<boolean> {
+  const { client, done } = await db()
+  try {
+    const result = await client.query(sql`
+      UPDATE games
+      SET dispute_requested = true, dispute_requested_at = ${requestedAt}
+      WHERE id = ${gameId}
+        AND disputable
+        AND NOT dispute_requested
+        AND canceled_at IS NULL
+    `)
+    return (result.rowCount ?? 0) > 0
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Marks a game's pending review request as reviewed without resolving the game, which stays
+ * disputed. `dispute_requested` is left set as the record that a review was asked for.
+ *
+ * @returns whether there was a pending request to dismiss
+ */
+export async function dismissReviewRequest(gameId: string): Promise<boolean> {
+  const { client, done } = await db()
+  try {
+    const result = await client.query(sql`
+      UPDATE games
+      SET dispute_reviewed = true
+      WHERE id = ${gameId}
+        AND disputable
+        AND dispute_requested
+        AND NOT dispute_reviewed
+    `)
+    return (result.rowCount ?? 0) > 0
+  } finally {
+    done()
+  }
+}
+
+/** Returns the games with a review request still awaiting an admin, newest request first. */
+export async function listPendingReviewRequests(
+  limit: number,
+): Promise<Array<{ game: GameRecord; requestedAt: Date }>> {
+  const { client, done } = await db()
+  try {
+    const result = await client.query<DbGameRecord & { dispute_requested_at: Date }>(sql`
+      SELECT id, start_time, map_id, config, disputable, dispute_requested, dispute_reviewed,
+        game_length, results, selected_matchup, assigned_matchup, canceled_at, cancellation_reason,
+        manually_resolved_at IS NOT NULL AS manually_resolved, dispute_requested_at
+      FROM games
+      WHERE dispute_requested AND NOT dispute_reviewed
+      ORDER BY dispute_requested_at DESC
+      LIMIT ${limit}
+    `)
+    return result.rows.map(row => ({
+      game: convertFromDb(row),
+      requestedAt: row.dispute_requested_at,
+    }))
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Returns the request times of the review requests awaiting an admin that were made after `since`,
+ * newest first.
+ */
+export async function listRecentPendingReviewRequestTimes({
+  since,
+  limit,
+}: {
+  since: Date
+  limit: number
+}): Promise<Date[]> {
+  const { client, done } = await db()
+  try {
+    const result = await client.query<{ dispute_requested_at: Date }>(sql`
+      SELECT dispute_requested_at
+      FROM games
+      WHERE dispute_requested AND NOT dispute_reviewed AND dispute_requested_at >= ${since}
+      ORDER BY dispute_requested_at DESC
+      LIMIT ${limit}
+    `)
+    return result.rows.map(r => r.dispute_requested_at)
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Persists the rally-point2 coordinator's session id for a netcode-v2 game, called right after the
+ * coordinator's session/create call succeeds. Lets the reconciliation sweep later ask the
+ * coordinator whether the session is still alive instead of blind-forcing after a timeout.
+ */
+export async function setNetcodeV2Session(gameId: string, session: number): Promise<void> {
+  const { client, done } = await db()
+  try {
+    await client.query(sql`
+      UPDATE games
+      SET netcode_v2_session = ${session}
+      WHERE id = ${gameId}
+    `)
+  } finally {
+    done()
+  }
+}
+
+/** Atomically binds a session and its roster, refusing to replace a different persisted session. */
+export async function setNetcodeV2SessionMapping(
+  gameId: string,
+  session: number,
+  requested: NetcodeV2RequestedRegion[],
+): Promise<boolean> {
+  const { client, done } = await db()
+  try {
+    const result = await client.query(sql`
+      UPDATE games
+      SET netcode_v2_session = ${session},
+        netcode_v2_requested_regions = ${JSON.stringify(requested)}::jsonb
+      WHERE id = ${gameId}
+        AND (netcode_v2_session IS NULL OR netcode_v2_session = ${session})
+    `)
+    return !!result.rowCount
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Returns the rally-point2 coordinator session id persisted for a game, or `null` if the game has
+ * none on record (not a netcode-v2 game, or the session id never persisted). Used by the in-game
+ * re-home endpoint to confirm a request names a live netcode-v2 session before asking the
+ * coordinator to move it.
+ */
+export async function getNetcodeV2Session(gameId: string): Promise<number | null> {
+  const { client, done } = await db()
+  try {
+    const result = await client.query<{ netcode_v2_session: string | null }>(sql`
+      SELECT netcode_v2_session
+      FROM games
+      WHERE id = ${gameId}
+    `)
+    const raw = result.rows[0]?.netcode_v2_session
+    // netcode_v2_session is a BIGINT, so pg returns it as a string; normalize to a number.
+    return raw === null || raw === undefined ? null : Number(raw)
+  } finally {
+    done()
+  }
+}
+
+/** Pages recent persisted sessions for bounded background observation recovery. */
+export async function findNetcodeV2EvidenceRecoveryCandidates({
+  since,
+  after,
+  limit,
+}: {
+  since: Date
+  after?: { gameId: string }
+  limit: number
+}): Promise<Array<{ gameId: string; session: number }>> {
+  const { client, done } = await db()
+  try {
+    const result = await client.query<{
+      id: string
+      netcode_v2_session: string
+    }>(sql`
+      SELECT id, netcode_v2_session FROM games
+      WHERE start_time >= ${since}
+        AND netcode_v2_session IS NOT NULL
+        AND jsonb_array_length(netcode_v2_requested_regions) > 0
+        ${after ? sql`AND id > ${after.gameId}::uuid` : sql``}
+      ORDER BY id
+      LIMIT ${Math.min(100, Math.max(1, Math.trunc(limit)))}
+    `)
+    return result.rows.map(row => ({
+      gameId: row.id,
+      session: Number(row.netcode_v2_session),
+    }))
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Appends relay-serving-history events to a game's `netcode_v2_relays` record: the session's serving
+ * relay(s) at create time, or a later rehome that moved it to a replacement. A no-op for an empty
+ * list, so callers can pass through a deduped/filtered set without a special-case guard.
+ */
+export async function addNetcodeV2RelayEvents(
+  gameId: string,
+  events: NetcodeV2RelayEvent[],
+): Promise<void> {
+  if (events.length === 0) {
+    return
+  }
+
+  const { client, done } = await db()
+  try {
+    await client.query(sql`
+      UPDATE games
+      SET netcode_v2_relays = COALESCE(netcode_v2_relays, '[]'::jsonb) || ${JSON.stringify(events)}::jsonb
+      WHERE id = ${gameId}
+    `)
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Records what each of a game's session slots requested at queue/join time. Written once, at session
+ * create, so this overwrites rather than appends: it's create-time truth, unlike the relay history
+ * that grows as a session moves.
+ */
+export async function setNetcodeV2RequestedRegions(
+  gameId: string,
+  requested: NetcodeV2RequestedRegion[],
+): Promise<void> {
+  const { client, done } = await db()
+  try {
+    await client.query(sql`
+      UPDATE games
+      SET netcode_v2_requested_regions = ${JSON.stringify(requested)}::jsonb
+      WHERE id = ${gameId}
+    `)
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Returns a game's persisted netcode-v2 coordinator session id, relay-serving history, and per-slot
+ * requested regions, for the admin debug view. `session` is `null` for a game that never persisted a
+ * coordinator session id (not a netcode-v2 game, or the write failed); `relays` and
+ * `requestedRegions` are empty when there's nothing on record.
+ */
+export async function getNetcodeV2DebugInfo(gameId: string): Promise<{
+  session: number | null
+  relays: NetcodeV2RelayEvent[]
+  requestedRegions: NetcodeV2RequestedRegion[]
+}> {
+  const { client, done } = await db()
+  try {
+    const result = await client.query<{
+      netcode_v2_session: string | null
+      netcode_v2_relays: NetcodeV2RelayEvent[] | null
+      netcode_v2_requested_regions: NetcodeV2RequestedRegion[] | null
+    }>(sql`
+      SELECT netcode_v2_session, netcode_v2_relays, netcode_v2_requested_regions
+      FROM games
+      WHERE id = ${gameId}
+    `)
+    const row = result.rows[0]
+    return {
+      // netcode_v2_session is a BIGINT, so pg returns it as a string; normalize to a number.
+      session: row?.netcode_v2_session != null ? Number(row.netcode_v2_session) : null,
+      relays: row?.netcode_v2_relays ?? [],
+      requestedRegions: row?.netcode_v2_requested_regions ?? [],
+    }
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Overwrites a game's persisted config. Used for values that get decided after the game record is
+ * first created — currently only `useNetcodeV2`, which depends on the netcode v2 feature flag and
+ * the player count at load time, neither of which is known when the game is registered.
+ */
+export async function updateGameConfig(gameId: string, config: GameConfig): Promise<void> {
+  const { client, done } = await db()
+  try {
+    await client.query(sql`
+      UPDATE games
+      SET config = ${config}
+      WHERE id = ${gameId}
+    `)
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Returns the number of games that have been completed (that is, have non-null results).
+ */
+export async function countCompletedGames(): Promise<number> {
+  const { client, done } = await db()
+  try {
+    const result = await client.query<{ count: string }>(
+      sql`SELECT COUNT(*) as count FROM games WHERE results IS NOT NULL AND canceled_at IS NULL;`,
+    )
+    return Number(result.rows[0].count)
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Retrieves game information for the last `numGames` games of a user. The resulting array may be
+ * empty or less than `numGames` in length if the user has not played that many games. This list
+ * will also include games that have incomplete results or are disputed, but never a results-exempt
+ * game (contains computer players — see `isResultsExempt`), which is never shown at all.
+ */
+export async function getRecentGamesForUser(
+  userId: SbUserId,
+  numGames: number,
+): Promise<GameRecord[]> {
+  // TODO(tec27): Support pagination on this
+
+  const { client, done } = await db()
+  try {
+    const result = await client.query<DbGameRecord>(sql`
+      SELECT g.*, g.manually_resolved_at IS NOT NULL AS manually_resolved
+      FROM games_users u JOIN games g ON u.game_id = g.id
+      WHERE u.user_id = ${userId}
+      AND g.canceled_at IS NULL
+      AND (g.config->>'resultsExempt')::boolean IS NOT TRUE
+      ORDER BY u.start_time DESC
+      LIMIT ${numGames}
+    `)
+    return result.rows.map(row => convertFromDb(row))
+  } finally {
+    done()
+  }
+}
+
+/** A lobby game only counts as part of the public games list once it opts into being listed. */
+const LISTED_LOBBY_VISIBILITY: LobbyVisibility = 'listed'
+
+/**
+ * Builds the games-list `source` filter's WHERE clause: `Ranked` restricts to matchmaking games,
+ * `Custom` restricts to public lobby games (`gameSourceExtra.visibility === 'listed'`), and `All`
+ * (or an absent filter) includes both. An unlisted lobby game, or one predating the visibility
+ * field (neither carries `'listed'`), never matches the `Custom` branch.
+ */
+function getGameSourceWhereClause(source: GameSourceFilter | undefined): SqlTemplate {
+  const rankedClause = sql`g.config->>'gameSource' = ${GameSource.Matchmaking}`
+  const customClause = sql`
+    g.config->>'gameSource' = ${GameSource.Lobby}
+    AND g.config->'gameSourceExtra'->>'visibility' = ${LISTED_LOBBY_VISIBILITY}
+  `
+
+  const effectiveSource = source ?? GameSourceFilter.All
+  switch (effectiveSource) {
+    case GameSourceFilter.Ranked:
+      return rankedClause
+    case GameSourceFilter.Custom:
+      return customClause
+    case GameSourceFilter.All:
+      return sql`(${rankedClause} OR (${customClause}))`
+    default:
+      return effectiveSource satisfies never
+  }
+}
+
+/**
+ * Retrieves completed games for the platform games list: matchmaking games, public lobby games, or
+ * both, depending on `source` (an absent filter, or `GameSourceFilter.All`, includes both). Never
+ * returns a results-exempt game (contains computer players — see `isResultsExempt`); this excludes
+ * every lobby game played against the computer, while matchmaking is never results-exempt since it
+ * has no computer players.
+ *
+ * If `leagueId` is given, the list is restricted to games played in that league (that is, games
+ * that produced a `league_user_changes` row), which is what backs a league's Games tab.
+ */
+export async function getGames(
+  params: {
+    limit: number
+    offset: number
+    leagueId?: LeagueId
+    source?: GameSourceFilter
+    duration?: GameDurationFilter
+    mapName?: string
+    playerName?: string
+    format?: GameFormat
+    matchup?: MatchupFilter
+    sort?: GameSortOption
+    startDate?: number
+    endDate?: number
+    /** When falsy, games shorter than `MIN_GAME_LENGTH_MS` are excluded. */
+    includeShort?: boolean
+  },
+  withClient?: DbClient,
+): Promise<GameRecord[]> {
+  const {
+    limit,
+    offset,
+    leagueId,
+    source,
+    duration,
+    mapName,
+    playerName,
+    format,
+    matchup,
+    sort,
+    startDate,
+    endDate,
+    includeShort,
+  } = params
+
+  const { client, done } = await db(withClient)
+  try {
+    const whereClauses = [
+      getGameSourceWhereClause(source),
+      sql`g.results IS NOT NULL`,
+      sql`g.canceled_at IS NULL`,
+      sql`(g.config->>'resultsExempt')::boolean IS NOT TRUE`,
+    ]
+    let needMapJoin = false
+
+    if (leagueId) {
+      // A game counts as part of a league if it produced a `league_user_changes` row for it (that
+      // is, at least one of its players was an active league member when the game reconciled).
+      whereClauses.push(sql`EXISTS (
+        SELECT 1 FROM league_user_changes luc
+        WHERE luc.league_id = ${leagueId} AND luc.game_id = g.id
+      )`)
+    }
+
+    if (duration && duration !== GameDurationFilter.All) {
+      switch (duration) {
+        case GameDurationFilter.Under10:
+          whereClauses.push(sql`g.game_length < 600000`)
+          break
+        case GameDurationFilter.From10To20:
+          whereClauses.push(sql`g.game_length >= 600000 AND g.game_length < 1200000`)
+          break
+        case GameDurationFilter.From20To30:
+          whereClauses.push(sql`g.game_length >= 1200000 AND g.game_length < 1800000`)
+          break
+        case GameDurationFilter.Over30:
+          whereClauses.push(sql`g.game_length >= 1800000`)
+          break
+        default:
+          duration satisfies never
+      }
+    }
+
+    if (!includeShort) {
+      // NULL-safe: legacy reconciled games with no recorded length must not disappear just because
+      // their length is unknown rather than known-short. Written as a COALESCE rather than
+      // `game_length IS NULL OR game_length >= n` because the planner badly underestimates how many
+      // rows that OR matches in `idx_games_public_completed_length` and turns it into a bitmap scan
+      // of nearly every public game followed by a sort, instead of walking
+      // `idx_games_public_completed_start` for the first page (~580ms vs <1ms in production).
+      whereClauses.push(
+        sql`COALESCE(g.game_length, ${MIN_GAME_LENGTH_MS}) >= ${MIN_GAME_LENGTH_MS}`,
+      )
+    }
+
+    if (mapName) {
+      needMapJoin = true
+      whereClauses.push(sql`m.name ILIKE ${'%' + escapeSearchString(mapName) + '%'}`)
+    }
+
+    if (playerName) {
+      whereClauses.push(sql`
+        EXISTS (
+          SELECT 1 FROM games_users gu2
+          INNER JOIN users u ON gu2.user_id = u.id
+          WHERE gu2.game_id = g.id
+          AND u.name ILIKE ${'%' + escapeSearchString(playerName) + '%'}
+        )
+      `)
+    }
+
+    if (format) {
+      const teamSize = getTeamSizeForFormat(format)
+      whereClauses.push(sql`
+        g.selected_matchup ~ ${`^[prtz]{${teamSize}}-[prtz]{${teamSize}}$`}
+      `)
+    }
+
+    if (format && matchup) {
+      const hasNonUndefinedRace = [...matchup.team1, ...matchup.team2].some(r => r !== undefined)
+
+      if (hasNonUndefinedRace) {
+        const matchupStrings = expandMatchupFilter(matchup)
+        whereClauses.push(sql`g.assigned_matchup = ANY(${matchupStrings})`)
+      }
+    }
+
+    if (startDate !== undefined) {
+      whereClauses.push(sql`g.start_time >= ${new Date(startDate)}`)
+    }
+
+    if (endDate !== undefined) {
+      whereClauses.push(sql`g.start_time <= ${new Date(endDate)}`)
+    }
+
+    // NOTE(2Pac): All of these include `g.id` as a final tiebreaker so the ordering is fully
+    // deterministic. Without it, rows that tie on the leading column (e.g. games that share a
+    // start_time) can be duplicated or skipped across paginated requests. This is especially
+    // relevant here since this list is a moving window (games complete continuously), so pages are
+    // loaded at different points in time.
+    let orderBy = sqlRaw('g.start_time DESC, g.id DESC')
+    if (sort) {
+      switch (sort) {
+        case GameSortOption.LatestFirst:
+          orderBy = sqlRaw('g.start_time DESC, g.id DESC')
+          break
+        case GameSortOption.OldestFirst:
+          orderBy = sqlRaw('g.start_time ASC, g.id ASC')
+          break
+        case GameSortOption.ShortestFirst:
+          orderBy = sqlRaw('g.game_length ASC NULLS LAST, g.start_time DESC, g.id DESC')
+          break
+        case GameSortOption.LongestFirst:
+          orderBy = sqlRaw('g.game_length DESC NULLS LAST, g.start_time DESC, g.id DESC')
+          break
+        default:
+          sort satisfies never
+      }
+    }
+
+    let query = sql`
+      SELECT g.*, g.manually_resolved_at IS NOT NULL AS manually_resolved
+      FROM games g
+    `
+
+    if (needMapJoin) {
+      query = query.append(sql`
+        INNER JOIN uploaded_maps m ON g.map_id = m.id
+      `)
+    }
+
+    query = query.append(sql`
+      WHERE ${sqlConcat(' AND ', whereClauses)}
+      ORDER BY ${orderBy}
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `)
+
+    const result = await client.query<DbGameRecord>(query)
+
+    return result.rows.map(row => convertFromDb(row))
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Retrieves game information for the match history of a user. Never returns a results-exempt game
+ * (contains computer players — see `isResultsExempt`).
+ */
+export async function getGamesForUser(
+  params: {
+    userId: SbUserId
+    limit: number
+    offset: number
+    ranked?: boolean
+    custom?: boolean
+    duration?: GameDurationFilter
+    mapName?: string
+    playerName?: string
+    format?: GameFormat
+    matchup?: MatchupFilter
+    sort?: GameSortOption
+    startDate?: number
+    endDate?: number
+    /** When falsy, games shorter than `MIN_GAME_LENGTH_MS` are excluded. */
+    includeShort?: boolean
+  },
+  withClient?: DbClient,
+): Promise<GameRecord[]> {
+  const {
+    userId,
+    limit,
+    offset,
+    ranked,
+    custom,
+    duration,
+    mapName,
+    playerName,
+    format,
+    matchup,
+    sort,
+    startDate,
+    endDate,
+    includeShort,
+  } = params
+
+  const { client, done } = await db(withClient)
+  try {
+    const whereClauses = [
+      sql`gu.user_id = ${userId}`,
+      sql`g.canceled_at IS NULL`,
+      sql`(g.config->>'resultsExempt')::boolean IS NOT TRUE`,
+    ]
+    let needMapJoin = false
+
+    if (ranked || custom) {
+      const sourceConditions = []
+      if (ranked) {
+        sourceConditions.push(sql`g.config->>'gameSource' = ${GameSource.Matchmaking}`)
+      }
+      if (custom) {
+        sourceConditions.push(sql`g.config->>'gameSource' = ${GameSource.Lobby}`)
+      }
+      whereClauses.push(sql`(${sqlConcat(' OR ', sourceConditions)})`)
+    }
+
+    if (duration && duration !== GameDurationFilter.All) {
+      switch (duration) {
+        case GameDurationFilter.Under10:
+          whereClauses.push(sql`g.game_length < 600000`)
+          break
+        case GameDurationFilter.From10To20:
+          whereClauses.push(sql`g.game_length >= 600000 AND g.game_length < 1200000`)
+          break
+        case GameDurationFilter.From20To30:
+          whereClauses.push(sql`g.game_length >= 1200000 AND g.game_length < 1800000`)
+          break
+        case GameDurationFilter.Over30:
+          whereClauses.push(sql`g.game_length >= 1800000`)
+          break
+        default:
+          duration satisfies never
+      }
+    }
+
+    if (!includeShort) {
+      // NULL-safe: legacy reconciled games with no recorded length must not disappear just because
+      // their length is unknown rather than known-short.
+      whereClauses.push(sql`(g.game_length IS NULL OR g.game_length >= ${MIN_GAME_LENGTH_MS})`)
+    }
+
+    if (mapName) {
+      needMapJoin = true
+      whereClauses.push(sql`m.name ILIKE ${'%' + escapeSearchString(mapName) + '%'}`)
+    }
+
+    if (playerName) {
+      whereClauses.push(sql`
+        EXISTS (
+          SELECT 1 FROM games_users gu2
+          INNER JOIN users u ON gu2.user_id = u.id
+          WHERE gu2.game_id = g.id
+          AND u.name ILIKE ${'%' + escapeSearchString(playerName) + '%'}
+        )
+      `)
+    }
+
+    if (format) {
+      const teamSize = getTeamSizeForFormat(format)
+      // Match games with exactly 2 teams where both teams have the expected size
+      whereClauses.push(sql`
+        g.selected_matchup ~ ${`^[prtz]{${teamSize}}-[prtz]{${teamSize}}$`}
+      `)
+    }
+
+    if (format && matchup) {
+      const hasNonUndefinedRace = [...matchup.team1, ...matchup.team2].some(r => r !== undefined)
+
+      if (hasNonUndefinedRace) {
+        const matchupStrings = expandMatchupFilter(matchup)
+        whereClauses.push(sql`g.assigned_matchup = ANY(${matchupStrings})`)
+      }
+    }
+
+    if (startDate !== undefined) {
+      whereClauses.push(sql`g.start_time >= ${new Date(startDate)}`)
+    }
+
+    if (endDate !== undefined) {
+      whereClauses.push(sql`g.start_time <= ${new Date(endDate)}`)
+    }
+
+    // NOTE(2Pac): All of these include `g.id` as a final tiebreaker so the ordering is fully
+    // deterministic. Without it, rows that tie on the leading column (e.g. many unreconciled games
+    // all have a NULL game_length, or games that share a start_time) can be duplicated or skipped
+    // across paginated requests.
+    let orderBy = sqlRaw('g.start_time DESC, g.id DESC')
+    if (sort) {
+      switch (sort) {
+        case GameSortOption.LatestFirst:
+          orderBy = sqlRaw('g.start_time DESC, g.id DESC')
+          break
+        case GameSortOption.OldestFirst:
+          orderBy = sqlRaw('g.start_time ASC, g.id ASC')
+          break
+        case GameSortOption.ShortestFirst:
+          orderBy = sqlRaw('g.game_length ASC NULLS LAST, g.start_time DESC, g.id DESC')
+          break
+        case GameSortOption.LongestFirst:
+          orderBy = sqlRaw('g.game_length DESC NULLS LAST, g.start_time DESC, g.id DESC')
+          break
+        default:
+          sort satisfies never
+      }
+    }
+
+    let query = sql`
+      SELECT g.*, g.manually_resolved_at IS NOT NULL AS manually_resolved
+      FROM games_users gu
+      INNER JOIN games g ON gu.game_id = g.id
+    `
+
+    if (needMapJoin) {
+      query = query.append(sql`
+        INNER JOIN uploaded_maps m ON g.map_id = m.id
+      `)
+    }
+
+    query = query.append(sql`
+      WHERE ${sqlConcat(' AND ', whereClauses)}
+      ORDER BY ${orderBy}
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `)
+
+    const result = await client.query<DbGameRecord>(query)
+
+    return result.rows.map(row => convertFromDb(row))
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Returns a list of game IDs that don't yet have reconciled results. This can be used to (roughly)
+ * determine games that have completed but didn't get reconciled (usually because at least one
+ * player failed to report).
+ *
+ * Excludes netcode-v2 games that persisted a coordinator session id — those are covered by the
+ * sweep's coordinator liveness probe instead (`findUnreconciledV2GamesForProbe`), so this is
+ * effectively the legacy/pre-cutover backstop now. Also excludes results-exempt games (contains
+ * computer players — see `isResultsExempt`), which never reconcile; a legacy comp game predating
+ * the exemption flag still flows through here as it always has.
+ *
+ * @param reportedBeforeTime Only include game IDs that have a reported result from before this time
+ * @param withClient a DB client to use to make the query (optional)
+ */
+export async function findUnreconciledGames(
+  reportedBeforeTime: Date,
+  withClient?: DbClient,
+): Promise<string[]> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<{ id: string }>(sql`
+      SELECT DISTINCT gu.game_id as "id"
+      FROM games_users gu
+      JOIN games g ON g.id = gu.game_id
+      WHERE gu."reported_results" IS NOT NULL
+      AND gu."result" IS NULL
+      AND gu.reported_at < ${reportedBeforeTime}
+      AND g.netcode_v2_session IS NULL
+      AND g.canceled_at IS NULL
+      AND (g.config->>'resultsExempt')::boolean IS NOT TRUE;
+    `)
+    return result.rows.map(row => row.id)
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Returns unreconciled netcode-v2 games that persisted a coordinator session id and started before
+ * `olderThan`, for the periodic sweep's coordinator liveness probe. A v2 game only reaches this
+ * backstop if it missed both push paths (the zero-grace known-complete trigger and `sessionClosed`)
+ * -- ~zero in steady state -- so the sweep asks the coordinator directly whether each session is
+ * still alive instead of blind-forcing on a timeout. Excludes results-exempt games (contains
+ * computer players — see `isResultsExempt`), which never reconcile.
+ *
+ * @param olderThan Only include games that started before this time
+ * @param withClient a DB client to use to make the query (optional)
+ */
+export async function findUnreconciledV2GamesForProbe(
+  olderThan: Date,
+  withClient?: DbClient,
+): Promise<Array<{ gameId: string; session: number }>> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<{ id: string; netcode_v2_session: string }>(sql`
+      SELECT id, netcode_v2_session
+      FROM games
+      WHERE results IS NULL
+      AND netcode_v2_session IS NOT NULL
+      AND canceled_at IS NULL
+      AND start_time < ${olderThan}
+      AND (config->>'resultsExempt')::boolean IS NOT TRUE;
+    `)
+    return result.rows.map(row => ({
+      gameId: row.id,
+      // netcode_v2_session is a BIGINT, so pg returns it as a string; normalize to a number.
+      session: Number(row.netcode_v2_session),
+    }))
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Returns a list of game IDs where every player has reported results but the game still has no
+ * reconciled result, and whose most recent report is older than `reportedBeforeTime`. This catches
+ * games that were fully reported but never reconciled (e.g. the server restarted during the desync
+ * verdict grace window), so they can be reconciled without waiting for the 3h force sweep.
+ * Excludes results-exempt games (contains computer players — see `isResultsExempt`), which never
+ * reconcile.
+ *
+ * @param reportedBeforeTime Only include games whose newest report predates this time
+ * @param withClient a DB client to use to make the query (optional)
+ */
+export async function findFullyReportedUnreconciledGames(
+  reportedBeforeTime: Date,
+  withClient?: DbClient,
+): Promise<string[]> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<{ id: string }>(sql`
+      SELECT gu.game_id AS "id"
+      FROM games_users gu
+      JOIN games g ON g.id = gu.game_id
+      WHERE g.results IS NULL
+      AND g.canceled_at IS NULL
+      AND (g.config->>'resultsExempt')::boolean IS NOT TRUE
+      GROUP BY gu.game_id
+      HAVING bool_and(gu.reported_results IS NOT NULL)
+        AND MAX(gu.reported_at) < ${reportedBeforeTime};
+    `)
+    return result.rows.map(row => row.id)
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Returns a list of unreconciled netcode-v2 game IDs where every human has either reported results
+ * or had a departure recorded, and the newest such report/departure is older than
+ * `olderThan`. A netcode-v2 game's result inputs are closed the moment every human is in one of
+ * those two states (a departed human can't report, a reported one can't report again), so these
+ * are safe to force-reconcile without waiting for the much longer legacy timeout. Excludes
+ * results-exempt games (contains computer players — see `isResultsExempt`), which never reconcile.
+ *
+ * @param olderThan Only include games whose newest report/departure predates this time
+ * @param withClient a DB client to use to make the query (optional)
+ */
+export async function findKnownCompleteUnreconciledGames(
+  olderThan: Date,
+  withClient?: DbClient,
+): Promise<string[]> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<{ id: string }>(sql`
+      SELECT gu.game_id AS "id"
+      FROM games_users gu
+      JOIN games g ON g.id = gu.game_id
+      WHERE g.results IS NULL
+      AND g.canceled_at IS NULL
+      AND (g.config->>'useNetcodeV2')::boolean IS TRUE
+      AND (g.config->>'resultsExempt')::boolean IS NOT TRUE
+      GROUP BY gu.game_id
+      HAVING bool_and(gu.reported_results IS NOT NULL OR gu.departure_kind IS NOT NULL)
+        AND MAX(GREATEST(gu.reported_at, gu.departure_time)) < ${olderThan};
+    `)
+    return result.rows.map(row => row.id)
+  } finally {
+    done()
+  }
+}

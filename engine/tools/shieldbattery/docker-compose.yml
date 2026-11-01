@@ -1,0 +1,40 @@
+# This docker-compose file is meant to be useful for development. It spins up containers for
+# software dependencies that we don't actively develop.
+#
+# $ docker-compose up -d
+#
+# Containers should be prefixed with the directory name containing this file.
+#
+# For more information, check out docs/GETTING_STARTED.md
+
+volumes:
+  db_data:
+  redis_data:
+
+services:
+  redis:
+    image: redis:7.4.2
+    restart: always
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6380:6379'
+    volumes:
+      - redis_data:/data
+
+  db:
+    image: postgres:17
+    restart: always
+    ports:
+      - '5433:5432'
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_SUPER_PASSWORD:?missing POSTGRES_SUPER_PASSWORD}
+      - POSTGRES_DB=postgres
+      - SB_DB=${SB_DB:-shieldbattery}
+      - SB_DB_USER=${SB_DB_USER:-shieldbattery}
+      - SB_DB_PASSWORD=${SB_DB_PASSWORD:?missing SB_DB_PASSWORD}
+    volumes:
+      - ./deployment/appserver/db/init-scripts:/docker-entrypoint-initdb.d:ro
+      - ./deployment/appserver/db/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - db_data:/var/lib/postgresql/data
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf

@@ -1,0 +1,1223 @@
+import * as React from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Trans, useTranslation } from 'react-i18next'
+import { TableComponents, TableVirtuoso, TableVirtuosoHandle } from 'react-virtuoso'
+import slug from 'slug'
+import styled from 'styled-components'
+import { ReadonlyDeep } from 'type-fest'
+import { Link, useRoute } from 'wouter'
+import { assertUnreachable } from '../../common/assert-unreachable'
+import {
+  ClientLeagueUserJson,
+  LeagueErrorCode,
+  LeagueId,
+  LeagueJson,
+} from '../../common/leagues/leagues'
+import { matchmakingTypeToLabel } from '../../common/matchmaking'
+import { RaceChar, raceCharToLabel } from '../../common/races'
+import { urlPath } from '../../common/urls'
+import { SbUserId } from '../../common/users/sb-user-id'
+import { useTrackPageView } from '../analytics/analytics'
+import { redirectToLogin, useIsLoggedIn, useSelfPermissions, useSelfUser } from '../auth/auth-utils'
+import { ConnectedAvatar } from '../avatars/avatar'
+import { openDialog } from '../dialogs/action-creators'
+import { DialogType } from '../dialogs/dialog-type'
+import { useTargetVisibleInScrollParent } from '../dom/visibility-hooks'
+import { longTimestamp, monthDay, narrowDuration } from '../i18n/date-formats'
+import { useFormat } from '../i18n/locale-formats'
+import { MaterialIcon } from '../icons/material/material-icon'
+import logger from '../logging/logger'
+import { Markdown } from '../markdown/markdown'
+import { FilledButton, IconButton } from '../material/button'
+import { buttonReset } from '../material/button-reset'
+import { MenuItem } from '../material/menu/item'
+import { MenuList } from '../material/menu/menu'
+import { Popover, usePopoverController, useRefAnchorPosition } from '../material/popover'
+import { useScrollIndicatorState } from '../material/scroll-indicator'
+import { elevationPlus2, elevationPlus3 } from '../material/shadows'
+import { TabItem, Tabs } from '../material/tabs'
+import { Tooltip } from '../material/tooltip'
+import { CopyLinkButton } from '../navigation/copy-link-button'
+import { ExternalLink } from '../navigation/external-link'
+import { useLocationSearchParam, useScrollMemory } from '../navigation/router-hooks'
+import { replace } from '../navigation/routing'
+import { isFetchError } from '../network/fetch-errors'
+import { LoadingDotsArea } from '../progress/dots'
+import { useNow } from '../react/date-hooks'
+import { useImmerState, useStableCallback } from '../react/state-hooks'
+import { useAppDispatch, useAppSelector } from '../redux-hooks'
+import { SearchInput } from '../search/search-input'
+import { useSnackbarController } from '../snackbars/snackbar-overlay'
+import { getRaceColor } from '../styles/colors'
+import { FlexSpacer } from '../styles/flex-spacer'
+import {
+  bodyLarge,
+  headlineLarge,
+  labelLarge,
+  labelMedium,
+  labelSmall,
+  singleLine,
+  titleLarge,
+  titleMedium,
+} from '../styles/typography'
+import { ConnectedUsername } from '../users/connected-username'
+import { RaceSelectionTooltip } from '../users/race-selection-tooltip'
+import {
+  adminBanUser,
+  adminUnbanUser,
+  correctSlugForLeague,
+  getLeagueById,
+  getLeagueLeaderboard,
+  joinLeague,
+  navigateToLeague,
+} from './action-creators'
+import { ALL_DETAILS_SUB_PAGES, DetailsSubPage } from './details-sub-page'
+import { LeagueBadge } from './league-badge'
+import { LeagueGames } from './league-games'
+import { LeagueImage, LeaguePlaceholderImage } from './league-image'
+import { LeaguePodium } from './league-podium'
+import { fromRouteLeagueId, makeRouteLeagueId } from './route-league-id'
+
+const PageFrame = styled.div`
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+`
+
+const JumpButton = styled.button`
+  ${buttonReset};
+  ${labelLarge};
+  ${elevationPlus3};
+  position: absolute;
+  right: 24px;
+  bottom: 22px;
+  z-index: 5;
+  height: 44px;
+  padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 22px;
+  background-color: var(--theme-amber);
+  color: var(--theme-on-amber);
+  font-weight: 600;
+`
+
+const PageRoot = styled.div`
+  position: relative;
+  width: 100%;
+  height: 100%;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+`
+
+export function LeagueDetailsPage() {
+  const [containerElem, setContainerElem] = useState<HTMLDivElement | null>(null)
+
+  const [match, params] = useRoute('/leagues/:routeId/:slugStr?/:subPage?')
+  const { routeId, slugStr } = params ?? {}
+  const id = routeId ? fromRouteLeagueId(makeRouteLeagueId(routeId)) : undefined
+  const leagueName = useAppSelector(s => (id ? s.leagues.byId.get(id)?.name : undefined))
+
+  const subPage =
+    params?.subPage && ALL_DETAILS_SUB_PAGES.includes(params.subPage as DetailsSubPage)
+      ? (params.subPage as DetailsSubPage)
+      : undefined
+
+  // The Games tab's list remembers and restores this container's scroll position itself. The
+  // Leaderboard tab renders a virtualized table whose full height isn't in the DOM at mount, so a
+  // restore targeting a position inside it clamps toward the top; positions on the Info tab restore
+  // normally.
+  useScrollMemory(subPage === DetailsSubPage.Games ? null : containerElem)
+
+  useTrackPageView(urlPath`/leagues/${routeId}/${subPage ?? ''}`)
+
+  useEffect(() => {
+    if (match && leagueName && slug(leagueName) !== slugStr) {
+      correctSlugForLeague(id!, leagueName, subPage)
+    }
+  }, [match, id, slugStr, leagueName, subPage])
+
+  if (!match) {
+    return null
+  }
+
+  return (
+    <PageFrame>
+      <PageRoot ref={setContainerElem}>
+        <LeagueDetails id={id!} subPage={subPage} container={containerElem} />
+      </PageRoot>
+    </PageFrame>
+  )
+}
+
+const DetailsRoot = styled.div`
+  width: 100%;
+  height: 100%;
+  min-height: min-content;
+  margin-top: 24px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+`
+
+/**
+ * Caps the header/tabs and the Info/Leaderboard tabs' content to a comfortable reading width.
+ */
+const NarrowContent = styled.div`
+  width: 100%;
+  max-width: 1040px;
+  container-type: inline-size;
+  container-name: ladder-content;
+  padding: 0 24px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+`
+
+/**
+ * Lets the Games tab's content span as wide as the rest of the app's list pages (matches
+ * `CenteredContentContainer`'s default target width). `LeagueGames` supplies its own horizontal
+ * padding, so this wrapper doesn't add any.
+ */
+const WideContent = styled.div`
+  width: 100%;
+  max-width: 1184px;
+`
+
+const InfoRoot = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+`
+
+const InfoBadge = styled(LeagueBadge)`
+  width: 80px;
+  height: 80px;
+  flex-grow: 0;
+  flex-shrink: 0;
+`
+
+const TitleAndSummary = styled.div`
+  flex-grow: 1;
+`
+
+const TitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const Title = styled.div`
+  ${headlineLarge};
+`
+
+const SummaryRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 32px;
+`
+
+const FormatAndDate = styled.div`
+  ${bodyLarge};
+  color: var(--theme-on-surface-variant);
+  flex-shrink: 0;
+`
+
+const DateTooltip = styled(Tooltip)`
+  display: inline-flex;
+`
+
+const LeagueLink = styled(ExternalLink)`
+  ${bodyLarge};
+  ${singleLine};
+  min-width: 80px;
+  text-align: right;
+`
+
+const TabsAndJoin = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+`
+
+const MembershipActions = styled.div`
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+`
+
+const InfoSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  & + & {
+    margin-top: 16px;
+  }
+`
+
+const InfoSectionHeader = styled.div`
+  ${titleLarge};
+`
+
+const LeagueImageContainer = styled.div`
+  flex-shrink: 0;
+`
+
+const ErrorLayout = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+`
+
+const ErrorText = styled.div`
+  ${bodyLarge};
+  color: var(--theme-error);
+`
+
+export interface LeagueDetailsProps {
+  id: LeagueId
+  subPage?: DetailsSubPage
+  container: HTMLElement | null
+}
+
+export function LeagueDetails({ id, subPage, container }: LeagueDetailsProps) {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const snackbarController = useSnackbarController()
+  const [isFetching, setIsFetching] = useState(false)
+  const [error, setError] = useState<Error>()
+
+  const isLoggedIn = useIsLoggedIn()
+  const league = useAppSelector(s => s.leagues.byId.get(id))
+  const selfLeagueUser = useAppSelector(s => s.leagues.selfLeagues.get(id))
+
+  const curTime = useNow(60_000)
+
+  const [isJoining, setIsJoining] = useState(false)
+  const [membershipRevision, setMembershipRevision] = useState(0)
+  const onLeaveClick = () =>
+    dispatch(
+      openDialog({
+        type: DialogType.LeaveLeague,
+        initData: { leagueId: id, onRemoved: () => setMembershipRevision(r => r + 1) },
+      }),
+    )
+  const onJoinClick = useStableCallback(() => {
+    if (!isLoggedIn) {
+      redirectToLogin()
+      return
+    }
+
+    setIsJoining(true)
+
+    dispatch(
+      joinLeague(id, {
+        onSuccess() {
+          setIsJoining(false)
+          snackbarController.showSnackbar(t('leagues.leagueDetails.leagueJoined', 'League joined'))
+        },
+        onError(err) {
+          setIsJoining(false)
+          if (isFetchError(err) && err.code === LeagueErrorCode.AlreadyEnded) {
+            snackbarController.showSnackbar(
+              t(
+                'leagues.leagueDetails.leagueEndedError',
+                "Couldn't join because the league has already ended",
+              ),
+            )
+          } else {
+            snackbarController.showSnackbar(
+              t('leagues.leagueDetails.joinError', {
+                defaultValue: "Couldn't join league: {{errorMessage}}",
+                errorMessage: isFetchError(err) ? err.statusText : err.message,
+              }),
+            )
+          }
+          logger.error(`Error joining league: ${String(err.stack ?? err)}`)
+        },
+      }),
+    )
+  })
+
+  const onTabChange = useStableCallback((subPage: DetailsSubPage) => {
+    navigateToLeague(id, league, subPage, replace)
+  })
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const signal = controller.signal
+
+    dispatch(
+      getLeagueById(id, {
+        signal,
+        onStart() {
+          setError(undefined)
+          setIsFetching(true)
+        },
+        onSuccess(res) {
+          setIsFetching(false)
+          setError(undefined)
+        },
+        onError(err) {
+          setIsFetching(false)
+          setError(err)
+          logger.error(`Error loading league details: ${String(err.stack ?? err)}`)
+        },
+      }),
+    )
+
+    return () => controller.abort()
+  }, [id, dispatch])
+
+  if (error) {
+    if (isFetchError(error) && error.code === LeagueErrorCode.NotFound) {
+      return (
+        <ErrorLayout>
+          <ErrorText>{t('leagues.leagueDetails.notFound', 'League not found')}</ErrorText>
+          <Link href='/leagues'>{t('leagues.leagueDetails.goBack', 'Go back to list')}</Link>
+        </ErrorLayout>
+      )
+    } else {
+      return (
+        <ErrorLayout>
+          <ErrorText>
+            <Trans t={t} i18nKey='leagues.leagueDetails.retrieveError'>
+              There was an error retrieving this league:{' '}
+              {{ errorMessage: (error as any).statusText ?? error.toString() }}
+            </Trans>
+          </ErrorText>
+
+          <Link href='/leagues'>{t('leagues.leagueDetails.goBack', 'Go back to list')}</Link>
+        </ErrorLayout>
+      )
+    }
+  } else if (!league) {
+    return <LoadingDotsArea />
+  }
+
+  const isJoinable = !selfLeagueUser && league.endAt > curTime
+  const isRunningOrEnded = league.startAt <= curTime
+
+  let joinButtonLabel: string
+  if (selfLeagueUser?.isBanned) {
+    joinButtonLabel = t('leagues.leagueDetails.banned', 'Banned')
+  } else if (selfLeagueUser) {
+    joinButtonLabel = t('leagues.leagueDetails.joined', 'Joined')
+  } else {
+    joinButtonLabel = t('common.actions.join', 'Join')
+  }
+
+  const activeTab = subPage ?? DetailsSubPage.Info
+
+  let content: React.ReactNode
+  switch (activeTab) {
+    case DetailsSubPage.Info:
+      content = <LeagueDetailsInfo league={league} />
+      break
+    case DetailsSubPage.Leaderboard:
+      content = (
+        <Leaderboard key={`${id}:${membershipRevision}`} league={league} container={container} />
+      )
+      break
+    case DetailsSubPage.Games:
+      content = <LeagueGames key={id} leagueId={id} scrollParent={container} />
+      break
+    default:
+      assertUnreachable(activeTab)
+  }
+  const isGamesTab = activeTab === DetailsSubPage.Games
+
+  return (
+    <DetailsRoot>
+      <NarrowContent>
+        <LeagueDetailsHeader
+          league={league}
+          actions={
+            selfLeagueUser && league.endAt > curTime ? (
+              <LeagueActionsMenu onLeave={onLeaveClick} />
+            ) : undefined
+          }
+        />
+        <TabsAndJoin>
+          <Tabs activeTab={activeTab} onChange={onTabChange}>
+            <TabItem value={DetailsSubPage.Info} text={t('leagues.leagueDetails.info', 'Info')} />
+            {isRunningOrEnded ? (
+              <TabItem
+                value={DetailsSubPage.Leaderboard}
+                text={t('leagues.leagueDetails.leaderboard', 'Leaderboard')}
+              />
+            ) : (
+              <></>
+            )}
+            {isRunningOrEnded ? (
+              <TabItem
+                value={DetailsSubPage.Games}
+                text={t('leagues.leagueDetails.games', 'Games')}
+              />
+            ) : (
+              <></>
+            )}
+          </Tabs>
+          <MembershipActions>
+            {(isJoinable || selfLeagueUser) && (!isFetching || selfLeagueUser) ? (
+              <FilledButton
+                label={joinButtonLabel}
+                disabled={!!selfLeagueUser || isJoining}
+                onClick={onJoinClick}
+              />
+            ) : undefined}
+          </MembershipActions>
+        </TabsAndJoin>
+        {!isGamesTab ? content : null}
+      </NarrowContent>
+      {isGamesTab ? <WideContent>{content}</WideContent> : null}
+    </DetailsRoot>
+  )
+}
+
+function LeagueActionsMenu({ onLeave }: { onLeave: () => void }) {
+  const { t } = useTranslation()
+  const [anchorRef, anchorX, anchorY, refreshAnchorPos] = useRefAnchorPosition('right', 'top')
+  const [open, openMenu, closeMenu] = usePopoverController({ refreshAnchorPos })
+
+  return (
+    <>
+      <IconButton
+        ref={anchorRef}
+        icon={<MaterialIcon icon='more_vert' />}
+        title={t('leagues.leagueDetails.actions', 'League actions')}
+        onClick={openMenu}
+      />
+      <Popover
+        open={open}
+        onDismiss={closeMenu}
+        anchorX={anchorX ?? 0}
+        anchorY={anchorY ?? 0}
+        originX='right'
+        originY='top'>
+        <MenuList>
+          <MenuItem
+            text={t('leagues.leave.action', 'Leave league')}
+            icon={<MaterialIcon icon='logout' size={20} />}
+            onClick={() => {
+              closeMenu()
+              onLeave()
+            }}
+          />
+        </MenuList>
+      </Popover>
+    </>
+  )
+}
+
+export interface LeagueDetailsHeaderProps {
+  league: ReadonlyDeep<LeagueJson>
+  previewBadgeUrl?: string
+  actions?: React.ReactNode
+}
+
+export function LeagueDetailsHeader({
+  league,
+  previewBadgeUrl,
+  actions,
+}: LeagueDetailsHeaderProps) {
+  const { t } = useTranslation()
+  const monthDayFormat = useFormat(monthDay)
+  const longTimestampFormat = useFormat(longTimestamp)
+  // TODO(tec27): Handle cases where year differs to smartly show that info
+  const dateText = t('leagues.leagueDetails.dateText', {
+    defaultValue: `{{startDate}} to {{endDate}}`,
+    startDate: monthDayFormat.format(league.startAt),
+    endDate: monthDayFormat.format(league.endAt),
+  })
+  const dateTooltip = t('leagues.leagueDetails.dateText', {
+    defaultValue: `{{startDate}} to {{endDate}}`,
+    startDate: longTimestampFormat.format(league.startAt),
+    endDate: longTimestampFormat.format(league.endAt),
+  })
+
+  return (
+    <InfoRoot>
+      <InfoBadge leagueName={league.name} badgeUrl={previewBadgeUrl ?? league.badgePath} />
+      <TitleAndSummary>
+        <TitleRow>
+          <Title>{league.name}</Title>
+          <CopyLinkButton
+            tooltipPosition='right'
+            startingText={t('leagues.leagueDetails.copyLink', 'Copy link to league')}
+          />
+          <FlexSpacer />
+          {actions}
+        </TitleRow>
+        <SummaryRow>
+          <FormatAndDate>
+            {matchmakingTypeToLabel(league.matchmakingType, t)} ·{' '}
+            <DateTooltip text={dateTooltip} position={'right'}>
+              {dateText}
+            </DateTooltip>
+          </FormatAndDate>
+          <FlexSpacer />
+          {league.link ? <LeagueLink href={league.link}>{league.link}</LeagueLink> : undefined}
+        </SummaryRow>
+      </TitleAndSummary>
+    </InfoRoot>
+  )
+}
+
+export interface LeagueDetailsInfoProps {
+  league: ReadonlyDeep<LeagueJson>
+  previewImageUrl?: string
+}
+
+export function LeagueDetailsInfo({ league, previewImageUrl }: LeagueDetailsInfoProps) {
+  const { t } = useTranslation()
+  const imageUrl = previewImageUrl ?? league.imagePath
+  return (
+    <>
+      <LeagueImageContainer>
+        {imageUrl ? <LeagueImage src={imageUrl} /> : <LeaguePlaceholderImage />}
+      </LeagueImageContainer>
+      <InfoSection>
+        <InfoSectionHeader>{t('leagues.leagueDetails.about', 'About')}</InfoSectionHeader>
+        <div>{league.description}</div>
+      </InfoSection>
+      {league.rulesAndInfo ? (
+        <InfoSection>
+          <InfoSectionHeader>
+            {t('leagues.leagueDetails.rulesAndInfo', 'Rules and info')}
+          </InfoSectionHeader>
+          <div>
+            <Markdown source={league.rulesAndInfo} />
+          </div>
+        </InfoSection>
+      ) : undefined}
+    </>
+  )
+}
+
+function TableBody(props: { context?: unknown }) {
+  const { context: _context, ...rest } = props
+  return <div {...rest} />
+}
+
+function TableRow(props: { context?: unknown }) {
+  const { context: _context, ...rest } = props
+  return <div {...rest} />
+}
+
+const FillerRow = styled.div.attrs<{ height: number }>(props => ({
+  style: { height: `${props.height}px` },
+}))<{ height: number }>``
+
+const HEADER_STUCK_CLASS = 'sb-leaderboard-table-sticky-header'
+
+const LeaderboardRoot = styled.div`
+  border: 1px solid var(--theme-outline-variant);
+  border-radius: 4px;
+  contain: content;
+`
+
+const LeaderboardHeaderRowElem = styled.div`
+  ${labelMedium};
+  width: 100%;
+  height: 48px;
+  position: sticky !important;
+  top: 0;
+  --sb-leaderboard-row-height: 48px;
+
+  display: flex;
+  align-items: center;
+
+  background-color: var(--theme-container-low);
+  color: var(--theme-on-surface-variant);
+  contain: content;
+
+  .${HEADER_STUCK_CLASS} & {
+    ${elevationPlus2};
+    border-bottom: 1px solid var(--theme-outline-variant);
+  }
+`
+
+// NOTE(tec27): This just strips the context prop off so styled-components doesn't give a warning
+// about it getting passed to the DOM
+function LeaderboardHeaderRow(props: { context?: unknown }) {
+  const { context: _context, ...rest } = props
+  return <LeaderboardHeaderRowElem {...rest} />
+}
+
+const LeaderboardRowRoot = styled.div<{ $isBanned: boolean; $isSelf: boolean }>`
+  ${bodyLarge};
+  position: relative;
+  width: 100%;
+  height: 72px;
+  --sb-leaderboard-row-height: 72px;
+
+  display: flex;
+  align-items: center;
+
+  ${props => {
+    if (props.$isBanned) {
+      return `
+        background-color: rgb(from var(--theme-error) r g b / 0.1);
+      `
+    }
+    if (props.$isSelf) {
+      return `
+        background-color: rgb(from var(--theme-amber) r g b / 0.1);
+        box-shadow: inset 3px 0 0 var(--theme-amber);
+      `
+    }
+    return ''
+  }}
+
+  &::after {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    content: '';
+    pointer-events: none;
+  }
+
+  &:hover {
+    &::after {
+      background-color: rgb(from var(--theme-on-surface) r g b / 0.04);
+    }
+  }
+`
+
+const BaseCell = styled.div`
+  height: var(--sb-leaderboard-row-height);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+`
+
+const NumericCell = styled(BaseCell)`
+  justify-content: flex-end;
+  text-align: right;
+`
+
+const TextCell = styled(BaseCell)`
+  justify-content: flex-start;
+  text-align: left;
+`
+
+const RankCell = styled(NumericCell)`
+  width: 80px;
+  padding: 0 16px;
+`
+
+const PlayerCell = styled(TextCell)`
+  width: 176px;
+  min-width: 0;
+  padding: 0 16px;
+
+  flex-grow: 1;
+`
+
+const PointsCell = styled(NumericCell)`
+  width: 56px;
+`
+
+const WinLossCell = styled(NumericCell)`
+  @container ladder-content (width < 440px) {
+    display: none;
+  }
+  width: 112px;
+`
+
+const LastPlayedCell = styled(NumericCell)`
+  @container ladder-content (width < 680px) {
+    display: none;
+  }
+  width: 140px;
+  padding: 0 16px 0 32px;
+  color: var(--theme-on-surface-variant);
+`
+
+const AdminActionsCell = styled(BaseCell)`
+  width: 56px;
+  padding: 0 16px 0 32px;
+  color: var(--theme-on-surface-variant);
+`
+
+const LeaderboardControls = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+`
+
+const LeaderboardSearchInput = styled(SearchInput)`
+  width: 220px;
+  max-width: 100%;
+`
+
+const LeaderboardError = styled(ErrorText)`
+  padding: 16px;
+  text-align: center;
+`
+
+const EmptyText = styled.div`
+  ${bodyLarge};
+  padding: 16px;
+
+  color: var(--theme-on-surface-variant);
+  text-align: center;
+`
+
+const FooterSpacing = styled.div`
+  height: 12px;
+`
+
+// The props Virtuoso passes (notably `style` with `overflow-anchor: none`) must reach the
+// DOM. Without `overflow-anchor: none`, the browser's scroll anchoring reacts to Virtuoso resizing
+// its filler rows by adjusting the scroll position, which triggers more filler changes, and the
+// scroll runs away to the end of the list.
+const LeaderboardAndMargin: TableComponents['Table'] = ({ context, ...rest }) => (
+  <>
+    <LeaderboardRoot {...rest} />
+    <FooterSpacing />
+  </>
+)
+
+function LeaderboardHeader() {
+  const { t } = useTranslation()
+  const selfPermissions = useSelfPermissions()
+
+  return (
+    <>
+      <RankCell>{t('leagues.leagueDetails.leaderBoardHeader.rank', 'Rank')}</RankCell>
+      <PlayerCell>{t('leagues.leagueDetails.leaderBoardHeader.player', 'Player')}</PlayerCell>
+      <PointsCell>{t('leagues.leagueDetails.leaderBoardHeader.points', 'Points')}</PointsCell>
+      <WinLossCell>{t('leagues.leagueDetails.leaderBoardHeader.winLoss', 'Win/loss')}</WinLossCell>
+      <LastPlayedCell>
+        {t('leagues.leagueDetails.leaderBoardHeader.lastPlayed', 'Last played')}
+      </LastPlayedCell>
+      {selfPermissions?.manageLeagues ? <AdminActionsCell></AdminActionsCell> : null}
+    </>
+  )
+}
+
+interface LeaderboardEntry {
+  rank: number
+  leagueUser: ReadonlyDeep<ClientLeagueUserJson>
+  isSelf: boolean
+}
+
+function Leaderboard({
+  league,
+  container,
+}: {
+  league: ReadonlyDeep<LeagueJson>
+  container: HTMLElement | null
+}) {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const snackbarController = useSnackbarController()
+
+  const tableRef = useRef<TableVirtuosoHandle>(null)
+  const [leaderboard, setLeaderboard] = useState<ReadonlyArray<SbUserId>>()
+  const [leaderboardUsers, setLeaderboardUsers] = useImmerState(
+    () => new Map<SbUserId, ClientLeagueUserJson>(),
+  )
+
+  const [error, setError] = useState<Error | undefined>(undefined)
+  const [curTime, setCurTime] = useState(() => Date.now())
+  const [searchQuery, setSearchQuery] = useLocationSearchParam('q')
+  const selfUserId = useSelfUser()?.id
+  const usersById = useAppSelector(s => s.users.byId)
+
+  const id = league.id
+  useEffect(() => {
+    const controller = new AbortController()
+    const signal = controller.signal
+
+    dispatch(
+      getLeagueLeaderboard(id, {
+        signal,
+        onStart() {
+          setError(undefined)
+          setLeaderboard(undefined)
+          setLeaderboardUsers(() => new Map())
+        },
+        onSuccess(res) {
+          setError(undefined)
+          setCurTime(Date.now())
+          setLeaderboard(res.leaderboard)
+          setLeaderboardUsers(new Map(res.leagueUsers.map(u => [u.userId, u])))
+        },
+        onError(err) {
+          setError(err)
+          logger.error(`Error loading leaderboard: ${String(err.stack ?? err)}`)
+        },
+      }),
+    )
+
+    return () => controller.abort()
+  }, [id, dispatch, setLeaderboardUsers])
+
+  const onBanUserClick = (userId: SbUserId) => {
+    dispatch(
+      adminBanUser(league.id, userId, {
+        onSuccess() {
+          setLeaderboardUsers(draft => {
+            const leagueUser = draft.get(userId)
+            if (leagueUser) {
+              leagueUser.isBanned = true
+            }
+          })
+          snackbarController.showSnackbar(
+            t('leagues.leagueDetails.userBannedSuccess', 'User banned'),
+          )
+        },
+        onError(err) {
+          snackbarController.showSnackbar(
+            t('leagues.leagueDetails.userBannedError', 'Error banning user'),
+          )
+        },
+      }),
+    )
+  }
+
+  const onUnbanUserClick = (userId: SbUserId) => {
+    dispatch(
+      adminUnbanUser(league.id, userId, {
+        onSuccess() {
+          setLeaderboardUsers(draft => {
+            const leagueUser = draft.get(userId)
+            if (leagueUser) {
+              leagueUser.isBanned = false
+            }
+          })
+          snackbarController.showSnackbar(
+            t('leagues.leagueDetails.userUnbannedSuccess', 'User unbanned'),
+          )
+        },
+        onError(err) {
+          snackbarController.showSnackbar(
+            t('leagues.leagueDetails.userUnbannedError', 'Error unbanning user'),
+          )
+        },
+      }),
+    )
+  }
+
+  const onRemoveUserClick = (userId: SbUserId) => {
+    dispatch(
+      openDialog({
+        type: DialogType.LeaveLeague,
+        initData: {
+          leagueId: id,
+          userId,
+          onRemoved() {
+            setLeaderboard(current => current?.filter(id => id !== userId))
+            setLeaderboardUsers(draft => {
+              draft.delete(userId)
+            })
+          },
+        },
+      }),
+    )
+  }
+
+  const leaderboardEntries = useMemo(() => {
+    const result: LeaderboardEntry[] = []
+    if (!leaderboard || !leaderboardUsers) {
+      return result
+    }
+
+    let curRank = 1
+
+    for (const userId of leaderboard) {
+      const leagueUser = leaderboardUsers.get(userId)!
+      const rank =
+        result.length && result.at(-1)!.leagueUser.points > leagueUser.points ? ++curRank : curRank
+      result.push({ rank, leagueUser, isSelf: userId === selfUserId })
+    }
+
+    return result
+  }, [leaderboard, leaderboardUsers, selfUserId])
+
+  // Ranks are assigned over the whole leaderboard first, so matching players keep their real rank
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+  const filteredEntries = normalizedQuery
+    ? leaderboardEntries.filter(entry =>
+        usersById.get(entry.leagueUser.userId)?.name.toLowerCase().includes(normalizedQuery),
+      )
+    : leaderboardEntries
+
+  const selfIndex = filteredEntries.findIndex(e => e.isSelf)
+  const isSelfRowVisible = useTargetVisibleInScrollParent(container, '[data-self-row]')
+
+  const [isHeaderUnstuck, , topHeaderNode, bottomHeaderNode] = useScrollIndicatorState({
+    refreshToken: leaderboard,
+  })
+
+  const renderRow = useStableCallback((_index: number, entry: LeaderboardEntry) => (
+    <LeaderboardRow
+      entry={entry}
+      curTime={curTime}
+      onBanUserClick={onBanUserClick}
+      onUnbanUserClick={onUnbanUserClick}
+      onRemoveUserClick={onRemoveUserClick}
+    />
+  ))
+
+  return (
+    <>
+      {error ? (
+        <LeaderboardError>
+          <Trans t={t} i18nKey='leagues.leagueDetails.leaderboardError'>
+            There was a problem retrieving the leaderboard:{' '}
+            {{ errorMessage: isFetchError(error) ? error.statusText : error.message }}
+          </Trans>
+        </LeaderboardError>
+      ) : undefined}
+      <LeaderboardControls>
+        <LeaderboardSearchInput
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          label={t('leagues.leagueDetails.searchPlayers', 'Search players')}
+        />
+      </LeaderboardControls>
+      {!normalizedQuery && leaderboardEntries.length ? (
+        <LeaguePodium entries={leaderboardEntries} />
+      ) : null}
+      {topHeaderNode}
+      {leaderboard ? (
+        <>
+          {container && filteredEntries.length ? (
+            <TableVirtuoso
+              ref={tableRef}
+              className={isHeaderUnstuck ? '' : HEADER_STUCK_CLASS}
+              customScrollParent={container}
+              fixedHeaderContent={LeaderboardHeader}
+              components={{
+                Table: LeaderboardAndMargin,
+                // NOTE(tec27): virtuoso expects a table section here, even though it doesn't
+                // *really* care. Because of that though, the typings clash with what is
+                // acceptable for `ref` props, so we cast to `any` to get past that error
+                TableHead: LeaderboardHeaderRow as any,
+                TableBody,
+                TableRow,
+                FillerRow,
+              }}
+              data={filteredEntries}
+              itemContent={renderRow}
+            />
+          ) : (
+            <EmptyText>{t('leagues.leagueDetails.noPlayers', 'No matching players.')}</EmptyText>
+          )}
+        </>
+      ) : (
+        <LeaderboardRoot>
+          <LoadingDotsArea />
+        </LeaderboardRoot>
+      )}
+      {bottomHeaderNode}
+      {container?.parentElement && selfIndex >= 0 && !isSelfRowVisible
+        ? createPortal(
+            <JumpButton
+              onClick={() =>
+                tableRef.current?.scrollToIndex({ index: selfIndex, align: 'center' })
+              }>
+              <MaterialIcon icon='my_location' size={20} />
+              {t('ladder.jumpToMyRank', 'Jump to my rank · #{{rank}}', {
+                rank: filteredEntries[selfIndex].rank,
+              })}
+            </JumpButton>,
+            container.parentElement,
+          )
+        : null}
+    </>
+  )
+}
+
+const StyledAvatar = styled(ConnectedAvatar)`
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  margin-right: 16px;
+`
+
+const PlayerNameAndRace = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+`
+
+const PlayerNameRow = styled.div`
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+`
+
+const PlayerName = styled(ConnectedUsername)`
+  ${titleMedium};
+  ${singleLine};
+`
+
+const SelfMarker = styled.div`
+  ${labelSmall};
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 4px;
+
+  background-color: var(--theme-amber);
+  color: var(--theme-on-amber);
+`
+
+const PlayerRace = styled.div<{ $race: RaceChar }>`
+  ${labelMedium};
+  color: ${props => getRaceColor(props.$race)};
+`
+
+const LeaderboardRow = React.memo(
+  ({
+    entry: { rank, leagueUser, isSelf },
+    curTime,
+    onBanUserClick,
+    onUnbanUserClick,
+    onRemoveUserClick,
+  }: {
+    entry: LeaderboardEntry
+    curTime: number
+    onBanUserClick: (userId: SbUserId) => void
+    onUnbanUserClick: (userId: SbUserId) => void
+    onRemoveUserClick: (userId: SbUserId) => void
+  }) => {
+    const { t } = useTranslation()
+    const longTimestampFormat = useFormat(longTimestamp)
+    const narrowDurationFormat = useFormat(narrowDuration)
+
+    const user = useAppSelector(s => s.users.byId.get(leagueUser.userId))!
+    const selfPermissions = useSelfPermissions()
+
+    const [anchorRef, anchorX, anchorY, refreshAnchorPos] = useRefAnchorPosition('right', 'top')
+    const [overlayOpen, openOverlay, closeOverlay] = usePopoverController({ refreshAnchorPos })
+
+    const raceStats: Array<[number, RaceChar]> = [
+      [leagueUser.pWins + leagueUser.pLosses, 'p'],
+      [leagueUser.tWins + leagueUser.tLosses, 't'],
+      [leagueUser.zWins + leagueUser.zLosses, 'z'],
+      [leagueUser.rWins + leagueUser.rLosses, 'r'],
+    ]
+    raceStats.sort((a, b) => b[0] - a[0])
+    const mostPlayedRace = raceStats[0][1]
+
+    return (
+      <Tooltip
+        text={t('leagues.leagueDetails.userBanned', 'This user has been banned from the league')}
+        position='bottom'
+        disabled={!leagueUser.isBanned}>
+        <LeaderboardRowRoot
+          key={leagueUser.userId}
+          $isBanned={leagueUser.isBanned}
+          $isSelf={isSelf}
+          data-self-row={isSelf || undefined}>
+          <RankCell>{rank}</RankCell>
+          <PlayerCell>
+            <StyledAvatar userId={leagueUser.userId} />
+            <PlayerNameAndRace>
+              <PlayerNameRow>
+                <PlayerName userId={leagueUser.userId} />
+                {isSelf ? (
+                  <SelfMarker>{t('leagues.leagueDetails.selfMarker', 'You')}</SelfMarker>
+                ) : null}
+              </PlayerNameRow>
+              <RaceSelectionTooltip stats={leagueUser}>
+                <PlayerRace $race={mostPlayedRace}>{raceCharToLabel(mostPlayedRace, t)}</PlayerRace>
+              </RaceSelectionTooltip>
+            </PlayerNameAndRace>
+          </PlayerCell>
+          <PointsCell>{Math.round(leagueUser.points)}</PointsCell>
+          <WinLossCell>
+            {leagueUser.wins} &ndash; {leagueUser.losses}
+          </WinLossCell>
+          <LastPlayedCell>
+            <Tooltip text={longTimestampFormat.format(leagueUser.lastPlayedDate)}>
+              {leagueUser.lastPlayedDate
+                ? narrowDurationFormat.format(leagueUser.lastPlayedDate, curTime)
+                : undefined}
+            </Tooltip>
+          </LastPlayedCell>
+          {selfPermissions?.manageLeagues ? (
+            <AdminActionsCell>
+              <IconButton
+                icon={<MaterialIcon icon='more_vert' />}
+                title={t('leagues.leagueDetails.adminActions', 'Admin actions')}
+                ref={anchorRef}
+                onClick={openOverlay}
+              />
+              <Popover
+                open={overlayOpen}
+                onDismiss={closeOverlay}
+                anchorX={anchorX ?? 0}
+                anchorY={anchorY ?? 0}
+                originX='right'
+                originY='top'>
+                <MenuList>
+                  <MenuItem
+                    key='remove'
+                    text={t('leagues.remove.action', 'Remove from league')}
+                    onClick={() => {
+                      closeOverlay()
+                      onRemoveUserClick(leagueUser.userId)
+                    }}
+                  />
+                  {leagueUser.isBanned ? (
+                    <MenuItem
+                      key='unban'
+                      text={t('leagues.leagueDetails.unbanUser', {
+                        defaultValue: 'Unban {{name}}',
+                        name: user.name,
+                      })}
+                      onClick={() => {
+                        closeOverlay()
+                        onUnbanUserClick(leagueUser.userId)
+                      }}
+                    />
+                  ) : (
+                    <MenuItem
+                      key='ban'
+                      text={t('leagues.leagueDetails.banUser', {
+                        defaultValue: 'Ban {{name}}',
+                        name: user.name,
+                      })}
+                      onClick={() => {
+                        closeOverlay()
+                        onBanUserClick(leagueUser.userId)
+                      }}
+                    />
+                  )}
+                </MenuList>
+              </Popover>
+            </AdminActionsCell>
+          ) : null}
+        </LeaderboardRowRoot>
+      </Tooltip>
+    )
+  },
+)

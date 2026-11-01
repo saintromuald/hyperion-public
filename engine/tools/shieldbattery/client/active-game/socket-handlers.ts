@@ -1,0 +1,263 @@
+import { NydusClient, RouteInfo } from 'nydus-client'
+import swallowNonBuiltins from '../../common/async/swallow-non-builtins'
+import { getErrorStack } from '../../common/errors'
+import { GameLaunchConfig, isReplayMapInfo } from '../../common/games/game-launch-config'
+import { GameLoaderEvent } from '../../common/games/game-loader-network'
+import { stringToStatus } from '../../common/games/game-status'
+import { TypedIpcRenderer } from '../../common/ipc'
+import { apiUrl } from '../../common/urls'
+import { UserRelationshipServiceErrorCode } from '../../common/users/relationships'
+import { dispatch, Dispatchable } from '../dispatch-registry'
+import {
+  addRecentReplayPathAtom,
+  gameLoadingStatusAtom,
+  lastGameAtom,
+  participatingGameAtom,
+} from '../games/game-atoms'
+import i18n from '../i18n/i18next'
+import { jotaiStore } from '../jotai-store'
+import logger from '../logging/logger'
+import { fetchJson } from '../network/fetch'
+import { isFetchError } from '../network/fetch-errors'
+import { makeServerUrl } from '../network/server-url'
+import { blockUser, ensureRelationshipsLoaded, unblockUser } from '../social/action-creators'
+import { updateActiveGame } from './wait-for-active-game'
+
+type EventToActionMap = {
+  [E in GameLoaderEvent['type']]: (
+    gameId: string,
+    event: Extract<GameLoaderEvent, { type: E }>,
+  ) => Dispatchable | void
+}
+
+export default function ({
+  ipcRenderer,
+  siteSocket,
+}: {
+  ipcRenderer: TypedIpcRenderer
+  siteSocket: NydusClient
+}) {
+  const eventToAction: EventToActionMap = {
+    setGameConfig(_, { setup }) {
+      return (dispatch, getState) => {
+        const {
+          auth: { self },
+        } = getState()
+
+        jotaiStore.set(participatingGameAtom, {
+          gameId: setup.gameId,
+          gameType: setup.gameType,
+          mapName: isReplayMapInfo(setup.map) ? '' : setup.map.name,
+          mapImageUrl: isReplayMapInfo(setup.map)
+            ? undefined
+            : (setup.map.image1024Url ?? setup.map.image512Url),
+          matchmakingType: setup.matchmakingType,
+          slots: setup.slots.map(({ userId, race, type }) => ({ userId, race, type })),
+        })
+
+        if ('mapUrl' in setup.map) {
+          const {
+            hash,
+            mapData: { format },
+            mapUrl,
+          } = setup.map
+          // The map should already be downloaded at this point, but just in case we trigger a check
+          // to re-download it if necessary
+          ipcRenderer.invoke('mapStoreDownloadMap', hash, format, mapUrl!)?.catch(err => {
+            // TODO(tec27): Report this to the server so the loading is canceled immediately
+
+            // This is already logged to our file by the map store, so we just log it to the console
+            // for easy visibility during development
+            console.error('Error downloading map: ' + err.stack)
+          })
+        }
+
+        const buildAndSend = () => {
+          const config: GameLaunchConfig = {
+            localUser: {
+              id: self!.user.id,
+              name: self!.user.name,
+              created: self!.user.created,
+            },
+            blockedUsers: Array.from(getState().relationships.blocks.keys()),
+            replayNameTemplate: getState().settings.account.replayNameTemplate,
+            serverConfig: {
+              serverUrl: makeServerUrl(''),
+            },
+            setup,
+            language: i18n.language,
+          }
+          ipcRenderer.invoke('activeGameSetConfig', config)?.catch(swallowNonBuiltins)
+        }
+
+        // The game needs the block list to hide blocked players' in-game chat, and relationship
+        // state is cleared on every reconnect, so make sure it's loaded before launching (falling
+        // back to whatever's cached rather than stalling the launch).
+        dispatch(ensureRelationshipsLoaded(buildAndSend))
+      }
+    },
+    setNetcodeV2Setup(_, { gameId, setup }) {
+      // The session handoff arriving means provisioning is done, so any provisioning status is stale.
+      jotaiStore.set(gameLoadingStatusAtom, undefined)
+      ipcRenderer.invoke('activeGameSetNetcodeV2Setup', gameId, setup)?.catch(swallowNonBuiltins)
+    },
+    setLoadingStatus(_, { gameId, status }) {
+      jotaiStore.set(gameLoadingStatusAtom, { gameId, status })
+    },
+    cancelLoading(_, { gameId }) {
+      jotaiStore.set(gameLoadingStatusAtom, undefined)
+      ipcRenderer.invoke('activeGameClearConfig', gameId)?.catch(swallowNonBuiltins)
+    },
+  }
+
+  siteSocket.registerRoute(
+    '/gameLoader/:gameId/:userId',
+    (route: RouteInfo, event: GameLoaderEvent) => {
+      const action = eventToAction[event.type]?.(route.params.gameId, event as any)
+      if (action) {
+        dispatch(action)
+      }
+    },
+  )
+
+  ipcRenderer
+    .on('activeGameStatus', (event, status) => {
+      dispatch({
+        type: '@active-game/status',
+        payload: status,
+      })
+
+      updateActiveGame(status)
+
+      if (status.isReplay) {
+        // Don't report replay status to the server (because it will error out and result in us
+        // quitting the game immediately). We may want to change this at some point, but we'll have
+        // to make the server assign replay IDs in that case.
+        return
+      }
+
+      if (status.state === 'playing') {
+        jotaiStore.set(lastGameAtom, { id: status.id })
+        const game = jotaiStore.get(participatingGameAtom)
+        if (game?.gameId === status.id && game.playingSince === undefined) {
+          jotaiStore.set(participatingGameAtom, { ...game, playingSince: Date.now() })
+        }
+      }
+
+      // A networked game's load completion reaches the server over the relay path, from the
+      // infrastructure that watches the session start; only a local-only game (no network session
+      // at all) has to report its own. The check is written so an unreported transport still sends:
+      // a redundant report is dropped server-side, while a missing one would stall a local game's
+      // load. `error` is always reported — a launch failure never reaches the network.
+      const reportToServer =
+        status.state === 'error' ||
+        (status.state === 'playing' && status.networkStatus?.transport !== 'netcodeV2')
+
+      if (reportToServer) {
+        let done = false
+        let retries = 0
+
+        // NOTE(tec27): Because these states are terminal, we don't need to worry about further
+        // game states coming in that would need to abort these ones. If that ever changes, we'd
+        // probably need a Map of game id -> abort controller or something
+        const doFetch = () => {
+          fetchJson(apiUrl`games/${status.id}/status`, {
+            method: 'put',
+            body: JSON.stringify({ status: stringToStatus(status.state), extra: status.extra }),
+            signal: AbortSignal.timeout(2000),
+          })
+            .then(
+              () => {
+                logger.debug(`Reported game status for ${status.id} (${status.state}) to server`)
+                done = true
+              },
+              err => {
+                if (isFetchError(err)) {
+                  if (err.status === 409 || err.status === 404) {
+                    logger.error(
+                      'Quitting current game due to error reporting game status to server: ' +
+                        err.message,
+                    )
+                    ipcRenderer
+                      .invoke('activeGameClearConfig', status.id)
+                      ?.catch(swallowNonBuiltins)
+                  }
+                }
+              },
+            )
+            .finally(() => {
+              retries += 1
+              if (!done && retries < 5) {
+                logger.debug(`Retrying game status report for ${status.id} (${status.state})`)
+                setTimeout(() => doFetch(), 500)
+              } else if (!done) {
+                logger.error(
+                  `Failed to report game status for ${status.id} (${status.state}) after 5 attempts`,
+                )
+              }
+            })
+        }
+
+        doFetch()
+      }
+
+      if (status.state === 'finished' || status.state === 'unknown') {
+        // The app reports `finished` when the game ended through the game-over handshake, and
+        // `unknown` when the process went away without one (a crash, the window being closed, a
+        // forced quit) or the game's config was cleared. Either way the game is over for this user,
+        // which is all the server tracks from this report (it drives friend presence), so both are
+        // reported as finished. Unlike the playing/error report above, a failure here never quits
+        // the game or clears its config: there's nothing left to abort.
+        let attempt = 0
+
+        const doFetch = () => {
+          attempt += 1
+          fetchJson(apiUrl`games/${status.id}/status`, {
+            method: 'put',
+            body: JSON.stringify({ status: stringToStatus('finished') }),
+            signal: AbortSignal.timeout(2000),
+          }).then(
+            () => {
+              logger.debug(`Reported game exit for ${status.id} to server`)
+            },
+            err => {
+              if (attempt < 3) {
+                setTimeout(doFetch, 500)
+              } else {
+                logger.error(
+                  `Failed to report game exit for ${status.id} to server after ` +
+                    `${attempt} attempts: ${err}`,
+                )
+              }
+            },
+          )
+        }
+
+        doFetch()
+      }
+    })
+    .on('activeGameReplaySaved', (_, gameId, path) => {
+      jotaiStore.set(addRecentReplayPathAtom, { gameId, path })
+    })
+    .on('activeGameSetUserBlocked', (_, gameId, userId, blocked) => {
+      const request = blocked ? blockUser : unblockUser
+      dispatch(
+        request(userId, {
+          onSuccess: () => {},
+          onError: err => {
+            logger.error(
+              `Error saving in-game ${blocked ? 'block' : 'unblock'} of user ${userId}: ` +
+                getErrorStack(err),
+            )
+            const reason =
+              isFetchError(err) && err.code === UserRelationshipServiceErrorCode.LimitReached
+                ? 'limitReached'
+                : 'error'
+            ipcRenderer
+              .invoke('activeGameBlockRequestFailed', gameId, { userId, blocked, reason })
+              ?.catch(swallowNonBuiltins)
+          },
+        }),
+      )
+    })
+}

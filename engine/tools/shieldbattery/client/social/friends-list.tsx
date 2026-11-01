@@ -1,0 +1,710 @@
+import * as React from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Virtuoso } from 'react-virtuoso'
+import styled, { css } from 'styled-components'
+import { getErrorStack } from '../../common/errors'
+import { FriendActivityStatus, UserRelationshipJson } from '../../common/users/relationships'
+import { SbUserId } from '../../common/users/sb-user-id'
+import { useSelfUser } from '../auth/auth-utils'
+import { ConnectedAvatar } from '../avatars/avatar'
+import { useObservedDimensions } from '../dom/dimension-hooks'
+import { MaterialIcon } from '../icons/material/material-icon'
+import { LoadErrorRow } from '../lists/load-error-row'
+import logger from '../logging/logger'
+import { IconButton } from '../material/button'
+import { ScrollDivider, useScrollIndicatorState } from '../material/scroll-indicator'
+import { TabItem, Tabs } from '../material/tabs'
+import { useNavigationTracker } from '../navigation/navigation-tracker'
+import { LoadingDotsArea } from '../progress/dots'
+import { useUserLocalStorageValue } from '../react/state-hooks'
+import { useAppDispatch, useAppSelector } from '../redux-hooks'
+import { openSettings } from '../settings/action-creators'
+import { UserSettingsPage } from '../settings/settings-page'
+import { DURATION_LONG } from '../snackbars/snackbar-durations'
+import { useSnackbarController } from '../snackbars/snackbar-overlay'
+import { styledWithAttrs } from '../styles/styled-with-attrs'
+import { bodyLarge, labelMedium, singleLine, titleLarge, titleSmall } from '../styles/typography'
+import { LiveLabel } from '../twitch/live-indicators'
+import { useLiveUserIds } from '../twitch/live-state'
+import { ConnectedUserContextMenu } from '../users/user-context-menu'
+import { areUserEntriesEqual, useUserEntriesSelector } from '../users/user-entries'
+import { useUserOverlays } from '../users/user-overlays'
+import { ConnectedUserProfileOverlay } from '../users/user-profile-overlay'
+import {
+  acceptFriendRequest,
+  declineFriendRequest,
+  getRelationshipsIfNeeded,
+  removeFriendRequest,
+} from './action-creators'
+import { FriendActivityStatusLine, NameBlock, NameLine } from './friend-activity-status'
+import { userRelationshipErrorToString } from './relationship-errors'
+
+const FadedFriendsIcon = styledWithAttrs(MaterialIcon, { icon: 'group' })`
+  color: var(--theme-on-surface-variant);
+`
+
+const FadedFriendAddIcon = styledWithAttrs(MaterialIcon, { icon: 'group_add' })`
+  color: var(--theme-on-surface-variant);
+`
+
+const FadedFriendSettingsIcon = styledWithAttrs(MaterialIcon, { icon: 'manage_accounts' })`
+  color: var(--theme-on-surface-variant);
+`
+
+/**
+ * Loads the current user's relationships whenever the client (re)connects and they aren't loaded
+ * yet. A failure is recorded in `relationships.loadError`, which the lists built from them show with
+ * a `RelationshipsLoadErrorRow`.
+ */
+export function useRelationshipsLoader() {
+  const dispatch = useAppDispatch()
+  const userId = useAppSelector(s => s.auth.self?.user.id)
+  const isConnected = useAppSelector(s => s.network.isConnected)
+
+  useEffect(() => {
+    if (!isConnected) return () => {}
+
+    const controller = new AbortController()
+    dispatch(
+      getRelationshipsIfNeeded({
+        signal: controller.signal,
+        onSuccess: () => {},
+        onError: err => {
+          logger.error(`Error loading relationships: ${getErrorStack(err)}`)
+        },
+      }),
+    )
+
+    return () => {
+      controller.abort()
+    }
+  }, [dispatch, isConnected, userId])
+}
+
+const LoadErrorContainer = styled.div`
+  padding: 16px 8px;
+`
+
+/**
+ * Stands in for a list of relationships while `relationships.loadError` is set, offering to make the
+ * request again.
+ */
+export function RelationshipsLoadErrorRow({
+  message,
+  className,
+}: {
+  message: string
+  className?: string
+}) {
+  const dispatch = useAppDispatch()
+  const [isRetrying, setIsRetrying] = useState(false)
+
+  return (
+    <LoadErrorContainer className={className}>
+      {isRetrying ? (
+        <LoadingDotsArea />
+      ) : (
+        <LoadErrorRow
+          message={message}
+          onRetry={() => {
+            dispatch(
+              getRelationshipsIfNeeded({
+                onStart: () => setIsRetrying(true),
+                onSuccess: () => setIsRetrying(false),
+                onError: err => {
+                  setIsRetrying(false)
+                  logger.error(`Error loading relationships: ${getErrorStack(err)}`)
+                },
+              }),
+            )
+          }}
+        />
+      )}
+    </LoadErrorContainer>
+  )
+}
+
+enum FriendsListTab {
+  List = 'List',
+  Requests = 'Requests',
+  Settings = 'Settings',
+}
+
+const FriendsListHeader = styled.div`
+  position: relative;
+  flex-shrink: 0;
+  padding: 8px 16px 4px;
+`
+
+const FriendsListTabsContainer = styled.div`
+  max-width: 212px;
+  margin: 0 auto;
+  padding-bottom: 16px;
+`
+
+const TitleText = styled.div`
+  ${titleLarge};
+  color: var(--theme-on-surface);
+`
+
+const FriendsListContent = styled.div`
+  flex-grow: 1;
+`
+
+function validateFriendsListTab(value: unknown): FriendsListTab | undefined {
+  return Object.values(FriendsListTab).includes(value as FriendsListTab)
+    ? (value as FriendsListTab)
+    : undefined
+}
+
+export function FriendsList() {
+  const { t } = useTranslation()
+  const { onNavigation } = useNavigationTracker()
+
+  useRelationshipsLoader()
+  const dispatch = useAppDispatch()
+  const loadError = useAppSelector(s => s.relationships.loadError)
+  const [activeTab, setActiveTab] = useUserLocalStorageValue(
+    'friendsList.tab',
+    FriendsListTab.List,
+    validateFriendsListTab,
+  )
+
+  // NOTE(tec27): We grab the height of the content container here so we can increase the viewport
+  // of Virtuoso. Virtuoso uses getBoundingClientRect() to retrieve viewport dimensions (and cannot
+  // be customized for viewports), which causes problems if the virtualized list is in a container
+  // that has its dimensions animated via CSS transforms (e.g. popovers). Potentially we end up
+  // rendering double the necessary items this way, but that tradeoff is better than not rendering
+  // enough items to actually fill up the viewport
+  const [dimensionRef, contentRect] = useObservedDimensions()
+
+  const [isAtTop, _isAtBottom, topElem, bottomElem] = useScrollIndicatorState()
+
+  let listContent: React.ReactNode
+  if (loadError) {
+    listContent = (
+      <RelationshipsLoadErrorRow
+        message={t('social.friendsList.loadFailed', "Couldn't load your friends list")}
+      />
+    )
+  } else if (activeTab === FriendsListTab.Requests) {
+    listContent = <VirtualizedFriendRequestsList height={contentRect?.height ?? 0} />
+  } else {
+    listContent = <VirtualizedFriendsList height={contentRect?.height ?? 0} />
+  }
+
+  return (
+    <>
+      <FriendsListHeader>
+        <FriendsListTabsContainer>
+          <Tabs
+            activeTab={activeTab}
+            onChange={tab => {
+              if (tab === FriendsListTab.Settings) {
+                dispatch(openSettings(UserSettingsPage.Social))
+                onNavigation()
+                return
+              }
+              setActiveTab(tab)
+            }}>
+            <TabItem
+              text={<FadedFriendsIcon />}
+              title={t('social.friendsList.tabs.friendsList', 'Friends list')}
+              value={FriendsListTab.List}
+            />
+            <TabItem
+              text={<FadedFriendAddIcon />}
+              title={t('social.friendsList.tabs.addFriends', 'Add friends')}
+              value={FriendsListTab.Requests}
+            />
+            <TabItem
+              text={<FadedFriendSettingsIcon />}
+              title={t('social.friendsList.tabs.socialSettings', 'Social settings')}
+              value={FriendsListTab.Settings}
+            />
+          </Tabs>
+        </FriendsListTabsContainer>
+        <TitleText>
+          {activeTab === FriendsListTab.Requests
+            ? t('social.friendsList.title.addFriends', 'Add friends')
+            : t('social.friendsList.title.friends', 'Friends')}
+        </TitleText>
+        <ScrollDivider $show={!isAtTop} $showAt='bottom' />
+      </FriendsListHeader>
+      <FriendsListContent ref={dimensionRef}>
+        {topElem}
+        {listContent}
+        {bottomElem}
+      </FriendsListContent>
+    </>
+  )
+}
+
+const EmptyList = styled.div`
+  ${bodyLarge};
+  padding: 32px 16px 48px;
+
+  color: var(--theme-on-surface-variant);
+  text-align: center;
+`
+
+const ListOverline = styled.div<{ $firstOverline?: boolean }>`
+  ${labelMedium};
+  ${singleLine};
+  margin: 0 8px;
+  padding: ${props => (props.$firstOverline ? '4px' : '20px')} 8px 0;
+
+  color: var(--theme-on-surface-variant);
+  line-height: 36px;
+`
+
+const VertPadding = styled.div<{ context?: unknown }>`
+  width: 100%;
+  height: 8px;
+`
+
+enum FriendsListRowType {
+  Header,
+  Online,
+  Offline,
+}
+
+interface HeaderData {
+  type: FriendsListRowType.Header
+  label: string
+  count: number
+}
+
+interface OnlineData {
+  type: FriendsListRowType.Online
+  userId: SbUserId
+  isLive: boolean
+}
+
+interface OfflineData {
+  type: FriendsListRowType.Offline
+  userId: SbUserId
+  isLive: boolean
+}
+
+type FriendsListRowData = HeaderData | OnlineData | OfflineData
+
+/**
+ * Identifies a row by what it holds rather than by where it sits, so that entries keep their
+ * component state (an open profile overlay, say) when the list reorders around them.
+ */
+function computeFriendsRowKey(_index: number, row: FriendsListRowData): React.Key {
+  return row.type === FriendsListRowType.Header ? `header:${row.label}` : `user:${row.userId}`
+}
+
+function VirtualizedFriendsList({ height }: { height: number }) {
+  const { t } = useTranslation()
+  const friends = useAppSelector(s => s.relationships.friends)
+  const friendActivityStatus = useAppSelector(s => s.relationships.friendActivityStatus)
+  const sortedFriendUserEntries = useAppSelector(
+    useUserEntriesSelector(friends),
+    areUserEntriesEqual,
+  )
+  const liveUserIds = useLiveUserIds()
+
+  const rowData = useMemo((): ReadonlyArray<FriendsListRowData> => {
+    // Every status other than Offline (including the in-activity ones) belongs in the online group.
+    const online: SbUserId[] = []
+    const offline: SbUserId[] = []
+    for (const [id] of sortedFriendUserEntries) {
+      const status = friendActivityStatus.get(id) ?? FriendActivityStatus.Offline
+      ;(status === FriendActivityStatus.Offline ? offline : online).push(id)
+    }
+
+    // Surface live friends first within each group (Array.sort is stable, so the existing name
+    // order is preserved among equally-live friends).
+    const liveFirst = (ids: SbUserId[]) =>
+      ids.sort((a, b) => (liveUserIds.has(b) ? 1 : 0) - (liveUserIds.has(a) ? 1 : 0))
+
+    const onlineFriends = liveFirst(online)
+    let result: FriendsListRowData[] = [
+      {
+        type: FriendsListRowType.Header,
+        label: t('social.friendsList.header.online', 'Online'),
+        count: onlineFriends.length,
+      },
+    ]
+
+    result = result.concat(
+      onlineFriends.map(userId => ({
+        type: FriendsListRowType.Online,
+        userId,
+        isLive: liveUserIds.has(userId),
+      })),
+    )
+
+    const offlineFriends = liveFirst(offline)
+    if (offlineFriends.length > 0) {
+      result.push({
+        type: FriendsListRowType.Header,
+        label: t('social.friendsList.header.offline', 'Offline'),
+        count: offlineFriends.length,
+      })
+
+      result = result.concat(
+        offlineFriends.map(userId => ({
+          type: FriendsListRowType.Offline,
+          userId,
+          isLive: liveUserIds.has(userId),
+        })),
+      )
+    }
+
+    return result
+  }, [friendActivityStatus, liveUserIds, sortedFriendUserEntries, t])
+
+  const renderRow = useCallback((index: number, row: FriendsListRowData) => {
+    if (row.type === FriendsListRowType.Header) {
+      return (
+        <ListOverline $firstOverline={index === 0}>
+          {row.label} ({row.count})
+        </ListOverline>
+      )
+    } else {
+      const faded = row.type === FriendsListRowType.Offline
+      return <FriendEntry userId={row.userId} faded={faded} isLive={row.isLive} />
+    }
+  }, [])
+
+  return friends.size === 0 ? (
+    <EmptyList>{t('common.lists.empty', 'Nothing to see here')}</EmptyList>
+  ) : (
+    <Virtuoso
+      components={{ Footer: VertPadding }}
+      computeItemKey={computeFriendsRowKey}
+      data={rowData}
+      itemContent={renderRow}
+      increaseViewportBy={height}
+    />
+  )
+}
+
+enum FriendRequestsRowType {
+  Header,
+  User,
+}
+
+interface FriendRequestsHeaderData {
+  type: FriendRequestsRowType.Header
+  label: string
+  count: number
+}
+
+interface FriendRequestsUserData {
+  type: FriendRequestsRowType.User
+  userId: SbUserId
+  relationship: UserRelationshipJson
+}
+
+type FriendRequestsRowData = FriendRequestsHeaderData | FriendRequestsUserData
+
+/**
+ * Identifies a row by what it holds rather than by where it sits, so that entries keep their
+ * component state (an open profile overlay, say) when the list reorders around them.
+ */
+function computeFriendRequestsRowKey(_index: number, row: FriendRequestsRowData): React.Key {
+  return row.type === FriendRequestsRowType.Header ? `header:${row.label}` : `user:${row.userId}`
+}
+
+function VirtualizedFriendRequestsList({ height }: { height: number }) {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const snackbarController = useSnackbarController()
+  const selfUser = useSelfUser()!
+  const incomingRequests = useAppSelector(s => s.relationships.incomingRequests)
+  const outgoingRequests = useAppSelector(s => s.relationships.outgoingRequests)
+  const sortedIncomingUserEntries = useAppSelector(
+    useUserEntriesSelector(incomingRequests),
+    areUserEntriesEqual,
+  )
+  const sortedOutgoingUserEntries = useAppSelector(
+    useUserEntriesSelector(outgoingRequests),
+    areUserEntriesEqual,
+  )
+
+  const rowData = useMemo((): ReadonlyArray<FriendRequestsRowData> => {
+    let result: FriendRequestsRowData[] = []
+    if (sortedIncomingUserEntries.length > 0) {
+      result.push({
+        type: FriendRequestsRowType.Header,
+        label: t('social.friendsList.header.incoming', 'Incoming'),
+        count: sortedIncomingUserEntries.length,
+      })
+
+      result = result.concat(
+        sortedIncomingUserEntries.map(([userId]) => ({
+          type: FriendRequestsRowType.User,
+          userId,
+          relationship: incomingRequests.get(userId)!,
+        })),
+      )
+    }
+
+    if (sortedOutgoingUserEntries.length > 0) {
+      result.push({
+        type: FriendRequestsRowType.Header,
+        label: t('social.friendsList.header.outgoing', 'Outgoing'),
+        count: sortedOutgoingUserEntries.length,
+      })
+
+      result = result.concat(
+        sortedOutgoingUserEntries.map(([userId]) => ({
+          type: FriendRequestsRowType.User,
+          userId,
+          relationship: outgoingRequests.get(userId)!,
+        })),
+      )
+    }
+
+    return result
+  }, [incomingRequests, outgoingRequests, sortedIncomingUserEntries, sortedOutgoingUserEntries, t])
+
+  const renderRow = useCallback(
+    (index: number, row: FriendRequestsRowData) => {
+      if (row.type === FriendRequestsRowType.Header) {
+        return (
+          <ListOverline $firstOverline={index === 0}>
+            {row.label} ({row.count})
+          </ListOverline>
+        )
+      } else {
+        const actions =
+          row.relationship.fromId === selfUser.id ? (
+            <>
+              <IconButton
+                icon={<MaterialIcon icon='close' />}
+                title={t('common.actions.remove', 'Remove')}
+                onClick={() => {
+                  dispatch(
+                    removeFriendRequest(row.userId, {
+                      onSuccess: () => {},
+                      onError: err => {
+                        snackbarController.showSnackbar(
+                          userRelationshipErrorToString(
+                            err,
+                            t(
+                              'social.errors.friendsList.errorRemovingFriendRequest',
+                              'Error removing friend request',
+                            ),
+                            t,
+                          ),
+                          DURATION_LONG,
+                        )
+                      },
+                    }),
+                  )
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <IconButton
+                icon={<MaterialIcon icon='close' />}
+                title={t('common.actions.decline', 'Decline')}
+                onClick={() => {
+                  dispatch(
+                    declineFriendRequest(row.userId, {
+                      onSuccess: () => {},
+                      onError: err => {
+                        snackbarController.showSnackbar(
+                          userRelationshipErrorToString(
+                            err,
+                            t(
+                              'social.errors.friendsList.errorDecliningFriendRequest',
+                              'Error declining friend request',
+                            ),
+                            t,
+                          ),
+                          DURATION_LONG,
+                        )
+                      },
+                    }),
+                  )
+                }}
+              />
+              <IconButton
+                icon={<MaterialIcon icon='check' />}
+                title={t('common.actions.accept', 'Accept')}
+                onClick={() => {
+                  dispatch(
+                    acceptFriendRequest(row.userId, {
+                      onSuccess: () => {},
+                      onError: err => {
+                        snackbarController.showSnackbar(
+                          userRelationshipErrorToString(
+                            err,
+                            t(
+                              'social.errors.friendsList.errorAcceptingFriendRequest',
+                              'Error accepting friend request',
+                            ),
+                            t,
+                          ),
+                          DURATION_LONG,
+                        )
+                      },
+                    }),
+                  )
+                }}
+              />
+            </>
+          )
+        return <FriendEntry userId={row.userId} actions={actions} />
+      }
+    },
+    [selfUser.id, t, dispatch, snackbarController],
+  )
+
+  return rowData.length === 0 ? (
+    <EmptyList>{t('common.lists.empty', 'Nothing to see here')}</EmptyList>
+  ) : (
+    <Virtuoso
+      components={{ Footer: VertPadding }}
+      computeItemKey={computeFriendRequestsRowKey}
+      data={rowData}
+      itemContent={renderRow}
+      increaseViewportBy={height}
+    />
+  )
+}
+
+const AvatarContainer = styled.div`
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  margin: 2px 16px 2px 0;
+`
+
+const StyledAvatar = styled(ConnectedAvatar)`
+  width: 32px;
+  height: 32px;
+
+  display: inline-block;
+`
+
+const EntryLiveLabel = styled(LiveLabel)`
+  flex-shrink: 0;
+  margin-left: 8px;
+`
+const LoadingName = styled.div`
+  width: 64px;
+  height: 20px;
+  margin: 8px 0;
+  display: inline-block;
+
+  background-color: rgb(from var(--theme-on-surface-variant) r g b / 0.7);
+  border-radius: 4px;
+`
+
+const fadedCss = css`
+  color: var(--theme-on-surface-variant);
+  ${StyledAvatar}, ${LoadingName} {
+    opacity: var(--theme-disabled-opacity);
+  }
+`
+
+const FriendEntryActions = styled.div`
+  display: flex;
+  align-items: center;
+`
+
+const FriendEntryRoot = styled.div<{ $isOverlayOpen?: boolean; $faded?: boolean }>`
+  ${titleSmall};
+  height: 44px;
+  margin: 0 8px;
+  padding: 4px 8px;
+
+  display: flex;
+  align-items: center;
+
+  border-radius: 4px;
+  line-height: 36px;
+
+  &:hover {
+    cursor: pointer;
+    background-color: rgb(from var(--theme-on-surface) r g b / 0.08);
+  }
+
+  ${props => {
+    if (props.$isOverlayOpen) {
+      return 'background-color: rgb(from var(--theme-on-surface) r g b / 0.08);'
+    }
+    return ''
+  }}
+
+  ${props => {
+    if (props.$faded) {
+      return fadedCss
+    }
+    return ''
+  }}
+
+  ${FriendEntryActions} {
+    opacity: 0;
+  }
+
+  &:hover ${FriendEntryActions} {
+    opacity: 1;
+  }
+`
+
+function FriendEntry({
+  userId,
+  faded = false,
+  isLive = false,
+  style,
+  actions,
+}: {
+  userId: SbUserId
+  faded?: boolean
+  isLive?: boolean
+  style?: React.CSSProperties
+  actions?: React.ReactNode
+}) {
+  const { t } = useTranslation()
+  const user = useAppSelector(s => s.users.byId.get(userId))
+
+  const { profileOverlayProps, contextMenuProps, onClick, onContextMenu, isOverlayOpen } =
+    useUserOverlays({
+      userId,
+      profileAnchorX: 'left',
+      profileAnchorY: 'top',
+      profileOriginX: 'right',
+      profileOriginY: 'top',
+      profileOffsetX: -4,
+    })
+
+  return (
+    <div style={style}>
+      <ConnectedUserProfileOverlay {...profileOverlayProps} />
+      <ConnectedUserContextMenu {...contextMenuProps} />
+
+      <FriendEntryRoot
+        key='entry'
+        $faded={faded}
+        $isOverlayOpen={isOverlayOpen}
+        onClick={onClick}
+        onContextMenu={onContextMenu}>
+        <AvatarContainer>
+          <StyledAvatar userId={userId} showAvailability={true} showOffline={true} />
+        </AvatarContainer>
+        {user ? (
+          <NameBlock>
+            <NameLine>{user.name}</NameLine>
+            <FriendActivityStatusLine userId={userId} />
+          </NameBlock>
+        ) : (
+          <LoadingName aria-label={t('social.friendsList.loadingUsername', 'Username loading…')} />
+        )}
+        {isLive ? <EntryLiveLabel /> : null}
+        {actions ? <FriendEntryActions>{actions}</FriendEntryActions> : null}
+      </FriendEntryRoot>
+    </div>
+  )
+}

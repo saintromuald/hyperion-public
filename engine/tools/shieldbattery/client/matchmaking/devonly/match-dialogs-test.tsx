@@ -1,0 +1,244 @@
+import { useStore } from 'jotai'
+import * as React from 'react'
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import styled from 'styled-components'
+import {
+  ALL_MATCHMAKING_TYPES,
+  MatchCanceledReason,
+  MATCHMAKING_ACCEPT_MATCH_TIME_MS,
+  MatchmakingType,
+  matchmakingTypeToLabel,
+} from '../../../common/matchmaking'
+import { RaceChar } from '../../../common/races'
+import { closeDialog, openDialog } from '../../dialogs/action-creators'
+import { DialogType } from '../../dialogs/dialog-type'
+import { gameLoadingStatusAtom } from '../../games/game-atoms'
+import { FilledButton } from '../../material/button'
+import { Card } from '../../material/card'
+import { CheckBox } from '../../material/check-box'
+import { NumberTextField } from '../../material/number-text-field'
+import { SelectOption } from '../../material/select/option'
+import { Select } from '../../material/select/select'
+import { useStableCallback } from '../../react/state-hooks'
+import { useAppDispatch } from '../../redux-hooks'
+import { BodyMedium } from '../../styles/typography'
+import { closeAcceptMatchDialog, openAcceptMatchDialog } from '../action-creators'
+import {
+  clearMatchmakingState,
+  currentSearchInfoAtom,
+  foundMatchAtom,
+  launchingMatchmakingTypeAtom,
+  MatchCancellationPenalty,
+  matchLaunchingAtom,
+} from '../matchmaking-atoms'
+import { eventToAction } from '../socket-handlers'
+
+const ControlsCard = styled(Card)`
+  max-width: 480px;
+  margin: 16px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+export function MatchDialogsTest() {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const store = useStore()
+
+  const [matchmakingType, setMatchmakingType] = useState(MatchmakingType.Match1v1)
+  const [numPlayers, setNumPlayers] = useState(2)
+  const [acceptedPlayers, setAcceptedPlayers] = useState(0)
+  const [hasAccepted, setHasAccepted] = useState(false)
+  const [showProvisioningStatus, setShowProvisioningStatus] = useState(false)
+  const [showResolutionStatus, setShowResolutionStatus] = useState(false)
+  const [autoCloseSecs, setAutoCloseSecs] = useState(10)
+  const [canceledReason, setCanceledReason] = useState<MatchCanceledReason>('playerLeft')
+
+  const showAnomalyDialog = (
+    penalty: MatchCancellationPenalty | undefined,
+    requeued: boolean,
+    queueRemoved = true,
+  ) => {
+    dispatch(
+      openDialog({
+        type: DialogType.MatchCanceled,
+        initData: {
+          phase: 'load',
+          reason: 'gameAnomaly',
+          ...(penalty ? { penalty, queueRemoved } : {}),
+          ...(requeued ? {} : { requeued: false }),
+        },
+      }),
+    )
+  }
+
+  const showAcceptDialog = useStableCallback(() => {
+    store.set(currentSearchInfoAtom, {
+      searchedTypes: new Map<MatchmakingType, RaceChar>([[matchmakingType, 'r']]),
+      startTime: window.performance.now(),
+    })
+    store.set(foundMatchAtom, {
+      matchmakingType,
+      numPlayers,
+      acceptStart: window.performance.now(),
+      acceptTimeTotalMillis: MATCHMAKING_ACCEPT_MATCH_TIME_MS,
+      acceptedPlayers,
+      hasAccepted,
+    })
+    dispatch(openAcceptMatchDialog())
+
+    // The dialog is modal with no close button (the real flow closes it from server events), so
+    // close it and reset the fake state automatically after a bit
+    setTimeout(() => {
+      clearMatchmakingState(store)
+      dispatch(closeAcceptMatchDialog())
+    }, autoCloseSecs * 1000)
+  })
+
+  const showLaunchingDialog = useStableCallback((type: MatchmakingType | undefined) => {
+    store.set(matchLaunchingAtom, true)
+    store.set(launchingMatchmakingTypeAtom, type)
+    let status: 'resolvingFailure' | 'provisioningGameServer' | undefined
+    if (showResolutionStatus) status = 'resolvingFailure'
+    else if (showProvisioningStatus) status = 'provisioningGameServer'
+    store.set(gameLoadingStatusAtom, status ? { gameId: 'dev-game', status } : undefined)
+    dispatch(openDialog({ type: DialogType.LaunchingGame }))
+
+    setTimeout(() => {
+      clearMatchmakingState(store)
+      store.set(gameLoadingStatusAtom, undefined)
+      dispatch(closeDialog(DialogType.LaunchingGame))
+    }, autoCloseSecs * 1000)
+  })
+
+  /** Runs the real socket handlers for a canceled match followed by the requeue. */
+  const showCanceledMatch = (phase: 'draft' | 'load') => {
+    const cancelAction =
+      phase === 'draft'
+        ? eventToAction.draftCancel({
+            type: 'draftCancel',
+            reason: canceledReason,
+          })
+        : eventToAction.cancelLoading({
+            type: 'cancelLoading',
+            reason: canceledReason,
+          })
+    if (cancelAction) dispatch(cancelAction)
+    const requeueAction = eventToAction.requeue({ type: 'requeue' })
+    if (requeueAction) dispatch(requeueAction)
+  }
+
+  return (
+    <div>
+      <ControlsCard>
+        <BodyMedium>
+          The accept-match and launching-game dialogs are modal without a close button, so they
+          auto-close after the configured number of seconds.
+        </BodyMedium>
+        <Select
+          value={matchmakingType}
+          label='Matchmaking type'
+          allowErrors={false}
+          onChange={(value: MatchmakingType) => setMatchmakingType(value)}>
+          {ALL_MATCHMAKING_TYPES.map(type => (
+            <SelectOption key={type} value={type} text={matchmakingTypeToLabel(type, t)} />
+          ))}
+        </Select>
+        <NumberTextField
+          label='Total players'
+          floatingLabel={true}
+          value={numPlayers}
+          onChange={setNumPlayers}
+        />
+        <NumberTextField
+          label='Accepted players'
+          floatingLabel={true}
+          value={acceptedPlayers}
+          onChange={setAcceptedPlayers}
+        />
+        <CheckBox
+          name='hasAccepted'
+          label='Self has accepted?'
+          checked={hasAccepted}
+          onChange={(event: React.ChangeEvent) =>
+            setHasAccepted((event.currentTarget as HTMLInputElement).checked)
+          }
+        />
+        <CheckBox
+          name='provisioningStatus'
+          label='Show server-provisioning status line? (launching dialog)'
+          checked={showProvisioningStatus}
+          onChange={(event: React.ChangeEvent) =>
+            setShowProvisioningStatus((event.currentTarget as HTMLInputElement).checked)
+          }
+        />
+        <CheckBox
+          name='resolutionStatus'
+          label='Show failed-setup checking status? (launching dialog)'
+          checked={showResolutionStatus}
+          onChange={(event: React.ChangeEvent) =>
+            setShowResolutionStatus((event.currentTarget as HTMLInputElement).checked)
+          }
+        />
+        <NumberTextField
+          label='Auto-close after (seconds)'
+          floatingLabel={true}
+          value={autoCloseSecs}
+          onChange={setAutoCloseSecs}
+        />
+        <FilledButton label='Show accept-match dialog' onClick={showAcceptDialog} />
+        <FilledButton
+          label='Show launching dialog'
+          onClick={() => showLaunchingDialog(matchmakingType)}
+        />
+        <FilledButton
+          label='Show launching dialog (lobby, no mode)'
+          onClick={() => showLaunchingDialog(undefined)}
+        />
+        <FilledButton
+          label='Show failed-to-accept dialog'
+          onClick={() => dispatch(openDialog({ type: DialogType.FailedToAcceptMatch }))}
+        />
+        <BodyMedium>
+          These previews open the same match-canceled dialog with synthetic client-only data.
+        </BodyMedium>
+        <FilledButton
+          label='Preview: innocent anomaly, requeued'
+          onClick={() => showAnomalyDialog(undefined, true)}
+        />
+        <FilledButton
+          label='Preview: offender anomaly, loss and ban'
+          onClick={() => showAnomalyDialog('lossAndBan', false)}
+        />
+        <FilledButton
+          label='Preview: offender anomaly, loss and warning'
+          onClick={() => showAnomalyDialog('lossAndWarning', false)}
+        />
+        <FilledButton
+          label='Preview: late warning, current search preserved'
+          onClick={() => showAnomalyDialog('lossAndWarning', false, false)}
+        />
+        <FilledButton
+          label='Preview: offender anomaly, penalty pending'
+          onClick={() => showAnomalyDialog('pending', false)}
+        />
+        <Select
+          value={canceledReason}
+          label='Match canceled reason'
+          allowErrors={false}
+          onChange={(value: MatchCanceledReason) => setCanceledReason(value)}>
+          <SelectOption value='playerLeft' text='playerLeft' />
+          <SelectOption value='playerFailedToLoad' text='playerFailedToLoad' />
+          <SelectOption value='loadTimeout' text='loadTimeout' />
+          <SelectOption value='setupUnresolved' text='setupUnresolved' />
+          <SelectOption value='error' text='error' />
+        </Select>
+        <FilledButton label='Cancel draft + requeue' onClick={() => showCanceledMatch('draft')} />
+        <FilledButton label='Cancel loading + requeue' onClick={() => showCanceledMatch('load')} />
+      </ControlsCard>
+    </div>
+  )
+}

@@ -1,0 +1,155 @@
+import { SetOptional } from 'type-fest'
+import { LobbyVisibility } from '../lobbies/lobby-visibility'
+import { MatchmakingType } from '../matchmaking'
+import { BwTurnRate } from '../network'
+import { RaceChar } from '../races'
+import { SbUserId } from '../users/sb-user-id'
+import { GameType } from './game-type'
+
+export enum GameSource {
+  Lobby = 'LOBBY',
+  Matchmaking = 'MATCHMAKING',
+}
+
+export const ALL_GAME_SOURCES: ReadonlyArray<GameSource> = Object.values(GameSource)
+
+export interface GameConfigPlayer {
+  id: SbUserId
+  race: RaceChar
+  isComputer: boolean
+}
+
+interface BaseGameConfig<Source extends GameSource, SourceExtra> {
+  gameSource: Source
+  gameSourceExtra: SourceExtra
+  gameType: GameType
+  gameSubType: number
+  teams: GameConfigPlayer[][]
+  /**
+   * The users who were in the game watching rather than playing. Observers are deliberately kept
+   * out of `teams`, which describes only the participants that results, ratings and matchups are
+   * derived from.
+   *
+   * Records created before this field existed won't have it set; readers should treat a missing
+   * value as having had no observers.
+   */
+  observers?: SbUserId[]
+  /**
+   * Whether in-game alliance changes are disabled for this game, meaning the teams above remain
+   * authoritative for the whole game (no player can leave or join a team after starting). Result
+   * reconciliation uses this to enforce that only one team can win.
+   *
+   * Records created before this field existed won't have it set; readers should fall back to
+   * `gameSource === GameSource.Matchmaking`, since matchmaking has always locked alliances.
+   */
+  lockedAlliances?: boolean
+  /**
+   * Whether this game used netcode v2 (rally-point2) for its networking. This depends on the
+   * feature being enabled and the game having more than one human participant, neither of which is
+   * known when the game record is first created, so the loader persists it here once decided.
+   *
+   * Records created before this field existed, or whose loader never reached that decision (e.g.
+   * the game failed to load), won't have it set; readers should treat a missing value as `false`.
+   */
+  useNetcodeV2?: boolean
+  /**
+   * The server-selected unsigned 32-bit random seed used to initialize the game. The loader
+   * persists it before distributing setup. Records created without seed persistence won't have it.
+   */
+  seed?: number
+  /**
+   * Whether this game is exempt from result tracking, because its teams include at least one
+   * computer player or because it has fewer than two human players. Unlike `useNetcodeV2`, the
+   * team composition is known as soon as the config is built, so this is set once at registration
+   * time and never changes.
+   *
+   * Matchmaking always has at least two human players and never includes computer players, so this
+   * only ever applies to lobby games. Records created before this field existed won't have it set;
+   * readers should treat a missing value as `false`.
+   */
+  resultsExempt?: boolean
+}
+
+export type LobbyGameConfig = SetOptional<
+  BaseGameConfig<GameSource.Lobby, LobbyExtra>,
+  'gameSourceExtra'
+>
+
+export interface LobbyExtra {
+  host?: SbUserId
+  turnRate?: BwTurnRate | 0
+  useLegacyLimits?: boolean
+  /**
+   * Whether the game was played without the ShieldBattery game logic fixes that make replays play
+   * back differently in StarCraft: Remastered without ShieldBattery. Records created before this
+   * field existed won't have it set; readers should treat a missing value as `false`.
+   */
+  starcraftCompatibleReplays?: boolean
+  /**
+   * The lobby's visibility when the game started. Records created before this field existed won't
+   * have it set; readers should treat a missing value as `unlisted` (participants-only) rather than
+   * public.
+   */
+  visibility?: LobbyVisibility
+}
+
+export interface MatchmakingExtra1v1 {
+  type: MatchmakingType.Match1v1
+}
+
+export interface MatchmakingExtra1v1Fastest {
+  type: MatchmakingType.Match1v1Fastest
+}
+
+export interface MatchmakingExtra2v2 {
+  type: MatchmakingType.Match2v2
+  /**
+   * The user IDs of players in the match, grouped into lists by party. Players not in a party
+   * will be in a list by themselves.
+   */
+  parties: SbUserId[][]
+}
+
+export interface MatchmakingExtra2v2Bgh {
+  type: MatchmakingType.Match2v2Bgh
+}
+
+export interface MatchmakingExtra2v2Hunters {
+  type: MatchmakingType.Match2v2Hunters
+}
+
+export interface MatchmakingExtra2v2Fastest {
+  type: MatchmakingType.Match2v2Fastest
+}
+
+export interface MatchmakingExtra3v3Bgh {
+  type: MatchmakingType.Match3v3Bgh
+}
+
+export interface MatchmakingExtra3v3Hunters {
+  type: MatchmakingType.Match3v3Hunters
+}
+
+export interface MatchmakingExtra3v3Fastest {
+  type: MatchmakingType.Match3v3Fastest
+}
+
+export type MatchmakingExtra =
+  | MatchmakingExtra1v1
+  | MatchmakingExtra1v1Fastest
+  | MatchmakingExtra2v2
+  | MatchmakingExtra2v2Bgh
+  | MatchmakingExtra2v2Hunters
+  | MatchmakingExtra2v2Fastest
+  | MatchmakingExtra3v3Bgh
+  | MatchmakingExtra3v3Hunters
+  | MatchmakingExtra3v3Fastest
+
+export type MatchmakingGameConfig = BaseGameConfig<GameSource.Matchmaking, MatchmakingExtra>
+
+export type GameConfig = LobbyGameConfig | MatchmakingGameConfig
+
+/** Returns the type of the `gameSourceExtra` param for a given `GameSource` type. */
+export type GameSourceExtraType<Source extends GameSource> = (GameConfig & {
+  gameSource: Source
+})['gameSourceExtra']

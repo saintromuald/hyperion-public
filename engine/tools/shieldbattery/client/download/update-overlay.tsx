@@ -1,0 +1,344 @@
+import { AnimatePresence, Transition, Variants } from 'motion/react'
+import * as m from 'motion/react-m'
+import prettyBytes from 'pretty-bytes'
+import * as React from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
+import styled from 'styled-components'
+import { TypedIpcRenderer } from '../../common/ipc'
+import { FocusTrap } from '../dom/focus-trap'
+import logger from '../logging/logger'
+import { FilledButton } from '../material/button'
+import { Dialog } from '../material/dialog'
+import { Portal } from '../material/portal'
+import { zIndexDialogScrim } from '../material/zindex'
+import { makeServerUrl } from '../network/server-url'
+import { LoadingDotsArea } from '../progress/dots'
+import { BodyLarge, BodyMedium, TitleLarge } from '../styles/typography'
+import {
+  addChangeHandler,
+  removeChangeHandler,
+  UpdateProgress,
+  UpdateStateChangeHandler,
+} from './updater-state'
+
+const ipcRenderer = new TypedIpcRenderer()
+
+const ErrorFallbackCard = styled.div`
+  position: fixed;
+  top: 25%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 480px;
+  padding: 24px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  background: var(--theme-container-high);
+  border-radius: 8px;
+  /* Matches the update dialog itself, which needs to display over everything else in the app */
+  z-index: 99999;
+
+  a,
+  a:visited {
+    color: var(--theme-amber);
+  }
+`
+
+interface UpdateErrorFallbackState {
+  translationError?: Error
+}
+
+/**
+ * Renders the update-failure fallback, trying translated contents first and falling back to
+ * static English if the translation machinery itself throws (this is a last-resort surface, so it
+ * must not assume any other part of the app works).
+ */
+class UpdateErrorFallback extends React.Component<object, UpdateErrorFallbackState> {
+  override state: UpdateErrorFallbackState = {}
+
+  static getDerivedStateFromError(error: Error) {
+    return { translationError: error }
+  }
+
+  override render() {
+    return this.state.translationError ? (
+      <ErrorFallbackCard>
+        <TitleLarge>Error while updating</TitleLarge>
+        <BodyLarge>
+          Something went wrong while updating. Please visit{' '}
+          <a href={makeServerUrl('/')} target='_blank' rel='noopener noreferrer'>
+            our website
+          </a>{' '}
+          to download the latest version.
+        </BodyLarge>
+      </ErrorFallbackCard>
+    ) : (
+      <TranslatedUpdateErrorFallback />
+    )
+  }
+}
+
+function TranslatedUpdateErrorFallback() {
+  const { t } = useTranslation()
+
+  return (
+    <ErrorFallbackCard>
+      <TitleLarge>{t('clientUpdate.errorBoundary.title', 'Error while updating')}</TitleLarge>
+      <BodyLarge>
+        <Trans t={t} i18nKey='clientUpdate.errorBoundary.contents'>
+          Something went wrong while updating. Please visit{' '}
+          <a href={makeServerUrl('/')} target='_blank' rel='noopener noreferrer'>
+            our website
+          </a>{' '}
+          to download the latest version.
+        </Trans>
+      </BodyLarge>
+    </ErrorFallbackCard>
+  )
+}
+
+interface UpdateOverlayErrorBoundaryState {
+  error?: Error
+}
+
+/**
+ * Error boundary around the auto-update UI. The update overlay renders outside the app's root
+ * error boundary (it must display over everything, even a crashed app), so without this a crash
+ * inside it would take down the whole tree with only a "report it to us" message — while the one
+ * thing a user with a broken updater actually needs is a link to download the latest version
+ * manually.
+ */
+export class UpdateOverlayErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  UpdateOverlayErrorBoundaryState
+> {
+  override state: UpdateOverlayErrorBoundaryState = {}
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    logger.error(`Error in update overlay: ${String(error.stack ?? error)}`)
+    logger.error(`React stack:\n${errorInfo.componentStack}`)
+  }
+
+  override render() {
+    return this.state.error ? <UpdateErrorFallback /> : this.props.children
+  }
+}
+
+const Scrim = styled(m.div)`
+  position: fixed;
+  left: 0;
+  top: var(--sb-system-bar-height, 0px);
+  right: 0;
+  bottom: 0;
+
+  background: var(--theme-dialog-scrim);
+  z-index: ${zIndexDialogScrim};
+
+  -webkit-app-region: no-drag;
+`
+
+const scrimVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 0.84 },
+}
+
+const scrimTransition: Transition = {
+  type: 'spring',
+  duration: 0.3,
+  bounce: 0,
+}
+
+export function UpdateOverlay() {
+  const [hasUpdate, setHasUpdate] = useState(false)
+  const [hasDownloadError, setHasDownloadError] = useState(false)
+  const [readyToInstall, setReadyToInstall] = useState(false)
+  const [progress, setProgress] = useState<UpdateProgress>()
+  const [focusableElem, setFocusableElem] = useState<HTMLSpanElement | null>(null)
+
+  const changeHandler = useCallback<UpdateStateChangeHandler>(state => {
+    setHasUpdate(state.hasUpdate)
+    setHasDownloadError(state.hasDownloadError)
+    setReadyToInstall(state.readyToInstall)
+    setProgress(state.progress)
+  }, [])
+
+  useEffect(() => {
+    const handler = changeHandler
+    addChangeHandler(handler)
+
+    return () => {
+      removeChangeHandler(handler)
+    }
+  }, [changeHandler])
+
+  useEffect(() => {
+    if (hasUpdate) {
+      focusableElem?.focus()
+    }
+  }, [hasUpdate, focusableElem])
+
+  return (
+    <AnimatePresence>
+      {hasUpdate && (
+        <Portal open={true}>
+          <Scrim
+            variants={scrimVariants}
+            initial='hidden'
+            animate='visible'
+            exit='hidden'
+            transition={scrimTransition}
+          />
+
+          <FocusTrap focusableElem={focusableElem}>
+            <span ref={setFocusableElem} tabIndex={-1}>
+              <UpdateDialog
+                hasUpdate={hasUpdate}
+                hasDownloadError={hasDownloadError}
+                readyToInstall={readyToInstall}
+                progress={progress}
+              />
+            </span>
+          </FocusTrap>
+        </Portal>
+      )}
+    </AnimatePresence>
+  )
+}
+
+const StyledDialog = styled(Dialog)`
+  max-width: 480px;
+  z-index: 99999;
+`
+
+const Content = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+`
+
+export interface UpdateDialogProps {
+  hasUpdate: boolean
+  hasDownloadError: boolean
+  readyToInstall: boolean
+  progress?: UpdateProgress
+}
+
+// NOTE(tec27): This is *not* available as a normal connected Dialog, it is only rendered by the
+// `UpdateOverlay` component. We expose it for easier testing in dev pages.
+export function UpdateDialog({
+  hasUpdate,
+  hasDownloadError,
+  readyToInstall,
+  progress,
+}: UpdateDialogProps) {
+  const { t } = useTranslation()
+  const title = !hasDownloadError
+    ? t('clientUpdate.overlay.noErrorTitle', 'Update available')
+    : t('clientUpdate.overlay.errorTitle', 'Error downloading update')
+  let content = <span />
+  if (hasDownloadError) {
+    content = (
+      <BodyLarge>
+        <Trans t={t} i18nKey='clientUpdate.overlay.errorBody'>
+          There was an error downloading the update. Please restart and try again, or visit{' '}
+          <a href={makeServerUrl('/')} target='_blank' rel='noopener noreferrer'>
+            our website
+          </a>{' '}
+          to download the latest version.
+        </Trans>
+      </BodyLarge>
+    )
+  } else if (readyToInstall) {
+    content = (
+      <Content>
+        <BodyLarge>
+          {t(
+            'clientUpdate.overlay.newUpdateReady',
+            'A new update has been downloaded and is ready to install. ' +
+              'Please restart the application to continue.',
+          )}
+        </BodyLarge>
+        <FilledButton
+          onClick={() => ipcRenderer.send('updaterQuitAndInstall')}
+          label={t('clientUpdate.overlay.restartNow', 'Restart now')}
+        />
+      </Content>
+    )
+  } else if (hasUpdate) {
+    content = (
+      <Content>
+        <BodyLarge>
+          {t(
+            'clientUpdate.overlay.newUpdateDownloading',
+            'A new update is being downloaded. ' +
+              'Please wait for the download to complete in order to continue.',
+          )}
+        </BodyLarge>
+        {progress ? <UpdateProgressUi progress={progress} /> : <LoadingDotsArea />}
+      </Content>
+    )
+  }
+
+  return (
+    <StyledDialog title={title} showCloseButton={false}>
+      {content}
+    </StyledDialog>
+  )
+}
+
+const ProgressBar = styled.div`
+  position: relative;
+  width: 100%;
+  height: 12px;
+  background-color: var(--theme-container-highest);
+`
+
+const FilledProgressBar = styled.div<{ $filledScale: number }>`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 12px;
+  background-color: var(--theme-amber);
+  transform: ${props => `scaleX(${props.$filledScale})`};
+  transform-origin: 0% 50%;
+  transition: transform 80ms linear;
+  will-change: transform;
+`
+
+const ProgressContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+`
+
+function UpdateProgressUi({ progress }: { progress: UpdateProgress }) {
+  const { t } = useTranslation()
+  const { totalBytes, bytesTransferred, bytesPerSecond } = progress
+
+  const prettyTotalBytes = prettyBytes(totalBytes)
+  const prettyBytesTransferred = prettyBytes(bytesTransferred)
+  const prettyBytesPerSecond = prettyBytes(bytesPerSecond)
+
+  return (
+    <ProgressContainer>
+      <ProgressBar>
+        <FilledProgressBar $filledScale={bytesTransferred / totalBytes} />
+      </ProgressBar>
+      <BodyMedium>
+        <Trans t={t} i18nKey='clientUpdate.overlay.progress'>
+          {{ transferred: prettyBytesTransferred }} / {{ total: prettyTotalBytes }} at{' '}
+          {{ perSecond: prettyBytesPerSecond }}/s
+        </Trans>
+      </BodyMedium>
+    </ProgressContainer>
+  )
+}

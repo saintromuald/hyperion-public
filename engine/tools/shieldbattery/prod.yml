@@ -1,0 +1,63 @@
+# The electron-builder config for the production site (https://shieldbattery.net)
+# It should generally match the other build configs (except things that need to differ for this
+# "region")
+appId: net.shieldbattery.client
+# Fails the build unless discord-sdk holds the Discord Social SDK version the repo pins
+beforePack: ./tools/check-discord-sdk.cjs
+extraResources:
+  # An explicit `from` keeps the asar integrity scan inside game/dist; a bare pattern makes it walk
+  # every directory in the project.
+  - from: game/dist
+    to: game/dist
+  # The Discord Social SDK, which never lives in the repo (see docs/DISCORD_SDK.md)
+  - from: discord-sdk
+    to: discord-sdk
+    filter:
+      - discord_partner_sdk.dll
+      - License-Notices.txt
+files:
+  - 'assets/**/*'
+  - 'dist/**/*'
+  # Exclusions last: a later pattern wins, so these would be undone by the includes above.
+  # node_modules is excluded because everything the app runs is bundled into dist/.
+  - '!node_modules/**/*'
+  - '!build/**/*'
+  - '!**/*.map'
+# Keep these identical to staging.yml, which is where a fuse that breaks the app gets caught.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  grantFileProtocolExtraPrivileges: false
+  onlyLoadAppFromAsar: true
+  enableEmbeddedAsarIntegrityValidation: true
+nsis:
+  artifactName: '${productName}-setup-${version}.${ext}'
+  # Registers/cleans up this channel's URL protocol; the top-level `protocols` option is ignored
+  # by the NSIS target, so the registry work lives in this include instead.
+  include: tools/nsis/shieldbattery-protocol.nsh
+win:
+  icon: icon.ico
+  target: nsis
+  signExts:
+    - dll
+  signtoolOptions:
+    certificateSubjectName: Fast Expo Collective LLC
+    # Signs via scsigntool so the YubiKey PIN is entered once per build instead of
+    # once per signed file. See the hook for details.
+    sign: ./tools/codesign/smartcard-sign.cjs
+    publisherName:
+      - Fast Expo Collective LLC
+    signingHashAlgorithms:
+      - sha256
+    rfc3161TimeStampServer: http://ts.ssl.com
+
+# These properties differ between configs
+productName: ShieldBattery
+publish:
+  provider: spaces
+  name: shieldbattery-cdn
+  region: nyc3
+  # No leading/trailing slashes: electron-builder >= 26.15 joins this verbatim, so "/app/"
+  # produces keys like "/app//latest.yml" (invisible to the updater, which reads app/latest.yml).
+  path: app

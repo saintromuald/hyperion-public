@@ -1,0 +1,53 @@
+import { Component } from 'react'
+import { Link, Route, Switch } from 'wouter'
+import { DraftTest } from './draft-tester'
+import { FindMatchListTest } from './find-match-test'
+import { MapPoolChipsTest } from './map-pool-chips-test'
+import { MatchDialogsTest } from './match-dialogs-test'
+import { PostMatchDialogTest } from './post-match-dialog-test'
+import { RankIconsTest } from './rank-icons-test'
+
+const BASE_URL = '/dev/matchmaking'
+
+class DevMatchmakingDashboard extends Component {
+  render() {
+    return (
+      <ul>
+        <li>
+          <Link href={`${BASE_URL}/draft`}>Draft</Link>
+        </li>
+        <li>
+          <Link href={`${BASE_URL}/find-match`}>Find match</Link>
+        </li>
+        <li>
+          <Link href={`${BASE_URL}/map-pool-chips`}>Map pool chips</Link>
+        </li>
+        <li>
+          <Link href={`${BASE_URL}/match-dialogs`}>Match dialogs</Link>
+        </li>
+        <li>
+          <Link href={`${BASE_URL}/post-match-dialog`}>Post-match dialog</Link>
+        </li>
+        <li>
+          <Link href={`${BASE_URL}/icons`}>Rank icons</Link>
+        </li>
+      </ul>
+    )
+  }
+}
+
+export default () => {
+  return (
+    <Switch>
+      <Route path={`${BASE_URL}/draft`} component={DraftTest} />
+      <Route path={`${BASE_URL}/find-match`} component={FindMatchListTest} />
+      <Route path={`${BASE_URL}/map-pool-chips`} component={MapPoolChipsTest} />
+      <Route path={`${BASE_URL}/match-dialogs`} component={MatchDialogsTest} />
+      <Route path={`${BASE_URL}/post-match-dialog`} component={PostMatchDialogTest} />
+      <Route path={`${BASE_URL}/icons`} component={RankIconsTest} />
+      <Route>
+        <DevMatchmakingDashboard />
+      </Route>
+    </Switch>
+  )
+}

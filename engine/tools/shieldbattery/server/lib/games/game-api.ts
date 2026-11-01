@@ -1,0 +1,945 @@
+import { RouterContext } from '@koa/router'
+import httpErrors from 'http-errors'
+import Joi from 'joi'
+import Koa from 'koa'
+import { Readable } from 'stream'
+import { container, singleton } from 'tsyringe'
+import { assertUnreachable } from '../../../common/assert-unreachable'
+import { decodeMatchup } from '../../../common/games/game-filters'
+import { GameStatus } from '../../../common/games/game-status'
+import { GameType } from '../../../common/games/game-type'
+import {
+  GameDebugInfo,
+  GameReplayInfo,
+  GET_GAMES_LIMIT,
+  GetGameResponse,
+  GetGamesResponse,
+  GetPendingReviewRequestsResponse,
+  ManuallyResolveGameRequest,
+  ManuallyResolveGameResponse,
+  NullifyGamePointsRequest,
+  NullifyGamePointsResponse,
+  ReviewRequestErrorCode,
+  ReviewRequestResponse,
+  toGameDebugInfoJson,
+  toGameRecordJson,
+  toPendingReviewRequestJson,
+} from '../../../common/games/games'
+import {
+  NetcodeV2FlightBlobsResponse,
+  NetcodeV2RehomeRequest,
+  NetcodeV2RehomeResponse,
+} from '../../../common/games/netcode-v2'
+import {
+  GameResultErrorCode,
+  isRawStoredGameResults,
+  SubmitGameReplayRequest,
+} from '../../../common/games/results'
+import {
+  MAX_ROLLBACK_HISTOGRAM_ENTRIES,
+  RollbackStats,
+  SubmitRollbackStatsRequest,
+} from '../../../common/games/rollback-stats'
+import { toMapInfoJson } from '../../../common/maps'
+import { toPublicMatchmakingRatingChangeJson } from '../../../common/matchmaking'
+import { parseReplay } from '../../workers/replays/replays'
+import { asHttpError } from '../errors/error-with-payload'
+import { handleMultipartFiles } from '../files/handle-multipart-files'
+import { httpApi, httpBeforeAll } from '../http/http-api'
+import { httpBefore, httpGet, httpPost, httpPut } from '../http/route-decorators'
+import logger from '../logging/logger'
+import { getMapInfos } from '../maps/map-models'
+import { insertGameRollbackStats } from '../models/game-rollback-stats'
+import { getGameReportedResults, getUserGameRecord } from '../models/games-users'
+import { NetcodeV2Service } from '../netcode-v2/netcode-v2-service'
+import { checkAllPermissions } from '../permissions/check-permissions'
+import { canUserAccessReplay } from '../replays/replay-access'
+import { generateReplayFilename } from '../replays/replay-filenames'
+import { getAllReplaysForGame, getBestReplayForGame } from '../replays/replay-models'
+import { ReplayService } from '../replays/replay-service'
+import ensureLoggedIn from '../session/ensure-logged-in'
+import createThrottle from '../throttle/create-throttle'
+import throttleMiddleware, {
+  throttleByIp,
+  throttleByUser,
+  throttleByUserOrIp,
+} from '../throttle/middleware'
+import { ActivityStatusService } from '../users/activity-status-service'
+import { findUsersByIdAsMap } from '../users/user-model'
+import { joiUserId } from '../users/user-validators'
+import { validateRequest } from '../validation/joi-validator'
+import { GameLifecycleEvents } from './game-lifecycle-events'
+import { GET_GAMES_QUERY_SCHEMA, getGameListSideData } from './game-list-data'
+import { GameLoader } from './game-loader'
+import {
+  countCompletedGames,
+  getGames,
+  getNetcodeV2DebugInfo,
+  getNetcodeV2Session,
+  listPendingReviewRequests,
+  wasUserInGame,
+} from './game-models'
+import {
+  GamePointsRefundErrorCode,
+  GamePointsRefundService,
+  GamePointsRefundServiceError,
+} from './game-points-refund-service'
+import GameResultService, {
+  ALL_MANUAL_GAME_RESULTS,
+  GameResultServiceError,
+} from './game-result-service'
+import { deriveResultSubmission } from './raw-results'
+import { ReviewRequestService, ReviewRequestServiceError } from './review-request-service'
+
+/** Maximum size of a replay file that we allow to be uploaded. */
+const MAX_REPLAY_SIZE_BYTES = 5 * 1024 * 1024
+
+const throttle = createThrottle('games', {
+  rate: 20,
+  burst: 40,
+  window: 60000,
+})
+
+// A looser limit just for the read-only single-game fetch (the map preview + game view), which a
+// user legitimately hits far more often than the lifecycle writes above — selecting distinct
+// replays while browsing the library is a read per selection. Kept separate from `throttle` so
+// loosening the read path doesn't also loosen the subscribe/unsubscribe/status writes.
+const gameInfoThrottle = createThrottle('gameInfo', {
+  rate: 40,
+  burst: 80,
+  window: 60000,
+})
+
+const gameResultsThrottle = createThrottle('gamesResults', {
+  rate: 10,
+  burst: 30,
+  window: 60000,
+})
+
+const gamesListThrottle = createThrottle('gamesList', {
+  rate: 20,
+  burst: 40,
+  window: 60000,
+})
+
+// Each game can only be asked about once, so this mostly bounds how fast one user can go through a
+// backlog of their disputed games.
+const reviewRequestThrottle = createThrottle('gameReviewRequest', {
+  rate: 10,
+  burst: 20,
+  window: 60 * 60 * 1000,
+})
+
+/** The most pending review requests listed for admins at once. */
+const PENDING_REVIEW_REQUESTS_LIMIT = 100
+
+const GAME_ID_PARAM = Joi.object<{ gameId: string }>({
+  gameId: Joi.string().required(),
+})
+
+const GAME_ID_AND_RELAY_ID_PARAM = Joi.object<{ gameId: string; relayId: number }>({
+  gameId: Joi.string().required(),
+  relayId: Joi.number().integer().min(0).required(),
+})
+
+/** The largest value a Postgres INTEGER holds. Rollback stats counts are stored in such columns. */
+const MAX_PG_INTEGER = 2 ** 31 - 1
+
+const joiRollbackCount = () => Joi.number().integer().min(0).max(MAX_PG_INTEGER).required()
+// Joi rejects integers beyond `Number.MAX_SAFE_INTEGER` by default, which bounds these 64-bit values
+// to what survives a round trip through a JS number.
+const joiRollbackDurationUs = () => Joi.number().integer().min(0).required()
+const joiRollbackSignedUs = () => Joi.number().integer().required()
+const joiRollbackHistogram = () =>
+  Joi.array()
+    .items(Joi.number().integer().min(0).max(MAX_PG_INTEGER))
+    .max(MAX_ROLLBACK_HISTOGRAM_ENTRIES)
+    .required()
+
+/**
+ * Validates submitted rollback stats. Unknown keys are allowed (and stored) so that a client sending
+ * fields this server doesn't know about isn't rejected.
+ */
+const ROLLBACK_STATS_SCHEMA = Joi.object<RollbackStats>({
+  version: Joi.number().integer().min(1).max(MAX_PG_INTEGER).required(),
+  throughTurn: joiRollbackCount(),
+  rollbackTarget: joiRollbackCount(),
+  predictionLimit: joiRollbackCount(),
+  minPipeTurns: Joi.number().integer().min(1).max(MAX_PG_INTEGER),
+  ticks: joiRollbackCount(),
+  rollbackHistogram: joiRollbackHistogram(),
+  pipeHistogram: joiRollbackHistogram(),
+  cappedTicks: joiRollbackCount(),
+  rollbacks: joiRollbackCount(),
+  resimulatedFrames: joiRollbackCount(),
+  deepestRollback: joiRollbackCount(),
+  predictedSteps: joiRollbackCount(),
+  mispredictedTurns: joiRollbackCount(),
+  confirmedPredictions: joiRollbackCount(),
+  caughtUpFrames: joiRollbackCount(),
+  heldBackTicks: joiRollbackCount(),
+  leadChanges: joiRollbackCount(),
+  scheduleCorrections: joiRollbackCount(),
+  scheduleCorrectedUs: joiRollbackSignedUs(),
+  holdsUndone: joiRollbackCount(),
+  clockStoppedUs: joiRollbackDurationUs(),
+  leadReports: joiRollbackCount(),
+  leadP90MaxUs: Joi.number()
+    .integer()
+    .min(-(2 ** 31))
+    .max(MAX_PG_INTEGER)
+    .required(),
+  leadP90SumUs: joiRollbackSignedUs(),
+  worstTickUs: joiRollbackDurationUs(),
+  slowTicks: joiRollbackCount(),
+  restoreUs: joiRollbackDurationUs(),
+  snapshotUs: joiRollbackDurationUs(),
+  stepUs: joiRollbackDurationUs(),
+}).unknown(true)
+
+@singleton()
+class GameCountEmitter {
+  static readonly GAME_COUNT_UPDATE_TIME_MS = 30 * 1000
+
+  streams = new Set<Readable>()
+  interval: ReturnType<typeof setInterval> | undefined
+  lastCount = 0
+
+  addListener(stream: Readable) {
+    stream.push(`event: gameCount\ndata: ${this.lastCount}\n\n`)
+    this.streams.add(stream)
+    this.start()
+  }
+
+  removeListener(stream: Readable) {
+    this.streams.delete(stream)
+    if (this.streams.size === 0) {
+      this.stop()
+    }
+  }
+
+  private start() {
+    if (this.interval) {
+      return
+    }
+
+    const doCount = () => {
+      countCompletedGames()
+        .then(count => {
+          this.lastCount = count
+          const message = `event: gameCount\ndata: ${this.lastCount}\n\n`
+          for (const stream of this.streams.values()) {
+            stream.push(message)
+          }
+        })
+        .catch(err => {
+          logger.error({ err }, 'error retrieving/sending completed game count')
+        })
+    }
+
+    doCount()
+    this.interval = setInterval(doCount, GameCountEmitter.GAME_COUNT_UPDATE_TIME_MS)
+  }
+
+  private stop() {
+    if (this.interval) {
+      clearInterval(this.interval)
+      this.interval = undefined
+    }
+  }
+}
+
+function convertGameResultServiceErrors(err: unknown) {
+  if (!(err instanceof GameResultServiceError)) {
+    throw err
+  }
+
+  switch (err.code) {
+    case GameResultErrorCode.NotFound:
+      throw asHttpError(404, err)
+    case GameResultErrorCode.AlreadyReported:
+      throw asHttpError(409, err)
+    case GameResultErrorCode.InvalidPlayers:
+      throw asHttpError(400, err)
+    case GameResultErrorCode.InvalidClient:
+      throw asHttpError(400, err)
+    case GameResultErrorCode.NotLoaded:
+      throw asHttpError(409, err)
+    case GameResultErrorCode.NotDisputable:
+      throw asHttpError(409, err)
+    case GameResultErrorCode.InvalidResults:
+      throw asHttpError(400, err)
+    case GameResultErrorCode.ReplayRejected:
+      throw asHttpError(403, err)
+    case GameResultErrorCode.ReplaySeedMissing:
+      throw asHttpError(422, err)
+    default:
+      assertUnreachable(err.code)
+  }
+}
+
+function convertGamePointsRefundErrors(err: unknown) {
+  if (!(err instanceof GamePointsRefundServiceError)) {
+    throw err
+  }
+
+  switch (err.code) {
+    case GamePointsRefundErrorCode.GameNotFound:
+      throw asHttpError(404, err)
+    case GamePointsRefundErrorCode.NotCurrentSeason:
+    case GamePointsRefundErrorCode.NotRanked:
+    case GamePointsRefundErrorCode.NotRefundable:
+    case GamePointsRefundErrorCode.InvalidPlayers:
+      throw asHttpError(400, err)
+    case GamePointsRefundErrorCode.AlreadyRefunded:
+      throw asHttpError(409, err)
+    default:
+      assertUnreachable(err.code)
+  }
+}
+
+function convertReviewRequestErrors(err: ReviewRequestServiceError) {
+  switch (err.code) {
+    case ReviewRequestErrorCode.NotFound:
+      throw asHttpError(404, err)
+    case ReviewRequestErrorCode.NotParticipant:
+      throw asHttpError(403, err)
+    case ReviewRequestErrorCode.NotMatchmaking:
+      throw asHttpError(400, err)
+    case ReviewRequestErrorCode.NotDisputed:
+    case ReviewRequestErrorCode.AlreadyRequested:
+    case ReviewRequestErrorCode.SeasonFinalized:
+    case ReviewRequestErrorCode.NoPendingRequest:
+      throw asHttpError(409, err)
+    default:
+      assertUnreachable(err.code)
+  }
+}
+
+async function convertServiceErrors(ctx: RouterContext, next: Koa.Next) {
+  try {
+    await next()
+  } catch (err) {
+    if (err instanceof GamePointsRefundServiceError) {
+      convertGamePointsRefundErrors(err)
+    }
+    if (err instanceof ReviewRequestServiceError) {
+      convertReviewRequestErrors(err)
+    }
+    convertGameResultServiceErrors(err)
+  }
+}
+
+@httpApi('/games')
+@httpBeforeAll(convertServiceErrors)
+export class GameApi {
+  constructor(
+    private gameResultService: GameResultService,
+    private gameLoader: GameLoader,
+    private replayService: ReplayService,
+    private gamePointsRefundService: GamePointsRefundService,
+    private netcodeV2Service: NetcodeV2Service,
+    private activityStatusService: ActivityStatusService,
+    private gameLifecycleEvents: GameLifecycleEvents,
+    private reviewRequestService: ReviewRequestService,
+  ) {}
+
+  @httpPost('/:gameId/nullify-points')
+  @httpBefore(ensureLoggedIn, checkAllPermissions('manageGameReports'))
+  async nullifyGamePoints(ctx: RouterContext): Promise<NullifyGamePointsResponse> {
+    const {
+      params: { gameId },
+      body: { punishedUserIds },
+    } = validateRequest(ctx, {
+      params: GAME_ID_PARAM,
+      body: Joi.object<NullifyGamePointsRequest>({
+        // `.single()` because the client sends this via `encodeBodyAsParams`, which serializes a
+        // one-element array as a single `punishedUserIds=<id>` param that the body parser decodes as
+        // a scalar (the usual convention here — see user-api.ts / chat-api.ts). A 3v3 is the largest
+        // matchmaking game, so at most 6 punished players; keep a little slack.
+        punishedUserIds: Joi.array().items(joiUserId()).single().min(1).max(8).required(),
+      }),
+    })
+
+    return await this.gamePointsRefundService.refundGamePoints({
+      gameId,
+      punishedUserIds,
+      refundedBy: ctx.session!.user.id,
+    })
+  }
+
+  @httpPost('/:gameId/manual-resolution')
+  @httpBefore(ensureLoggedIn, checkAllPermissions('manageGameReports'))
+  async manuallyResolveGame(ctx: RouterContext): Promise<ManuallyResolveGameResponse> {
+    const {
+      params: { gameId },
+      body: { results },
+    } = validateRequest(ctx, {
+      params: GAME_ID_PARAM,
+      body: Joi.object<ManuallyResolveGameRequest>({
+        // 8 is the most human players a game can have.
+        results: Joi.array()
+          .items(
+            Joi.object({
+              userId: joiUserId().required(),
+              result: Joi.string()
+                .valid(...ALL_MANUAL_GAME_RESULTS)
+                .required(),
+            }),
+          )
+          .min(1)
+          .max(8)
+          .required(),
+      }),
+    })
+
+    const { game, ratingsApplied } = await this.gameResultService.resolveGameManually({
+      gameId,
+      results,
+      resolvedBy: ctx.session!.user.id,
+    })
+    // A resolution also closes any review request that was waiting on the game.
+    this.reviewRequestService.refreshPendingCount()
+
+    return { game: toGameRecordJson(game), ratingsApplied }
+  }
+
+  @httpGet('/review-requests')
+  @httpBefore(ensureLoggedIn, checkAllPermissions('manageGameReports'))
+  async getPendingReviewRequests(): Promise<GetPendingReviewRequestsResponse> {
+    const requests = await listPendingReviewRequests(PENDING_REVIEW_REQUESTS_LIMIT)
+    const maps = await getMapInfos(Array.from(new Set(requests.map(r => r.game.mapId))))
+
+    return {
+      requests: requests.map(r => toPendingReviewRequestJson(r)),
+      maps: maps.map(m => toMapInfoJson(m)),
+    }
+  }
+
+  @httpPost('/:gameId/review-request')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(reviewRequestThrottle, throttleByUser))
+  async requestReview(ctx: RouterContext): Promise<ReviewRequestResponse> {
+    const {
+      params: { gameId },
+    } = validateRequest(ctx, { params: GAME_ID_PARAM })
+
+    const game = await this.reviewRequestService.requestReview({
+      gameId,
+      userId: ctx.session!.user.id,
+    })
+    return { game: toGameRecordJson(game) }
+  }
+
+  @httpPost('/:gameId/review-request/dismiss')
+  @httpBefore(ensureLoggedIn, checkAllPermissions('manageGameReports'))
+  async dismissReviewRequest(ctx: RouterContext): Promise<ReviewRequestResponse> {
+    const {
+      params: { gameId },
+    } = validateRequest(ctx, { params: GAME_ID_PARAM })
+
+    const game = await this.reviewRequestService.dismissRequest(gameId)
+    return { game: toGameRecordJson(game) }
+  }
+
+  @httpGet('/list')
+  @httpBefore(throttleMiddleware(gamesListThrottle, throttleByUserOrIp))
+  async getGamesList(ctx: RouterContext): Promise<GetGamesResponse> {
+    const {
+      query: {
+        source,
+        duration,
+        mapName,
+        playerName,
+        format,
+        matchup,
+        sort,
+        offset,
+        startDate,
+        endDate,
+        includeShort,
+      },
+    } = validateRequest(ctx, {
+      query: GET_GAMES_QUERY_SCHEMA,
+    })
+
+    const decodedMatchup = matchup && format ? decodeMatchup(format, matchup) : undefined
+
+    const games = await getGames({
+      limit: GET_GAMES_LIMIT,
+      offset: offset ?? 0,
+      source,
+      duration,
+      mapName,
+      playerName,
+      format,
+      matchup: decodedMatchup,
+      sort,
+      startDate,
+      endDate,
+      includeShort,
+    })
+
+    const { users, maps, replays } = await getGameListSideData({
+      games,
+      currentUserId: ctx.session?.user?.id,
+      replayService: this.replayService,
+      logger: ctx.log,
+    })
+
+    return {
+      games: games.map(g => toGameRecordJson(g)),
+      maps: maps.map(m => toMapInfoJson(m)),
+      users,
+      hasMoreGames: games.length >= GET_GAMES_LIMIT,
+      replays,
+    }
+  }
+
+  @httpGet('/:gameId')
+  @httpBefore(throttleMiddleware(gameInfoThrottle, throttleByUserOrIp))
+  async getGame(ctx: RouterContext): Promise<GetGameResponse> {
+    const {
+      params: { gameId },
+    } = validateRequest(ctx, {
+      params: GAME_ID_PARAM,
+    })
+
+    const game = await this.gameResultService.retrieveGame(gameId)
+
+    const usersToRetrieve = game.config.teams.flatMap(t =>
+      t.filter(p => !p.isComputer).map(p => p.id),
+    )
+    const [mapArray, users, mmrChanges, canRequestReview] = await Promise.all([
+      getMapInfos([game.mapId]),
+      findUsersByIdAsMap(usersToRetrieve),
+      this.gameResultService.retrieveMatchmakingRatingChanges(game),
+      this.reviewRequestService.canRequestReview(game, ctx.session?.user?.id),
+    ])
+
+    const mapName = mapArray[0]?.name ?? 'Unknown Map'
+
+    // Check replay access
+    const currentUserId = ctx.session?.user?.id
+    const canAccessReplay = canUserAccessReplay(game, currentUserId)
+
+    let replay: GameReplayInfo | undefined
+    if (canAccessReplay) {
+      try {
+        const bestReplay = await getBestReplayForGame(gameId)
+        if (bestReplay) {
+          const filename = generateReplayFilename(game, mapName)
+          replay = {
+            gameId,
+            id: bestReplay.id,
+            url: await this.replayService.getReplayDownloadUrl(bestReplay.id, filename),
+            hash: bestReplay.hash.toString('hex'),
+            filename,
+          }
+        }
+      } catch (err) {
+        ctx.log.error({ err }, 'Error retrieving replay info for game')
+      }
+    }
+
+    // Check for debug permission and add debug info if authorized
+    let debugInfo: GameDebugInfo | undefined
+    if (ctx.session?.permissions?.debug) {
+      try {
+        const [reportedResults, allReplays, netcodeV2] = await Promise.all([
+          getGameReportedResults(gameId),
+          getAllReplaysForGame(gameId),
+          getNetcodeV2DebugInfo(gameId),
+        ])
+
+        const replayDebugInfo = await Promise.all(
+          allReplays.map(async r => ({
+            id: r.id,
+            uploadedByUserId: r.uploadedByGameUserId,
+            // Append uploader user ID to distinguish multiple replays
+            url: await this.replayService.getReplayDownloadUrl(
+              r.id,
+              `${generateReplayFilename(game, mapName)}-${r.uploadedByGameUserId}`,
+            ),
+            hash: r.hash.toString('hex'),
+            frames: r.header?.frames ?? null,
+          })),
+        )
+
+        // The debug view shows per-player verdicts. A raw (v2) report is undigested, so derive its
+        // verdicts (the same way reconciliation would) before displaying it.
+        const isUms = game.config.gameType === GameType.UseMapSettings
+        const debugReportedResults = reportedResults.map(r => {
+          if (r.reportedResults && isRawStoredGameResults(r.reportedResults)) {
+            const derived = deriveResultSubmission(r.reportedResults, r.userId, { isUms })
+            return {
+              userId: r.userId,
+              reportedAt: r.reportedAt,
+              reportedResults: { time: derived.time, playerResults: derived.playerResults },
+            }
+          }
+          return { userId: r.userId, reportedAt: r.reportedAt, reportedResults: r.reportedResults }
+        })
+
+        debugInfo = {
+          reportedResults: debugReportedResults,
+          replays: replayDebugInfo.length > 0 ? replayDebugInfo : undefined,
+          netcodeV2,
+        }
+      } catch (err) {
+        // Log error but don't fail the request
+        ctx.log.error({ err }, 'Error retrieving debug info for game')
+      }
+    }
+
+    return {
+      game: toGameRecordJson(game),
+      map: mapArray.length ? toMapInfoJson(mapArray[0]) : undefined,
+      users: Array.from(users.values()),
+      mmrChanges: mmrChanges.map(m => toPublicMatchmakingRatingChangeJson(m)),
+      replay,
+      debugInfo: debugInfo ? toGameDebugInfoJson(debugInfo) : undefined,
+      canRequestReview,
+    }
+  }
+
+  @httpPost('/:gameId/subscribe')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(throttle, throttleByUser))
+  async subscribeToGame(ctx: RouterContext): Promise<void> {
+    const {
+      params: { gameId },
+      query: { clientId },
+    } = validateRequest(ctx, {
+      params: GAME_ID_PARAM,
+      query: Joi.object<{ clientId: string }>({ clientId: Joi.string().required() }).required(),
+    })
+
+    await this.gameResultService.subscribeToGame(ctx.session!.user.id, clientId, gameId)
+    ctx.status = 204
+  }
+
+  @httpPost('/:gameId/unsubscribe')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(throttle, throttleByUser))
+  async unsubscribeFromGame(ctx: RouterContext): Promise<void> {
+    const {
+      params: { gameId },
+      query: { clientId },
+    } = validateRequest(ctx, {
+      params: GAME_ID_PARAM,
+      query: Joi.object<{ clientId: string }>({ clientId: Joi.string().required() }).required(),
+    })
+
+    await this.gameResultService.unsubscribeFromGame(ctx.session!.user.id, clientId, gameId)
+    ctx.status = 204
+  }
+
+  @httpPut('/:gameId/status')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(throttle, throttleByUser))
+  async updateGameStatus(ctx: RouterContext): Promise<void> {
+    const {
+      params: { gameId },
+      body: { status },
+    } = validateRequest(ctx, {
+      params: GAME_ID_PARAM,
+      body: Joi.object<{ status: GameStatus; extra: any }>({
+        status: Joi.number().min(GameStatus.Launching).max(GameStatus.Error).required(),
+        extra: Joi.any().optional(), // unused currently
+      }),
+    })
+    const user = ctx.session!.user
+
+    if (status > GameStatus.Finished && status !== GameStatus.Error) {
+      throw new httpErrors.BadRequest('invalid game status')
+    }
+
+    if (status === GameStatus.Finished || status === GameStatus.Error) {
+      // Done ahead of the checks below so that a report which arrives too late to be interesting to
+      // the game loader still ends the user's in-game state.
+      this.activityStatusService.clearInGame(user.id, gameId)
+    }
+
+    if (
+      status >= GameStatus.Launching &&
+      status <= GameStatus.Playing &&
+      !this.gameLoader.isLoadingOrRecentlyLoaded(gameId)
+    ) {
+      throw new httpErrors.Conflict('game must be loading')
+    }
+
+    if (status < GameStatus.Playing) {
+      // Intermediate statuses are accepted but unused. Fault for a load that never finishes is
+      // assigned from what the relay infrastructure observed of each player, not from the
+      // players' own progress reports, so there's nothing for the loader to learn from these.
+    } else if (status === GameStatus.Playing) {
+      // Only a local-only game (a lone human, no network session) completes its load on its own
+      // player's word. A networked game completes on the coordinator's, which watches the session
+      // itself: a client that never reached the relay can't be told from one that did by asking the
+      // client. Networked clients still send this report, so it's accepted and dropped as redundant
+      // rather than treated as an error.
+      if (this.gameLoader.isLocalOnlyLoad(gameId)) {
+        if (!this.gameLoader.registerGameAsLoaded(gameId, user.id)) {
+          throw new httpErrors.NotFound('game not found')
+        }
+      }
+    } else if (status === GameStatus.Error) {
+      // A client can report its own launch failure, but the relay's setup evidence decides fault:
+      // another player's policy violation can make an innocent client's launch fail. The loader
+      // holds cancellation until that decision or its no-blame deadline. A report after loading
+      // remains a game-end signal, including a crash during play. The participation check below
+      // covers both cases because an absent load alone cannot distinguish them.
+      this.gameLoader.maybeCancelLoading(gameId, user.id)
+    }
+
+    if (status === GameStatus.Finished || status === GameStatus.Error) {
+      // The report ends the reporter's own participation, so it has to be for a game they actually
+      // hold. The game record and its players' rows are written when the game is registered, before
+      // any client is told to launch, so both a load-time error and a post-load finish find them
+      // here. Observers count too: they have no row of their own, but the lobby they came from
+      // waits on their game ending just like a player's.
+      if (!(await wasUserInGame(gameId, user.id))) {
+        throw new httpErrors.NotFound('game not found')
+      }
+
+      // The reporter's game is over one way or the other, so anything waiting on them (a lobby that
+      // regroups when its game ends) can stop waiting.
+      this.gameLifecycleEvents.emit('userGameEnded', { gameId, userId: user.id })
+    }
+
+    ctx.status = 204
+  }
+
+  // NOTE(tec27): Like the replay endpoint this doesn't require being logged in — the game
+  // client authenticates by presenting the per-(game, user) resultCode the server minted, which is
+  // secret to that user. The game client posts here when its home relay looks dead and it needs the
+  // session re-homed; the server (not the client) does the tenant-signed coordinator round trip.
+  @httpPost('/:gameId/netcode-rehome')
+  @httpBefore(throttleMiddleware(gameResultsThrottle, throttleByIp))
+  async netcodeV2Rehome(ctx: RouterContext): Promise<NetcodeV2RehomeResponse> {
+    const {
+      params: { gameId },
+      body: { userId, resultCode, deadRelayId },
+    } = validateRequest(ctx, {
+      params: GAME_ID_PARAM,
+      body: Joi.object<NetcodeV2RehomeRequest>().keys({
+        // `.integer()`: `userId` is an account id and `deadRelayId` is a coordinator u64 relay id
+        // — a fractional value (e.g. `1.5`) is meaningless and would only fail downstream at the
+        // coordinator, so reject it here.
+        userId: Joi.number().integer().min(0).required(),
+        resultCode: Joi.string().required(),
+        deadRelayId: Joi.number().integer().min(0).required(),
+      }),
+    })
+
+    if (!this.netcodeV2Service.isEnabled()) {
+      throw new httpErrors.NotFound('netcode v2 is not enabled')
+    }
+    if (this.gameLoader.isLoading(gameId)) {
+      throw new GameResultServiceError(
+        GameResultErrorCode.NotLoaded,
+        'Game is still loading, try again later',
+      )
+    }
+
+    // Same auth as the replay upload: the resultCode must match what's stored for this user/game.
+    const gameUserRecord = await getUserGameRecord(userId, gameId)
+    if (!gameUserRecord || gameUserRecord.resultCode !== resultCode) {
+      throw new GameResultServiceError(GameResultErrorCode.NotFound, 'no matching game found')
+    }
+
+    // Only a user still actively in the game may drive failover. A user who has already submitted a
+    // result, or whose mid-game departure the relay recorded, is done — and letting a done (e.g.
+    // departed) player keep asking to re-home would let them drain the coordinator's per-session
+    // rehome rate-limit bucket and 429 a real survivor's failover. This is the same "human is done"
+    // predicate `areAllHumansAccountedFor` keys on (reported a result, or has a recorded departure).
+    if (gameUserRecord.reportedResults != null || gameUserRecord.departureKind != null) {
+      throw new GameResultServiceError(
+        GameResultErrorCode.AlreadyReported,
+        'game participant has already finished and cannot re-home',
+      )
+    }
+
+    // Only a live netcode-v2 game with a coordinator session on record can be re-homed.
+    const session = await getNetcodeV2Session(gameId)
+    if (session === null) {
+      throw new httpErrors.Conflict('game has no active netcode v2 session')
+    }
+
+    // The route framework uses the handler's return value as the response body (see http-api.ts) —
+    // assigning ctx.body here would be overwritten with undefined.
+    return await this.netcodeV2Service.rehomeSession(gameId, session, deadRelayId)
+  }
+
+  // Lets staff pull a game's stored flight-recorder blobs through the app server (which holds the
+  // tenant signing key) instead of running `deployment/coordinator/tools/fetch-flight.mjs` with the
+  // key copied off the box. The session id is looked up from the game record server-side rather
+  // than trusting a client-supplied one, so this can only ever fetch the calling game's own data.
+  @httpGet('/:gameId/flight-recordings')
+  @httpBefore(ensureLoggedIn, checkAllPermissions('debug'))
+  async listFlightRecordings(ctx: RouterContext): Promise<NetcodeV2FlightBlobsResponse> {
+    const {
+      params: { gameId },
+    } = validateRequest(ctx, { params: GAME_ID_PARAM })
+
+    if (!this.netcodeV2Service.isEnabled()) {
+      throw new httpErrors.NotFound('netcode v2 is not configured')
+    }
+
+    const session = await getNetcodeV2Session(gameId)
+    if (session === null) {
+      throw new httpErrors.NotFound('game has no netcode v2 session')
+    }
+
+    const blobs = await this.netcodeV2Service.listFlightBlobs(session)
+    return { blobs }
+  }
+
+  // See `listFlightRecordings` above for why this proxies through the server rather than handing
+  // out the tenant key.
+  @httpGet('/:gameId/flight-recordings/:relayId')
+  @httpBefore(ensureLoggedIn, checkAllPermissions('debug'))
+  async getFlightRecording(ctx: RouterContext): Promise<string> {
+    const {
+      params: { gameId, relayId },
+    } = validateRequest(ctx, { params: GAME_ID_AND_RELAY_ID_PARAM })
+
+    if (!this.netcodeV2Service.isEnabled()) {
+      throw new httpErrors.NotFound('netcode v2 is not configured')
+    }
+
+    const session = await getNetcodeV2Session(gameId)
+    if (session === null) {
+      throw new httpErrors.NotFound('game has no netcode v2 session')
+    }
+
+    const blob = await this.netcodeV2Service.fetchFlightBlob(session, relayId)
+    if (blob === undefined) {
+      throw new httpErrors.NotFound('no flight recording for that relay')
+    }
+
+    // The blob is already JSON text; the type is set here so Koa doesn't label the string body as
+    // text/plain when the route framework assigns it.
+    ctx.type = 'application/json'
+    return blob
+  }
+
+  // NOTE(tec27): This doesn't require being logged in because the game client sends these requests,
+  // the body is intended to be secret per user and authenticate that they are the one who sent it.
+  @httpPost('/:gameId/replay')
+  @httpBefore(
+    throttleMiddleware(gameResultsThrottle, throttleByIp),
+    handleMultipartFiles(MAX_REPLAY_SIZE_BYTES),
+  )
+  async submitGameReplay(ctx: RouterContext): Promise<void> {
+    const {
+      params: { gameId },
+      body: { userId, resultCode },
+    } = validateRequest(ctx, {
+      params: GAME_ID_PARAM,
+      body: Joi.object<SubmitGameReplayRequest>().keys({
+        userId: Joi.number().min(0).required(),
+        resultCode: Joi.string().required(),
+      }),
+    })
+
+    if (this.gameLoader.isLoading(gameId)) {
+      throw new GameResultServiceError(
+        GameResultErrorCode.NotLoaded,
+        'Game is still loading, try again later',
+      )
+    }
+
+    // Validate resultCode matches what's stored for this user/game
+    const gameUserRecord = await getUserGameRecord(userId, gameId)
+    if (!gameUserRecord || gameUserRecord.resultCode !== resultCode) {
+      throw new GameResultServiceError(GameResultErrorCode.NotFound, 'no matching game found')
+    }
+
+    const replayFile = ctx.request.files?.replay
+    if (!replayFile || Array.isArray(replayFile)) {
+      throw new httpErrors.BadRequest('exactly one replay file must be uploaded')
+    }
+
+    const parseResult = await parseReplay(replayFile.filepath)
+    if (parseResult.error) {
+      throw new httpErrors.BadRequest('failed to parse replay file')
+    }
+
+    const game = await this.gameResultService.retrieveGame(gameId)
+    await this.replayService.validateGameSeed(
+      parseResult.value.header.startTime,
+      game.config.seed,
+      {
+        gameId,
+        userId,
+      },
+    )
+
+    // Validate every upload, including attempts to replace an already linked replay.
+    if (gameUserRecord.replayFileId) {
+      ctx.status = 204
+      return
+    }
+
+    await this.replayService.storeReplay(replayFile.filepath, parseResult.value, {
+      gameId,
+      userId,
+    })
+
+    ctx.status = 204
+  }
+
+  // Like the replay endpoint, this is sent by the game client and authenticated by the per-(game,
+  // user) resultCode rather than a session. Only the first submission for a user/game is stored.
+  @httpPost('/:gameId/rollback-stats')
+  @httpBefore(throttleMiddleware(gameResultsThrottle, throttleByIp))
+  async submitRollbackStats(ctx: RouterContext): Promise<void> {
+    const {
+      params: { gameId },
+      body: { userId, resultCode, stats },
+    } = validateRequest(ctx, {
+      params: GAME_ID_PARAM,
+      body: Joi.object<SubmitRollbackStatsRequest>().keys({
+        userId: Joi.number().integer().min(0).required(),
+        resultCode: Joi.string().required(),
+        stats: ROLLBACK_STATS_SCHEMA.required(),
+      }),
+    })
+
+    if (this.gameLoader.isLoading(gameId)) {
+      throw new GameResultServiceError(
+        GameResultErrorCode.NotLoaded,
+        'Game is still loading, try again later',
+      )
+    }
+
+    const gameUserRecord = await getUserGameRecord(userId, gameId)
+    if (!gameUserRecord || gameUserRecord.resultCode !== resultCode) {
+      throw new GameResultServiceError(GameResultErrorCode.NotFound, 'no matching game found')
+    }
+
+    await insertGameRollbackStats({ gameId, userId, stats })
+
+    ctx.status = 204
+  }
+
+  @httpGet('/')
+  async streamGameCount(ctx: RouterContext): Promise<Readable> {
+    const gameCountEmitter = container.resolve(GameCountEmitter)
+    const stream = new Readable({ highWaterMark: 0, read() {} })
+
+    const cleanup = () => {
+      gameCountEmitter.removeListener(stream)
+      stream.push(null)
+    }
+
+    ctx.req.on('close', cleanup).on('finish', cleanup).on('error', cleanup)
+
+    ctx.type = 'text/event-stream'
+    ctx.status = 200
+    ctx.res.flushHeaders()
+    ctx.dontSendSessionCookies = true
+
+    gameCountEmitter.addListener(stream)
+
+    return stream
+  }
+}

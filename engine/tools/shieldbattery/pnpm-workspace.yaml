@@ -1,0 +1,40 @@
+# Use a shell emulator so POSIX script syntax (e.g. inline env vars) works on Windows
+shellEmulator: true
+# refuse to install package versions published less than a week ago (supply-chain protection)
+minimumReleaseAge: 10080
+# first-party packages we publish ourselves don't need the quarantine
+minimumReleaseAgeExclude:
+  - '@shieldbattery/broodrep'
+  - 'nydus'
+  - 'nydus-client'
+  # security fast-track: 44.9.1 adds the SPKI blocklist for the compromised eMudhra/emSign
+  # intermediates to both Chromium's verifier and the main process's Node TLS; 44.9.3 adds a
+  # batch of Chromium/V8 security backports
+  - 'electron@44.9.3'
+
+peerDependencyRules:
+  allowedVersions:
+    # plugin-react's caret range on a 0.x version admits only 0.152.x, but it calls nothing that
+    # changed since; 0.151.0 and 0.154.0 compile our client identically
+    '@vitejs/plugin-react>oxc-transform-react': 0.154.0
+
+overrides:
+  '@types/node': 24.13.3
+  '@types/koa': ^3.0.3
+  '@types/react': ^19.2.17
+  '@types/react-dom': ^19.2.3
+  '@types/unist': ^3.0.3
+  parse5: 7.2.1
+
+allowBuilds:
+  '@parcel/watcher': true
+  '@swc/core': true
+  bcrypt: true
+  core-js: true
+  core-js-pure: true
+  electron-winstaller: true
+  esbuild: true
+  jotai-rolldown: false
+  pino-datadog-transport: true
+  protobufjs: true
+  sharp: true

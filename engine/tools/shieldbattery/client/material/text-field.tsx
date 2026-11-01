@@ -1,0 +1,540 @@
+import * as React from 'react'
+import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react'
+import styled, { css } from 'styled-components'
+import { MaterialIcon } from '../icons/material/material-icon'
+import { useMultiplexRef } from '../react/refs'
+import { useStableCallback } from '../react/state-hooks'
+import { IconButton } from './button'
+import { InputBase } from './input-base'
+import { InputCounter } from './input-counter'
+import { InputError } from './input-error'
+import { FloatingLabel } from './input-floating-label'
+import { Label } from './input-label'
+import { InputUnderline } from './input-underline'
+import { useTextInputContextMenu } from './text-input-context-menu'
+import { Tooltip } from './tooltip'
+
+// NOTE(2Pac): You might notice that this component (and others that are used here) might have some
+// weird values used for paddings and margins, like 1px, or 7px. This is fine. It's mostly caused by
+// the intrinsic weirdness of the <input> element itself and the way its implemented in the browser.
+// Like, its vertical centering of the text might be off by 1 pixel than what it is for labels that
+// we use flex to center with here. To ensure the pixel-perfect alignment of some elements, certain
+// numbers had to be fudged a bit which was ascertained by using custom browser extensions to
+// measure the distance in pixels.
+
+const TextFieldContainer = styled.div<{
+  $dense?: boolean
+  $disabled?: boolean
+  $floatingLabel?: boolean
+  $focused?: boolean
+  $rows?: number
+  $maxRows?: number
+  $multiline?: boolean
+}>`
+  position: relative;
+
+  width: 100%;
+  min-height: ${props => (props.$dense ? '40px' : '56px')};
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+
+  font-size: 16px;
+  line-height: 20px;
+
+  background-color: ${props =>
+    props.$disabled
+      ? 'rgb(from var(--theme-on-surface) r g b / calc(1 / var(--theme-disabled-opacity) * 0.04))'
+      : 'var(--theme-container-highest)'};
+  border-radius: 6px 6px 0 0;
+  contain: layout paint style;
+  opacity: ${props => (props.$disabled ? 'var(--theme-disabled-opacity)' : '1')};
+  user-select: text;
+
+  pointer-events: ${props => (props.$disabled ? 'none' : 'unset')};
+
+  ${props => {
+    if (!props.$multiline) return ''
+
+    const padding = props.$floatingLabel ? 34 : 28 /* textfield padding + input padding */
+
+    // NOTE(tec27): Chop off a bit from the max height to account for textarea rendering in padding
+    // area + ensure some cut-off in text to show overflow
+    return `
+      min-height: ${props.$rows ? `${props.$rows * 20 + padding + 8}px` : 'auto'};
+      max-height: ${props.$maxRows ? `${props.$maxRows * 20 + padding + 8 - 10}px` : 'auto'};
+    `
+  }}
+
+  ${props => {
+    if (!props.$multiline) return ''
+
+    // TODO(2Pac): Rework this if/when we move to a new version of TextFields without a floating
+    // label. The only reason why we're adding the padding here instead of to the `textarea` element
+    // itself is because the floating label overlaps the scrolled content, so we have to push the
+    // scrollable content down. But that also means that the area that this padding covers is not
+    // natively clickable to focus the `textarea`. I've added a click handler below which does that
+    // manually for now, but that can also be removed if/when we move to a new version of TextField.
+    if (props.$floatingLabel) {
+      // NOTE(2Pac): We only set the top padding here to keep the floating label above the
+      // scrollable area.
+      return props.$dense ? 'padding-top: 17px;' : 'padding-top: 25px;'
+    } else {
+      // NOTE(2Pac): The padding for `textarea` without a floating label will be added to the input
+      // itself to avoid the issues described above.
+      return ''
+    }
+  }}
+
+  & input[type='text'],
+  & input[type='password'],
+  & input[type='datetime'],
+  & input[type='datetime-local'],
+  & input[type='date'],
+  & input[type='month'],
+  & input[type='time'],
+  & input[type='week'],
+  & input[type='number'],
+  & input[type='email'],
+  & input[type='url'],
+  & input[type='search'],
+  & input[type='tel'],
+  & input[type='color'],
+  & textarea {
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  & input[type='datetime'],
+  & input[type='datetime-local'] {
+    &::-webkit-calendar-picker-indicator {
+      display: none;
+    }
+  }
+
+  & textarea {
+    field-sizing: content;
+  }
+`
+
+const StateLayer = styled.div`
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-color: var(--theme-on-surface);
+  opacity: 0;
+  transition: opacity 75ms linear;
+
+  *:hover > & {
+    opacity: 0.08;
+  }
+
+  *:focus-within > & {
+    opacity: 0.12;
+  }
+`
+
+const iconStyle = css<{ $dense?: boolean }>`
+  position: absolute;
+  top: 4px;
+  width: ${props => (props.$dense ? '32px' : '48px')};
+  height: ${props => (props.$dense ? '32px' : '48px')};
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--theme-on-surface-variant);
+`
+
+const LeadingIcon = styled.span<{ $dense?: boolean; $index: number }>`
+  ${iconStyle}
+  left: ${props => {
+    const iconWidth = props.$dense ? 32 : 48
+    const leftOffset = props.$index * iconWidth + (props.$index + 1) * 4
+
+    return `${leftOffset}px`
+  }};
+`
+
+const TrailingIcon = styled.span<{ $dense?: boolean; $index: number; $multiline?: boolean }>`
+  ${iconStyle}
+  right: ${props => {
+    const iconWidth = props.$dense ? 32 : 48
+    // Multiline fields reserve the scrollbar gutter instead of an additional outer gap.
+    const edgeInset = props.$multiline ? 12 : 4
+    const rightOffset = props.$index * (iconWidth + 4) + edgeInset
+
+    return `${rightOffset}px`
+  }};
+`
+
+const LeadingContentSlot = styled.span<{
+  $dense?: boolean
+  $floatingLabel?: boolean
+  $multiline?: boolean
+}>`
+  position: absolute;
+  left: 12px;
+  top: ${props => {
+    if (props.$multiline) {
+      if (props.$floatingLabel) {
+        // The input itself has no top padding in this variant (it's added to the container
+        // instead, to keep the floating label above the scrollable area), so match that padding
+        // here rather than the input's own.
+        return props.$dense ? '17px' : '25px'
+      }
+
+      return props.$dense ? '11px' : '19px'
+    }
+
+    // Single-line fields render their content in a fixed 24px line box that starts after the
+    // input's own top padding; center the slot within it.
+    const paddingTop = props.$floatingLabel ? 17 : 12
+    return `${paddingTop + (24 - 20) / 2}px`
+  }};
+  height: 20px;
+
+  display: inline-flex;
+  align-items: center;
+`
+
+const ClearButton = styled(IconButton)`
+  width: 32px;
+  min-height: 32px;
+`
+
+const InlineCounter = styled(InputCounter)`
+  position: absolute;
+  /* Inset far enough to clear the focused underline below and a scrollbar beside it, at the cost
+     of overlapping more of the text (which the backdrop keeps legible) */
+  bottom: 5px;
+  right: calc(var(--scrollbar-width, 16px) + 4px);
+
+  padding: 0 4px;
+
+  /* Matches the field background (in both enabled and disabled states) so that any input text
+     that runs beneath the counter passes behind it, keeping the count legible. */
+  background-color: inherit;
+  border-radius: 4px;
+`
+
+export type TextSelectionDirection = 'forward' | 'backward' | 'none'
+
+export interface TextFieldProps {
+  allowErrors?: boolean
+  className?: string
+  dense?: boolean
+  disabled?: boolean
+  errorText?: string
+  floatingLabel?: boolean
+  /**
+   * If true, the label will always be rendered as if there is a value present, regardless of the
+   * actual `value`.
+   */
+  alwaysHasValue?: boolean
+  hasClearButton?: boolean
+  inputProps?: React.InputHTMLAttributes<HTMLInputElement>
+  label?: string
+  leadingIcons?: React.ReactElement[]
+  /**
+   * Arbitrary-width content (e.g. a chip) rendered at the start of the field's first text line,
+   * inside the field's left padding area. Unlike `leadingIcons`, which reserve a fixed-width slot,
+   * this content is measured so it can be any width. The first line of text (and the label, while
+   * it's showing) is pushed to the right of it; later lines of a multiline field wrap back to the
+   * left edge and run underneath it, like a hanging indent.
+   */
+  leadingContent?: React.ReactNode
+  /**
+   * The maximum allowed length of the value. When set, a counter showing the number of remaining
+   * characters overlays the bottom-right corner of the field once the value approaches the limit
+   * (when at most 20% of it — capped at 200 characters — remains). This doesn't prevent typing
+   * past the limit — the counter just goes negative (in the error color), leaving it to the
+   * consumer to decide whether that's an actual error (e.g. overlong chat messages simply get
+   * trimmed by the server).
+   *
+   * The counter has a backdrop so it stays legible if input text runs beneath it, but it works
+   * best on `multiline` fields and/or ones with `trailingIcons`, where the layout naturally keeps
+   * the bottom-right corner clear. `dense` fields don't have vertical room for it below the
+   * trailing icons, so avoid combining it with `dense` fields that have them.
+   */
+  maxLength?: number
+  maxRows?: number
+  multiline?: boolean
+  name?: string
+  testName?: string
+  onBlur?: (event: React.FocusEvent<HTMLInputElement>) => void
+  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void
+  onEnterKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void
+  onFocus?: (event: React.FocusEvent<HTMLInputElement>) => void
+  onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void
+  rows?: number
+  trailingIcons?: React.ReactElement[]
+  type?: string
+  value: string
+  ref?: React.Ref<HTMLInputElement | HTMLTextAreaElement | null>
+  containerRef?: React.Ref<HTMLDivElement | null>
+}
+
+/**
+ * A Material text field component with single-line, multi-line and text area variants, supporting
+ * with and without floating labels.
+ */
+export function TextField({
+  allowErrors = true,
+  className,
+  dense,
+  disabled,
+  errorText,
+  floatingLabel,
+  alwaysHasValue,
+  hasClearButton,
+  inputProps,
+  label,
+  leadingIcons = [],
+  leadingContent,
+  maxLength,
+  maxRows,
+  multiline,
+  name,
+  testName,
+  onBlur,
+  onChange,
+  onEnterKeyDown,
+  onFocus,
+  onKeyDown,
+  rows = 1,
+  trailingIcons = [],
+  type = 'text',
+  value,
+  ref,
+  containerRef,
+}: TextFieldProps) {
+  const id = useId()
+  const [isFocused, setIsFocused] = useState(false)
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
+  const leadingContentSlotRef = useRef<HTMLSpanElement | null>(null)
+  const [leadingContentWidth, setLeadingContentWidth] = useState(0)
+  const hasLeadingContent = !!leadingContent
+
+  const multiplexedRef = useMultiplexRef(inputRef, ref)
+
+  useLayoutEffect(() => {
+    if (!hasLeadingContent) {
+      return undefined
+    }
+
+    const slotElem = leadingContentSlotRef.current
+    if (!slotElem) {
+      return undefined
+    }
+
+    const observer = new ResizeObserver(entries => {
+      const entry = entries[0]
+      if (entry) {
+        setLeadingContentWidth(entry.contentRect.width)
+      }
+    })
+    observer.observe(slotElem)
+
+    return () => {
+      observer.disconnect()
+      setLeadingContentWidth(0)
+    }
+  }, [hasLeadingContent])
+
+  const { onContextMenu: onInputContextMenu, contextMenu } = useTextInputContextMenu()
+  const onContainerContextMenu = (event: React.MouseEvent) => {
+    // Portalled content can bubble through the React tree while landing outside this container.
+    if (!event.currentTarget.contains(event.target as Node)) {
+      return
+    }
+
+    if (inputRef.current) {
+      onInputContextMenu(event, inputRef.current)
+    }
+  }
+  const onInputBlur = useCallback(
+    (event: React.FocusEvent<HTMLInputElement>) => {
+      setIsFocused(false)
+      onBlur?.(event)
+    },
+    [onBlur],
+  )
+
+  const onInputFocus = useCallback(
+    (event: React.FocusEvent<HTMLInputElement>) => {
+      setIsFocused(true)
+      onFocus?.(event)
+    },
+    [onFocus],
+  )
+
+  const onInputChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      onChange?.(event)
+    },
+    [onChange],
+  )
+
+  const onInputKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Enter') {
+        onEnterKeyDown?.(event)
+      }
+
+      onKeyDown?.(event)
+    },
+    [onEnterKeyDown, onKeyDown],
+  )
+
+  const internalInputProps = {
+    id,
+    value,
+    type,
+    name,
+    disabled,
+    onBlur: onInputBlur,
+    onChange: onInputChange,
+    onFocus: onInputFocus,
+    onKeyDown: onInputKeyDown,
+  }
+
+  const leadingIconsElements = leadingIcons.map((leadingIcon, index) => {
+    return (
+      <LeadingIcon key={index} $index={index} $dense={dense}>
+        {leadingIcon}
+      </LeadingIcon>
+    )
+  })
+  const trailingIconsElements = trailingIcons
+    .slice() // Don't mutate the original array
+    .reverse()
+    .map((trailingIcon, index) => {
+      return (
+        <TrailingIcon key={index} $index={index} $dense={dense} $multiline={multiline}>
+          {trailingIcon}
+        </TrailingIcon>
+      )
+    })
+
+  const clearAndFocusInput = useStableCallback(() => {
+    if (!inputRef.current) {
+      return
+    }
+
+    // React overrides the input value setter so we have to do shenanigans to set a value
+    // manually. See this answer for more info: https://stackoverflow.com/a/46012210/398302
+    const nativeInputValue = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    )
+    nativeInputValue?.set?.call(inputRef.current, '')
+    const changeEvent = new Event('input', { bubbles: true })
+    inputRef.current.dispatchEvent(changeEvent)
+    inputRef.current?.focus()
+  })
+
+  if (hasClearButton && value) {
+    trailingIconsElements.push(
+      <TrailingIcon
+        key={trailingIconsElements.length}
+        $index={trailingIconsElements.length}
+        $dense={dense}
+        $multiline={multiline}>
+        <Tooltip text='Clear'>
+          <ClearButton icon={<MaterialIcon icon='close' />} onClick={clearAndFocusInput} />
+        </Tooltip>
+      </TrailingIcon>,
+    )
+  }
+
+  let renderLabel
+  if (!label) {
+    renderLabel = null
+  } else if (floatingLabel) {
+    renderLabel = (
+      <FloatingLabel
+        htmlFor={id}
+        $hasValue={alwaysHasValue || !!value}
+        $dense={dense}
+        $focused={isFocused}
+        $disabled={disabled}
+        $error={!!errorText}
+        $leadingIconsLength={leadingIcons.length}
+        $leadingContentWidth={leadingContentWidth}>
+        {label}
+      </FloatingLabel>
+    )
+  } else {
+    renderLabel = (
+      <Label
+        htmlFor={id}
+        $hasValue={alwaysHasValue || !!value}
+        $dense={dense}
+        $disabled={disabled}
+        $leadingIconsLength={leadingIcons.length}
+        $leadingContentWidth={leadingContentWidth}>
+        {label}
+      </Label>
+    )
+  }
+
+  return (
+    <div className={className}>
+      <TextFieldContainer
+        ref={containerRef}
+        $disabled={disabled}
+        $focused={isFocused}
+        $floatingLabel={floatingLabel}
+        $dense={dense}
+        $multiline={multiline}
+        $rows={rows}
+        $maxRows={maxRows}
+        onClick={event => {
+          // Trailing icons can anchor portalled content (e.g. an emoji picker popover) whose
+          // clicks bubble here through the React tree even though they land outside the container
+          // in the DOM — focusing the input then would steal focus from the portalled content
+          if (event.currentTarget.contains(event.target as Node)) {
+            inputRef.current?.focus()
+          }
+        }}
+        onContextMenu={IS_ELECTRON ? onContainerContextMenu : undefined}>
+        {renderLabel}
+        {leadingIconsElements.length > 0 ? leadingIconsElements : null}
+        {leadingContent ? (
+          <LeadingContentSlot
+            ref={leadingContentSlotRef}
+            $dense={dense}
+            $floatingLabel={floatingLabel}
+            $multiline={multiline}>
+            {leadingContent}
+          </LeadingContentSlot>
+        ) : null}
+        <InputBase
+          ref={multiplexedRef as any}
+          as={multiline ? 'textarea' : 'input'}
+          rows={rows}
+          $focused={isFocused}
+          $floatingLabel={floatingLabel}
+          $dense={dense}
+          $multiline={multiline}
+          $leadingIconsLength={leadingIcons.length}
+          $trailingIconsLength={trailingIconsElements.length}
+          $leadingContentWidth={leadingContentWidth}
+          data-testid={testName}
+          {...inputProps}
+          {...internalInputProps}
+        />
+        {trailingIconsElements.length > 0 ? trailingIconsElements : null}
+        <InputUnderline focused={isFocused} error={!!errorText} />
+        {maxLength !== undefined ? <InlineCounter value={value} maxLength={maxLength} /> : null}
+        {/* Renders above the counter so its hover/focus tint applies to the counter's backdrop
+            the same as the rest of the field */}
+        <StateLayer />
+      </TextFieldContainer>
+      {contextMenu}
+      {allowErrors ? <InputError error={errorText} /> : null}
+    </div>
+  )
+}

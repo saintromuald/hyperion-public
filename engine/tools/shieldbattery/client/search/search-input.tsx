@@ -1,0 +1,101 @@
+import * as React from 'react'
+import { useImperativeHandle, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { MaterialIcon } from '../icons/material/material-icon'
+import { useKeyListener } from '../keyboard/key-listener'
+import { TextField } from '../material/text-field'
+import { useStableCallback } from '../react/state-hooks'
+
+const ESCAPE = 'Escape'
+const F = 'KeyF'
+
+export interface SearchInputHandle {
+  clear: () => void
+  focus: () => void
+}
+
+interface SearchInputProps {
+  searchQuery: string
+  onSearchChange: (value: string) => void
+  /** The field's label. Defaults to "Search". */
+  label?: string
+  className?: string
+  ref?: React.Ref<SearchInputHandle>
+}
+
+export function SearchInput({
+  searchQuery,
+  onSearchChange,
+  label,
+  className,
+  ref,
+}: SearchInputProps) {
+  const { t } = useTranslation()
+  const [inputValue, setInputValue] = useState(searchQuery)
+  const [searchFocused, setInputFocused] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const [prevSearchQuery, setPrevSearchQuery] = useState<string>(searchQuery)
+
+  if (searchQuery !== prevSearchQuery) {
+    if (prevSearchQuery !== undefined) {
+      // If we were rendered before and the props have changed, update the input value to match
+      setInputValue(searchQuery)
+    }
+
+    setPrevSearchQuery(searchQuery)
+  }
+
+  useImperativeHandle(ref, () => ({
+    clear: () => {
+      if (inputValue) {
+        setInputValue('')
+      }
+    },
+    focus: () => {
+      inputRef?.current?.focus()
+    },
+  }))
+
+  const onInputFocus = useStableCallback(() => {
+    setInputFocused(true)
+  })
+  const onInputBlur = useStableCallback(() => {
+    setInputFocused(false)
+  })
+  const onInputChange = useStableCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(event.target.value)
+    onSearchChange(event.target.value)
+  })
+
+  useKeyListener({
+    onKeyDown: useStableCallback(event => {
+      if (event.code === F && event.ctrlKey) {
+        inputRef.current?.focus()
+        inputRef.current?.select()
+        return true
+      } else if (event.code === ESCAPE && searchFocused) {
+        inputRef.current?.blur()
+        return true
+      }
+
+      return false
+    }),
+  })
+
+  return (
+    <TextField
+      className={className}
+      ref={inputRef}
+      value={inputValue}
+      label={label ?? t('common.actions.search', 'Search')}
+      dense={true}
+      allowErrors={false}
+      onChange={onInputChange}
+      onFocus={onInputFocus}
+      onBlur={onInputBlur}
+      leadingIcons={[<MaterialIcon icon='search' key='search' />]}
+      hasClearButton={true}
+    />
+  )
+}

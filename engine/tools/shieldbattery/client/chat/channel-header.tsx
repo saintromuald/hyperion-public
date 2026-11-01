@@ -1,0 +1,391 @@
+import * as React from 'react'
+import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+import styled from 'styled-components'
+import { ReadonlyDeep } from 'type-fest'
+import { assertUnreachable } from '../../common/assert-unreachable'
+import {
+  BasicChannelInfo,
+  ChannelPreferences,
+  DetailedChannelInfo,
+  JoinedChannelInfo,
+  SbChannelId,
+} from '../../common/chat'
+import { matchLinks } from '../../common/text/links'
+import { urlPath } from '../../common/urls'
+import { useHasAnyPermission } from '../admin/admin-permissions'
+import { useSelfUser } from '../auth/auth-utils'
+import { openDialog } from '../dialogs/action-creators'
+import { DialogType } from '../dialogs/dialog-type'
+import { useOverflowingElement } from '../dom/overflowing-element'
+import { MaterialIcon } from '../icons/material/material-icon'
+import { IconButton } from '../material/button'
+import { CheckableMenuItem } from '../material/menu/checkable-item'
+import { Divider } from '../material/menu/divider'
+import { DestructiveMenuItem, MenuItem } from '../material/menu/item'
+import { MenuList } from '../material/menu/menu'
+import { Popover, usePopoverController, useRefAnchorPosition } from '../material/popover'
+import { Tooltip, TooltipContent } from '../material/tooltip'
+import { ExternalLink } from '../navigation/external-link'
+import { push } from '../navigation/routing'
+import { useStableCallback } from '../react/state-hooks'
+import { useAppDispatch, useAppSelector } from '../redux-hooks'
+import { useSnackbarController } from '../snackbars/snackbar-overlay'
+import { BodySmall, labelLarge, singleLine, titleLarge } from '../styles/typography'
+import { updateChannelUserPreferences } from './action-creators'
+import { ChannelBadge } from './channel-badge'
+import { useChannelNotificationMenuItems } from './channel-notification-menu-items'
+import { openChannelSettings } from './channel-settings/channel-settings-action-creators'
+import { copyChannelLink } from './copy-channel-link'
+
+export const CHANNEL_HEADER_HEIGHT = 72
+
+/** The bar across the top of a chat surface, holding what it is and the actions for it. */
+export const ChatHeaderRoot = styled.div<{ $hasActions: boolean }>`
+  width: 100%;
+  height: ${CHANNEL_HEADER_HEIGHT}px;
+  padding: 8px;
+  padding-right: ${props => (props.$hasActions ? '8px' : '0')};
+
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+
+  background-color: var(--theme-container-low);
+  border-radius: 8px;
+`
+
+const StyledMenuList = styled(MenuList)`
+  --sb-menu-min-width: 192px;
+`
+
+const BadgeAndTextContainer = styled.div`
+  // NOTE(2Pac): Need this to make truncated text on channel topic work.
+  min-width: 0px;
+
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+`
+
+const StyledChannelBadge = styled(ChannelBadge)`
+  flex-shrink: 0;
+`
+
+const NameAndTopicContainer = styled.div`
+  // NOTE(2Pac): Need this to make truncated text on channel topic work.
+  min-width: 0px;
+
+  display: flex;
+  align-items: center;
+  gap: 16px;
+`
+
+const ChannelName = styled.div`
+  ${titleLarge};
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const PrivateGlyph = styled.span`
+  display: flex;
+  color: var(--theme-on-surface-variant);
+`
+
+const StyledTooltipContent = styled(TooltipContent)`
+  max-width: 480px;
+  display: block;
+`
+
+const ChannelTopic = styled.div`
+  ${labelLarge};
+  ${singleLine};
+  padding-block: 8px;
+
+  color: var(--theme-on-surface-variant);
+`
+
+const ActionsArea = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const UserCountContainer = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  color: var(--theme-on-surface-variant);
+`
+
+const StyledIconButton = styled(IconButton)`
+  color: var(--theme-on-surface-variant);
+`
+
+export interface ChannelHeaderProps {
+  basicChannelInfo: ReadonlyDeep<BasicChannelInfo>
+  detailedChannelInfo: ReadonlyDeep<DetailedChannelInfo>
+  joinedChannelInfo: ReadonlyDeep<JoinedChannelInfo>
+  selfPreferences: ChannelPreferences
+  onLeaveChannel: (channelId: SbChannelId) => void
+}
+
+export function ChannelHeader({
+  basicChannelInfo,
+  detailedChannelInfo,
+  joinedChannelInfo,
+  selfPreferences,
+  onLeaveChannel,
+}: ChannelHeaderProps) {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const snackbarController = useSnackbarController()
+  const user = useSelfUser()
+  const isServerModerator = useHasAnyPermission('moderateChatChannels')
+  const channelPermissions = useAppSelector(s =>
+    s.chat.idToSelfPermissions.get(basicChannelInfo.id),
+  )
+
+  const [anchor, anchorX, anchorY, refreshAnchorPos] = useRefAnchorPosition('right', 'top')
+  const [overflowMenuOpen, openOverflowMenu, closeOverflowMenu] = usePopoverController({
+    refreshAnchorPos,
+  })
+
+  const [channelTopicRef, isChannelTopicOverflowing] = useOverflowingElement()
+
+  const notificationMenuItems = useChannelNotificationMenuItems(
+    basicChannelInfo.id,
+    closeOverflowMenu,
+    { dense: true },
+  )
+
+  // TODO(2Pac): Figure out if we can share this with common-message-layout somehow.
+  const parsedChannelTopic = useMemo(() => {
+    if (!joinedChannelInfo.topic) {
+      return undefined
+    }
+
+    const matches = matchLinks(joinedChannelInfo.topic)
+    const sortedMatches = Array.from(matches).sort((a, b) => a.index - b.index)
+    const elements = []
+    let lastIndex = 0
+
+    for (const match of sortedMatches) {
+      // This probably can't happen at this moment, but to ensure we don't get tripped by it in the
+      // future, if this happens we skip the match entirely as it means it overlaps with a previous
+      // match.
+      if (match.index < lastIndex) {
+        continue
+      }
+
+      // Insert preceding text, if any
+      if (match.index > lastIndex) {
+        elements.push(joinedChannelInfo.topic.substring(lastIndex, match.index))
+      }
+
+      if (match.type === 'link') {
+        elements.push(
+          <ExternalLink key={match.index} href={match.text}>
+            {match.text}
+          </ExternalLink>,
+        )
+      } else {
+        assertUnreachable(match.type)
+      }
+
+      lastIndex = match.index + match.text.length
+    }
+
+    // Insert remaining text, if any
+    if (joinedChannelInfo.topic.length > lastIndex) {
+      elements.push(joinedChannelInfo.topic.substring(lastIndex))
+    }
+
+    return elements
+  }, [joinedChannelInfo.topic])
+
+  const onChannelSettingsClick = useStableCallback(() => {
+    closeOverflowMenu()
+    dispatch(openChannelSettings())
+  })
+  const onHideBannerClick = useStableCallback(() => {
+    dispatch(
+      updateChannelUserPreferences(
+        basicChannelInfo.id,
+        { hideBanner: !selfPreferences.hideBanner },
+        {
+          onSuccess: () => {},
+          onError: err => {
+            snackbarController.showSnackbar(
+              t(
+                'chat.channelHeader.errors.toggleBannerVisibility',
+                'Something went wrong toggling the banner visibility',
+              ),
+            )
+          },
+        },
+      ),
+    )
+  })
+  const onCopyInviteLinkClick = () => {
+    closeOverflowMenu()
+    dispatch(
+      openDialog({
+        type: DialogType.ChannelInviteLink,
+        initData: { channelId: basicChannelInfo.id },
+      }),
+    )
+  }
+  const onCopyChannelLinkClick = () => {
+    closeOverflowMenu()
+    copyChannelLink(basicChannelInfo.id, basicChannelInfo.name)
+  }
+  const onLeaveChannelClick = useStableCallback(() => {
+    onLeaveChannel(basicChannelInfo.id)
+  })
+  const onOpenAdminViewClick = useStableCallback(() => {
+    closeOverflowMenu()
+    push(urlPath`/chat/admin/${basicChannelInfo.id}/${basicChannelInfo.name}/view`)
+  })
+
+  const actions: React.ReactNode[] = []
+  if (
+    isServerModerator ||
+    user?.id === joinedChannelInfo.ownerId ||
+    channelPermissions?.editPermissions ||
+    channelPermissions?.ban
+  ) {
+    actions.push(
+      <MenuItem
+        key='channel-settings'
+        text={t('chat.channelHeader.actionItems.channelSettings', 'Channel settings')}
+        testName='channel-settings-button'
+        onClick={onChannelSettingsClick}
+      />,
+    )
+  }
+  if (isServerModerator) {
+    actions.push(
+      <MenuItem
+        key='open-admin-view'
+        text={t('chat.channelHeader.actionItems.openAdminView', 'Open admin view')}
+        onClick={onOpenAdminViewClick}
+      />,
+    )
+  }
+  if (
+    basicChannelInfo.private &&
+    (joinedChannelInfo.membersCanInvite ||
+      user?.id === joinedChannelInfo.ownerId ||
+      isServerModerator)
+  ) {
+    actions.push(
+      <MenuItem
+        key='copy-invite-link'
+        text={t('chat.channelHeader.actionItems.invitePeople', 'Invite people')}
+        testName='channel-invite-people-button'
+        onClick={onCopyInviteLinkClick}
+      />,
+    )
+  }
+  if (!basicChannelInfo.private) {
+    actions.push(
+      <MenuItem
+        key='copy-channel-link'
+        text={t('chat.channelHeader.actionItems.copyChannelLink', 'Copy channel link')}
+        testName='channel-copy-link-button'
+        onClick={onCopyChannelLinkClick}
+      />,
+    )
+  }
+  if (detailedChannelInfo.bannerPath) {
+    actions.push(
+      <CheckableMenuItem
+        key='hide-banner'
+        checked={selfPreferences.hideBanner}
+        text={t('chat.channelHeader.actionItems.hideBanner', 'Hide banner')}
+        onClick={onHideBannerClick}
+      />,
+    )
+  }
+  actions.push(...notificationMenuItems)
+  // The divider sets the destructive leave action apart from the items above it.
+  actions.push(<Divider key='divider' $dense={true} />)
+  actions.push(
+    <DestructiveMenuItem
+      key='leave-channel'
+      text={t('chat.channelHeader.actionItems.leaveChannel', 'Leave channel')}
+      onClick={onLeaveChannelClick}
+    />,
+  )
+
+  return (
+    <ChatHeaderRoot $hasActions={actions.length === 0}>
+      {actions.length > 0 ? (
+        <Popover
+          open={overflowMenuOpen}
+          onDismiss={closeOverflowMenu}
+          anchorX={anchorX ?? 0}
+          anchorY={anchorY ?? 0}
+          originX={'right'}
+          originY={'top'}>
+          <StyledMenuList dense={true}>{actions}</StyledMenuList>
+        </Popover>
+      ) : null}
+
+      <BadgeAndTextContainer>
+        <StyledChannelBadge
+          src={detailedChannelInfo.badgePath}
+          channelName={basicChannelInfo.name}
+        />
+        <NameAndTopicContainer>
+          <ChannelName>
+            #{basicChannelInfo.name}
+            {basicChannelInfo.private ? (
+              <Tooltip text={t('chat.privateChannelTitle', 'Private channel')} position='bottom'>
+                <PrivateGlyph data-testid='channel-header-private-glyph'>
+                  <MaterialIcon icon='lock' size={20} />
+                </PrivateGlyph>
+              </Tooltip>
+            ) : null}
+          </ChannelName>
+          {parsedChannelTopic ? (
+            <Tooltip
+              text={parsedChannelTopic}
+              position='bottom'
+              disabled={!isChannelTopicOverflowing}
+              interactive={true}
+              ContentComponent={StyledTooltipContent}>
+              <ChannelTopic ref={channelTopicRef}>{parsedChannelTopic}</ChannelTopic>
+            </Tooltip>
+          ) : null}
+        </NameAndTopicContainer>
+      </BadgeAndTextContainer>
+
+      <ActionsArea>
+        <UserCountContainer>
+          <MaterialIcon icon='groups' size={20} />
+          <BodySmall>{detailedChannelInfo.userCount}</BodySmall>
+        </UserCountContainer>
+        {actions.length > 0 ? (
+          <StyledIconButton
+            ref={anchor}
+            icon={<MaterialIcon icon='more_vert' />}
+            title={t('chat.channelHeader.moreActions', 'More actions')}
+            testName='channel-header-actions-button'
+            onClick={openOverflowMenu}
+          />
+        ) : (
+          <div />
+        )}
+      </ActionsArea>
+    </ChatHeaderRoot>
+  )
+}

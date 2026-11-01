@@ -1,0 +1,105 @@
+name: Game CI
+
+on:
+  push:
+    paths:
+      - '.github/workflows/game-ci.yml'
+      - 'game/**'
+  pull_request:
+    paths:
+      - '.github/workflows/game-ci.yml'
+      - 'game/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clippy:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ./game
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86
+            target: '--target i686-pc-windows-msvc'
+            display: 'x86'
+          - name: x64
+            target: '--target x86_64-pc-windows-msvc'
+            display: 'x64'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./game
+
+      - name: clippy ${{ matrix.display }}
+        run: cargo clippy --all-targets --workspace ${{ matrix.target }} -- -D warnings
+
+  fmt:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ./game
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+
+  licenses:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: ./game/Cargo.toml
+          command: check licenses
+
+  test:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ./game
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86
+            target: '--target i686-pc-windows-msvc'
+            display: 'x86'
+          - name: x64
+            target: '--target x86_64-pc-windows-msvc'
+            display: 'x64'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ./game
+
+      - name: cargo test ${{ matrix.display }}
+        run: cargo test --all-targets --no-fail-fast ${{ matrix.target }}

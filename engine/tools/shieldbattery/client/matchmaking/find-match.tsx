@@ -1,0 +1,1647 @@
+import { useAtomValue, useSetAtom } from 'jotai'
+import { AnimatePresence, m } from 'motion/react'
+import React, { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import styled, { css, keyframes } from 'styled-components'
+import { ladderPlayerToMatchmakingDivision } from '../../common/ladder/ladder'
+import { urlForLobby } from '../../common/lobbies/lobby-url'
+import {
+  ALL_MATCHMAKING_TYPES,
+  DivisionContext,
+  getDivisionContext,
+  getMatchmakingModeInfo,
+  MapSelectionStyle,
+  MatchmakingDivision,
+  matchmakingDivisionToLabel,
+  MatchmakingPreferences,
+  MatchmakingType,
+  matchmakingTypeToLabel,
+  NUM_PLACEMENT_MATCHES,
+} from '../../common/matchmaking'
+import { AssignedRaceChar, RaceChar } from '../../common/races'
+import { urlPath } from '../../common/urls'
+import { useTrackPageView } from '../analytics/analytics'
+import { useSelfUser } from '../auth/auth-utils'
+import { GuideLink } from '../guides/guide-link'
+import { MATCHMAKING_GUIDE_PATH } from '../guides/guide-urls'
+import { dateTimeFormat, useFormat, useFormatLocale } from '../i18n/locale-formats'
+import { MaterialIcon } from '../icons/material/material-icon'
+import { useKeyListener } from '../keyboard/key-listener'
+import { getInstantaneousSelfRank } from '../ladder/action-creators'
+import { isInLobby } from '../lobbies/lobby-reducer'
+import { RaceIcon } from '../lobbies/race-icon'
+import { FilledButton, TextButton, useButtonState } from '../material/button'
+import { CheckBox } from '../material/check-box'
+import { Ripple } from '../material/ripple'
+import { Tooltip } from '../material/tooltip'
+import { zIndexSettings } from '../material/zindex'
+import { push } from '../navigation/routing'
+import { useCurrentMinuteMs, useNow } from '../react/date-hooks'
+import { useAppDispatch, useAppSelector } from '../redux-hooks'
+import { healthChecked } from '../starcraft/health-checked'
+import {
+  bodyMedium,
+  bodySmall,
+  labelMedium,
+  labelSmall,
+  singleLine,
+  sofiaSans,
+  titleLarge,
+  titleMedium,
+  titleSmall,
+} from '../styles/typography'
+import { cancelFindMatch, findMatch, getCurrentMapPool } from './action-creators'
+import { FindMatchContent } from './find-match-content'
+import {
+  currentSearchInfoAtom,
+  findMatchSelectionAtom,
+  foundMatchAtom,
+  isMatchmakingAtom,
+} from './matchmaking-atoms'
+import { DivisionIcon } from './rank-icon'
+import { SeasonEndDate, useUpcomingSeasonEnd } from './season-end-date'
+
+// ─── Static mode definitions ─────────────────────────────────────────────────
+
+export interface RealModeData {
+  type: MatchmakingType
+  group: string
+}
+
+const REAL_MODES: RealModeData[] = [
+  { type: MatchmakingType.Match1v1, group: '1v1' },
+  { type: MatchmakingType.Match1v1Fastest, group: '1v1' },
+  { type: MatchmakingType.Match2v2, group: '2v2' },
+  { type: MatchmakingType.Match2v2Bgh, group: '2v2' },
+  { type: MatchmakingType.Match2v2Hunters, group: '2v2' },
+  { type: MatchmakingType.Match2v2Fastest, group: '2v2' },
+  { type: MatchmakingType.Match3v3Bgh, group: '3v3' },
+  { type: MatchmakingType.Match3v3Hunters, group: '3v3' },
+  { type: MatchmakingType.Match3v3Fastest, group: '3v3' },
+]
+
+const MODE_GROUPS: { id: '1v1' | '2v2' | '3v3'; label: string; team: boolean }[] = [
+  { id: '1v1', label: '1v1', team: false },
+  { id: '2v2', label: '2v2', team: true },
+  { id: '3v3', label: '3v3', team: true },
+]
+
+// ─── Animations ───────────────────────────────────────────────────────────────
+
+const searchPulse = keyframes`
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+`
+
+// ─── Page layout ──────────────────────────────────────────────────────────────
+
+export const PageRoot = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  background: var(--theme-surface);
+  /* Horizontal padding is slim and constant: this page renders inside CenteredContentContainer,
+     which already pads the content edges, and every extra pixel here narrows the panel the row
+     layouts measure themselves against. It must not vary by viewport width — the panel width the
+     rows respond to depends on the content area (which the social sidebar can shrink), not the
+     viewport, so viewport-conditional padding would make the layout switch at inconsistent
+     content widths. */
+  padding: 28px 12px 0;
+  gap: 20px;
+  position: relative;
+
+  @media (max-width: 1024px) {
+    padding-top: 24px;
+  }
+`
+
+export const PanelRoot = styled.div`
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 20px;
+
+  /* The row layouts below respond to this container rather than the viewport: the pinned social
+     sidebar can narrow the content area by hundreds of pixels while the window stays wide, and a
+     viewport media query would keep the wide layout active in a space that can't fit it. */
+  container: find-match-panel / inline-size;
+`
+
+export const PageHead = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+`
+
+export const PageTitle = styled.h1`
+  ${titleLarge};
+  color: var(--theme-on-surface);
+  margin: 0;
+`
+
+export const PageSubtitle = styled.div`
+  ${bodySmall};
+  color: var(--theme-on-surface-variant);
+  margin-top: 4px;
+`
+
+const PageHeadArea = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`
+
+const PageGuideLink = styled(GuideLink)`
+  align-self: flex-end;
+`
+
+export const SeasonLabel = styled.div`
+  ${bodySmall};
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+
+  color: var(--theme-on-surface-variant);
+  white-space: nowrap;
+`
+
+// ─── Lobby banner ─────────────────────────────────────────────────────────────
+
+export const LobbyBanner = styled.div`
+  ${bodyMedium};
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--theme-on-surface) 6%, var(--theme-container-low));
+  border: 1px solid color-mix(in srgb, var(--theme-on-surface) 12%, transparent);
+  border-radius: 8px;
+  color: var(--theme-on-surface-variant);
+`
+
+export const LobbyBannerText = styled.span`
+  flex: 1;
+`
+
+export const LobbyBannerButton = styled(TextButton)`
+  flex-shrink: 0;
+`
+
+// ─── Mode groups ──────────────────────────────────────────────────────────────
+
+export const GroupsContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 28px;
+`
+
+export const ModeGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+export const GroupHead = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+`
+
+export const GroupLabel = styled.span`
+  ${labelSmall};
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--theme-on-surface-variant);
+  white-space: nowrap;
+`
+
+export const GroupDivider = styled.span`
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--theme-on-surface) 8%, transparent);
+`
+
+export const GroupHint = styled.span`
+  ${bodySmall};
+  color: var(--theme-on-surface-variant);
+  opacity: 0.6;
+  white-space: nowrap;
+`
+
+export const ModeList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+// ─── Type Row ─────────────────────────────────────────────────────────────────
+
+const TypeRowRoot = styled.div<{
+  $selected: boolean
+  $faded: boolean
+  $searching: boolean
+  $disabled: boolean
+}>`
+  display: grid;
+  /* Each row is its own grid, so the zone column is fixed (not minmax) to keep the settings-zone
+     divider aligned across rows regardless of their content. The compact-layout container query
+     below triggers at exactly this layout's minimum width (fixed columns + title minimum + gaps +
+     row padding = 862px), so the wide layout stays active whenever it can physically fit — a
+     976px window (content area minus centering padding and scrollbar gutters ≈ 872px panel)
+     still gets the wide layout. Keep the query in sync when adjusting column sizes. */
+  grid-template-columns: 44px minmax(170px, 1fr) 256px 322px;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  background: ${props =>
+    props.$selected
+      ? 'color-mix(in srgb, var(--theme-primary) 8%, var(--theme-container-low))'
+      : 'var(--theme-container-low)'};
+  border-radius: 8px;
+  box-shadow: var(--shadow-1dp);
+  border: 1px solid
+    ${props =>
+      props.$selected
+        ? 'color-mix(in srgb, var(--theme-primary) 60%, transparent)'
+        : 'transparent'};
+  cursor: ${props => (props.$searching || props.$disabled ? 'default' : 'pointer')};
+  user-select: none;
+  transition:
+    background 200ms ease,
+    border-color 200ms ease,
+    opacity 300ms ease;
+  opacity: ${props => {
+    if (props.$faded) {
+      return 0.3
+    }
+    if (props.$disabled) {
+      return 0.7
+    }
+    return 1
+  }};
+  pointer-events: ${props => (props.$faded ? 'none' : 'auto')};
+
+  &:hover {
+    background: ${props => {
+      if (props.$disabled || props.$searching) {
+        return props.$selected
+          ? 'color-mix(in srgb, var(--theme-primary) 8%, var(--theme-container-low))'
+          : 'var(--theme-container-low)'
+      } else {
+        return props.$selected
+          ? 'color-mix(in srgb, var(--theme-primary) 12%, var(--theme-container))'
+          : 'var(--theme-container)'
+      }
+    }};
+  }
+
+  @container find-match-panel (max-width: 862px) {
+    grid-template-columns: 44px 1fr 280px;
+    grid-template-rows: auto auto;
+    grid-template-areas:
+      'check title zone'
+      'check stats zone';
+    column-gap: 16px;
+    row-gap: 4px;
+    padding: 12px 18px;
+    align-items: start;
+  }
+`
+
+const RowCheckBox = styled(CheckBox)<{ $pulsing: boolean }>`
+  padding: 0;
+  align-self: center;
+
+  ${props =>
+    props.$pulsing &&
+    css`
+      animation: ${searchPulse} 1.8s ease-in-out infinite;
+    `}
+
+  @container find-match-panel (max-width: 862px) {
+    grid-area: check;
+    align-self: center;
+  }
+`
+
+const DisabledCheckPlaceholder = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: var(--theme-on-surface-variant);
+  opacity: 0.6;
+  align-self: center;
+
+  @container find-match-panel (max-width: 862px) {
+    grid-area: check;
+    align-self: center;
+  }
+`
+
+const RowTitle = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+
+  @container find-match-panel (max-width: 862px) {
+    grid-area: title;
+    align-self: end;
+    padding-bottom: 2px;
+  }
+`
+
+const RowModeName = styled.h3`
+  ${titleMedium};
+  margin: 0;
+  font-size: 20px;
+  color: var(--theme-on-surface);
+  white-space: nowrap;
+
+  @container find-match-panel (max-width: 640px) {
+    font-size: 18px;
+  }
+`
+
+const RowDesc = styled.span`
+  ${bodySmall};
+  color: var(--theme-on-surface-variant);
+
+  @container find-match-panel (max-width: 862px) {
+    display: none;
+  }
+`
+
+// Stats column — inner grid: Rank | MMR | Bonus Pool. The divider on the right side is provided
+// by the settings zone's own left edge, so it exists at every layout size.
+const StatsBlock = styled.div`
+  display: grid;
+  grid-template-columns: 100px 60px 72px;
+  align-items: center;
+  padding: 0 12px;
+  border-left: 1px solid color-mix(in srgb, var(--theme-on-surface) 8%, transparent);
+
+  @container find-match-panel (max-width: 862px) {
+    grid-area: stats;
+    justify-self: start;
+    align-self: start;
+    padding: 0;
+    border: none;
+    display: flex;
+    flex-direction: row;
+    gap: 14px;
+    align-items: center;
+  }
+`
+
+const StatCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  @container find-match-panel (max-width: 862px) {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+
+    & + &::before {
+      content: '';
+      display: block;
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--color-grey-blue60);
+      margin-right: 8px;
+      flex-shrink: 0;
+      align-self: center;
+    }
+  }
+`
+
+const StatLabel = styled.span`
+  ${labelSmall};
+  ${singleLine};
+  text-transform: uppercase;
+  color: var(--color-grey-blue60);
+
+  @container find-match-panel (max-width: 862px) {
+    display: none;
+  }
+`
+
+const StatValue = styled.span`
+  ${titleSmall};
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  color: var(--theme-on-surface);
+  font-feature-settings: 'tnum';
+`
+
+const StatUnrankedValue = styled.span`
+  ${bodySmall};
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  color: var(--theme-on-surface-variant);
+`
+
+const StatRankRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+`
+
+const SmallDivisionIcon = styled(DivisionIcon)`
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.4));
+
+  @container find-match-panel (max-width: 862px) {
+    width: 22px;
+    height: 22px;
+  }
+`
+
+const StatRankLabel = styled.span`
+  ${labelMedium};
+  ${singleLine};
+  color: var(--color-grey-blue95);
+`
+
+const BonusValue = styled.span<{ $zero: boolean }>`
+  ${labelMedium};
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: ${props => (props.$zero ? 'var(--color-grey-blue60)' : 'var(--color-amber70)')};
+  font-feature-settings: 'tnum';
+  min-height: 28px;
+`
+
+// ─── Unavailable info (replaces stats+summary for disabled types) ─────────────
+
+const UnavailableBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  grid-column: 3 / 5;
+  padding: 0 16px;
+
+  @container find-match-panel (max-width: 862px) {
+    grid-column: auto;
+    grid-area: stats-start / stats-start / zone-end / zone-end;
+    padding: 0;
+  }
+`
+
+const UnavailableLabel = styled.span`
+  ${labelSmall};
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--theme-on-surface-variant);
+`
+
+const UnavailableDetail = styled.span`
+  ${bodySmall};
+  color: var(--theme-on-surface-variant);
+`
+
+const UnavailableCountdown = styled.span`
+  ${bodySmall};
+  color: var(--theme-on-surface-variant);
+  font-feature-settings: 'tnum';
+`
+
+// Summary content inside the settings zone. Pointer events stay off so hovering/clicking the
+// race and map info reads as interacting with the zone itself.
+const SummaryBlock = styled.div`
+  ${bodySmall};
+  flex: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  column-gap: 10px;
+  color: var(--theme-on-surface-variant);
+
+  pointer-events: none;
+`
+
+const SummaryRaceRow = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`
+
+const StyledRaceIcon = styled(RaceIcon)`
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+`
+
+const ChipRaceIcon = styled(RaceIcon)`
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+`
+
+const MirrorArrow = styled.span`
+  ${bodySmall};
+  opacity: 0.6;
+  color: var(--theme-on-surface-variant);
+`
+
+const SummaryMapRow = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`
+
+const MapCountLabel = styled.span`
+  ${labelMedium};
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-feature-settings: 'tnum';
+`
+
+const PoolBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--theme-amber) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--theme-amber) 40%, transparent);
+  ${labelSmall};
+  text-transform: uppercase;
+  color: var(--theme-amber);
+  white-space: nowrap;
+`
+
+const PoolBadgeDot = styled.span`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--theme-amber);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-amber) 25%, transparent);
+  flex-shrink: 0;
+`
+
+// The entire right side of a row (race/map summary + gear button) is one clickable region that
+// opens the mode's settings. It bleeds through the row's padding to sit flush against the row's
+// edges, and its left border doubles as the summary divider at every layout size.
+const SettingsZone = styled.div<{ $disabled: boolean }>`
+  position: relative;
+  overflow: hidden;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px 14px 16px;
+  margin: -14px -20px -14px 0;
+  border-left: 1px solid color-mix(in srgb, var(--theme-on-surface) 8%, transparent);
+  border-radius: 0 7px 7px 0;
+  background: color-mix(in srgb, var(--theme-on-surface) 3%, transparent);
+  cursor: ${props => (props.$disabled ? 'default' : 'pointer')};
+  transition: border-color 150ms ease;
+
+  /* The hover wash comes from the Ripple inside; this just tints it (and the press ripple). */
+  --sb-ripple-color: var(--theme-amber);
+
+  ${props =>
+    !props.$disabled &&
+    css`
+      &:hover {
+        border-left-color: color-mix(in srgb, var(--theme-amber) 30%, transparent);
+      }
+    `}
+
+  @container find-match-panel (max-width: 862px) {
+    grid-area: zone;
+    align-self: stretch;
+    padding: 12px 18px 12px 16px;
+    margin: -12px -18px -12px 0;
+  }
+`
+
+const GearButton = styled.button`
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  border: 1px solid var(--theme-outline);
+  background: transparent;
+  color: var(--theme-on-surface-variant);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+
+  /* Highlight when hovering anywhere in the settings zone, not just the button itself. */
+  ${SettingsZone}:hover &:not(:disabled) {
+    color: var(--theme-amber);
+    border-color: color-mix(in srgb, var(--theme-amber) 50%, transparent);
+    background: color-mix(in srgb, var(--theme-amber) 8%, transparent);
+  }
+
+  &:disabled {
+    opacity: 0.38;
+    cursor: default;
+  }
+
+  @container find-match-panel (max-width: 640px) {
+    width: 36px;
+    height: 36px;
+  }
+`
+
+// ─── Stats block sub-component ────────────────────────────────────────────────
+
+export interface RowStats {
+  division: MatchmakingDivision
+  mmr: number | null
+  bonus: number
+}
+
+interface ModeStatsProps {
+  stats: RowStats
+  t: ReturnType<typeof useTranslation>['t']
+}
+
+export function ModeStats({ stats, t }: ModeStatsProps) {
+  const locale = useFormatLocale()
+  const unranked = stats.mmr === null
+  return (
+    <StatsBlock>
+      <StatCell>
+        <StatLabel>{t('matchmaking.findMatch.rank', 'Rank')}</StatLabel>
+        <StatRankRow>
+          <SmallDivisionIcon division={stats.division} size={28} />
+          <StatRankLabel>{matchmakingDivisionToLabel(stats.division, t)}</StatRankLabel>
+        </StatRankRow>
+      </StatCell>
+
+      <StatCell>
+        <StatLabel>{t('matchmaking.findMatch.rating', 'Rating')}</StatLabel>
+        {unranked ? (
+          <StatUnrankedValue aria-label={t('matchmaking.findMatch.unratedText', 'Unrated')}>
+            —
+          </StatUnrankedValue>
+        ) : (
+          <StatValue>{stats.mmr!.toLocaleString(locale)}</StatValue>
+        )}
+      </StatCell>
+
+      <StatCell>
+        <StatLabel>{t('matchmaking.findMatch.bonus', 'Bonus')}</StatLabel>
+        <BonusValue $zero={stats.bonus === 0}>
+          <MaterialIcon icon='bolt' size={13} />+{stats.bonus}
+        </BonusValue>
+      </StatCell>
+    </StatsBlock>
+  )
+}
+
+// ─── Unavailable info sub-component ──────────────────────────────────────────
+
+/**
+ * Formats the time remaining until `nextStartDate` as a `1d 02h 03m 04s` countdown string, relative
+ * to `now`. Returns an empty string once the date has passed (or if there is no date). Derived
+ * purely from its inputs so the caller can drive ticking with `useNow()` rather than its own timer.
+ */
+function formatCountdown(nextStartDate: Date | undefined, now: number): string {
+  if (!nextStartDate) {
+    return ''
+  }
+  const diff = Number(nextStartDate) - now
+  if (diff <= 0) {
+    return ''
+  }
+  const d = Math.floor(diff / (24 * 3600000))
+  const h = Math.floor((diff % (24 * 3600000)) / 3600000)
+  const m = Math.floor((diff % 3600000) / 60000)
+  const s = Math.floor((diff % 60000) / 1000)
+  const parts: string[] = []
+  if (d > 0) parts.push(`${d}d`)
+  parts.push(`${String(h).padStart(2, '0')}h`)
+  parts.push(`${String(m).padStart(2, '0')}m`)
+  parts.push(`${String(s).padStart(2, '0')}s`)
+  return parts.join(' ')
+}
+
+const dateRangeFormat = dateTimeFormat({
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+})
+
+interface UnavailableInfoProps {
+  nextStartDate?: Date
+  nextEndDate?: Date
+}
+
+function UnavailableInfo({ nextStartDate, nextEndDate }: UnavailableInfoProps) {
+  const { t } = useTranslation()
+  const dateRangeFormatter = useFormat(dateRangeFormat)
+  const now = useNow()
+
+  const hasSchedule = nextStartDate !== undefined && Number(nextStartDate) > now
+  const countdown = hasSchedule ? formatCountdown(nextStartDate, now) : ''
+
+  return (
+    <UnavailableBlock>
+      <UnavailableLabel>{t('matchmaking.findMatch.unavailable', 'Unavailable')}</UnavailableLabel>
+      {hasSchedule ? (
+        <>
+          <UnavailableDetail>
+            {dateRangeFormatter.format(nextStartDate)}
+            {nextEndDate && nextEndDate > nextStartDate!
+              ? ` – ${dateRangeFormatter.format(nextEndDate)}`
+              : ''}
+          </UnavailableDetail>
+          {countdown ? <UnavailableCountdown>{countdown}</UnavailableCountdown> : null}
+        </>
+      ) : (
+        <UnavailableDetail>
+          {t('matchmaking.findMatch.noScheduledWindow', 'No scheduled window yet')}
+        </UnavailableDetail>
+      )}
+    </UnavailableBlock>
+  )
+}
+
+// ─── Summary block sub-component ─────────────────────────────────────────────
+
+export interface RowSummaryState {
+  race: RaceChar
+  useAlternateRace: boolean
+  alternateRace: AssignedRaceChar
+  mapSelectionCount: number
+  mapPoolVetoLimit: number
+  mapPoolSize: number
+  mapSelectionStyle: MapSelectionStyle
+  poolChanged: boolean
+}
+
+interface ModeSummaryProps {
+  summaryState: RowSummaryState
+}
+
+export function ModeSummary({ summaryState }: ModeSummaryProps) {
+  const { t } = useTranslation()
+  return (
+    <SummaryBlock>
+      <SummaryRaceRow>
+        <StyledRaceIcon race={summaryState.race} applyRaceColor={true} />
+        {summaryState.useAlternateRace && summaryState.race !== 'r' ? (
+          <>
+            <MirrorArrow>→</MirrorArrow>
+            <StyledRaceIcon race={summaryState.alternateRace} applyRaceColor={true} />
+          </>
+        ) : null}
+      </SummaryRaceRow>
+
+      {(() => {
+        if (summaryState.mapSelectionStyle === 'fixed') {
+          return (
+            <SummaryMapRow>
+              <MaterialIcon icon='map' size={16} />
+              <MapCountLabel>{t('matchmaking.findMatch.fixedMap', 'Fixed map')}</MapCountLabel>
+            </SummaryMapRow>
+          )
+        }
+        if (summaryState.mapSelectionStyle === 'veto') {
+          if (summaryState.mapPoolVetoLimit <= 0) {
+            return null
+          }
+          return (
+            <SummaryMapRow>
+              <MaterialIcon icon='map' size={16} />
+              <MapCountLabel>
+                {t('matchmaking.findMatch.vetoedCount', '{{selected}} / {{limit}} vetoed', {
+                  selected: summaryState.mapSelectionCount,
+                  limit: summaryState.mapPoolVetoLimit,
+                })}
+              </MapCountLabel>
+            </SummaryMapRow>
+          )
+        }
+        if (summaryState.mapPoolSize <= 0) {
+          return null
+        }
+        return (
+          <SummaryMapRow>
+            <MaterialIcon icon='map' size={16} />
+            <MapCountLabel>
+              {t('matchmaking.findMatch.selectedCount', '{{selected}} / {{total}} selected', {
+                selected: summaryState.mapSelectionCount,
+                total: summaryState.mapPoolSize,
+              })}
+            </MapCountLabel>
+          </SummaryMapRow>
+        )
+      })()}
+
+      {summaryState.poolChanged ? (
+        <PoolBadge>
+          <PoolBadgeDot />
+          {t('matchmaking.findMatch.updated', 'Updated')}
+        </PoolBadge>
+      ) : null}
+    </SummaryBlock>
+  )
+}
+
+// ─── Type Row component ───────────────────────────────────────────────────────
+
+interface TypeRowProps {
+  label: string
+  desc: string
+  selected: boolean
+  isSearching: boolean
+  isEnabled: boolean
+  nextStartDate?: Date
+  nextEndDate?: Date
+  stats: RowStats
+  summaryState: RowSummaryState
+  t: ReturnType<typeof useTranslation>['t']
+  onToggle: () => void
+  onOpenSettings: () => void
+}
+
+export function TypeRow({
+  label,
+  desc,
+  selected,
+  isSearching,
+  isEnabled,
+  nextStartDate,
+  nextEndDate,
+  stats,
+  summaryState,
+  t,
+  onToggle,
+  onOpenSettings,
+}: TypeRowProps) {
+  const faded = isSearching && !selected
+  const pulsing = isSearching && selected
+  const isDisabled = !isEnabled
+  const settingsLabel = t('matchmaking.findMatch.settingsTitle', 'Settings — {{label}}', { label })
+
+  const [zoneProps, zoneRippleRef] = useButtonState({
+    disabled: isSearching,
+    onClick: e => {
+      e.stopPropagation()
+      onOpenSettings()
+    },
+  })
+
+  return (
+    <TypeRowRoot
+      $selected={selected && !isDisabled}
+      $faded={faded}
+      $searching={isSearching}
+      $disabled={isDisabled}
+      onClick={isDisabled || isSearching ? undefined : onToggle}>
+      {isDisabled ? (
+        <DisabledCheckPlaceholder>
+          <MaterialIcon icon='block' size={24} />
+        </DisabledCheckPlaceholder>
+      ) : (
+        <RowCheckBox checked={selected} onChange={() => {}} $pulsing={pulsing} />
+      )}
+
+      <RowTitle>
+        <RowModeName>{label}</RowModeName>
+        <RowDesc>{desc}</RowDesc>
+      </RowTitle>
+
+      {isDisabled ? (
+        <UnavailableInfo nextStartDate={nextStartDate} nextEndDate={nextEndDate} />
+      ) : (
+        <>
+          <ModeStats stats={stats} t={t} />
+          <SettingsZone $disabled={isSearching} {...zoneProps}>
+            <ModeSummary summaryState={summaryState} />
+            <Tooltip text={settingsLabel} position='top' tabIndex={-1}>
+              <GearButton
+                aria-label={settingsLabel}
+                disabled={isSearching}
+                onClick={e => {
+                  e.stopPropagation()
+                  if (!isSearching) onOpenSettings()
+                }}>
+                <MaterialIcon icon='tune' size={20} />
+              </GearButton>
+            </Tooltip>
+            <Ripple ref={zoneRippleRef} disabled={isSearching} />
+          </SettingsZone>
+        </>
+      )}
+    </TypeRowRoot>
+  )
+}
+
+// ─── Settings Drawer ──────────────────────────────────────────────────────────
+
+const DrawerScrim = styled(m.div)`
+  position: fixed;
+  inset: var(--sb-system-bar-height, 0) 0 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: ${zIndexSettings - 1};
+`
+
+const DrawerPanel = styled(m.aside)`
+  position: fixed;
+  top: var(--sb-system-bar-height, 0);
+  left: 0;
+  bottom: 0;
+  width: 661px;
+  max-width: 92vw;
+  background: var(--theme-container);
+  border-right: 1px solid color-mix(in srgb, var(--theme-on-surface) 10%, transparent);
+  box-shadow: 12px 0 48px rgba(0, 0, 0, 0.5);
+  z-index: ${zIndexSettings};
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+`
+
+const DrawerHead = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-on-surface) 10%, transparent);
+  background: var(--theme-container-high);
+  flex-shrink: 0;
+`
+
+const DrawerTitle = styled.div`
+  ${titleMedium};
+  font-size: 22px;
+  color: var(--theme-on-surface);
+  flex: 1;
+`
+
+const DrawerCloseBtn = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--theme-on-surface-variant);
+  cursor: pointer;
+  transition: background 150ms ease;
+  flex-shrink: 0;
+
+  &:hover {
+    background: color-mix(in srgb, var(--theme-on-surface) 10%, transparent);
+    color: var(--theme-on-surface);
+  }
+`
+
+const DrawerBody = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-gutter: stable both-edges;
+  padding: 16px 8px 24px;
+`
+
+interface SettingsDrawerProps {
+  drawerType: MatchmakingType | null
+  labelForType: (type: MatchmakingType) => string
+  onClose: () => void
+}
+
+export function SettingsDrawer({ drawerType, labelForType, onClose }: SettingsDrawerProps) {
+  const { t } = useTranslation()
+
+  return (
+    <AnimatePresence>
+      {drawerType !== null ? (
+        <>
+          <DrawerScrim
+            key='scrim'
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
+          />
+          <DrawerPanel
+            key='panel'
+            initial={{ x: '-100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '-100%' }}
+            transition={{ duration: 0.28, ease: [0.2, 0, 0, 1] }}>
+            <DrawerHead>
+              <DrawerTitle>{labelForType(drawerType)}</DrawerTitle>
+              <Tooltip text={t('common.actions.close', 'Close')} position='bottom' tabIndex={-1}>
+                <DrawerCloseBtn onClick={onClose} aria-label={t('common.actions.close', 'Close')}>
+                  <MaterialIcon icon='close' size={22} />
+                </DrawerCloseBtn>
+              </Tooltip>
+            </DrawerHead>
+
+            <DrawerBody>
+              <FindMatchContent key={drawerType} type={drawerType} disabled={false} />
+            </DrawerBody>
+          </DrawerPanel>
+        </>
+      ) : null}
+    </AnimatePresence>
+  )
+}
+
+// ─── Queue bar ────────────────────────────────────────────────────────────────
+
+const QueueBarRoot = styled.div`
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: center;
+  padding: 16px 20px 16px 24px;
+  background: var(--theme-container-high);
+  border: 1px solid color-mix(in srgb, var(--theme-on-surface) 16%, transparent);
+  border-radius: 10px;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.5),
+    0 0 0 1px color-mix(in srgb, var(--theme-on-surface) 8%, transparent);
+  backdrop-filter: blur(6px);
+  position: sticky;
+  bottom: 24px;
+  z-index: 10;
+`
+
+const QueueSummary = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+`
+
+const QueueSummaryHead = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  ${labelMedium};
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--theme-on-surface-variant);
+`
+
+const QueueEmptyHint = styled.div`
+  ${bodySmall};
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--theme-on-surface-variant);
+`
+
+const QueueChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const QueueChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px 0 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--theme-primary) 20%, transparent);
+  color: var(--color-blue90);
+  ${labelSmall};
+`
+
+const SearchingTimer = styled.div`
+  ${sofiaSans};
+  font-size: 42px;
+  font-weight: 700;
+  color: var(--theme-amber);
+  letter-spacing: 1px;
+  font-feature-settings: 'tnum';
+  line-height: 1;
+`
+
+const QueueActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+`
+
+export interface QueueChipData {
+  type: string
+  label: string
+  race: RaceChar
+}
+
+interface QueueBarProps {
+  selectedChips: QueueChipData[]
+  isSearching: boolean
+  isMatched: boolean
+  elapsedSecs: number
+  isSubmitting: boolean
+  disabled: boolean
+  onFindMatch: () => void
+  onCancel: () => void
+}
+
+export function QueueBar({
+  selectedChips,
+  isSearching,
+  isMatched,
+  elapsedSecs,
+  isSubmitting,
+  disabled,
+  onFindMatch,
+  onCancel,
+}: QueueBarProps) {
+  const { t } = useTranslation()
+  const mm = String(Math.floor(elapsedSecs / 60)).padStart(2, '0')
+  const ss = String(elapsedSecs % 60).padStart(2, '0')
+
+  let summaryContent: React.ReactNode
+  if (isSearching) {
+    // Once a match is found (the accept dialog is up), the elapsed search time is no longer
+    // meaningful, so we hide it behind a placeholder — mirroring the gameplay activity widget.
+    summaryContent = (
+      <>
+        <QueueSummaryHead>
+          {isMatched
+            ? t('matchmaking.findMatch.matchFound', 'Match found!')
+            : t('matchmaking.findMatch.searchingMessage', 'Searching for a match…')}
+        </QueueSummaryHead>
+        <SearchingTimer>{isMatched ? '…' : `${mm}:${ss}`}</SearchingTimer>
+      </>
+    )
+  } else if (selectedChips.length === 0) {
+    summaryContent = (
+      <QueueEmptyHint>
+        <MaterialIcon icon='info' size={18} />
+        {t(
+          'matchmaking.findMatch.selectAtLeastOne',
+          'Select at least one matchmaking type to start searching.',
+        )}
+      </QueueEmptyHint>
+    )
+  } else {
+    summaryContent = (
+      <>
+        <QueueSummaryHead>
+          {isSubmitting
+            ? t('matchmaking.findMatch.joiningQueue', 'Joining the queue…')
+            : t('matchmaking.findMatch.readyToQueue', 'Ready to queue')}
+        </QueueSummaryHead>
+        <QueueChips>
+          {selectedChips.map(({ type, label, race }) => (
+            <QueueChip key={type}>
+              <ChipRaceIcon race={race} />
+              {label}
+            </QueueChip>
+          ))}
+        </QueueChips>
+      </>
+    )
+  }
+
+  return (
+    <QueueBarRoot>
+      <QueueSummary>{summaryContent}</QueueSummary>
+
+      <QueueActions>
+        {isSearching ? (
+          <TextButton
+            label={t('matchmaking.findMatch.cancelSearch', 'Cancel search')}
+            onClick={onCancel}
+          />
+        ) : (
+          <FilledButton
+            label={t('matchmaking.findMatch.title', 'Find match')}
+            disabled={disabled}
+            onClick={disabled ? undefined : onFindMatch}
+          />
+        )}
+      </QueueActions>
+    </QueueBarRoot>
+  )
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+export const PageSpacer = styled.div`
+  height: 24px;
+  flex-shrink: 0;
+`
+
+const ENTER = 'Enter'
+const ENTER_NUMPAD = 'NumpadEnter'
+
+export function FindMatch() {
+  const { t } = useTranslation()
+  useTrackPageView(urlPath`/matchmaking/find`)
+  const dispatch = useAppDispatch()
+  const selfUser = useSelfUser()!
+
+  // ─── Searching state (from Jotai atoms) ─────────────────────────────────────
+  const isSearching = useAtomValue(isMatchmakingAtom)
+  const searchInfo = useAtomValue(currentSearchInfoAtom)
+  const isMatched = !!useAtomValue(foundMatchAtom)
+
+  // ─── Redux state ────────────────────────────────────────────────────────────
+  const season = useAppSelector(s => s.selfRank.currentSeason)
+  const seasonEnd = useUpcomingSeasonEnd(season)
+  const selfRankByType = useAppSelector(s => s.selfRank.byType)
+  const matchmakingStatus = useAppSelector(s => s.matchmakingStatus.byType)
+  const matchmakingPreferences = useAppSelector(s => s.matchmakingPreferences.byType)
+  const mapPools = useAppSelector(s => s.mapPools.byType)
+  const inLobby = useAppSelector(s => isInLobby(s.lobby))
+  const lobbyId = useAppSelector(s => s.lobby.info.id)
+  const lobbyName = useAppSelector(s => s.lobby.info.name)
+
+  // ─── Local state ────────────────────────────────────────────────────────────
+  // The mode selection itself isn't stored here: it's derived from the persisted preferences (see
+  // `selectedTypes` below). We only keep an override (in a Jotai atom, so it survives navigating
+  // away and back) for when the user changes the selection this session, so we never duplicate store
+  // data into state via a seeding effect.
+  const sessionSelection = useAtomValue(findMatchSelectionAtom)
+  const setSessionSelection = useSetAtom(findMatchSelectionAtom)
+  const [drawerType, setDrawerType] = useState<MatchmakingType | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [elapsedSecs, setElapsedSecs] = useState(0)
+
+  // ─── Effects ────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    for (const type of ALL_MATCHMAKING_TYPES) {
+      dispatch(getCurrentMapPool(type))
+    }
+  }, [dispatch])
+
+  useEffect(() => {
+    const abortController = new AbortController()
+    dispatch(
+      getInstantaneousSelfRank({
+        signal: abortController.signal,
+        onSuccess: () => {},
+        onError: () => {},
+      }),
+    )
+    return () => {
+      abortController.abort()
+    }
+  }, [dispatch, selfUser.id])
+
+  useEffect(() => {
+    if (!isSearching || !searchInfo) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time reset when a search stops
+      setElapsedSecs(0)
+      return undefined
+    }
+    const update = () => {
+      setElapsedSecs(Math.floor((performance.now() - searchInfo.startTime) / 1000))
+    }
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [isSearching, searchInfo])
+
+  // ─── Derived data ────────────────────────────────────────────────────────────
+
+  const currentMinuteMs = useCurrentMinuteMs()
+  const divisionContext: DivisionContext = season
+    ? getDivisionContext(new Date(currentMinuteMs), season)
+    : { bonusPool: 0 }
+
+  const isTypeEnabled = (type: MatchmakingType): boolean =>
+    matchmakingStatus.get(type)?.enabled ?? false
+
+  // The persisted selection: the types flagged `selected` in the preferences pushed on connect (the
+  // user's most recent search). Deriving it from the store each render — rather than copying it into
+  // state — keeps it live and needs no seeding effect. Once the user toggles a mode this session,
+  // their override takes over; until then we show the persisted selection.
+  const persistedSelectedTypes = new Set<MatchmakingType>(
+    ALL_MATCHMAKING_TYPES.filter(type => matchmakingPreferences.get(type)?.selected),
+  )
+  // Only honor the session override if it belongs to the current user (it's a global atom that
+  // outlives a logout), otherwise fall back to this user's persisted selection.
+  const sessionSelectedTypes =
+    sessionSelection?.userId === selfUser.id ? sessionSelection.types : undefined
+  const selectedTypes: ReadonlySet<MatchmakingType> = sessionSelectedTypes ?? persistedSelectedTypes
+
+  // While searching, the effective selected types come from Jotai (server-authoritative). When not
+  // searching, we filter out any types that are currently disabled: their rows can't be deselected
+  // (the checkbox is replaced by a "blocked" placeholder) and the server rejects the entire request
+  // if any selected type is disabled, so leaving them in would make every queue attempt error out.
+  const effectiveSelectedTypes: ReadonlySet<MatchmakingType> = isSearching
+    ? new Set(searchInfo?.searchedTypes.keys() ?? [])
+    : new Set(Array.from(selectedTypes).filter(isTypeEnabled))
+
+  const getStatsForType = (type: MatchmakingType): RowStats => {
+    const player = selfRankByType.get(type)
+    if (!player || !season) {
+      return { division: MatchmakingDivision.Unrated, mmr: null, bonus: 0 }
+    }
+    const division = ladderPlayerToMatchmakingDivision(player, divisionContext)
+    // Ratings are hidden until placements complete (the server zeroes them until then), so show
+    // the no-rating presentation rather than a bogus 0 for players mid-placements.
+    const inPlacements = player.lifetimeGames < NUM_PLACEMENT_MATCHES
+    const bonus = Math.max(0, Math.floor(divisionContext.bonusPool - player.bonusUsed))
+    return {
+      division,
+      mmr: inPlacements ? null : Math.round(player.rating),
+      bonus,
+    }
+  }
+
+  const getSummaryStateForType = (type: MatchmakingType): RowSummaryState => {
+    const prefs = matchmakingPreferences.get(type)?.preferences
+    const mapPool = mapPools.get(type)
+    // Derived from the currently-loaded pool rather than a connect-time flag, so the badge refreshes
+    // whenever the page (re)fetches the pool — e.g. each time the user opens the Play screen.
+    const poolChanged = !!prefs && !!mapPool && prefs.mapPoolId !== mapPool.id
+
+    let race: RaceChar = 'r'
+    let useAlternateRace = false
+    let alternateRace: AssignedRaceChar = 'z'
+    let mapSelectionCount = 0
+
+    if (prefs) {
+      race = prefs.race ?? 'r'
+      // Only count selections that are still in the current pool, so stale preferences (from a
+      // previous pool) can't produce counts that exceed the limit shown next to them.
+      const mapSelections = prefs.mapSelections ?? []
+      mapSelectionCount = mapPool
+        ? mapSelections.filter(id => mapPool.maps.includes(id)).length
+        : mapSelections.length
+      if (
+        (type === MatchmakingType.Match1v1 || type === MatchmakingType.Match1v1Fastest) &&
+        race !== 'r'
+      ) {
+        const data1v1 = prefs.data as {
+          useAlternateRace?: boolean
+          alternateRace?: AssignedRaceChar
+        }
+        useAlternateRace = data1v1?.useAlternateRace ?? false
+        alternateRace = data1v1?.alternateRace ?? 'z'
+      }
+    }
+
+    return {
+      race,
+      useAlternateRace,
+      alternateRace,
+      mapSelectionCount,
+      mapPoolVetoLimit: mapPool?.maxVetoCount ?? 0,
+      mapPoolSize: mapPool?.maps.length ?? 0,
+      mapSelectionStyle: getMatchmakingModeInfo(type).mapSelectionStyle,
+      poolChanged,
+    }
+  }
+
+  const getRaceForType = (type: MatchmakingType): RaceChar =>
+    matchmakingPreferences.get(type)?.preferences?.race ?? 'r'
+
+  // ─── Handlers ───────────────────────────────────────────────────────────────
+
+  const handleToggle = (type: MatchmakingType) => {
+    if (isSearching) return
+    const next = new Set(selectedTypes)
+    if (next.has(type)) next.delete(type)
+    else next.add(type)
+    setSessionSelection({ userId: selfUser.id, types: next })
+  }
+
+  const handleOpenSettings = (type: MatchmakingType) => {
+    if (isSearching) return
+    setDrawerType(type)
+  }
+
+  const handleFindMatch = healthChecked(() => {
+    if (inLobby || isSubmitting || effectiveSelectedTypes.size === 0) return
+
+    const allPrefs: MatchmakingPreferences[] = []
+    for (const type of effectiveSelectedTypes) {
+      const prefs = matchmakingPreferences.get(type)?.preferences
+      if (!prefs) {
+        // The preferences subscription seeds defaults for every type on connect, so this is
+        // effectively unreachable past app startup; bail rather than silently queueing a subset.
+        return
+      }
+      allPrefs.push(prefs as MatchmakingPreferences)
+    }
+    if (allPrefs.length === 0) return
+
+    setIsSubmitting(true)
+    dispatch(
+      findMatch(allPrefs, {
+        onSuccess: () => {
+          setIsSubmitting(false)
+        },
+        onError: () => {
+          setIsSubmitting(false)
+        },
+      }),
+    )
+  })
+
+  const handleCancel = () => {
+    dispatch(
+      cancelFindMatch({
+        onSuccess: () => {},
+        onError: () => {},
+      }),
+    )
+  }
+
+  useKeyListener({
+    onKeyDown: (event: KeyboardEvent) => {
+      if (event.code === ENTER || event.code === ENTER_NUMPAD) {
+        if (!isSearching && effectiveSelectedTypes.size > 0 && !inLobby) {
+          handleFindMatch()
+          return true
+        }
+      }
+      return false
+    },
+  })
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
+  const labelForType = (type: MatchmakingType) => matchmakingTypeToLabel(type, t)
+
+  const descForType = (type: MatchmakingType): string => {
+    switch (type) {
+      case MatchmakingType.Match1v1:
+        return t('matchmaking.findMatch.desc.1v1', 'Solo · Standard maps')
+      case MatchmakingType.Match1v1Fastest:
+        return t('matchmaking.findMatch.desc.1v1fastest', 'Solo · Fastest Map')
+      case MatchmakingType.Match2v2:
+        return t('matchmaking.findMatch.desc.2v2', 'Team · Standard maps')
+      case MatchmakingType.Match2v2Bgh:
+        return t('matchmaking.findMatch.desc.2v2bgh', 'Team · Big Game Hunters')
+      case MatchmakingType.Match2v2Hunters:
+        return t('matchmaking.findMatch.desc.2v2hunters', 'Team · Hunters')
+      case MatchmakingType.Match2v2Fastest:
+        return t('matchmaking.findMatch.desc.2v2fastest', 'Team · Fastest Map')
+      case MatchmakingType.Match3v3Bgh:
+        return t('matchmaking.findMatch.desc.3v3bgh', 'Team · Big Game Hunters')
+      case MatchmakingType.Match3v3Hunters:
+        return t('matchmaking.findMatch.desc.3v3hunters', 'Team · Hunters')
+      case MatchmakingType.Match3v3Fastest:
+        return t('matchmaking.findMatch.desc.3v3fastest', 'Team · Fastest Map')
+      default:
+        return type satisfies never
+    }
+  }
+
+  const selectedChips: QueueChipData[] = isSearching
+    ? Array.from(searchInfo?.searchedTypes.entries() ?? []).map(([type, race]) => ({
+        type,
+        label: labelForType(type),
+        race,
+      }))
+    : Array.from(effectiveSelectedTypes).map(type => ({
+        type,
+        label: labelForType(type),
+        race: getRaceForType(type),
+      }))
+
+  const findMatchDisabled = effectiveSelectedTypes.size === 0 || inLobby || isSubmitting
+
+  return (
+    <PageRoot>
+      <PanelRoot>
+        <PageHeadArea>
+          <PageGuideLink
+            label={t('matchmaking.explainer.linkLabel', 'How matchmaking works')}
+            href={MATCHMAKING_GUIDE_PATH}
+          />
+          <PageHead>
+            <div>
+              <PageTitle>{t('matchmaking.findMatch.title', 'Find match')}</PageTitle>
+              <PageSubtitle>
+                {t(
+                  'matchmaking.findMatch.subtitle',
+                  'Choose one or more matchmaking types and we\u2019ll queue for them all at once.',
+                )}
+              </PageSubtitle>
+            </div>
+            {season ? (
+              <SeasonLabel>
+                <span>{season.name}</span>
+                {seasonEnd !== undefined ? <SeasonEndDate endDate={seasonEnd} /> : null}
+              </SeasonLabel>
+            ) : null}
+          </PageHead>
+        </PageHeadArea>
+
+        {inLobby ? (
+          <LobbyBanner>
+            <MaterialIcon icon='info' size={20} />
+            <LobbyBannerText>
+              {t(
+                'matchmaking.findMatch.inLobbyBanner',
+                'You\u2019re in a lobby \u2014 matchmaking is unavailable while in a game lobby.',
+              )}
+            </LobbyBannerText>
+            <LobbyBannerButton
+              label={t('matchmaking.findMatch.goToLobby', 'Go to lobby')}
+              onClick={() => push(urlForLobby(lobbyId, lobbyName))}
+            />
+          </LobbyBanner>
+        ) : null}
+
+        <GroupsContainer>
+          {MODE_GROUPS.map(group => {
+            const modes = REAL_MODES.filter(m => m.group === group.id)
+            return (
+              <ModeGroup key={group.id}>
+                <GroupHead>
+                  <GroupLabel>{group.label}</GroupLabel>
+                  <GroupDivider />
+                  <GroupHint>
+                    {group.team
+                      ? t(
+                          'matchmaking.findMatch.groupHintTeam',
+                          'Team play · race drafted before game',
+                        )
+                      : t(
+                          'matchmaking.findMatch.groupHintSolo',
+                          'Solo · race locked when searching',
+                        )}
+                  </GroupHint>
+                </GroupHead>
+                <ModeList>
+                  {modes.map(mode => {
+                    const status = matchmakingStatus.get(mode.type)
+                    const isEnabled = status?.enabled ?? false
+                    return (
+                      <TypeRow
+                        key={mode.type}
+                        label={labelForType(mode.type)}
+                        desc={descForType(mode.type)}
+                        selected={effectiveSelectedTypes.has(mode.type)}
+                        isSearching={isSearching}
+                        isEnabled={isEnabled}
+                        nextStartDate={status?.nextStartDate}
+                        nextEndDate={status?.nextEndDate}
+                        stats={getStatsForType(mode.type)}
+                        summaryState={getSummaryStateForType(mode.type)}
+                        t={t}
+                        onToggle={() => handleToggle(mode.type)}
+                        onOpenSettings={() => handleOpenSettings(mode.type)}
+                      />
+                    )
+                  })}
+                </ModeList>
+              </ModeGroup>
+            )
+          })}
+        </GroupsContainer>
+
+        <QueueBar
+          selectedChips={selectedChips}
+          isSearching={isSearching}
+          isMatched={isMatched}
+          elapsedSecs={elapsedSecs}
+          isSubmitting={isSubmitting}
+          disabled={findMatchDisabled}
+          onFindMatch={handleFindMatch}
+          onCancel={handleCancel}
+        />
+      </PanelRoot>
+
+      <PageSpacer />
+
+      <SettingsDrawer
+        drawerType={drawerType}
+        labelForType={labelForType}
+        onClose={() => setDrawerType(null)}
+      />
+    </PageRoot>
+  )
+}

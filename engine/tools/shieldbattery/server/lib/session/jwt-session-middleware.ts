@@ -1,0 +1,213 @@
+import jwt from 'jsonwebtoken'
+import Koa, { AppSession } from 'koa'
+import { container } from 'tsyringe'
+import uid from 'uid-safe'
+import { promisify } from 'util'
+import { SbUserId } from '../../../common/users/sb-user-id'
+import { SessionClientClass } from '../../../common/users/session'
+import { CodedError } from '../errors/coded-error'
+import { isElectronClient } from '../network/electron-clients'
+import { Redis } from '../redis/redis'
+import { Clock } from '../time/clock'
+import { ClientAttestation } from '../users/client-attestation'
+import { CacheBehavior, UserService } from '../users/user-service'
+import { DeletedSessionRegistry } from './deleted-sessions'
+
+const SESSION_TTL_SECONDS = Number(process.env.SB_SESSION_TTL)
+const JWT_SECRET = process.env.SB_JWT_SECRET!
+
+export function sessionKey(userId: SbUserId, sessionId: string) {
+  return `sessions:${userId}:${sessionId}`
+}
+
+/**
+ * Key for the set of session IDs belonging to a user, used to look up their sessions without
+ * scanning the whole keyspace. Its TTL is refreshed alongside any member session's activity, so
+ * it always outlives its live members; sessionIds whose underlying keys have since expired may
+ * linger in the set, so consumers must tolerate deleting keys that no longer exist.
+ */
+export function userSessionsKey(userId: SbUserId) {
+  return `user-sessions:${userId}`
+}
+
+const jwtSign = promisify(jwt.sign) as any as (
+  payload: unknown,
+  secret: jwt.Secret,
+  options: jwt.SignOptions,
+) => Promise<string>
+
+interface JwtPayloadData {
+  sessionId: string
+  userId: SbUserId
+  /** The last time the user explicitly authenticated (as a JS unix timestamp in UTC) */
+  authTime: number
+  /**
+   * Whether the user wants to stay logged in, or have the session expire when the browser exits.
+   */
+  stayLoggedIn: boolean
+  /** Which kind of client logged in. Absent for sessions created before this was tracked. */
+  clientClass?: SessionClientClass
+}
+
+export interface StateWithJwt {
+  jwtData?: {
+    /** When this token was issued (as a unix timestamp). */
+    iat: number
+    /** When this token expires (as a unix timestamp). */
+    exp: number
+  } & JwtPayloadData
+}
+
+export enum SessionErrorCode {
+  /** Attempted to create a new session when one already exists. */
+  AlreadyHaveSession = 'alreadyHaveSession',
+}
+
+export class SessionError extends CodedError<SessionErrorCode> {}
+
+export function jwtSessions(): Koa.Middleware<StateWithJwt> {
+  const redis = container.resolve(Redis)
+  const clock = container.resolve(Clock)
+  const userService = container.resolve(UserService)
+  const deletedSessions = container.resolve(DeletedSessionRegistry)
+  const clientAttestation = container.resolve(ClientAttestation)
+
+  return async (ctx, next) => {
+    ctx.beginSession = async (
+      userId: SbUserId,
+      stayLoggedIn: boolean,
+      clientClass: SessionClientClass,
+    ) => {
+      if (ctx.session) {
+        throw new SessionError(
+          SessionErrorCode.AlreadyHaveSession,
+          'tried to start a new session with an existing session',
+        )
+      }
+      const now = clock.now()
+
+      ;(ctx.session as any as AppSession) = await userService.getSelfUserInfo(
+        userId,
+        CacheBehavior.ForceRefresh,
+      )
+
+      const sessionId = await uid(24)
+      const sessionData: JwtPayloadData = {
+        sessionId,
+        userId,
+        authTime: now,
+        stayLoggedIn,
+        clientClass,
+      }
+
+      await redis.client
+        .multi()
+        .setEx(
+          sessionKey(userId, sessionData.sessionId),
+          SESSION_TTL_SECONDS,
+          JSON.stringify(sessionData),
+        )
+        .sAdd(userSessionsKey(userId), sessionData.sessionId)
+        .expire(userSessionsKey(userId), SESSION_TTL_SECONDS)
+        .execAsPipeline()
+
+      ctx.state.jwtData = {
+        iat: Math.floor(now / 1000),
+        exp: Math.floor(now / 1000) + SESSION_TTL_SECONDS,
+        ...sessionData,
+      }
+    }
+
+    ctx.deleteSession = async () => {
+      if (ctx.state.jwtData) {
+        const { userId, sessionId } = ctx.state.jwtData
+        const key = sessionKey(userId, sessionId)
+
+        if (deletedSessions.register(key)) {
+          await redis.client
+            .multi()
+            .del(key)
+            .sRem(userSessionsKey(userId), sessionId)
+            .execAsPipeline()
+        }
+      }
+
+      ctx.state.jwtData = undefined
+      ;(ctx.session as any) = undefined
+    }
+
+    if (
+      ctx.state.jwtData?.clientClass === 'web' &&
+      isElectronClient(ctx) &&
+      clientAttestation.mode() === 'required'
+    ) {
+      // Apps need their own sessions
+      ctx.state.jwtData = undefined
+    }
+
+    if (ctx.state.jwtData) {
+      // Make sure the session still exists
+      const sessionExists =
+        (await redis.client.exists(
+          sessionKey(ctx.state.jwtData.userId, ctx.state.jwtData.sessionId),
+        )) > 0
+
+      if (sessionExists) {
+        try {
+          ;(ctx.session as any as AppSession) = await userService.getSelfUserInfo(
+            ctx.state.jwtData.userId,
+          )
+        } catch (err) {
+          ctx.log.error({ err }, 'error loading user/permissions for session')
+        }
+      }
+    }
+
+    if (!ctx.session) {
+      // If the session isn't set at this point, then it either doesn't exist or something went
+      // wrong loading the user data, so we just clear this session out
+      ctx.state.jwtData = undefined
+    }
+
+    try {
+      await next()
+    } finally {
+      if (ctx.state.jwtData) {
+        const { jwtData } = ctx.state
+
+        try {
+          // The SADD re-indexes the session on every request, so sessions created before this
+          // set existed get picked up the next time they're used.
+          await redis.client
+            .multi()
+            .expire(sessionKey(jwtData.userId, jwtData.sessionId), SESSION_TTL_SECONDS)
+            .sAdd(userSessionsKey(jwtData.userId), jwtData.sessionId)
+            .expire(userSessionsKey(jwtData.userId), SESSION_TTL_SECONDS)
+            .execAsPipeline()
+        } catch (err) {
+          ctx.log.error({ err }, 'error setting session new expiration')
+        }
+      }
+    }
+  }
+}
+
+/** Generates a JWT for the current session. Will throw if no session is active. */
+export async function getJwt(ctx: Koa.Context, now = Date.now()): Promise<string> {
+  const { jwtData } = ctx.state
+  if (!jwtData) {
+    throw new Error('No active session available for generating JWT')
+  }
+
+  return await jwtSign(
+    {
+      ...jwtData,
+      iat: Math.floor(now / 1000),
+      exp: Math.floor(now / 1000) + SESSION_TTL_SECONDS,
+    },
+    JWT_SECRET,
+    {
+      algorithm: 'HS256',
+    },
+  )
+}

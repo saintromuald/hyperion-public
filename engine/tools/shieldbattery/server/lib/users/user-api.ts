@@ -1,0 +1,1692 @@
+import { RouterContext } from '@koa/router'
+import bcrypt from 'bcrypt'
+import got from 'got'
+import httpErrors from 'http-errors'
+import Joi from 'joi'
+import mime from 'mime'
+import { container } from 'tsyringe'
+import { assertUnreachable } from '../../../common/assert-unreachable'
+import {
+  MAX_DATE_TIMESTAMP,
+  PASSWORD_MINLENGTH,
+  USERNAME_MAXLENGTH,
+  USERNAME_MINLENGTH,
+  USERNAME_PATTERN,
+} from '../../../common/constants'
+import {
+  ALL_GAME_FORMATS,
+  decodeMatchup,
+  GameDurationFilter,
+  GameSortOption,
+} from '../../../common/games/game-filters'
+import { MAX_GAMES_OFFSET, toGameRecordJson } from '../../../common/games/games'
+import { ALL_TRANSLATION_LANGUAGES } from '../../../common/i18n'
+import { MAX_IMAGE_SIZE_BYTES, USER_AVATAR_SIZE } from '../../../common/images'
+import { LadderPlayer } from '../../../common/ladder/ladder'
+import { toMapInfoJson } from '../../../common/maps'
+import {
+  MatchmakingType,
+  NUM_PLACEMENT_MATCHES,
+  toMatchmakingSeasonJson,
+} from '../../../common/matchmaking'
+import { ALL_POLICY_TYPES, SbPolicyType } from '../../../common/policies/policy-type'
+import { CheckAllowedNameResponse } from '../../../common/typeshare'
+import { urlPath } from '../../../common/urls'
+import {
+  ClientProof,
+  SignupChallengeResponse,
+  SignupFields,
+} from '../../../common/users/client-proof'
+import { SbPermissions } from '../../../common/users/permissions'
+import {
+  GetRelationshipsResponse,
+  ModifyRelationshipResponse,
+  toUserRelationshipJson,
+  toUserRelationshipSummaryJson,
+} from '../../../common/users/relationships'
+import {
+  ALL_RESTRICTION_KINDS,
+  RESTRICTION_REASONS_BY_KIND,
+  RestrictionKind,
+} from '../../../common/users/restrictions'
+import { SbUser, SelfUser, toSelfUserJson } from '../../../common/users/sb-user'
+import { SbUserId } from '../../../common/users/sb-user-id'
+import { ClientSessionInfo } from '../../../common/users/session'
+import {
+  AcceptPoliciesRequest,
+  AcceptPoliciesResponse,
+  AdminApplyRestrictionRequest,
+  AdminApplyRestrictionResponse,
+  AdminBanUserRequest,
+  AdminBanUserResponse,
+  AdminGetBansResponse,
+  AdminGetLinkedAccountsResponse,
+  AdminGetRestrictionsResponse,
+  AdminGetUserIpsResponse,
+  AdminLiftRestrictionRequest,
+  AdminLiftRestrictionResponse,
+  AdminRemoveUserAvatarResponse,
+  AdminSetStaffBadgeRequest,
+  AdminSetStaffBadgeResponse,
+  AdminUnbanUserRequest,
+  AdminUnbanUserResponse,
+  AuthEvent,
+  BanSource,
+  ChangeLanguageRequest,
+  ChangeLanguagesResponse,
+  GET_MATCH_HISTORY_LIMIT,
+  GetBatchUserInfoResponse,
+  GetMatchHistoryQueryParams,
+  GetMatchHistoryResponse,
+  GetUserByNameResponse,
+  GetUserProfileResponse,
+  GetUserRankingHistoryResponse,
+  LINKED_ACCOUNTS_PAGE_SIZE,
+  RANDOM_EMAIL_CODE_PATTERN,
+  RecoverUsernameRequest,
+  RequestPasswordResetRequest,
+  ResetPasswordRequest,
+  SEARCH_USERS_LIMIT,
+  SearchUsersResponse,
+  toBanHistoryEntryJson,
+  toUserIpInfoJson,
+  toUserRestrictionHistoryJson,
+  UpdateCurrentUserAvatarResponse,
+  UserErrorCode,
+  UsernameAvailableResponse,
+} from '../../../common/users/user-network'
+import ChatService from '../chat/chat-service'
+import { UNIQUE_VIOLATION } from '../db/pg-error-codes'
+import transact from '../db/transaction'
+import isDev from '../env/is-dev'
+import { handleMultipartFiles } from '../files/handle-multipart-files'
+import { createImagePath, resizeImage } from '../files/images'
+import { getGameListSideData } from '../games/game-list-data'
+import { getGamesForUser, getRecentGamesForUser } from '../games/game-models'
+import { httpApi, httpBeforeAll } from '../http/http-api'
+import { httpBefore, httpDelete, httpGet, httpPost } from '../http/route-decorators'
+import { joiLocale } from '../i18n/locale-validator'
+import { ImageService } from '../images/image-service'
+import { getRankingsForUser } from '../ladder/rankings'
+import { sendMailTemplate } from '../mail/mailer'
+import { MatchmakingSeasonsService } from '../matchmaking/matchmaking-seasons'
+import {
+  getMatchmakingFinalizedRanksForUser,
+  getMatchmakingRatingsForUser,
+  getMatchmakingSeasonsByIds,
+} from '../matchmaking/models'
+import { updatePermissions } from '../models/permissions'
+import { isElectronClient } from '../network/electron-clients'
+import { serverRsUrl } from '../network/server-rs-requests'
+import { checkAllPermissions, checkAnyPermission } from '../permissions/check-permissions'
+import { Redis } from '../redis/redis'
+import { ReplayService } from '../replays/replay-service'
+import ensureLoggedIn from '../session/ensure-logged-in'
+import { getJwt } from '../session/jwt-session-middleware'
+import createThrottle from '../throttle/create-throttle'
+import throttleMiddleware, {
+  throttleByIp,
+  throttleByUser,
+  throttleByUserOrIp,
+} from '../throttle/middleware'
+import { Clock } from '../time/clock'
+import { validateRequest } from '../validation/joi-validator'
+import { TypedPublisher } from '../websockets/typed-publisher'
+import { BanEnacter } from './ban-enacter'
+import { isUserBanned, retrieveBanHistory } from './ban-models'
+import { joiClientIdentifiers } from './client-ids'
+import { addEmailVerificationCode, getEmailVerificationsCount } from './email-verification-models'
+import { PasswordResetCleanupJob } from './password-reset-cleanup'
+import { addPasswordResetCode, usePasswordResetCode } from './password-reset-model'
+import { genRandomCode } from './random-code'
+import { RestrictionService } from './restriction-service'
+import { SignupCodeCleanupJob } from './signup-code-cleanup'
+import { InvalidSignupCodeError } from './signup-code-models'
+import { SignupProofService } from './signup-proof-service'
+import {
+  convertUserApiErrors,
+  convertUserRelationshipServiceErrors,
+  UserApiError,
+} from './user-api-errors'
+import { UserIdentifierCleanupJob } from './user-identifier-cleanup'
+import { UserIdentifierManager } from './user-identifier-manager'
+import { findLinkedAccounts } from './user-identifiers'
+import { retrieveIpsForUsers, retrieveRelatedUsersForIps } from './user-ips'
+import { UserIpsCleanupJob } from './user-ips-cleanup'
+import {
+  createUser,
+  findAllUsersWithEmail,
+  findSelfById,
+  findUserById,
+  findUserByName,
+  findUsersById,
+  findUsersByNamePrefix,
+  isUsernameAvailable,
+  UserUpdatables,
+} from './user-model'
+import { UserRelationshipService } from './user-relationship-service'
+import { UserService } from './user-service'
+import { getUserStats } from './user-stats-model'
+import { joiEmail, joiUserId, joiUsername } from './user-validators'
+
+/** How many accounts 1 machine is allowed to create. */
+const MAX_ACCOUNTS_PER_MACHINE = isDev ? Number.MAX_SAFE_INTEGER : 5
+
+// Env var that lets us turn throttling off for testing
+const THROTTLING_DISABLED = Boolean(process.env.SB_DISABLE_THROTTLING ?? false)
+
+const accountCreationThrottle = createThrottle('accountcreation', {
+  rate: 1,
+  burst: 4,
+  window: 60000,
+})
+
+const usernameAvailableThrottle = createThrottle('usernameavailability', {
+  rate: 10,
+  burst: 300,
+  window: 60000,
+})
+
+const accountUpdateThrottle = createThrottle('accountupdate', {
+  rate: 10,
+  burst: 20,
+  window: 60000,
+})
+
+const avatarUpdateThrottle = createThrottle('avatarupdate', {
+  rate: 5,
+  burst: 10,
+  window: 60000,
+})
+
+const accountRetrievalThrottle = createThrottle('accountretrieval', {
+  rate: 40,
+  burst: 80,
+  window: 60000,
+})
+
+const userSearchThrottle = createThrottle('usersearch', {
+  rate: 60,
+  burst: 120,
+  window: 60000,
+})
+
+const matchHistoryRetrievalThrottle = createThrottle('matchhistoryretrieval', {
+  rate: 50,
+  burst: 150,
+  window: 60000,
+})
+
+const rankingsHistoryRetrievalThrottle = createThrottle('rankingshistoryretrieval', {
+  rate: 10,
+  burst: 30,
+  window: 60000,
+})
+
+const emailVerificationThrottle = createThrottle('emailverification', {
+  rate: 10,
+  burst: 20,
+  window: 12 * 60 * 60 * 1000,
+})
+
+const sendVerificationThrottle = createThrottle('sendverification', {
+  rate: 4,
+  burst: 4,
+  window: 12 * 60 * 60 * 1000,
+})
+
+const relationshipsThrottle = createThrottle('accountrelationships', {
+  rate: 5,
+  burst: 25,
+  window: 60000,
+})
+
+// Throttle for attempting a user/password recovery
+const forgotUserPassThrottle = createThrottle('forgotuserpass', {
+  rate: 30,
+  burst: 50,
+  window: 12 * 60 * 60 * 1000,
+})
+
+// Extra throttles on success to ensure we don't spam people with emails
+const forgotUserSuccessThrottle = createThrottle('forgotusersuccess', {
+  rate: 2,
+  burst: 2,
+  window: 12 * 60 * 60 * 1000,
+})
+const forgotPasswordSuccessThrottle = createThrottle('forgotpasssuccess', {
+  rate: 2,
+  burst: 2,
+  window: 12 * 60 * 60 * 1000,
+})
+
+const resetPasswordThrottle = createThrottle('resetpassword', {
+  rate: 1,
+  burst: 10,
+  window: 30 * 60 * 1000,
+})
+
+function hashPass(password: string): Promise<string> {
+  return bcrypt.hash(password, 11 /* saltRounds */)
+}
+
+function sendVerificationEmail({
+  email,
+  code,
+  username,
+}: {
+  email: string
+  code: string
+  username: string
+}) {
+  return sendMailTemplate({
+    to: email,
+    subject: 'ShieldBattery Email Verification',
+    templateName: 'email-verification',
+    templateData: { code, username },
+  })
+}
+
+interface SignupRequestBody extends SignupFields {
+  clientIds?: [type: number, hash: string][]
+  attemptId?: string
+  proof?: ClientProof
+}
+
+const signupFields = {
+  username: joiUsername().required(),
+  password: Joi.string().min(PASSWORD_MINLENGTH).required(),
+  email: joiEmail().trim().required(),
+  locale: joiLocale(),
+  signupCode: Joi.string().min(1).max(100).empty(''),
+}
+
+const signupChallengeThrottle = createThrottle('signupchallenge', {
+  rate: 4,
+  burst: 8,
+  window: 60000,
+})
+
+@httpApi('/users')
+@httpBeforeAll(convertUserApiErrors, convertUserRelationshipServiceErrors)
+export class UserApi {
+  // eslint-disable-next-line max-params
+  constructor(
+    private publisher: TypedPublisher<AuthEvent>,
+    private userIdManager: UserIdentifierManager,
+    private userRelationshipService: UserRelationshipService,
+    private userService: UserService,
+    private clock: Clock,
+    private redis: Redis,
+    private matchmakingSeasonsService: MatchmakingSeasonsService,
+    private chatService: ChatService,
+    private replayService: ReplayService,
+    private imageService: ImageService,
+    private restrictionService: RestrictionService,
+    private signupProofService: SignupProofService,
+  ) {
+    container.resolve(PasswordResetCleanupJob)
+    container.resolve(SignupCodeCleanupJob)
+    container.resolve(UserIdentifierCleanupJob)
+    container.resolve(UserIpsCleanupJob)
+  }
+
+  @httpPost('/signup-challenge')
+  @httpBefore(throttleMiddleware(signupChallengeThrottle, throttleByIp))
+  async signupChallenge(ctx: RouterContext): Promise<SignupChallengeResponse> {
+    const { body } = validateRequest(ctx, {
+      body: Joi.object<SignupFields>(signupFields).required(),
+    })
+    return this.signupProofService.challenge(body)
+  }
+
+  @httpPost('/')
+  @httpBefore(throttleMiddleware(accountCreationThrottle, throttleByIp))
+  async createUser(ctx: RouterContext): Promise<ClientSessionInfo> {
+    if (!isElectronClient(ctx)) {
+      throw new httpErrors.BadRequest('This method is only allowed within the app')
+    }
+
+    const { body } = validateRequest(ctx, {
+      body: Joi.object<SignupRequestBody>({
+        ...signupFields,
+        clientIds: joiClientIdentifiers(ctx),
+        attemptId: Joi.string().uuid(),
+        proof: Joi.object<ClientProof>({
+          keyId: Joi.number().integer().min(0).max(0xffffffff).required(),
+          body: Joi.string().max(360).required(),
+          signature: Joi.string().max(88).required(),
+        }),
+      }).required(),
+    })
+
+    const { username, password, email, locale, signupCode } = body
+    const request = await this.signupProofService.verify(body, body.attemptId, body.proof)
+    const clientIds = request?.clientIds ?? body.clientIds
+    if (!clientIds) throw new httpErrors.BadRequest('Client identifiers are required')
+
+    const prepareCreationFn = async () => {
+      const { allowed } = await got
+        .post(serverRsUrl(urlPath`/users/names/check-allowed/${username}`), {
+          timeout: { request: 5000 },
+        })
+        .json<CheckAllowedNameResponse>()
+
+      if (!allowed) {
+        throw new UserApiError(
+          UserErrorCode.UsernameTakenOrRestricted,
+          'A user with that name already exists or the name is not allowed',
+        )
+      }
+
+      if (!THROTTLING_DISABLED) {
+        const signupAllowed = await this.userIdManager.isSignupAllowed(clientIds)
+        if (!signupAllowed) {
+          throw new UserApiError(
+            UserErrorCode.MachineBanned,
+            'This machine is banned from creating new accounts',
+          )
+        }
+      }
+
+      let useSignupCode = false
+      // NOTE(tec27): We don't check this in dev because it is very likely we have created a ton of
+      // accounts with the same session ID. It is separate from the throttling disable, however,
+      // because we do want to be able to integration test it
+      const usersWithIds = await this.userIdManager.findUsersWithIdentifiers(clientIds)
+      if (usersWithIds.length >= MAX_ACCOUNTS_PER_MACHINE) {
+        if (!signupCode) {
+          throw new UserApiError(
+            UserErrorCode.TooManyAccounts,
+            'This machine has reached the limit of created accounts.',
+          )
+        }
+        // Code will be validated in createUser
+        useSignupCode = true
+      }
+      return { signupCode: useSignupCode ? signupCode : undefined }
+    }
+
+    let checkedSignupCode: string | undefined
+    if (request?.completedUserId === undefined) {
+      try {
+        checkedSignupCode = (await prepareCreationFn()).signupCode
+      } catch (err) {
+        // A concurrent request may have created this account during preflight checks.
+        if (
+          !request ||
+          (
+            await this.signupProofService
+              .verify(body, body.attemptId, body.proof)
+              .catch(() => undefined)
+          )?.completedUserId === undefined
+        ) {
+          throw err
+        }
+      }
+    }
+    const hashedPassword = await hashPass(password)
+
+    let completeIdentifiers: (() => Promise<void>) | undefined
+    let createdUser: { user: SelfUser; permissions: SbPermissions; reused?: boolean } | undefined
+    try {
+      createdUser = await createUser({
+        name: username,
+        email,
+        hashedPassword,
+        ipAddress: ctx.ip,
+        locale,
+        request,
+        signupCode: checkedSignupCode,
+        completeCreationFn: async (userId, client, transactionCompleted) => {
+          await this.chatService.joinInitialChannel(userId, client, transactionCompleted)
+          completeIdentifiers = await this.userIdManager.upsertInTransaction(
+            userId,
+            clientIds,
+            client,
+          )
+        },
+      })
+    } catch (err: any) {
+      if (err instanceof InvalidSignupCodeError) {
+        throw new UserApiError(
+          UserErrorCode.InvalidCode,
+          'The provided signup code is invalid. It may be expired.',
+        )
+      }
+
+      if (err.code && err.code === UNIQUE_VIOLATION) {
+        throw new UserApiError(
+          UserErrorCode.UsernameTakenOrRestricted,
+          'A user with that name already exists or the name is not allowed',
+        )
+      }
+
+      throw err
+    }
+
+    // If this is the first user ever created, give them the ability to edit permissions. This
+    // mostly just makes it easier to get started in development and tests.
+    if (!createdUser.reused && createdUser.user.id === 1) {
+      await updatePermissions(createdUser.user.id, {
+        ...createdUser.permissions,
+        editPermissions: true,
+      })
+      createdUser.permissions.editPermissions = true
+    }
+
+    if (createdUser.reused) {
+      await this.userIdManager.upsertAndReconcileRestrictions(createdUser.user.id, clientIds)
+    } else {
+      await completeIdentifiers!()
+    }
+    if (
+      createdUser.reused &&
+      ((await isUserBanned(createdUser.user.id)) ||
+        (await this.userIdManager.banUserIfNeeded(createdUser.user.id)))
+    ) {
+      throw new UserApiError(UserErrorCode.AccountBanned, 'This account has been banned')
+    }
+    await ctx.beginSession(createdUser.user.id, false, 'app')
+
+    // No need to wait for this, if it fails they can just re-send the email later
+    Promise.resolve()
+      .then(async () => {
+        if (createdUser.reused) return
+        const code = await genRandomCode()
+        await addEmailVerificationCode({ userId: createdUser.user.id, email, code, ip: ctx.ip })
+        await sendVerificationEmail({
+          email,
+          code,
+          username: createdUser.user.loginName,
+        })
+      })
+      .catch(err => ctx.log.error({ err, req: ctx.req }, 'Error sending email verification email'))
+
+    return {
+      user: toSelfUserJson(ctx.session!.user),
+      permissions: ctx.session!.permissions,
+      jwt: await getJwt(ctx, this.clock.now()),
+    }
+  }
+
+  @httpPost('/username-available/:username')
+  @httpBefore(throttleMiddleware(usernameAvailableThrottle, throttleByIp))
+  async checkUsernameAvailable(ctx: RouterContext): Promise<UsernameAvailableResponse> {
+    const {
+      params: { username },
+      query: { type },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ username: string }>({
+        username: Joi.string()
+          .min(USERNAME_MINLENGTH)
+          .max(USERNAME_MAXLENGTH)
+          .pattern(USERNAME_PATTERN)
+          .required(),
+      }).required(),
+      query: Joi.object<{ type?: 'login' | 'display' }>({
+        type: Joi.string().valid('login', 'display'),
+      }),
+    })
+
+    const available = await isUsernameAvailable(username, type)
+    if (!available) {
+      return { available: false }
+    }
+
+    const { allowed } = await got
+      .post(serverRsUrl(urlPath`/users/names/check-allowed/${username}`), {
+        timeout: { request: 5000 },
+      })
+      .json<CheckAllowedNameResponse>()
+
+    return { available: available && allowed }
+  }
+
+  @httpPost('/recovery/user')
+  @httpBefore(throttleMiddleware(forgotUserPassThrottle, throttleByIp))
+  async recoverUsername(ctx: RouterContext): Promise<void> {
+    const {
+      body: { email },
+    } = validateRequest(ctx, {
+      body: Joi.object<RecoverUsernameRequest>({
+        email: joiEmail().required().trim(),
+      }).required(),
+    })
+
+    const users = await findAllUsersWithEmail(email)
+    ctx.status = 204
+
+    if (!users.length) {
+      return
+    }
+
+    const isLimited = await forgotUserSuccessThrottle.rateLimit(email)
+    if (isLimited) {
+      ctx.log.warn('email is over username recovery limit')
+      return
+    }
+
+    await sendMailTemplate({
+      to: email,
+      subject: 'ShieldBattery Username Recovery',
+      templateName: 'username-recovery',
+      templateData: {
+        email,
+        usernames: users.map(user => ({ username: user.name })),
+      },
+    })
+  }
+
+  @httpPost('/recovery/password')
+  @httpBefore(throttleMiddleware(forgotUserPassThrottle, throttleByIp))
+  async requestPasswordReset(ctx: RouterContext): Promise<void> {
+    const {
+      body: { username, email },
+    } = validateRequest(ctx, {
+      body: Joi.object<RequestPasswordResetRequest>({
+        username: joiUsername().required(),
+        email: joiEmail().required().trim(),
+      }).required(),
+    })
+
+    const user = await findUserByName(username)
+    ctx.status = 204
+    if (!user) {
+      return
+    }
+
+    const selfUser = await findSelfById(user.id)
+    if (!selfUser || selfUser.email !== email) {
+      return
+    }
+
+    const isLimited = await forgotPasswordSuccessThrottle.rateLimit(String(user.id))
+    if (isLimited) {
+      ctx.log.warn('user is over password recovery limit')
+      return
+    }
+
+    const code = await genRandomCode()
+    await addPasswordResetCode({
+      userId: user.id,
+      code,
+      ip: ctx.ip,
+    })
+
+    await sendMailTemplate({
+      to: selfUser.email,
+      subject: 'ShieldBattery Password Reset',
+      templateName: 'password-reset',
+      templateData: {
+        username: user.name,
+        code,
+      },
+    })
+  }
+
+  @httpPost('/recovery/reset-password')
+  @httpBefore(throttleMiddleware(resetPasswordThrottle, throttleByIp))
+  async resetPassword(ctx: RouterContext): Promise<void> {
+    const {
+      body: { code, password },
+    } = validateRequest(ctx, {
+      body: Joi.object<ResetPasswordRequest>({
+        code: Joi.string().regex(RANDOM_EMAIL_CODE_PATTERN).required(),
+        password: Joi.string().min(PASSWORD_MINLENGTH).required(),
+      }).required(),
+    })
+
+    await transact(async client => {
+      const userId = await usePasswordResetCode(code, client)
+      if (!userId) {
+        throw new UserApiError(UserErrorCode.InvalidCode, 'Password reset code is invalid')
+      }
+
+      await this.userService.updateCurrentUser(userId, { password: await hashPass(password) })
+    })
+
+    ctx.status = 204
+  }
+
+  @httpGet('/batch-info')
+  @httpBefore(throttleMiddleware(accountRetrievalThrottle, throttleByUserOrIp))
+  async batchGetInfo(ctx: RouterContext): Promise<GetBatchUserInfoResponse> {
+    const { query } = validateRequest(ctx, {
+      query: Joi.object<{ u: SbUserId[] }>({
+        u: Joi.array().items(joiUserId()).single().min(1).max(20),
+      }).required(),
+    })
+
+    const userIds = query.u
+    const users = await findUsersById(userIds)
+
+    return {
+      userInfos: users,
+    }
+  }
+
+  /**
+   * Finds users whose name starts with the given text, matching without regard to case. Meant for
+   * completing a name as it's typed, so it answers with a short list rather than paging.
+   */
+  @httpGet('/search')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(userSearchThrottle, throttleByUser))
+  async searchUsers(ctx: RouterContext): Promise<SearchUsersResponse> {
+    const { query } = validateRequest(ctx, {
+      query: Joi.object<{ q: string }>({
+        q: Joi.string().trim().min(1).max(USERNAME_MAXLENGTH).required(),
+      }).required(),
+    })
+
+    return { users: await findUsersByNamePrefix(query.q, SEARCH_USERS_LIMIT) }
+  }
+
+  /**
+   * Resolves a display name to the user carrying it, matching without regard to case. Answers 404
+   * if no user has that name.
+   */
+  @httpGet('/by-name/:name')
+  @httpBefore(throttleMiddleware(accountRetrievalThrottle, throttleByUserOrIp))
+  async getUserByName(ctx: RouterContext): Promise<GetUserByNameResponse> {
+    const { params } = validateRequest(ctx, {
+      params: Joi.object<{ name: string }>({
+        name: joiUsername().required(),
+      }).required(),
+    })
+
+    const user = await findUserByName(params.name)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    return { user }
+  }
+
+  @httpGet('/:id/profile')
+  @httpBefore(throttleMiddleware(accountRetrievalThrottle, throttleByUserOrIp))
+  async getUserProfile(ctx: RouterContext): Promise<GetUserProfileResponse> {
+    const { params } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }).required(),
+    })
+
+    const user = await findUserById(params.id)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const currentSeason = await this.matchmakingSeasonsService.getCurrentSeason()
+    const ratingsPromise = getMatchmakingRatingsForUser(user.id, currentSeason.id)
+    const rankingsPromise = getRankingsForUser(this.redis, user.id, currentSeason.id)
+
+    const userStatsPromise = getUserStats(user.id)
+
+    const NUM_RECENT_GAMES = 6
+    const matchHistoryPromise = (async () => {
+      const games = await getRecentGamesForUser(user.id, NUM_RECENT_GAMES)
+      const { users, maps, replays } = await getGameListSideData({
+        games,
+        currentUserId: ctx.session?.user?.id,
+        replayService: this.replayService,
+        logger: ctx.log,
+      })
+
+      return {
+        games: games.map(g => toGameRecordJson(g)),
+        maps: maps.map(m => toMapInfoJson(m)),
+        users,
+        replays,
+      }
+    })()
+
+    const [userStats, matchHistory, ratings, rankings] = await Promise.all([
+      userStatsPromise,
+      matchHistoryPromise,
+      ratingsPromise,
+      rankingsPromise,
+    ])
+
+    const ladder: Partial<Record<MatchmakingType, LadderPlayer>> = {}
+    for (const r of ratings) {
+      ladder[r.matchmakingType] = {
+        userId: r.userId,
+        matchmakingType: r.matchmakingType,
+        seasonId: r.seasonId,
+        rank: rankings.get(r.matchmakingType) ?? -1,
+        rating: r.lifetimeGames >= NUM_PLACEMENT_MATCHES ? r.rating : 0,
+        points: r.points,
+        bonusUsed: r.bonusUsed,
+        wins: r.wins,
+        losses: r.losses,
+        lifetimeGames: r.lifetimeGames,
+        pWins: r.pWins,
+        pLosses: r.pLosses,
+        tWins: r.tWins,
+        tLosses: r.tLosses,
+        zWins: r.zWins,
+        zLosses: r.zLosses,
+        rWins: r.rWins,
+        rLosses: r.rLosses,
+        rPWins: r.rPWins,
+        rPLosses: r.rPLosses,
+        rTWins: r.rTWins,
+        rTLosses: r.rTLosses,
+        rZWins: r.rZWins,
+        rZLosses: r.rZLosses,
+        lastPlayedDate: Number(r.lastPlayedDate),
+      }
+    }
+
+    return {
+      user,
+      profile: {
+        userId: user.id,
+        ladder,
+        seasonId: currentSeason.id,
+        userStats,
+      },
+      matchHistory,
+      seasons: [toMatchmakingSeasonJson(currentSeason)],
+    }
+  }
+
+  @httpGet('/:id/match-history')
+  @httpBefore(throttleMiddleware(matchHistoryRetrievalThrottle, throttleByUserOrIp))
+  async getMatchHistory(ctx: RouterContext): Promise<GetMatchHistoryResponse> {
+    const {
+      params,
+      query: {
+        ranked,
+        custom,
+        duration,
+        mapName,
+        playerName,
+        format,
+        matchup,
+        sort,
+        offset,
+        startDate,
+        endDate,
+        includeShort,
+      },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }).required(),
+      query: Joi.object<GetMatchHistoryQueryParams>({
+        ranked: Joi.boolean(),
+        custom: Joi.boolean(),
+        duration: Joi.string().valid(...Object.values(GameDurationFilter)),
+        mapName: Joi.string().max(100),
+        playerName: Joi.string().max(100),
+        format: Joi.string().valid(...ALL_GAME_FORMATS),
+        matchup: Joi.string().pattern(/^[ptz_]{1,4}-[ptz_]{1,4}$/),
+        sort: Joi.string().valid(...Object.values(GameSortOption)),
+        // `.integer()` is needed because Joi otherwise accepts e.g. `1.5`, which produces an invalid
+        // `OFFSET 1.5` and 500s on the bigint cast. The max keeps a hand-crafted request from
+        // forcing the DB to produce (and sort) an unbounded number of rows.
+        offset: Joi.number().integer().min(0).max(MAX_GAMES_OFFSET),
+        startDate: Joi.number().integer().min(0).max(MAX_DATE_TIMESTAMP),
+        endDate: Joi.number().integer().min(0).max(MAX_DATE_TIMESTAMP),
+        includeShort: Joi.boolean().default(false),
+      }),
+    })
+
+    const user = await findUserById(params.id)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const decodedMatchup = matchup && format ? decodeMatchup(format, matchup) : undefined
+
+    const games = await getGamesForUser({
+      userId: user.id,
+      limit: GET_MATCH_HISTORY_LIMIT,
+      offset: offset ?? 0,
+      ranked,
+      custom,
+      duration,
+      mapName,
+      playerName,
+      format,
+      matchup: decodedMatchup,
+      sort,
+      startDate,
+      endDate,
+      includeShort,
+    })
+
+    const { users, maps, replays } = await getGameListSideData({
+      games,
+      currentUserId: ctx.session?.user?.id,
+      replayService: this.replayService,
+      logger: ctx.log,
+    })
+
+    return {
+      games: games.map(g => toGameRecordJson(g)),
+      maps: maps.map(m => toMapInfoJson(m)),
+      users,
+      hasMoreGames: games.length >= GET_MATCH_HISTORY_LIMIT,
+      replays,
+    }
+  }
+
+  @httpGet('/:id/ranking-history')
+  @httpBefore(throttleMiddleware(rankingsHistoryRetrievalThrottle, throttleByUserOrIp))
+  async getUserRankingHistory(ctx: RouterContext): Promise<GetUserRankingHistoryResponse> {
+    const { params } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }).required(),
+    })
+
+    const user = await findUserById(params.id)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const ranks = await getMatchmakingFinalizedRanksForUser(params.id)
+    const seasons = await getMatchmakingSeasonsByIds(ranks.map(r => r.seasonId))
+
+    const history: LadderPlayer[] = ranks.map(
+      r =>
+        ({
+          userId: r.userId,
+          matchmakingType: r.matchmakingType,
+          seasonId: r.seasonId,
+          rank: r.rank,
+          rating: r.rating,
+          points: r.points,
+          bonusUsed: r.bonusUsed,
+          wins: r.wins,
+          losses: r.losses,
+          lifetimeGames: r.lifetimeGames,
+          pWins: r.pWins,
+          pLosses: r.pLosses,
+          tWins: r.tWins,
+          tLosses: r.tLosses,
+          zWins: r.zWins,
+          zLosses: r.zLosses,
+          rWins: r.rWins,
+          rLosses: r.rLosses,
+          rPWins: r.rPWins,
+          rPLosses: r.rPLosses,
+          rTWins: r.rTWins,
+          rTLosses: r.rTLosses,
+          rZWins: r.rZWins,
+          rZLosses: r.rZLosses,
+          lastPlayedDate: Number(r.lastPlayedDate),
+        }) satisfies LadderPlayer,
+    )
+
+    return {
+      history,
+      seasons: seasons.map(s => toMatchmakingSeasonJson(s)),
+    }
+  }
+
+  @httpPost('/:id/policies')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(accountUpdateThrottle, throttleByUser))
+  async acceptPolicies(ctx: RouterContext): Promise<AcceptPoliciesResponse> {
+    const { params, body } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }).required(),
+      body: Joi.object<AcceptPoliciesRequest>({
+        policies: Joi.array()
+          .items(
+            Joi.array()
+              .ordered(Joi.valid(...ALL_POLICY_TYPES).required(), Joi.number().required())
+              .required(),
+          )
+          .min(1)
+          .required(),
+      }).required(),
+    })
+
+    if (params.id !== ctx.session!.user.id) {
+      throw new httpErrors.Unauthorized("Can't change another user's account")
+    }
+
+    const updates: Partial<UserUpdatables> = {}
+    for (const [policyType, version] of body.policies) {
+      switch (policyType) {
+        case SbPolicyType.Privacy:
+          updates.acceptedPrivacyVersion = version
+          break
+        case SbPolicyType.TermsOfService:
+          updates.acceptedTermsVersion = version
+          break
+        case SbPolicyType.AcceptableUse:
+          updates.acceptedUsePolicyVersion = version
+          break
+        default:
+          // TODO(tec27): Perhaps we should just skip this policy instead of 500ing?
+          assertUnreachable(policyType)
+      }
+    }
+
+    const { user } = await this.userService.updateCurrentUser(params.id, updates, ctx)
+
+    return { user: toSelfUserJson(user) }
+  }
+
+  @httpPost('/:id/language')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(accountUpdateThrottle, throttleByUser))
+  async changeLanguage(ctx: RouterContext): Promise<ChangeLanguagesResponse> {
+    const { params, body } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }).required(),
+      body: Joi.object<ChangeLanguageRequest>({
+        language: Joi.valid(...ALL_TRANSLATION_LANGUAGES).required(),
+      }).required(),
+    })
+
+    if (params.id !== ctx.session!.user.id) {
+      throw new httpErrors.Unauthorized("Can't change another user's language")
+    }
+
+    const { user } = await this.userService.updateCurrentUser(
+      params.id,
+      { locale: body.language },
+      ctx,
+    )
+
+    return { user: toSelfUserJson(user) }
+  }
+
+  @httpPost('/:id/avatar')
+  @httpBefore(
+    ensureLoggedIn,
+    throttleMiddleware(avatarUpdateThrottle, throttleByUser),
+    handleMultipartFiles(MAX_IMAGE_SIZE_BYTES),
+  )
+  async updateAvatar(ctx: RouterContext): Promise<UpdateCurrentUserAvatarResponse> {
+    const { params } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().valid(ctx.session!.user.id).required(),
+      }).required(),
+    })
+
+    // Removing an avatar stays allowed while restricted, so this check is only done here
+    if (
+      await this.restrictionService.isRestricted(ctx.session!.user.id, RestrictionKind.AvatarUpload)
+    ) {
+      throw new UserApiError(
+        UserErrorCode.AvatarUploadRestricted,
+        'User is restricted from uploading avatars',
+      )
+    }
+
+    const avatarFile = ctx.request.files?.avatar
+    if (!avatarFile) {
+      throw new httpErrors.BadRequest('an avatar file must be provided')
+    }
+    if (Array.isArray(avatarFile)) {
+      throw new httpErrors.BadRequest('only one avatar file can be uploaded')
+    }
+
+    if (!(await this.imageService.isImageSafe(avatarFile.filepath))) {
+      throw new UserApiError(UserErrorCode.InappropriateImage, 'Avatar image is inappropriate')
+    }
+
+    const [image, imageExtension] = await resizeImage(
+      avatarFile.filepath,
+      USER_AVATAR_SIZE,
+      USER_AVATAR_SIZE,
+    )
+    const avatarPath = createImagePath('user-avatars', imageExtension)
+    const buffer = await image.toBuffer()
+
+    const userInfo = await this.userService.updateUserAvatar(
+      params.id,
+      { path: avatarPath, data: buffer, contentType: mime.getType(imageExtension) ?? undefined },
+      ctx,
+    )
+
+    return { user: toSelfUserJson(userInfo.user) }
+  }
+
+  @httpDelete('/:id/avatar')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(avatarUpdateThrottle, throttleByUser))
+  async removeAvatar(ctx: RouterContext): Promise<UpdateCurrentUserAvatarResponse> {
+    const { params } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().valid(ctx.session!.user.id).required(),
+      }).required(),
+    })
+
+    const userInfo = await this.userService.updateUserAvatar(params.id, undefined, ctx)
+
+    return { user: toSelfUserJson(userInfo.user) }
+  }
+
+  @httpPost('/:id/email-verification/send')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(sendVerificationThrottle, throttleByUser))
+  async resendVerificationEmail(ctx: RouterContext): Promise<void> {
+    const { params } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().valid(ctx.session!.user.id).required(),
+      }).required(),
+    })
+
+    const user = await findSelfById(params.id)
+    if (!user) {
+      throw new httpErrors.BadRequest('User not found')
+    }
+
+    const emailVerificationsCount = await getEmailVerificationsCount({
+      id: user.id,
+      email: user.email,
+    })
+    if (emailVerificationsCount > 10) {
+      throw new httpErrors.Conflict('Email is over verification limit')
+    }
+
+    const code = await genRandomCode()
+    await addEmailVerificationCode({ userId: user.id, email: user.email, code, ip: ctx.ip })
+    await sendVerificationEmail({
+      email: user.email,
+      code,
+      username: user.loginName,
+    })
+
+    ctx.status = 204
+  }
+
+  @httpPost('/:id/email-verification')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(emailVerificationThrottle, throttleByUser))
+  async verifyEmail(ctx: RouterContext): Promise<void> {
+    const {
+      params,
+      body: { code },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().valid(ctx.session!.user.id).required(),
+      }).required(),
+      body: Joi.object<{ code: string }>({
+        code: Joi.string().required(),
+      }).required(),
+    })
+
+    const user = await findSelfById(params.id)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const emailVerified = await this.userService.verifyEmail({
+      userId: user.id,
+      code,
+    })
+    if (!emailVerified) {
+      throw new UserApiError(UserErrorCode.InvalidCode, 'invalid code')
+    }
+
+    this.publisher.publish(`/userProfiles/${user.id}`, {
+      action: 'emailVerified',
+      userId: user.id,
+    })
+
+    ctx.status = 204
+  }
+
+  @httpGet('/:id/relationships')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(accountRetrievalThrottle, throttleByUser))
+  async getRelationships(ctx: RouterContext): Promise<GetRelationshipsResponse> {
+    const { params } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().valid(ctx.session!.user.id).required(),
+      }).required(),
+    })
+
+    const summary = await this.userRelationshipService.getRelationshipSummary(params.id)
+
+    const allUserIds = [
+      summary.blocks.map(b => b.toId),
+      summary.friends.map(f => f.toId),
+      summary.outgoingRequests.map(r => r.toId),
+      summary.incomingRequests.map(r => r.fromId),
+    ].flat()
+    const users = await findUsersById(allUserIds)
+
+    return { summary: toUserRelationshipSummaryJson(summary), users }
+  }
+
+  @httpPost('/:id/relationships/friend-requests')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(relationshipsThrottle, throttleByUser))
+  async sendFriendRequest(ctx: RouterContext): Promise<ModifyRelationshipResponse> {
+    const { params } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }).required(),
+    })
+
+    const user = await findUserById(params.id)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const relationship = await this.userRelationshipService.sendFriendRequest(
+      ctx.session!.user.id,
+      user.id,
+    )
+
+    return { relationship: toUserRelationshipJson(relationship), user }
+  }
+
+  @httpDelete('/:toId/relationships/friend-requests/:fromId')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(relationshipsThrottle, throttleByUser))
+  async removeFriendRequest(ctx: RouterContext): Promise<void> {
+    const {
+      params: { toId, fromId },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ toId: SbUserId; fromId: SbUserId }>({
+        toId: joiUserId().required(),
+        fromId: joiUserId().required(),
+      }).required(),
+    })
+
+    if (toId !== ctx.session!.user.id && fromId !== ctx.session!.user.id) {
+      throw new httpErrors.BadRequest('Can only manage your own friend requests')
+    }
+    const otherUser = toId === ctx.session!.user.id ? fromId : toId
+
+    const user = await findUserById(otherUser)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    await this.userRelationshipService.removeFriendRequest(fromId, toId)
+
+    ctx.status = 204
+  }
+
+  @httpPost('/:toId/relationships/friends/:fromId')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(relationshipsThrottle, throttleByUser))
+  async acceptFriendRequest(ctx: RouterContext): Promise<ModifyRelationshipResponse> {
+    const {
+      params: { toId, fromId },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ toId: SbUserId; fromId: SbUserId }>({
+        toId: joiUserId().valid(ctx.session!.user.id).required(),
+        fromId: joiUserId().required(),
+      }).required(),
+    })
+
+    const user = await findUserById(fromId)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const relationship = await this.userRelationshipService.acceptFriendRequest(toId, fromId)
+
+    return { relationship: toUserRelationshipJson(relationship), user }
+  }
+
+  @httpDelete('/:removerId/relationships/friends/:targetId')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(relationshipsThrottle, throttleByUser))
+  async removeFriend(ctx: RouterContext): Promise<void> {
+    const {
+      params: { removerId, targetId },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ removerId: SbUserId; targetId: SbUserId }>({
+        removerId: joiUserId().valid(ctx.session!.user.id).required(),
+        targetId: joiUserId().required(),
+      }).required(),
+    })
+
+    const user = await findUserById(targetId)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    await this.userRelationshipService.removeFriend(removerId, targetId)
+
+    ctx.status = 204
+  }
+
+  @httpPost('/:blockerId/relationships/blocks/:targetId')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(relationshipsThrottle, throttleByUser))
+  async blockUser(ctx: RouterContext): Promise<ModifyRelationshipResponse> {
+    const {
+      params: { blockerId, targetId },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ blockerId: SbUserId; targetId: SbUserId }>({
+        blockerId: joiUserId().valid(ctx.session!.user.id).required(),
+        targetId: joiUserId().required(),
+      }).required(),
+    })
+
+    const user = await findUserById(targetId)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const relationship = await this.userRelationshipService.blockUser(blockerId, targetId)
+
+    return { relationship: toUserRelationshipJson(relationship), user }
+  }
+
+  @httpDelete('/:unblockerId/relationships/blocks/:targetId')
+  @httpBefore(ensureLoggedIn, throttleMiddleware(relationshipsThrottle, throttleByUser))
+  async unblockUser(ctx: RouterContext): Promise<void> {
+    const {
+      params: { unblockerId, targetId },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ unblockerId: SbUserId; targetId: SbUserId }>({
+        unblockerId: joiUserId().valid(ctx.session!.user.id).required(),
+        targetId: joiUserId().required(),
+      }).required(),
+    })
+
+    const user = await findUserById(targetId)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    await this.userRelationshipService.unblockUser(unblockerId, targetId)
+
+    ctx.status = 204
+  }
+}
+
+@httpApi('/admin/users')
+@httpBeforeAll(convertUserApiErrors, ensureLoggedIn)
+export class AdminUserApi {
+  constructor(
+    private banEnacter: BanEnacter,
+    private restrictionService: RestrictionService,
+    private userService: UserService,
+  ) {}
+
+  @httpGet('/:id/bans')
+  @httpBefore(checkAllPermissions('banUsers'))
+  async getBans(ctx: RouterContext): Promise<AdminGetBansResponse> {
+    const { params } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }).required(),
+    })
+
+    const [user, banHistory] = await Promise.all([
+      findUserById(params.id),
+      retrieveBanHistory(params.id),
+    ])
+
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const banningUserIds = Array.from(
+      new Set(banHistory.map(b => b.bannedBy).filter((i): i is SbUserId => i !== undefined)),
+    )
+
+    const banningUsers = banningUserIds.length ? await findUsersById(banningUserIds) : []
+
+    return {
+      forUser: params.id,
+      bans: banHistory.map(b => toBanHistoryEntryJson(b)),
+      users: banningUsers.concat(user),
+    }
+  }
+
+  @httpPost('/:id/bans')
+  @httpBefore(checkAllPermissions('banUsers'))
+  async banUser(ctx: RouterContext): Promise<AdminBanUserResponse> {
+    const { params, body } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }),
+      body: Joi.object<AdminBanUserRequest>({
+        endTime: Joi.date().timestamp().min(Date.now()).required(),
+        reason: Joi.string(),
+      }).required(),
+    })
+
+    if (params.id === ctx.session!.user.id) {
+      throw new UserApiError(UserErrorCode.NotAllowedOnSelf, "can't ban yourself")
+    }
+
+    const user = await findUserById(params.id)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const [ban, bannedBy] = await Promise.all([
+      this.banEnacter.enactBan({
+        targetId: user.id,
+        bannedBy: ctx.session!.user.id,
+        endTime: new Date(body.endTime),
+        reason: body.reason,
+        source: BanSource.Admin,
+      }),
+      findUserById(ctx.session!.user.id),
+    ])
+
+    // This would be a really weird occurrence! So we just make sure we do the actual banning before
+    // this, and let the 500 pass through after
+    if (!bannedBy) {
+      throw new Error("couldn't find current user")
+    }
+
+    return {
+      ban: toBanHistoryEntryJson(ban),
+      users: [user, bannedBy],
+    }
+  }
+
+  @httpPost('/:id/unban')
+  @httpBefore(checkAllPermissions('banUsers'))
+  async unbanUser(ctx: RouterContext): Promise<AdminUnbanUserResponse> {
+    const { params, body } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }),
+      body: Joi.object<AdminUnbanUserRequest>({
+        reason: Joi.string().max(500),
+      }).required(),
+    })
+
+    const user = await findUserById(params.id)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const { liftedBans, liftedIdentifierBans } = await this.banEnacter.enactUnban({
+      targetId: user.id,
+      unbannedBy: ctx.session!.user.id,
+      reason: body.reason,
+    })
+
+    const unbannedUsers = Array.from(new Set(liftedBans.map(b => b.userId)))
+    const users = await findUsersById(
+      Array.from(new Set(unbannedUsers.concat(ctx.session!.user.id, user.id))),
+    )
+
+    return {
+      bans: liftedBans.filter(b => b.userId === user.id).map(b => toBanHistoryEntryJson(b)),
+      unbannedUsers,
+      liftedIdentifierBans,
+      users,
+    }
+  }
+
+  @httpGet('/:id/restrictions')
+  @httpBefore(checkAllPermissions('banUsers'))
+  async getRestrictions(ctx: RouterContext): Promise<AdminGetRestrictionsResponse> {
+    const { params } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }),
+    })
+
+    const [user, restrictionHistory] = await Promise.all([
+      findUserById(params.id),
+      this.restrictionService.getUserRestrictionHistory({ userId: params.id }),
+    ])
+
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const restrictingUserIds = Array.from(
+      new Set(
+        restrictionHistory
+          .flatMap(r => [r.restrictedBy, r.liftedBy])
+          .filter((i): i is SbUserId => i !== undefined),
+      ),
+    )
+
+    const restrictingUsers = restrictingUserIds.length
+      ? await findUsersById(restrictingUserIds)
+      : []
+
+    return {
+      forUser: params.id,
+      restrictions: restrictionHistory.map(r => toUserRestrictionHistoryJson(r)),
+      users: restrictingUsers.concat(user),
+    }
+  }
+
+  @httpPost('/:id/restrictions')
+  @httpBefore(checkAllPermissions('banUsers'))
+  async applyRestriction(ctx: RouterContext): Promise<AdminApplyRestrictionResponse> {
+    const { params, body } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }),
+      body: Joi.object<AdminApplyRestrictionRequest>({
+        kind: Joi.string()
+          .valid(...ALL_RESTRICTION_KINDS)
+          .required(),
+        endTime: Joi.date().timestamp().min(Date.now()).required(),
+        // Reasons are per-kind: a kind with presets requires one of its presets; a kind with no
+        // presets (e.g. reporting) forbids a reason entirely.
+        reason: Joi.any().when('kind', {
+          switch: ALL_RESTRICTION_KINDS.filter(
+            kind => RESTRICTION_REASONS_BY_KIND[kind].length > 0,
+          ).map(kind => ({
+            is: kind,
+            then: Joi.string()
+              .valid(...RESTRICTION_REASONS_BY_KIND[kind])
+              .required(),
+          })),
+          otherwise: Joi.forbidden(),
+        }),
+        adminNotes: Joi.string().max(500),
+      }).required(),
+    })
+
+    const user = await findUserById(params.id)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const restriction = await this.restrictionService.applyRestriction({
+      targetId: user.id,
+      kind: body.kind,
+      endTime: new Date(body.endTime),
+      reason: body.reason,
+      restrictedBy: ctx.session!.user.id,
+      adminNotes: body.adminNotes,
+    })
+
+    const restrictingUser = await findUserById(ctx.session!.user.id)
+    if (!restrictingUser) {
+      throw new Error("couldn't find current user")
+    }
+
+    return {
+      restriction: toUserRestrictionHistoryJson(restriction),
+      users: [user, restrictingUser],
+    }
+  }
+
+  @httpPost('/:id/restrictions/lift')
+  @httpBefore(checkAllPermissions('banUsers'))
+  async liftRestriction(ctx: RouterContext): Promise<AdminLiftRestrictionResponse> {
+    const { params, body } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }),
+      body: Joi.object<AdminLiftRestrictionRequest>({
+        kind: Joi.string()
+          .valid(...ALL_RESTRICTION_KINDS)
+          .required(),
+        reason: Joi.string().max(500),
+      }).required(),
+    })
+
+    if (params.id === ctx.session!.user.id) {
+      throw new UserApiError(UserErrorCode.NotAllowedOnSelf, "can't lift your own restrictions")
+    }
+
+    const user = await findUserById(params.id)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const liftedRestrictions = await this.restrictionService.liftRestriction({
+      targetId: user.id,
+      kind: body.kind,
+      liftedBy: ctx.session!.user.id,
+      reason: body.reason,
+    })
+
+    const liftingUser = await findUserById(ctx.session!.user.id)
+    if (!liftingUser) {
+      throw new Error("couldn't find current user")
+    }
+
+    return {
+      restrictions: liftedRestrictions
+        .filter(r => r.userId === user.id)
+        .map(r => toUserRestrictionHistoryJson(r)),
+      users: [user, liftingUser],
+    }
+  }
+
+  @httpGet('/:id/linked-accounts')
+  @httpBefore(checkAllPermissions('banUsers'))
+  async getLinkedAccounts(ctx: RouterContext): Promise<AdminGetLinkedAccountsResponse> {
+    const { params, query } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({ id: joiUserId().required() }).required(),
+      query: Joi.object<{ minMatches: number; offset: number }>({
+        minMatches: Joi.number().integer().min(1).max(8).default(4),
+        offset: Joi.number().integer().min(0).max(Number.MAX_SAFE_INTEGER).default(0),
+      }),
+    })
+    const user = await findUserById(params.id)
+    if (!user) throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+
+    const matches = await findLinkedAccounts(
+      user.id,
+      query.minMatches,
+      LINKED_ACCOUNTS_PAGE_SIZE + 1,
+      query.offset,
+    )
+    const page = matches.slice(0, LINKED_ACCOUNTS_PAGE_SIZE)
+    const users = page.length ? await findUsersById(page.map(match => match.userId)) : []
+    ctx.set('Cache-Control', 'private, no-store')
+    return {
+      forUser: user.id,
+      matches: page.map(match => ({
+        userId: match.userId,
+        matchingIdentifierTypes: match.matchingIdentifierTypes,
+        firstUsed: Number(match.firstUsed),
+        lastUsed: Number(match.lastUsed),
+      })),
+      users: users.concat(user),
+      hasMore: matches.length > LINKED_ACCOUNTS_PAGE_SIZE,
+    }
+  }
+
+  @httpGet('/:id/ips')
+  @httpBefore(checkAllPermissions('banUsers'))
+  async getIps(ctx: RouterContext): Promise<AdminGetUserIpsResponse> {
+    const { params } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }),
+    })
+
+    const user = await findUserById(params.id)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const ips = await retrieveIpsForUsers([user.id])
+    if (!ips.length) {
+      return {
+        forUser: user.id,
+        ips: [],
+        relatedUsers: [],
+        users: [user],
+      }
+    }
+
+    const relatedUsers = await retrieveRelatedUsersForIps(
+      ips.map(i => i.ipAddress),
+      user.id,
+    )
+
+    const otherUserIds = Array.from(
+      new Set(Array.from(relatedUsers.values(), v => v.map(info => info.userId)).flat()),
+    )
+    const otherUsers = await findUsersById(otherUserIds)
+
+    return {
+      forUser: user.id,
+      ips: ips.map(i => toUserIpInfoJson(i)),
+      relatedUsers: Array.from(relatedUsers.entries(), ([ip, infos]) => [
+        ip,
+        infos.map(i => toUserIpInfoJson(i)),
+      ]),
+      users: otherUsers.concat(user),
+    }
+  }
+
+  @httpDelete('/:id/avatar')
+  @httpBefore(checkAllPermissions('banUsers'))
+  async removeAvatar(ctx: RouterContext): Promise<AdminRemoveUserAvatarResponse> {
+    const { params } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }).required(),
+    })
+
+    const user = await findUserById(params.id)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    const userInfo = await this.userService.updateUserAvatar(params.id, undefined, ctx)
+
+    // NOTE: `userInfo.user` is a `SelfUser` (includes email), so we build the `SbUser` response
+    // explicitly rather than reusing it wholesale.
+    return {
+      user: {
+        id: userInfo.user.id,
+        name: userInfo.user.name,
+        created: userInfo.user.created,
+        avatarUrl: userInfo.user.avatarUrl,
+        staffBadge: userInfo.user.staffBadge,
+      },
+    }
+  }
+
+  @httpPost('/:id/staff-badge')
+  @httpBefore(checkAllPermissions('editPermissions'))
+  async setStaffBadge(ctx: RouterContext): Promise<AdminSetStaffBadgeResponse> {
+    const { params, body } = validateRequest(ctx, {
+      params: Joi.object<{ id: SbUserId }>({
+        id: joiUserId().required(),
+      }).required(),
+      body: Joi.object<AdminSetStaffBadgeRequest>({
+        staffBadge: Joi.boolean().required(),
+      }).required(),
+    })
+
+    const user = await this.userService.updateUserStaffBadge(params.id, body.staffBadge, ctx)
+    if (!user) {
+      throw new UserApiError(UserErrorCode.NotFound, 'user not found')
+    }
+
+    return { user }
+  }
+
+  @httpGet('/:searchTerm')
+  @httpBefore(checkAnyPermission('banUsers', 'editPermissions'))
+  async findUser(ctx: RouterContext): Promise<SbUser[]> {
+    const searchTerm = ctx.params.searchTerm
+
+    // TODO(tec27): Admins probably want more info than just this, maybe we should merge some of
+    // this functionality with the profile page
+    const user = await findUserByName(searchTerm)
+    return user ? [user] : []
+  }
+}

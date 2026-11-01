@@ -1,0 +1,191 @@
+import { Counter } from '@prometheus-io/client'
+import pg, { QueryConfigValues } from 'pg'
+import { isTestRun } from '../../../common/is-test-run'
+import log from '../logging/logger'
+import { monotonicNow } from '../time/monotonic-now'
+import handlePgError from './pg-error-handler'
+
+/**
+ * The amount of time queries are allowed to run for before they are considered "slow" and logged
+ * as a warning.
+ */
+const SLOW_QUERY_TIME_MS = 1000
+
+const dbQueryErrorsTotalMetric = new Counter({
+  name: 'shieldbattery_db_query_errors_total',
+  labelNames: ['error_class'],
+  help: 'Total number of DB queries that threw an error, labeled by the 2-character Postgres SQLSTATE error class (or "unknown" for non-Postgres errors)',
+})
+
+/**
+ * Returns the 2-character Postgres SQLSTATE error class (e.g. "23" for
+ * integrity-constraint-violation) for `error`, or "unknown" if it isn't a Postgres error with a
+ * usable `code`. Kept low-cardinality intentionally: never label metrics with the full 5-char
+ * code or the error message.
+ */
+function getPgErrorClass(error: unknown): string {
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? (error as { code: unknown }).code
+      : undefined
+  return typeof code === 'string' && code.length === 5 ? code.substring(0, 2) : 'unknown'
+}
+
+// Our DATETIME columns are all in UTC, so we mark the strings postgres returns this way so the
+// parsed dates are correct
+pg.types.setTypeParser(
+  pg.types.builtins.TIMESTAMP,
+  (stringValue: string) => new Date(Date.parse(stringValue + '+0000')),
+)
+
+// Similar to above, we must also parse input dates as UTC so the servers running on different time
+// zones work correctly
+// NOTE(tec27): Typings are now missing this option for some reason?
+;(pg.defaults as any).parseInputDatesAsUTC = true
+
+const DEFAULT_POOL_MAX = 20
+const DEFAULT_CONNECT_TIMEOUT_MILLIS = 10000
+
+/** Parses a positive integer from an env var, falling back to `defaultValue` if unset/invalid. */
+function readPositiveIntEnv(value: string | undefined, defaultValue: number): number {
+  const parsed = Number(value)
+  return Number.isNaN(parsed) || parsed <= 0 ? defaultValue : parsed
+}
+
+let pool: pg.Pool | undefined
+// TODO(tec27): Inject this instead so that tests can initialize it if they need to
+if (!isTestRun()) {
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) throw new Error('DATABASE_URL must be set')
+
+  pool = new pg.Pool({
+    connectionString,
+    max: readPositiveIntEnv(process.env.SB_DB_POOL_MAX, DEFAULT_POOL_MAX),
+    // A starved pool should fail fast with an actionable error rather than hanging requests
+    // indefinitely (the pg default is to wait forever for a connection to free up).
+    connectionTimeoutMillis: readPositiveIntEnv(
+      process.env.SB_DB_CONNECT_TIMEOUT_MILLIS,
+      DEFAULT_CONNECT_TIMEOUT_MILLIS,
+    ),
+  })
+
+  // An unhandled 'error' event crashes the process, and Postgres resetting its connections (e.g.
+  // crash recovery after a backend is killed) errors every client at once. The pool only listens on
+  // idle clients, so this listener covers checked-out ones too; their holder also sees the failure
+  // on its next query, and the pool discards the broken client when it's released.
+  pool.on('connect', client => {
+    client.on('error', err => {
+      log.error({ err }, 'database connection errored')
+    })
+  })
+  // The pool re-emits idle clients' errors here, which the listener above has already logged.
+  pool.on('error', () => {})
+}
+
+export interface DbPoolStats {
+  totalConnections: number
+  idleConnections: number
+  inUseConnections: number
+  waitingRequests: number
+  maxConnections: number
+}
+
+/**
+ * Returns a point-in-time snapshot of the shared node-postgres pool. The pool is absent in unit
+ * tests, where database access is mocked.
+ */
+export function getDbPoolStats(): DbPoolStats | undefined {
+  if (!pool) {
+    return undefined
+  }
+
+  return {
+    totalConnections: pool.totalCount,
+    idleConnections: pool.idleCount,
+    inUseConnections: pool.totalCount - pool.idleCount,
+    waitingRequests: pool.waitingCount,
+    maxConnections: pool.options.max,
+  }
+}
+
+export type DbDone = (err?: Error | boolean) => void
+
+export interface ClientResult {
+  /**
+   * A usable database client. This should be released by calling `done` when the DB operations are
+   * completed.
+   */
+  client: DbClient
+  /**
+   * A method to release the client back to the pool. Optionally, a parameter can be passed
+   * indicating whether the client should be thrown away rather than re-used.
+   */
+  done: DbDone
+}
+
+function isQueryConfig(
+  queryTextOrConfig: string | pg.QueryConfig<any>,
+): queryTextOrConfig is pg.QueryConfig {
+  return !(typeof queryTextOrConfig === 'string')
+}
+
+/**
+ * A wrapped version of pg.PoolClient that keeps track of queries that are executed and their
+ * timings for better error tracking + finding long-running queries.
+ */
+export class DbClient {
+  constructor(private wrappedClient: pg.PoolClient) {}
+
+  async query<R extends pg.QueryResultRow = any, I extends any[] = any[]>(
+    queryTextOrConfig: string | pg.QueryConfig<I>,
+    values?: QueryConfigValues<I>,
+  ): Promise<pg.QueryResult<R>> {
+    const queryText = isQueryConfig(queryTextOrConfig) ? queryTextOrConfig.text : queryTextOrConfig
+    const startTime = monotonicNow()
+    try {
+      return await this.wrappedClient.query(queryTextOrConfig, values)
+    } catch (error) {
+      dbQueryErrorsTotalMetric.labels(getPgErrorClass(error)).inc()
+      throw handlePgError(queryText, error)
+    } finally {
+      const totalTime = monotonicNow() - startTime
+      if (totalTime > SLOW_QUERY_TIME_MS) {
+        log.warn(`Slow query [${totalTime}ms]:\n${queryText.trim()}`)
+      }
+    }
+  }
+}
+
+const NOOP_DONE = () => {}
+
+/**
+ * Retrieves a database client from the pool. If a defined `inputClient` is passed in, it will be
+ * returned instead of retrieving a new client (so query functions can easily utilize existing
+ * clients, while also being simple to work with if no client is available already).
+ */
+export async function getDbClient(inputClient?: DbClient): Promise<ClientResult> {
+  if (inputClient) {
+    return { client: inputClient, done: NOOP_DONE }
+  }
+
+  const client = await pool!.connect()
+  return { client: new DbClient(client), done: client.release.bind(client) }
+}
+
+/**
+ * Executes `fn` with a database client, automatically releasing the client when completed. Any
+ * additional arguments will be passed along with the `DbClient`.
+ */
+export async function withDbClient<T, U extends any[]>(
+  fn: (client: DbClient, ...args: U) => Promise<T>,
+  ...args: U
+): Promise<T> {
+  const { client, done } = await getDbClient()
+  try {
+    return await fn(client, ...args)
+  } finally {
+    done()
+  }
+}
+
+export default getDbClient

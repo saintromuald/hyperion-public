@@ -1,0 +1,925 @@
+import { TFunction } from 'i18next'
+import * as React from 'react'
+import { Trans, useTranslation } from 'react-i18next'
+import styled, { css } from 'styled-components'
+import { assertUnreachable } from '../../../common/assert-unreachable'
+import { getGameDurationString } from '../../../common/games/games'
+import {
+  changesGameSettings,
+  LobbyChangedSetting,
+  LobbySeriesPlayerJson,
+} from '../../../common/lobbies/lobby-network'
+import { findSeriesGameWinner } from '../../../common/lobbies/lobby-series'
+import { SbUserId } from '../../../common/users/sb-user-id'
+import { useSelfUser } from '../../auth/auth-utils'
+import { ConnectedAvatar } from '../../avatars/avatar'
+import { openDialog } from '../../dialogs/action-creators'
+import { DialogType } from '../../dialogs/dialog-type'
+import { TransInterpolation } from '../../i18n/i18next'
+import { MaterialIcon } from '../../icons/material/material-icon'
+import { ReduxMapThumbnail } from '../../maps/map-thumbnail'
+import { IconButton, OutlinedButton } from '../../material/button'
+import { buttonReset } from '../../material/button-reset'
+import { Tooltip } from '../../material/tooltip'
+import { Chat } from '../../messaging/chat'
+import { LobbyCommandContext } from '../../messaging/commands/command-context'
+import { useMentionFilterClick } from '../../messaging/mention-hooks'
+import { SystemImportant, SystemMessage } from '../../messaging/message-layout'
+import { MessageComponentProps } from '../../messaging/message-list'
+import { SbMessage } from '../../messaging/message-records'
+import { useAppDispatch, useAppSelector } from '../../redux-hooks'
+import { bodyMedium, bodySmall, labelMedium, labelSmall, singleLine } from '../../styles/typography'
+import { getBatchUserInfo } from '../../users/action-creators'
+import { ConnectedUsername } from '../../users/connected-username'
+import { areUserEntriesEqual, useUserEntriesSelector } from '../../users/user-entries'
+import { LobbyUserMenu } from '../lobby-menu-items'
+import { JoinLobbyMessage, LobbyMessageType } from '../lobby-message-records'
+import { RaceIcon } from '../race-icon'
+import { getReadyEligibleUsers, lobbyTeamLabel, SectionLabel } from './room-parts'
+
+function Username({ userId }: { userId: SbUserId }) {
+  const filterClick = useMentionFilterClick()
+  return (
+    <SystemImportant>
+      <ConnectedUsername userId={userId} filterClick={filterClick} UserMenu={LobbyUserMenu} />
+    </SystemImportant>
+  )
+}
+
+/**
+ * Cards stay inline with the timestamp but must not inherit the message container's hanging
+ * indent, which would shift the card's contents into the timestamp gutter.
+ */
+const inlineCardLayout = css`
+  display: inline-flex;
+  vertical-align: baseline;
+  text-indent: 0;
+`
+
+const NoticeCard = styled.div`
+  ${bodyMedium};
+  ${inlineCardLayout};
+  width: 100%;
+  max-width: 420px;
+  margin: 4px 0;
+  padding: 8px 12px;
+
+  border-radius: 8px;
+  background-color: var(--theme-container-low);
+  box-shadow:
+    inset 0 0 0 1px rgb(from var(--theme-primary) r g b / 0.5),
+    0 0 8px rgb(from var(--theme-primary) r g b / 0.12);
+  color: var(--theme-on-surface);
+
+  align-items: flex-start;
+  gap: 8px;
+`
+
+const NoticeCardText = styled.div`
+  align-self: baseline;
+`
+
+const NoticeCardDetail = styled.div`
+  ${bodySmall};
+  color: var(--theme-on-surface-variant);
+`
+
+const JoinCard = styled.div`
+  ${inlineCardLayout};
+  width: 100%;
+  max-width: 420px;
+  margin: 4px 0;
+  padding: 8px 12px;
+
+  border-radius: 8px;
+  background-color: var(--theme-container-low);
+
+  align-items: center;
+  gap: 10px;
+`
+
+const JoinCardText = styled.div`
+  align-self: baseline;
+  display: flex;
+  flex-direction: column;
+`
+
+const JoinCardTitle = styled.div`
+  ${bodyMedium};
+`
+
+const JoinCardSeat = styled.div`
+  ${labelSmall};
+  color: var(--theme-on-surface-variant);
+`
+
+const SummaryCardRoot = styled.div<{ $largeRoster: boolean }>`
+  ${inlineCardLayout};
+  width: 100%;
+  max-width: ${props => (props.$largeRoster ? 600 : 480)}px;
+  margin: 4px 0;
+
+  border: 1px solid var(--theme-outline-variant);
+  border-radius: 8px;
+  background-color: var(--theme-container-low);
+
+  flex-direction: column;
+  color: var(--theme-on-surface);
+`
+
+const SummaryToggle = styled.button`
+  ${buttonReset};
+  ${bodyMedium};
+  width: 100%;
+  padding: 8px 12px;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background-color: var(--theme-container);
+  }
+`
+
+const SummaryHeadline = styled.div`
+  ${singleLine};
+  flex-grow: 1;
+  min-width: 0;
+`
+
+const SummaryBody = styled.div`
+  padding: 0 12px 12px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+const ResultRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+`
+
+/**
+ * Sized by the map's own aspect ratio (squarish for nearly every map). The frame must have a
+ * definite height of its own: the thumbnail inside sizes itself with percentage heights, which
+ * collapse to zero against an auto-height ancestor.
+ */
+const ResultMapFrame = styled.div<{ $aspectRatio: number }>`
+  width: 80px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  aspect-ratio: ${props => props.$aspectRatio};
+
+  border-radius: 4px;
+  overflow: hidden;
+`
+
+const ResultDetails = styled.div`
+  min-width: 0;
+  flex-grow: 1;
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const ResultMapName = styled.div`
+  ${labelMedium};
+  ${singleLine};
+`
+
+const TeamsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  min-width: 0;
+`
+
+const TeamColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 140px;
+  min-width: 0;
+`
+
+const TeamHeading = styled(SectionLabel)`
+  padding: 0;
+  color: var(--theme-on-surface);
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  & > span:first-child {
+    ${singleLine};
+    min-width: 0;
+  }
+`
+
+const TeamHeadingTrophyIcon = styled(MaterialIcon)`
+  flex-shrink: 0;
+  color: var(--theme-amber);
+`
+
+const PlayerRowTrophyIcon = styled(MaterialIcon)`
+  flex-shrink: 0;
+  color: var(--theme-amber);
+`
+
+const PlayersGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: 4px 12px;
+`
+
+const PlayerRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+`
+
+const PlayerAvatar = styled(ConnectedAvatar)`
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+`
+
+const ComputerAvatar = styled(MaterialIcon)`
+  flex-shrink: 0;
+`
+
+const PlayerRaceIcon = styled(RaceIcon)`
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+`
+
+const PlayerName = styled.div`
+  ${bodyMedium};
+  ${singleLine};
+  min-width: 0;
+`
+
+const SummaryActions = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+`
+
+const ReplayButton = styled(OutlinedButton)`
+  min-height: 32px;
+  padding: 0 12px;
+  border-color: var(--theme-outline-variant);
+  color: var(--theme-on-surface);
+`
+
+const SummaryButton = styled(IconButton)`
+  width: 32px;
+  min-height: 32px;
+  color: var(--theme-on-surface);
+`
+
+/** A line of its own under a system message, aligned with the message's text. */
+const ReportBugHintLine = styled.div`
+  text-indent: 0;
+`
+
+/**
+ * Offers a bug report under a failed load to the members whose logs can say why it failed: those
+ * named as failing to load, or everyone when no one was. A bug report uploads the app's logs, which
+ * the web client doesn't have.
+ */
+function LoadFailedReportBugHint({
+  usersAtFault,
+}: {
+  usersAtFault: ReadonlyArray<SbUserId> | undefined
+}) {
+  const { t } = useTranslation()
+  const selfUserId = useSelfUser()?.id
+
+  const othersAtFault = !!usersAtFault?.length && !usersAtFault.some(id => id === selfUserId)
+  if (!IS_ELECTRON || othersAtFault) {
+    return null
+  }
+
+  return (
+    <ReportBugHintLine>
+      <Trans t={t} i18nKey='lobbies.room.chat.loadFailedReportBug'>
+        If this keeps happening, <ReportBugLink>report a bug</ReportBugLink>.
+      </Trans>
+    </ReportBugHintLine>
+  )
+}
+
+function ReportBugLink({ children }: { children?: React.ReactNode }) {
+  const dispatch = useAppDispatch()
+
+  return (
+    <a
+      href='#'
+      onClick={event => {
+        event.preventDefault()
+        event.stopPropagation()
+        dispatch(openDialog({ type: DialogType.BugReport }))
+      }}>
+      {children}
+    </a>
+  )
+}
+
+/** The card that lands in chat when someone new turns up, preserving their seat at arrival. */
+function ArrivalCard({ userId, arrivalSeat }: Pick<JoinLobbyMessage, 'userId' | 'arrivalSeat'>) {
+  const { t } = useTranslation()
+  let seatDescription: string | undefined
+  if (arrivalSeat?.kind === 'observer') {
+    seatDescription = t('lobbies.room.chat.joinedAsObserver', 'Joined as an observer')
+  } else if (arrivalSeat?.kind === 'team') {
+    seatDescription = t('lobbies.room.chat.seatedOn', 'seated on {{seat}}', {
+      seat: lobbyTeamLabel(arrivalSeat, t),
+    })
+  }
+
+  return (
+    <JoinCard>
+      <MaterialIcon icon='person_add' size={20} />
+      <JoinCardText>
+        <JoinCardTitle>
+          <Trans t={t} i18nKey='lobbies.room.chat.joinedLobby'>
+            <Username userId={userId} /> joined the lobby
+          </Trans>
+        </JoinCardTitle>
+        {seatDescription !== undefined ? <JoinCardSeat>{seatDescription}</JoinCardSeat> : null}
+      </JoinCardText>
+    </JoinCard>
+  )
+}
+
+/** A changed setting that's announced by name in a joined list. */
+type ListedChangedSetting = Exclude<LobbyChangedSetting, 'starcraftCompatibleReplays'>
+
+/** A short, human-readable label for a single changed lobby setting, used in a joined list. */
+function changedSettingLabel(setting: ListedChangedSetting, t: TFunction): string {
+  switch (setting) {
+    case 'name':
+      return t('lobbies.messageLayout.settingsChangeName', 'lobby name')
+    case 'visibility':
+      return t('lobbies.messageLayout.settingsChangeVisibility', 'visibility')
+    case 'map':
+      return t('lobbies.messageLayout.settingsChangeMap', 'map')
+    case 'gameType':
+      return t('lobbies.messageLayout.settingsChangeGameType', 'game type')
+    case 'gameSubType':
+      return t('lobbies.messageLayout.settingsChangeGameSubType', 'teams')
+    case 'useLegacyLimits':
+      return t('lobbies.messageLayout.settingsChangeUnitLimit', 'unit limit')
+    case 'lockedAlliances':
+      return t('lobbies.messageLayout.settingsChangeLockedAlliances', 'alliance lock')
+    case 'allowObservers':
+      return t('lobbies.messageLayout.settingsChangeObservers', 'observers')
+    case 'mapQueue':
+      return t('lobbies.messageLayout.settingsChangeMapQueue', 'map queue')
+    default:
+      return assertUnreachable(setting)
+  }
+}
+
+/**
+ * The card announcing that the host retuned something. Settings changes are the one kind of system
+ * event that can invalidate a decision someone already made, so they get more weight than a line.
+ */
+function SettingsNoticeCard({
+  changedBy,
+  changedSettings,
+  warpFieldOn,
+}: {
+  changedBy: SbUserId
+  changedSettings: ReadonlyArray<LobbyChangedSetting>
+  warpFieldOn?: boolean
+}) {
+  const { t } = useTranslation()
+  // Warp Field is announced as being turned on or off rather than by name in the list, since
+  // "changed the Warp Field" doesn't say which way it went.
+  const listedSettings = changedSettings.filter(
+    (setting): setting is ListedChangedSetting => setting !== 'starcraftCompatibleReplays',
+  )
+  const settings = listedSettings.map(setting => changedSettingLabel(setting, t)).join(', ')
+  // A rename or visibility change touches nothing about the game being set up, so neither resets
+  // readiness; any other setting can, so its notice calls that out.
+  const resetsReady = changesGameSettings(changedSettings)
+
+  let notice: React.ReactNode
+  if (warpFieldOn === undefined) {
+    notice = (
+      <Trans t={t} i18nKey='lobbies.room.chat.settingsChanged'>
+        <Username userId={changedBy} /> changed the {{ settings } as TransInterpolation}
+      </Trans>
+    )
+  } else if (!listedSettings.length) {
+    notice = warpFieldOn ? (
+      <Trans t={t} i18nKey='lobbies.room.chat.warpFieldTurnedOn'>
+        <Username userId={changedBy} /> turned Warp Field on
+      </Trans>
+    ) : (
+      <Trans t={t} i18nKey='lobbies.room.chat.warpFieldTurnedOff'>
+        <Username userId={changedBy} /> turned Warp Field off
+      </Trans>
+    )
+  } else {
+    notice = warpFieldOn ? (
+      <Trans t={t} i18nKey='lobbies.room.chat.settingsChangedWarpFieldOn'>
+        <Username userId={changedBy} /> changed the {{ settings } as TransInterpolation} and turned
+        Warp Field on
+      </Trans>
+    ) : (
+      <Trans t={t} i18nKey='lobbies.room.chat.settingsChangedWarpFieldOff'>
+        <Username userId={changedBy} /> changed the {{ settings } as TransInterpolation} and turned
+        Warp Field off
+      </Trans>
+    )
+  }
+
+  return (
+    <NoticeCard>
+      <MaterialIcon icon='tune' size={20} />
+      <NoticeCardText>
+        {notice}
+        {resetsReady ? ` · ${t('lobbies.room.chat.readyReset', 'ready reset')}` : ''}
+      </NoticeCardText>
+    </NoticeCard>
+  )
+}
+
+/**
+ * The card announcing that the lobby moved on to the next map in its queue once its game ended.
+ * The map is what everyone is about to play, so it gets the same weight as a settings change.
+ */
+function MapQueueAdvanceCard({
+  mapName,
+  skippedMapNames,
+}: {
+  mapName?: string
+  skippedMapNames: ReadonlyArray<string>
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <NoticeCard>
+      <MaterialIcon icon='playlist_play' size={20} />
+      <NoticeCardText>
+        {mapName !== undefined ? (
+          <Trans t={t} i18nKey='lobbies.room.chat.mapQueueAdvanced'>
+            Next map from the queue:{' '}
+            <SystemImportant>{{ map: mapName } as TransInterpolation}</SystemImportant>
+          </Trans>
+        ) : (
+          t('lobbies.room.chat.mapQueueNoneFit', "None of the queued maps fit the lobby's settings")
+        )}
+        {skippedMapNames.length ? (
+          <NoticeCardDetail>
+            {mapName !== undefined
+              ? t('lobbies.room.chat.mapQueueSkippedUnfit', {
+                  defaultValue_one: "Skipped {{maps}}, which doesn't fit the lobby's settings",
+                  defaultValue_other: "Skipped {{maps}}, which don't fit the lobby's settings",
+                  count: skippedMapNames.length,
+                  maps: skippedMapNames.join(', '),
+                })
+              : t('lobbies.room.chat.mapQueueSkipped', {
+                  defaultValue: 'Skipped {{maps}}',
+                  maps: skippedMapNames.join(', '),
+                })}
+          </NoticeCardDetail>
+        ) : null}
+      </NoticeCardText>
+    </NoticeCard>
+  )
+}
+
+/**
+ * Everything a game summary card needs beyond the game itself: who is reading it, whether the lobby
+ * is between games, and what it can offer to do. Held in context so the message list's component
+ * type stays stable across renders -- swapping it remounts every message in the log.
+ */
+export interface GameSummaryActions {
+  isRegrouping: boolean
+  onWatchReplay: (gameId: string) => void
+  onViewGameSummary: (gameId: string) => void
+}
+
+const GameSummaryContext = React.createContext<GameSummaryActions>({
+  isRegrouping: false,
+  onWatchReplay: () => {},
+  onViewGameSummary: () => {},
+})
+
+/**
+ * One player of a finished game's roster: a lobby member, or one of the computers they played.
+ * `isWinner` marks the player who won a game played as a single side, where there is no team to
+ * carry the trophy instead.
+ */
+function ResultPlayerRow({
+  player,
+  isWinner,
+}: {
+  player: LobbySeriesPlayerJson
+  isWinner?: boolean
+}) {
+  const { t } = useTranslation()
+  if (player.type === 'computer') {
+    return (
+      <PlayerRow>
+        <ComputerAvatar icon='smart_toy' size={20} />
+        <PlayerRaceIcon race={player.race} applyRaceColor />
+        <PlayerName>{t('game.playerName.computer', 'Computer')}</PlayerName>
+      </PlayerRow>
+    )
+  }
+
+  return (
+    <PlayerRow>
+      <PlayerAvatar userId={player.userId} />
+      <PlayerRaceIcon race={player.race} applyRaceColor />
+      <PlayerName>
+        <ConnectedUsername userId={player.userId} UserMenu={LobbyUserMenu} />
+      </PlayerName>
+      {isWinner ? <PlayerRowTrophyIcon icon='trophy' size={14} /> : null}
+    </PlayerRow>
+  )
+}
+
+/**
+ * The result of a finished game, dropped into the conversation it happened in the middle of. The
+ * newest one opens itself while the lobby is between games, since that's when its contents are what
+ * the room is actually doing; anything the reader opens or closes by hand stays that way.
+ */
+function GameSummaryCard({ gameId }: { gameId: string }) {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const { isRegrouping, onWatchReplay, onViewGameSummary } = React.useContext(GameSummaryContext)
+  const series = useAppSelector(s => s.lobby.series)
+  const gameIndex = series.findIndex(g => g.gameId === gameId)
+  const game = gameIndex >= 0 ? series[gameIndex] : undefined
+  const isLatest = gameIndex >= 0 && gameIndex === series.length - 1
+
+  const map = useAppSelector(s => (game ? s.maps.byId.get(game.mapId) : undefined))
+
+  const winner = game ? findSeriesGameWinner(game) : undefined
+  const winnerUserId = winner?.kind === 'player' ? winner.userId : undefined
+  // A game won by a single player can name someone who has since left the lobby, whom nothing else
+  // in the room has any reason to have loaded.
+  const winnerName = useAppSelector(s =>
+    winnerUserId !== undefined ? s.users.byId.get(winnerUserId)?.name : undefined,
+  )
+  React.useEffect(() => {
+    if (winnerUserId !== undefined) {
+      dispatch(getBatchUserInfo(winnerUserId))
+    }
+  }, [dispatch, winnerUserId])
+
+  const [override, setOverride] = React.useState<boolean | null>(null)
+  const expanded = override ?? (isLatest && isRegrouping)
+
+  if (!game) {
+    return null
+  }
+
+  // A game's results settle some time after it ends, and games that report none never settle at
+  // all, so the headline says as much as the lobby actually knows.
+  const result = game.result
+  const gameNumber = gameIndex + 1
+  const duration = result ? getGameDurationString(result.durationMs) : ''
+  let headline: string
+  if (!result) {
+    headline = t('lobbies.room.series.headlineWaiting', 'Game {{number}}, waiting for results', {
+      number: gameNumber,
+    })
+  } else if (winner?.kind === 'team') {
+    headline = t(
+      'lobbies.room.series.headlineTeamWon',
+      'Game {{number}}: {{team}} won ({{duration}})',
+      { number: gameNumber, team: lobbyTeamLabel(winner, t), duration },
+    )
+  } else if (winner?.kind === 'player') {
+    headline = t(
+      'lobbies.room.series.headlinePlayerWon',
+      'Game {{number}}: {{player}} won ({{duration}})',
+      { number: gameNumber, player: winnerName ?? '…', duration },
+    )
+  } else {
+    headline = t(
+      'lobbies.room.series.headlineNoWinner',
+      'Game {{number}}: no recorded winner ({{duration}})',
+      { number: gameNumber, duration },
+    )
+  }
+
+  return (
+    <SummaryCardRoot
+      $largeRoster={game.teams.reduce((count, team) => count + team.players.length, 0) > 2}>
+      <SummaryToggle type='button' aria-expanded={expanded} onClick={() => setOverride(!expanded)}>
+        <SummaryHeadline title={headline}>{headline}</SummaryHeadline>
+        <MaterialIcon icon={expanded ? 'expand_less' : 'expand_more'} size={20} />
+      </SummaryToggle>
+      {expanded ? (
+        <SummaryBody>
+          <ResultRow>
+            <ResultMapFrame $aspectRatio={map ? map.mapData.width / map.mapData.height : 1}>
+              <ReduxMapThumbnail
+                mapId={game.mapId}
+                size={128}
+                showInfoLayer={false}
+                hasMapPreviewAction={false}
+                hasFavoriteAction={false}
+              />
+            </ResultMapFrame>
+            <ResultDetails>
+              <ResultMapName title={map?.name}>
+                {map?.name ?? t('game.mapName.unknown', 'Unknown map')}
+              </ResultMapName>
+              <TeamsRow>
+                {game.teams.map(team => (
+                  <TeamColumn key={team.teamId}>
+                    {/*
+                      A game played as a single side has no sides to tell apart, so naming its one
+                      team would only add noise above the roster.
+                    */}
+                    {game.teams.length > 1 ? (
+                      <TeamHeading>
+                        <span title={lobbyTeamLabel(team, t)}>{lobbyTeamLabel(team, t)}</span>
+                        {winner?.kind === 'team' && winner.teamId === team.teamId ? (
+                          <TeamHeadingTrophyIcon icon='trophy' size={14} />
+                        ) : null}
+                      </TeamHeading>
+                    ) : null}
+                    <PlayersGrid>
+                      {team.players.map((player, playerIndex) => (
+                        <ResultPlayerRow
+                          key={playerIndex}
+                          player={player}
+                          isWinner={
+                            winnerUserId !== undefined &&
+                            player.type === 'human' &&
+                            player.userId === winnerUserId
+                          }
+                        />
+                      ))}
+                    </PlayersGrid>
+                  </TeamColumn>
+                ))}
+              </TeamsRow>
+              <SummaryActions>
+                <ReplayButton
+                  label={t('lobbies.room.series.watchReplay', 'Watch replay')}
+                  iconStart='play_arrow'
+                  onClick={() => onWatchReplay(gameId)}
+                />
+                <Tooltip text={t('lobbies.room.series.fullSummary', 'Full summary')} tabIndex={-1}>
+                  <SummaryButton
+                    icon={<MaterialIcon icon='summarize' size={20} />}
+                    ariaLabel={t('lobbies.room.series.fullSummary', 'Full summary')}
+                    onClick={() => onViewGameSummary(gameId)}
+                  />
+                </Tooltip>
+              </SummaryActions>
+            </ResultDetails>
+          </ResultRow>
+        </SummaryBody>
+      ) : null}
+    </SummaryCardRoot>
+  )
+}
+
+/**
+ * Renders the lobby-specific entries of the room's chat log. Plain messages between people are
+ * handled by the message list itself; everything here is the lobby narrating itself.
+ */
+function RoomChatMessage({ message }: MessageComponentProps) {
+  const { t } = useTranslation()
+  const msg = message as SbMessage & { type: LobbyMessageType }
+
+  switch (msg.type) {
+    case LobbyMessageType.JoinLobby:
+      return (
+        <SystemMessage time={msg.time}>
+          <ArrivalCard userId={msg.userId} arrivalSeat={msg.arrivalSeat} />
+        </SystemMessage>
+      )
+    case LobbyMessageType.LobbySettingsChange:
+      return (
+        <SystemMessage time={msg.time}>
+          <SettingsNoticeCard
+            changedBy={msg.changedBy}
+            changedSettings={msg.changedSettings}
+            warpFieldOn={msg.warpFieldOn}
+          />
+        </SystemMessage>
+      )
+    case LobbyMessageType.LobbyRegroup:
+      return (
+        <SystemMessage time={msg.time}>
+          <GameSummaryCard gameId={msg.gameId} />
+        </SystemMessage>
+      )
+    case LobbyMessageType.LobbyMapQueueAdvance:
+      return (
+        <SystemMessage time={msg.time}>
+          <MapQueueAdvanceCard mapName={msg.mapName} skippedMapNames={msg.skippedMapNames} />
+        </SystemMessage>
+      )
+    case LobbyMessageType.SelfJoinLobby:
+      return (
+        <SystemMessage time={msg.time}>
+          <Trans t={t} i18nKey='lobbies.room.chat.selfJoinLobby'>
+            You joined{' '}
+            <SystemImportant>{{ lobby: msg.lobby } as TransInterpolation}</SystemImportant>. The
+            host is <Username userId={msg.hostId} />.
+          </Trans>
+        </SystemMessage>
+      )
+    case LobbyMessageType.LeaveLobby:
+      return (
+        <SystemMessage time={msg.time}>
+          <Trans t={t} i18nKey='lobbies.room.chat.leftLobby'>
+            <Username userId={msg.userId} /> left the lobby
+          </Trans>
+        </SystemMessage>
+      )
+    case LobbyMessageType.KickLobbyPlayer:
+      return (
+        <SystemMessage time={msg.time}>
+          <Trans t={t} i18nKey='lobbies.room.chat.wasKicked'>
+            <Username userId={msg.userId} /> was kicked
+          </Trans>
+        </SystemMessage>
+      )
+    case LobbyMessageType.BanLobbyPlayer:
+      return (
+        <SystemMessage time={msg.time}>
+          <Trans t={t} i18nKey='lobbies.room.chat.wasBanned'>
+            <Username userId={msg.userId} /> was banned
+          </Trans>
+        </SystemMessage>
+      )
+    case LobbyMessageType.LobbyHostChange:
+      return (
+        <SystemMessage time={msg.time}>
+          <Trans t={t} i18nKey='lobbies.room.chat.isNowHost'>
+            <Username userId={msg.userId} /> is now the host
+          </Trans>
+        </SystemMessage>
+      )
+    case LobbyMessageType.LobbyBenchJoin:
+      return (
+        <SystemMessage time={msg.time}>
+          <Trans t={t} i18nKey='lobbies.room.chat.waitingForSeat'>
+            <Username userId={msg.userId} /> is waiting for a seat
+          </Trans>
+        </SystemMessage>
+      )
+    case LobbyMessageType.LobbyCountdownStarted:
+      return (
+        <SystemMessage time={msg.time}>
+          {t('lobbies.room.chat.countdownStarted', 'The game is starting')}
+        </SystemMessage>
+      )
+    case LobbyMessageType.LobbyCountdownTick:
+      return <SystemMessage time={msg.time}>{msg.timeLeft}…</SystemMessage>
+    case LobbyMessageType.LobbyCountdownCanceled:
+      return (
+        <SystemMessage time={msg.time}>
+          {t('lobbies.room.chat.countdownCanceled', 'The countdown was canceled')}
+        </SystemMessage>
+      )
+    case LobbyMessageType.LobbyLoadingCanceled:
+      if (msg.reason === 'gameAnomaly') {
+        return (
+          <SystemMessage time={msg.time}>
+            {t('game.gameAnomaly', 'Game anomalies detected')}
+          </SystemMessage>
+        )
+      }
+      // Naming who failed to load is the difference between a lobby that looks broken and one whose
+      // members can see what to do about it, so the culprits are called out whenever they're known.
+      // The prefix and suffix are translated separately from the user list between them, since the
+      // list's length varies and can't be represented as fixed positional children of a single key.
+      return (
+        <SystemMessage time={msg.time}>
+          {msg.usersAtFault?.length ? (
+            <>
+              {t('lobbies.room.chat.loadFailedPrefix', "The game couldn't start because")}{' '}
+              {msg.usersAtFault.map((userId, i) => (
+                <React.Fragment key={userId}>
+                  {i > 0 ? ', ' : ''}
+                  <Username userId={userId} />
+                </React.Fragment>
+              ))}{' '}
+              {t('lobbies.room.chat.loadFailedSuffix', 'failed to load')}
+            </>
+          ) : (
+            t('lobbies.room.chat.loadFailedNoUsers', "The game couldn't start")
+          )}
+          <LoadFailedReportBugHint usersAtFault={msg.usersAtFault} />
+        </SystemMessage>
+      )
+    case LobbyMessageType.LobbyGameStarted:
+      return (
+        <SystemMessage time={msg.time}>
+          {t('lobbies.messageLayout.gameStarted', 'The game has started')}
+        </SystemMessage>
+      )
+    case LobbyMessageType.LobbyMemberGameEnded:
+      return (
+        <SystemMessage time={msg.time}>
+          <Trans t={t} i18nKey='lobbies.room.chat.memberBack'>
+            <Username userId={msg.userId} /> is back in the lobby
+          </Trans>
+        </SystemMessage>
+      )
+    default:
+      msg satisfies never
+      return null
+  }
+}
+
+const ChatSurface = styled(Chat)`
+  flex-grow: 1;
+  min-width: 0;
+  /* The base component sizes to its parent; here it stretches to the room's height beside the rail. */
+  height: auto;
+`
+
+/**
+ * The room's conversation: the widest surface, because it's what a lobby actually does. The rest
+ * of the room that names members is rendered through it (`header` above the messages, `aside`
+ * beside them) so shift-clicking a name there mentions them in the input, and their user menus
+ * offer the same items as names in the conversation.
+ */
+export function RoomChat({
+  viewerId,
+  isRegrouping,
+  header,
+  aside,
+  onSendChatMessage,
+  onWatchReplay,
+  onViewGameSummary,
+}: {
+  viewerId: SbUserId
+  header: React.ReactNode
+  aside: React.ReactNode
+  onSendChatMessage: (msg: string) => void
+} & GameSummaryActions) {
+  const chat = useAppSelector(s => s.lobby.chat)
+  const lobby = useAppSelector(s => s.lobby.info)
+  const memberEntries = useAppSelector(
+    useUserEntriesSelector(
+      getReadyEligibleUsers(lobby).concat(lobby.bench.map(benched => benched.userId)),
+    ),
+    areUserEntriesEqual,
+  )
+  // Being in the lobby means being connected to it, so every member is online.
+  const members = memberEntries
+    .filter(([_id, name]) => name !== undefined)
+    .map(([id, name]) => ({ id, name: name!, online: true }))
+  const mentionableUsers = members.filter(member => member.id !== viewerId)
+
+  const commandContext: LobbyCommandContext = { surface: 'lobby', selfUserId: viewerId, members }
+
+  return (
+    <GameSummaryContext.Provider
+      value={{
+        isRegrouping,
+        onWatchReplay,
+        onViewGameSummary,
+      }}>
+      <ChatSurface
+        listProps={{ messages: chat, MessageComponent: RoomChatMessage }}
+        inputProps={{
+          onSendChatMessage,
+          // The room's chat unmounts while the host has the game setup open, so the draft has to
+          // outlive it.
+          storageKey: `lobby-${lobby.id}`,
+          mentionableUsers,
+          baseMentionableUsers: mentionableUsers,
+        }}
+        commandContext={commandContext}
+        header={header}
+        extraContent={aside}
+        UserMenu={LobbyUserMenu}
+        escapeJumpsToBottom
+        jumpToBottomOnSend
+      />
+    </GameSummaryContext.Provider>
+  )
+}

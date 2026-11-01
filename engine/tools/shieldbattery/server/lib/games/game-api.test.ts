@@ -1,0 +1,591 @@
+import { RouterContext } from '@koa/router'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { GameStatus } from '../../../common/games/game-status'
+import { GameResultErrorCode } from '../../../common/games/results'
+import { RollbackStats } from '../../../common/games/rollback-stats'
+import { makeSbUserId } from '../../../common/users/sb-user-id'
+import { insertGameRollbackStats } from '../models/game-rollback-stats'
+import { getUserGameRecord } from '../models/games-users'
+import { GameApi } from './game-api'
+import { GameLifecycleEvents } from './game-lifecycle-events'
+import { getNetcodeV2Session, wasUserInGame } from './game-models'
+import { GameResultServiceError } from './game-result-service'
+
+vi.mock('../models/games-users', async importOriginal => ({
+  ...(await importOriginal<typeof import('../models/games-users')>()),
+  getUserGameRecord: vi.fn(),
+}))
+vi.mock('../models/game-rollback-stats', async importOriginal => ({
+  ...(await importOriginal<typeof import('../models/game-rollback-stats')>()),
+  insertGameRollbackStats: vi.fn(),
+}))
+vi.mock('./game-models', async importOriginal => ({
+  ...(await importOriginal<typeof import('./game-models')>()),
+  getNetcodeV2Session: vi.fn(),
+  wasUserInGame: vi.fn(),
+}))
+
+/** A fake `RouterContext` satisfying `netcodeV2Rehome`'s param/body Joi validation. */
+function makeRehomeCtx(): RouterContext {
+  return {
+    params: { gameId: 'game-1' },
+    request: {
+      body: { userId: 1, resultCode: 'abc123abc123', deadRelayId: 5 },
+    },
+  } as any
+}
+
+/** Builds a `GameApi` with only the dependencies `netcodeV2Rehome` touches mocked. */
+function makeRehomeApi({
+  isEnabled = true,
+  isLoading = false,
+}: {
+  isEnabled?: boolean
+  isLoading?: boolean
+} = {}) {
+  const gameLoader = { isLoading: vi.fn().mockReturnValue(isLoading) }
+  const netcodeV2Service = {
+    isEnabled: vi.fn().mockReturnValue(isEnabled),
+    rehomeSession: vi.fn(),
+  }
+  const api = new GameApi(
+    {} as any,
+    gameLoader as any,
+    {} as any,
+    {} as any,
+    netcodeV2Service as any,
+    {} as any,
+    new GameLifecycleEvents(),
+    {} as any,
+  )
+  return { api, netcodeV2Service }
+}
+
+describe('games/game-api/GameApi#netcodeV2Rehome', () => {
+  test('rejects when netcode v2 is not enabled', async () => {
+    const { api, netcodeV2Service } = makeRehomeApi({ isEnabled: false })
+
+    const err = await api.netcodeV2Rehome(makeRehomeCtx()).catch(e => e)
+
+    expect(err).toHaveProperty('status', 404)
+    expect(netcodeV2Service.rehomeSession).not.toHaveBeenCalled()
+  })
+
+  test('rejects a request whose resultCode does not match the stored record', async () => {
+    const { api, netcodeV2Service } = makeRehomeApi()
+    vi.mocked(getUserGameRecord).mockResolvedValue({ resultCode: 'a-different-code' } as any)
+
+    const err = await api.netcodeV2Rehome(makeRehomeCtx()).catch(e => e)
+
+    expect(err).toBeInstanceOf(GameResultServiceError)
+    expect((err as GameResultServiceError).code).toBe(GameResultErrorCode.NotFound)
+    expect(netcodeV2Service.rehomeSession).not.toHaveBeenCalled()
+  })
+
+  test('rejects a participant who has already submitted a result', async () => {
+    const { api, netcodeV2Service } = makeRehomeApi()
+    // Valid resultCode, but this user is done: a reported result means they're no longer an active
+    // participant, so they must not be able to drive failover (and drain the rehome rate limit).
+    vi.mocked(getUserGameRecord).mockResolvedValue({
+      resultCode: 'abc123abc123',
+      reportedResults: { userId: 1 },
+    } as any)
+
+    const err = await api.netcodeV2Rehome(makeRehomeCtx()).catch(e => e)
+
+    expect(err).toBeInstanceOf(GameResultServiceError)
+    expect((err as GameResultServiceError).code).toBe(GameResultErrorCode.AlreadyReported)
+    expect(netcodeV2Service.rehomeSession).not.toHaveBeenCalled()
+  })
+
+  test('rejects a participant whose mid-game departure was recorded', async () => {
+    const { api, netcodeV2Service } = makeRehomeApi()
+    vi.mocked(getUserGameRecord).mockResolvedValue({
+      resultCode: 'abc123abc123',
+      departureKind: 'left',
+    } as any)
+
+    const err = await api.netcodeV2Rehome(makeRehomeCtx()).catch(e => e)
+
+    expect(err).toBeInstanceOf(GameResultServiceError)
+    expect((err as GameResultServiceError).code).toBe(GameResultErrorCode.AlreadyReported)
+    expect(netcodeV2Service.rehomeSession).not.toHaveBeenCalled()
+  })
+
+  test('rejects when the game has no netcode v2 session on record', async () => {
+    const { api, netcodeV2Service } = makeRehomeApi()
+    vi.mocked(getUserGameRecord).mockResolvedValue({ resultCode: 'abc123abc123' } as any)
+    vi.mocked(getNetcodeV2Session).mockResolvedValue(null)
+
+    const err = await api.netcodeV2Rehome(makeRehomeCtx()).catch(e => e)
+
+    expect(err).toHaveProperty('status', 409)
+    expect(netcodeV2Service.rehomeSession).not.toHaveBeenCalled()
+  })
+
+  test('re-homes with the stored session id and returns the coordinator decision', async () => {
+    const { api, netcodeV2Service } = makeRehomeApi()
+    vi.mocked(getUserGameRecord).mockResolvedValue({ resultCode: 'abc123abc123' } as any)
+    vi.mocked(getNetcodeV2Session).mockResolvedValue(42)
+    const decision = {
+      decision: 'newTarget' as const,
+      relay: { relayId: 9 } as any,
+    }
+    netcodeV2Service.rehomeSession.mockResolvedValue(decision)
+
+    const ctx = makeRehomeCtx()
+    // The route framework uses the handler's RETURN VALUE as the response body (http-api.ts
+    // assigns `ctx.body = result`), so that's what must carry the decision — asserting on a
+    // handler-set ctx.body would pass while production returned null.
+    const returned = await api.netcodeV2Rehome(ctx)
+
+    // The stored session id (not anything from the request) is what's re-homed, with the client's
+    // reported dead relay id.
+    expect(netcodeV2Service.rehomeSession).toHaveBeenCalledWith('game-1', 42, 5)
+    expect(returned).toEqual(decision)
+  })
+})
+
+/** A fake `RouterContext` satisfying `updateGameStatus`'s param/body Joi validation. */
+function makeStatusCtx(status: GameStatus): RouterContext {
+  return {
+    params: { gameId: 'game-1' },
+    request: { body: { status } },
+    session: { user: { id: makeSbUserId(1) } },
+  } as any
+}
+
+/** Builds a `GameApi` with only the loader queries `updateGameStatus` touches mocked. */
+function makeStatusApi({
+  isLoadingOrRecentlyLoaded = true,
+  isLocalOnlyLoad = false,
+}: {
+  isLoadingOrRecentlyLoaded?: boolean
+  isLocalOnlyLoad?: boolean
+} = {}) {
+  const gameLoader = {
+    isLoadingOrRecentlyLoaded: vi.fn().mockReturnValue(isLoadingOrRecentlyLoaded),
+    isLocalOnlyLoad: vi.fn().mockReturnValue(isLocalOnlyLoad),
+    registerGameAsLoaded: vi.fn().mockReturnValue(true),
+    maybeCancelLoading: vi.fn().mockReturnValue(true),
+  }
+  const activityStatusService = { clearInGame: vi.fn() }
+  const gameLifecycleEvents = new GameLifecycleEvents()
+  const api = new GameApi(
+    {} as any,
+    gameLoader as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    activityStatusService as any,
+    gameLifecycleEvents,
+    {} as any,
+  )
+  return { api, gameLoader, activityStatusService, gameLifecycleEvents }
+}
+
+describe('games/game-api/GameApi#updateGameStatus', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(wasUserInGame).mockResolvedValue(true)
+  })
+
+  test('completes a local-only load from the client report', async () => {
+    const { api, gameLoader } = makeStatusApi({ isLocalOnlyLoad: true })
+    const ctx = makeStatusCtx(GameStatus.Playing)
+
+    await api.updateGameStatus(ctx)
+
+    expect(gameLoader.registerGameAsLoaded).toHaveBeenCalledWith('game-1', makeSbUserId(1))
+    expect(ctx.status).toBe(204)
+  })
+
+  test('accepts but ignores a networked game client reporting itself as playing', async () => {
+    const { api, gameLoader } = makeStatusApi({ isLocalOnlyLoad: false })
+    const ctx = makeStatusCtx(GameStatus.Playing)
+
+    // The coordinator owns this signal for a networked game, so the client's own report must
+    // neither complete the load nor be answered as an error.
+    await api.updateGameStatus(ctx)
+
+    expect(gameLoader.registerGameAsLoaded).not.toHaveBeenCalled()
+    expect(ctx.status).toBe(204)
+  })
+
+  test('cancels the load on a client-reported error regardless of transport', async () => {
+    const { api, gameLoader, activityStatusService } = makeStatusApi({ isLocalOnlyLoad: false })
+    const ctx = makeStatusCtx(GameStatus.Error)
+
+    await api.updateGameStatus(ctx)
+
+    expect(gameLoader.maybeCancelLoading).toHaveBeenCalledWith('game-1', makeSbUserId(1))
+    expect(activityStatusService.clearInGame).toHaveBeenCalledWith(makeSbUserId(1), 'game-1')
+    expect(ctx.status).toBe(204)
+  })
+
+  test('rejects a status report for a game that is neither loading nor recently loaded', async () => {
+    const { api } = makeStatusApi({ isLoadingOrRecentlyLoaded: false })
+
+    const err = await api.updateGameStatus(makeStatusCtx(GameStatus.Playing)).catch(e => e)
+
+    expect(err).toHaveProperty('status', 409)
+  })
+
+  test('emits userGameEnded and answers 204 for a Finished report, even past the load window', async () => {
+    const { api, gameLifecycleEvents } = makeStatusApi({ isLoadingOrRecentlyLoaded: false })
+    const ctx = makeStatusCtx(GameStatus.Finished)
+    const listener = vi.fn()
+    gameLifecycleEvents.on('userGameEnded', listener)
+
+    await api.updateGameStatus(ctx)
+
+    expect(listener).toHaveBeenCalledWith({ gameId: 'game-1', userId: makeSbUserId(1) })
+    expect(ctx.status).toBe(204)
+  })
+
+  test('emits userGameEnded, clears in-game state, and answers 204 for an Error report after the load', async () => {
+    const { api, gameLoader, activityStatusService, gameLifecycleEvents } = makeStatusApi({
+      isLocalOnlyLoad: false,
+      isLoadingOrRecentlyLoaded: false,
+    })
+    gameLoader.maybeCancelLoading.mockReturnValue(false)
+    const ctx = makeStatusCtx(GameStatus.Error)
+    const listener = vi.fn()
+    gameLifecycleEvents.on('userGameEnded', listener)
+
+    await api.updateGameStatus(ctx)
+
+    expect(listener).toHaveBeenCalledWith({ gameId: 'game-1', userId: makeSbUserId(1) })
+    expect(activityStatusService.clearInGame).toHaveBeenCalledWith(makeSbUserId(1), 'game-1')
+    expect(ctx.status).toBe(204)
+  })
+
+  test('rejects a Finished report for a game the reporter is not in, without emitting', async () => {
+    vi.mocked(wasUserInGame).mockResolvedValue(false)
+    const { api, activityStatusService, gameLifecycleEvents } = makeStatusApi()
+    const ctx = makeStatusCtx(GameStatus.Finished)
+    const listener = vi.fn()
+    gameLifecycleEvents.on('userGameEnded', listener)
+
+    const err = await api.updateGameStatus(ctx).catch(e => e)
+
+    expect(err).toHaveProperty('status', 404)
+    expect(listener).not.toHaveBeenCalled()
+    // `clearInGame` runs ahead of the participation check by design, so it still fires here.
+    expect(activityStatusService.clearInGame).toHaveBeenCalledWith(makeSbUserId(1), 'game-1')
+  })
+
+  test('asks the game record whether the reporter was in the game, so observers count too', async () => {
+    const { api, gameLifecycleEvents } = makeStatusApi({ isLoadingOrRecentlyLoaded: false })
+    const ctx = makeStatusCtx(GameStatus.Finished)
+    const listener = vi.fn()
+    gameLifecycleEvents.on('userGameEnded', listener)
+
+    await api.updateGameStatus(ctx)
+
+    // Observers have no `games_users` row of their own, so a row lookup would turn them away.
+    expect(wasUserInGame).toHaveBeenCalledWith('game-1', makeSbUserId(1))
+    expect(getUserGameRecord).not.toHaveBeenCalled()
+    expect(listener).toHaveBeenCalledWith({ gameId: 'game-1', userId: makeSbUserId(1) })
+    expect(ctx.status).toBe(204)
+  })
+
+  test('emits nothing for a Playing report', async () => {
+    const { api, gameLifecycleEvents } = makeStatusApi({ isLocalOnlyLoad: true })
+    const ctx = makeStatusCtx(GameStatus.Playing)
+    const listener = vi.fn()
+    gameLifecycleEvents.on('userGameEnded', listener)
+
+    await api.updateGameStatus(ctx)
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+})
+
+/** A fake `RouterContext` for the flight-recordings endpoints, keyed to game-1. */
+function makeFlightCtx(relayId?: number): RouterContext {
+  return {
+    params:
+      relayId !== undefined ? { gameId: 'game-1', relayId: String(relayId) } : { gameId: 'game-1' },
+  } as any
+}
+
+/** Builds a `GameApi` with only the dependencies the flight-recordings endpoints touch mocked. */
+function makeFlightApi({ isEnabled = true }: { isEnabled?: boolean } = {}) {
+  const netcodeV2Service = {
+    isEnabled: vi.fn().mockReturnValue(isEnabled),
+    listFlightBlobs: vi.fn(),
+    fetchFlightBlob: vi.fn(),
+  }
+  const api = new GameApi(
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    netcodeV2Service as any,
+    {} as any,
+    new GameLifecycleEvents(),
+    {} as any,
+  )
+  return { api, netcodeV2Service }
+}
+
+describe('games/game-api/GameApi#listFlightRecordings', () => {
+  test('rejects when netcode v2 is not enabled', async () => {
+    const { api, netcodeV2Service } = makeFlightApi({ isEnabled: false })
+
+    const err = await api.listFlightRecordings(makeFlightCtx()).catch(e => e)
+
+    expect(err).toHaveProperty('status', 404)
+    expect(netcodeV2Service.listFlightBlobs).not.toHaveBeenCalled()
+  })
+
+  test('rejects when the game has no netcode v2 session on record', async () => {
+    const { api, netcodeV2Service } = makeFlightApi()
+    vi.mocked(getNetcodeV2Session).mockResolvedValue(null)
+
+    const err = await api.listFlightRecordings(makeFlightCtx()).catch(e => e)
+
+    expect(err).toHaveProperty('status', 404)
+    expect(netcodeV2Service.listFlightBlobs).not.toHaveBeenCalled()
+  })
+
+  test('lists blobs for the session id stored on the game record', async () => {
+    const { api, netcodeV2Service } = makeFlightApi()
+    vi.mocked(getNetcodeV2Session).mockResolvedValue(42)
+    const blob = { relayId: 7, pinned: false, size: 2048, lastModifiedMs: 1700000000000 }
+    netcodeV2Service.listFlightBlobs.mockResolvedValue([blob])
+
+    const returned = await api.listFlightRecordings(makeFlightCtx())
+
+    // The stored session id (never anything client-supplied) is what's listed.
+    expect(netcodeV2Service.listFlightBlobs).toHaveBeenCalledWith(42)
+    expect(returned).toEqual({ blobs: [blob] })
+  })
+})
+
+describe('games/game-api/GameApi#getFlightRecording', () => {
+  test('rejects when netcode v2 is not enabled', async () => {
+    const { api, netcodeV2Service } = makeFlightApi({ isEnabled: false })
+
+    const err = await api.getFlightRecording(makeFlightCtx(7)).catch(e => e)
+
+    expect(err).toHaveProperty('status', 404)
+    expect(netcodeV2Service.fetchFlightBlob).not.toHaveBeenCalled()
+  })
+
+  test('rejects when the game has no netcode v2 session on record', async () => {
+    const { api, netcodeV2Service } = makeFlightApi()
+    vi.mocked(getNetcodeV2Session).mockResolvedValue(null)
+
+    const err = await api.getFlightRecording(makeFlightCtx(7)).catch(e => e)
+
+    expect(err).toHaveProperty('status', 404)
+    expect(netcodeV2Service.fetchFlightBlob).not.toHaveBeenCalled()
+  })
+
+  test('returns 404 when the coordinator has no blob for that relay', async () => {
+    const { api, netcodeV2Service } = makeFlightApi()
+    vi.mocked(getNetcodeV2Session).mockResolvedValue(42)
+    netcodeV2Service.fetchFlightBlob.mockResolvedValue(undefined)
+
+    const err = await api.getFlightRecording(makeFlightCtx(7)).catch(e => e)
+
+    expect(err).toHaveProperty('status', 404)
+  })
+
+  test('fetches the blob for the stored session id and the requested relay', async () => {
+    const { api, netcodeV2Service } = makeFlightApi()
+    vi.mocked(getNetcodeV2Session).mockResolvedValue(42)
+    const recording = JSON.stringify({ events: ['connect'] })
+    netcodeV2Service.fetchFlightBlob.mockResolvedValue(recording)
+    const ctx = makeFlightCtx(7)
+
+    const returned = await api.getFlightRecording(ctx)
+
+    expect(netcodeV2Service.fetchFlightBlob).toHaveBeenCalledWith(42, 7)
+    expect(returned).toBe(recording)
+    expect(ctx.type).toBe('application/json')
+  })
+})
+
+function makeRollbackStats(): RollbackStats {
+  return {
+    version: 1,
+    throughTurn: 5000,
+    rollbackTarget: 2,
+    predictionLimit: 8,
+    ticks: 30000,
+    rollbackHistogram: [20000, 5000, 3000, 1000, 500, 300, 100, 50, 30, 10, 5, 5],
+    pipeHistogram: [0, 0, 100, 25000, 4000, 900, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    cappedTicks: 12,
+    rollbacks: 4000,
+    resimulatedFrames: 9000,
+    deepestRollback: 11,
+    predictedSteps: 10000,
+    mispredictedTurns: 3000,
+    confirmedPredictions: 7000,
+    caughtUpFrames: 40,
+    heldBackTicks: 60,
+    leadChanges: 3,
+    scheduleCorrections: 7,
+    scheduleCorrectedUs: -12000,
+    holdsUndone: 1,
+    clockStoppedUs: 250000,
+    leadReports: 100,
+    leadP90MaxUs: -500,
+    leadP90SumUs: -20000,
+    worstTickUs: 18000,
+    slowTicks: 9,
+    restoreUs: 400000,
+    snapshotUs: 900000,
+    stepUs: 30000000,
+  }
+}
+
+/** A fake `RouterContext` for `submitRollbackStats`, with `stats` overridable per test. */
+function makeRollbackStatsCtx(stats: Record<string, unknown> = { ...makeRollbackStats() }) {
+  return {
+    params: { gameId: 'game-1' },
+    request: {
+      body: { userId: 1, resultCode: 'abc123abc123', stats },
+    },
+  } as any as RouterContext
+}
+
+/** Builds a `GameApi` with only the loader query `submitRollbackStats` touches mocked. */
+function makeRollbackStatsApi({ isLoading = false }: { isLoading?: boolean } = {}) {
+  const gameLoader = { isLoading: vi.fn().mockReturnValue(isLoading) }
+  return new GameApi(
+    {} as any,
+    gameLoader as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    new GameLifecycleEvents(),
+    {} as any,
+  )
+}
+
+describe('games/game-api/GameApi#submitRollbackStats', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(getUserGameRecord).mockResolvedValue({ resultCode: 'abc123abc123' } as any)
+    vi.mocked(insertGameRollbackStats).mockResolvedValue(true)
+  })
+
+  test('stores the stats, keeping fields this server does not know about', async () => {
+    const api = makeRollbackStatsApi()
+    const stats = { ...makeRollbackStats(), someFutureField: 42 }
+    const ctx = makeRollbackStatsCtx(stats)
+
+    await api.submitRollbackStats(ctx)
+
+    expect(insertGameRollbackStats).toHaveBeenCalledWith({
+      gameId: 'game-1',
+      userId: 1,
+      stats,
+    })
+    expect(ctx.status).toBe(204)
+  })
+
+  test('stores the minimum pipe a layout 2 client reports', async () => {
+    const api = makeRollbackStatsApi()
+    const stats = { ...makeRollbackStats(), version: 2, minPipeTurns: 2 }
+    const ctx = makeRollbackStatsCtx(stats)
+
+    await api.submitRollbackStats(ctx)
+
+    expect(insertGameRollbackStats).toHaveBeenCalledWith({ gameId: 'game-1', userId: 1, stats })
+    expect(ctx.status).toBe(204)
+  })
+
+  test('answers 204 when stats were already stored for the user', async () => {
+    vi.mocked(insertGameRollbackStats).mockResolvedValue(false)
+    const api = makeRollbackStatsApi()
+    const ctx = makeRollbackStatsCtx()
+
+    await api.submitRollbackStats(ctx)
+
+    expect(ctx.status).toBe(204)
+  })
+
+  test('rejects a request whose resultCode does not match the stored record', async () => {
+    vi.mocked(getUserGameRecord).mockResolvedValue({ resultCode: 'a-different-code' } as any)
+    const api = makeRollbackStatsApi()
+
+    const err = await api.submitRollbackStats(makeRollbackStatsCtx()).catch(e => e)
+
+    expect(err).toBeInstanceOf(GameResultServiceError)
+    expect((err as GameResultServiceError).code).toBe(GameResultErrorCode.NotFound)
+    expect(insertGameRollbackStats).not.toHaveBeenCalled()
+  })
+
+  test('rejects a user with no record in the game', async () => {
+    vi.mocked(getUserGameRecord).mockResolvedValue(null)
+    const api = makeRollbackStatsApi()
+
+    const err = await api.submitRollbackStats(makeRollbackStatsCtx()).catch(e => e)
+
+    expect(err).toBeInstanceOf(GameResultServiceError)
+    expect((err as GameResultServiceError).code).toBe(GameResultErrorCode.NotFound)
+    expect(insertGameRollbackStats).not.toHaveBeenCalled()
+  })
+
+  test('rejects while the game is still loading', async () => {
+    const api = makeRollbackStatsApi({ isLoading: true })
+
+    const err = await api.submitRollbackStats(makeRollbackStatsCtx()).catch(e => e)
+
+    expect(err).toBeInstanceOf(GameResultServiceError)
+    expect((err as GameResultServiceError).code).toBe(GameResultErrorCode.NotLoaded)
+    expect(insertGameRollbackStats).not.toHaveBeenCalled()
+  })
+
+  test.each<[string, Record<string, unknown>]>([
+    ['a negative count', { ticks: -1 }],
+    ['a fractional count', { rollbacks: 1.5 }],
+    ['a count too large for an INTEGER column', { ticks: 2 ** 31 }],
+    ['a negative duration', { worstTickUs: -1 }],
+    ['an unsafe integer duration', { stepUs: 2 ** 53 }],
+    ['a non-numeric field', { slowTicks: 'many' }],
+    ['a missing field', { ticks: undefined }],
+    ['a histogram with a negative entry', { rollbackHistogram: [1, -1] }],
+    ['a histogram with a fractional entry', { pipeHistogram: [1, 0.5] }],
+    ['a histogram with too many entries', { pipeHistogram: new Array(65).fill(0) }],
+    ['a histogram that is not an array', { rollbackHistogram: 5 }],
+    ['a minimum pipe of no turns', { minPipeTurns: 0 }],
+    ['a fractional minimum pipe', { minPipeTurns: 1.5 }],
+  ])('rejects stats with %s', async (_, overrides) => {
+    const api = makeRollbackStatsApi()
+    const stats: Record<string, unknown> = { ...makeRollbackStats(), ...overrides }
+    for (const [key, value] of Object.entries(overrides)) {
+      if (value === undefined) {
+        delete stats[key]
+      }
+    }
+
+    const err = await api.submitRollbackStats(makeRollbackStatsCtx(stats)).catch(e => e)
+
+    expect(err).toHaveProperty('status', 400)
+    expect(insertGameRollbackStats).not.toHaveBeenCalled()
+  })
+
+  test('accepts negative values for the signed fields and empty histograms', async () => {
+    const api = makeRollbackStatsApi()
+    const ctx = makeRollbackStatsCtx({
+      ...makeRollbackStats(),
+      scheduleCorrectedUs: -(2 ** 40),
+      leadP90MaxUs: -(2 ** 31),
+      leadP90SumUs: -(2 ** 45),
+      rollbackHistogram: [],
+      pipeHistogram: new Array(64).fill(0),
+    })
+
+    await api.submitRollbackStats(ctx)
+
+    expect(insertGameRollbackStats).toHaveBeenCalled()
+    expect(ctx.status).toBe(204)
+  })
+})

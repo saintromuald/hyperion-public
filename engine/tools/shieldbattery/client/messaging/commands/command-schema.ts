@@ -1,0 +1,348 @@
+import { TFunction } from 'i18next'
+import { SbUserId } from '../../../common/users/sb-user-id'
+import { ReduxAction } from '../../action-types'
+import { DispatchFunction } from '../../dispatch-registry'
+import { RootState } from '../../root-reducer'
+import { CommandContext, CommandSurface } from './command-context'
+import { LocalLineEmitter } from './local-output'
+
+/** Every surface a command can be declared for, in the order a sentence listing them reads. */
+export const ALL_COMMAND_SURFACES: ReadonlyArray<CommandSurface> = ['channel', 'whisper', 'lobby']
+
+/** The headings the help dialog files commands under, in the order it draws them. */
+export const COMMAND_GROUPS = ['chat', 'people', 'matchmaking', 'moderation', 'fun'] as const
+export type CommandGroup = (typeof COMMAND_GROUPS)[number]
+
+/** One value the argument palette can complete an argument with. */
+export interface ArgSuggestion {
+  /** What accepting the suggestion types into the input, e.g. a username or a channel name. */
+  value: string
+  /**
+   * Other spellings the argument accepts for this value, such as a subcommand option's short
+   * aliases. They are never shown; one typed in full counts as the value itself, so pressing Enter
+   * on it sends the command rather than rewriting it to the spelling the row shows.
+   */
+  aliases?: readonly string[]
+  /**
+   * When the value names a user: whose avatar the row shows, faded along with the text while the
+   * user is known to be offline. `online` is undefined when the client doesn't track that user's
+   * presence.
+   */
+  user?: { id: SbUserId; online?: boolean }
+}
+
+export interface ArgSuggestDeps {
+  context: CommandContext
+  /**
+   * Reads the store as of the moment the suggestions are built. The palette builds them afresh for
+   * every caret change, so what an argument offers follows the store as it is typed at.
+   */
+  getState: () => RootState
+}
+
+interface BaseArg {
+  /**
+   * An English identifier for the argument. It keys the parsed value, and it is what usage strings
+   * and error messages call the argument, so it is never localized.
+   */
+  name: string
+  /**
+   * Whether the argument may be left out. Optional arguments can only follow required ones, and a
+   * left-out one parses to `undefined`.
+   */
+  optional?: boolean
+  /**
+   * Offers values for the argument palette to complete this argument with. Without it, an argument
+   * is completed from what its kind implies: a `user` from the surface's members (never the
+   * caller), a `channel` from the channels the client knows of, an `enum` or `subcommand` from its
+   * own values, and the other kinds from nothing. Returns every candidate; the palette narrows them
+   * to what has been typed.
+   */
+  suggest?: (deps: ArgSuggestDeps) => ReadonlyArray<ArgSuggestion>
+  /**
+   * Whether the values offered for completion (`suggest`, or what the kind implies) are the only
+   * ones the argument accepts. An `enum` or a `subcommand` is exhaustive whatever this says, since
+   * the parser refuses anything they don't list. A `user` argument that its command resolves
+   * strictly against the surface's members, as the moderation commands do, declares this; a whisper
+   * target or a channel name, which can be anyone on the server or any channel that could exist,
+   * leaves it unset.
+   *
+   * Only an exhaustive set lets the palette rewrite what has been typed when the user presses
+   * space: a lone remaining row is then what they must have meant. For an open-ended argument what
+   * has been typed may be the intended value in its own right, so space leaves it unchanged.
+   */
+  exhaustive?: boolean
+}
+
+/** One token, with a leading `@` stripped, that has to look like a username. */
+export interface UserArg extends BaseArg {
+  kind: 'user'
+}
+
+/** One token, with a leading `#` stripped, that has to look like a channel name. */
+export interface ChannelArg extends BaseArg {
+  kind: 'channel'
+}
+
+/** One token, or a double-quoted run of tokens with the quotes stripped. */
+export interface WordArg extends BaseArg {
+  kind: 'word'
+}
+
+/**
+ * Everything that is left, verbatim: spaces, quotes and slashes inside it all survive. Only the
+ * last argument of a command (or of a subcommand option) can be one of these.
+ */
+export interface RestArg extends BaseArg {
+  kind: 'rest'
+}
+
+/** One token that has to be one of `values`, matched without regard to case. */
+export interface EnumArg extends BaseArg {
+  kind: 'enum'
+  /** The accepted values. The parsed value is always the one spelled as it is here. */
+  values: readonly string[]
+}
+
+/**
+ * One token spelling a length of time, such as `30s`, `1h30m` or `2d`. Units are `ms`, `s`, `m`,
+ * `h`, `d` and `w`; they can be combined without spaces. The parsed value is in milliseconds.
+ */
+export interface DurationArg extends BaseArg {
+  kind: 'duration'
+}
+
+/** One token spelling a number, optionally constrained to integers and/or to a range. */
+export interface NumberArg extends BaseArg {
+  kind: 'number'
+  integer?: boolean
+  min?: number
+  max?: number
+}
+
+/** One of the shapes a subcommand argument can take. */
+export interface SubcommandOption {
+  /** The canonical English name, which is what the parsed value carries. */
+  name: string
+  aliases?: readonly string[]
+  description: (t: TFunction) => string
+  args: readonly CommandArg[]
+}
+
+/**
+ * One token naming one of `options`, followed by that option's own arguments. Only the last
+ * argument of a command can be one of these.
+ */
+export interface SubcommandArg extends BaseArg {
+  kind: 'subcommand'
+  options: readonly SubcommandOption[]
+}
+
+export type CommandArg =
+  | UserArg
+  | ChannelArg
+  | WordArg
+  | RestArg
+  | EnumArg
+  | DurationArg
+  | NumberArg
+  | SubcommandArg
+
+/** The value a parsed subcommand argument carries: which option was named, and its own arguments. */
+export interface ParsedSubcommand<Name extends string = string, Args = ParsedArgValues> {
+  name: Name
+  args: Args
+}
+
+/** Parsed arguments with the schema that shaped them erased, as the parser hands them back. */
+export interface ParsedArgValues {
+  [name: string]: string | number | ParsedSubcommand | undefined
+}
+
+type SubcommandValues<Options extends readonly SubcommandOption[]> = {
+  [K in keyof Options]: Options[K] extends SubcommandOption
+    ? ParsedSubcommand<Options[K]['name'], ParsedArgs<Options[K]['args']>>
+    : never
+}[number]
+
+type ArgValue<A extends CommandArg> = A extends { kind: 'number' | 'duration' }
+  ? number
+  : A extends { kind: 'subcommand'; options: infer Options }
+    ? Options extends readonly SubcommandOption[]
+      ? SubcommandValues<Options>
+      : never
+    : string
+
+// An argument only comes back missing if it said it could be left out.
+type MaybeMissing<A extends CommandArg> = A extends { optional: true }
+  ? ArgValue<A> | undefined
+  : ArgValue<A>
+
+/** The arguments a command's schema produces, keyed by the names the schema gave them. */
+export type ParsedArgs<Args extends readonly CommandArg[]> = {
+  [Name in Args[number]['name']]: MaybeMissing<Extract<Args[number], { name: Name }>>
+}
+
+/** Who a reply goes to, resolved to a confirmed id and the name shown while composing. */
+export interface ReplyTarget {
+  id: SbUserId
+  name: string
+}
+
+/**
+ * What a command hands back when its whole effect is rewriting what was typed into ordinary chat
+ * text: the text goes out through the surface's normal send path, exactly as if the user had typed
+ * it, with no emote flag and nothing server-side.
+ */
+export interface TextTransform {
+  text: string
+}
+
+export interface CommandInvocation<Args = ParsedArgValues> {
+  args: Args
+  /**
+   * The surface the command was run in. A command declared for a single surface still has to
+   * narrow this before reaching into it.
+   */
+  context: CommandContext
+  dispatch: DispatchFunction<ReduxAction>
+  t: TFunction
+  /** Puts a line only the running user sees into the surface the command was run in. */
+  emit: LocalLineEmitter
+  /**
+   * Every command there is, in display order. Handed in rather than imported so that a command
+   * which lists or resolves its siblings doesn't import the registry that holds it. Whether one
+   * exists in a surface is `surfaces`; whether it can run is `getUnavailableReason`.
+   */
+  commands: ReadonlyArray<ChatCommand>
+  /**
+   * Puts the input the command was typed into in reply mode, with `target` locked for the rest of
+   * that composition. Absent where a command runs without an input, such as in tests.
+   */
+  enterReplyMode?: (target: ReplyTarget) => void
+}
+
+/** A command as the registry holds it and the runner runs it, with its argument schema erased. */
+export interface ChatCommand {
+  /** The canonical name, lower-case and without a leading slash. Never localized. */
+  name: string
+  /** Other lower-case names that reach this command. Never localized. */
+  aliases?: readonly string[]
+  description: (t: TFunction) => string
+  /** The heading the help dialog lists this command under. */
+  group: CommandGroup
+  /**
+   * The surfaces the command can run in. Typed outside of them, it answers with where it can be
+   * used instead.
+   */
+  surfaces: readonly CommandSurface[]
+  /**
+   * Decides whether the command can be run in a context that is one of its `surfaces`, and when it
+   * can't, says why in a sentence the user is shown. Returns `undefined` when it can. A command
+   * that can't be run still exists: help and the palette leave it out, but naming it answers with
+   * this reason rather than the unknown-command line.
+   */
+  getUnavailableReason?: (context: CommandContext, t: TFunction) => string | undefined
+  args: readonly CommandArg[]
+  // Declared as a method so that a command written against a precise argument schema is still one
+  // of these, which is all the registry and the runner ever need it to be.
+  run(invocation: CommandInvocation): TextTransform | void
+}
+
+/** A command as it is written: each argument carries the type its schema entry describes. */
+export interface TypedChatCommand<Args extends readonly CommandArg[]> extends Omit<
+  ChatCommand,
+  'args' | 'run'
+> {
+  args: Args
+  run(invocation: CommandInvocation<ParsedArgs<Args>>): TextTransform | void
+}
+
+/**
+ * Declares a command, inferring its argument schema literally so that `run` sees each argument
+ * under the name and with the type the schema gives it.
+ */
+export function defineCommand<const Args extends readonly CommandArg[]>(
+  command: TypedChatCommand<Args>,
+): ChatCommand {
+  return command
+}
+
+/** Whether `name` reaches `command`, comparing without regard to case. */
+export function matchesCommandName(command: ChatCommand, name: string): boolean {
+  const lowered = name.toLowerCase()
+  return (
+    command.name.toLowerCase() === lowered ||
+    (command.aliases?.some(alias => alias.toLowerCase() === lowered) ?? false)
+  )
+}
+
+/** The commands that exist in a surface, in the order they were given in. */
+export function getSurfaceCommands(
+  commands: ReadonlyArray<ChatCommand>,
+  surface: CommandSurface,
+): ReadonlyArray<ChatCommand> {
+  return commands.filter(command => command.surfaces.includes(surface))
+}
+
+/** The commands that exist in the context's surface and can be run from it, in the order given. */
+export function getRunnableCommands(
+  commands: ReadonlyArray<ChatCommand>,
+  context: CommandContext,
+  t: TFunction,
+): ReadonlyArray<ChatCommand> {
+  return getSurfaceCommands(commands, context.surface).filter(
+    command => command.getUnavailableReason?.(context, t) === undefined,
+  )
+}
+
+/**
+ * Files commands under their groups, in group order, keeping each group's commands in the order
+ * given. Groups with no command are left out, so a listing built from this shows exactly the
+ * commands it was handed and nothing else.
+ */
+export function groupCommands<T extends { group: CommandGroup }>(
+  commands: ReadonlyArray<T>,
+): Array<{ group: CommandGroup; commands: T[] }> {
+  return COMMAND_GROUPS.flatMap(group => {
+    const inGroup = commands.filter(command => command.group === group)
+    return inGroup.length ? [{ group, commands: inGroup }] : []
+  })
+}
+
+/** What usage strings and error messages call an argument. */
+export function getArgLabel(arg: CommandArg): string {
+  switch (arg.kind) {
+    case 'enum':
+      return arg.values.join('|')
+    case 'subcommand':
+      return arg.options.map(option => option.name).join('|')
+    default:
+      return arg.name
+  }
+}
+
+/** One argument as a usage string spells it, for a listing that typesets the pieces separately. */
+export interface CommandArgUsage {
+  /** What usage strings call the argument, e.g. `user` or `kick|ban`. */
+  label: string
+  optional: boolean
+}
+
+/** The arguments of a command in order, each as its usage string would spell it. */
+export function getCommandArgUsages(command: ChatCommand): CommandArgUsage[] {
+  return command.args.map(arg => ({ label: getArgLabel(arg), optional: arg.optional ?? false }))
+}
+
+/** Spells out how a command is typed, e.g. `/kick <user> [reason]`. */
+export function getCommandUsage(command: ChatCommand): string {
+  const args = getCommandArgUsages(command).map(arg =>
+    arg.optional ? `[${arg.label}]` : `<${arg.label}>`,
+  )
+  return [`/${command.name}`, ...args].join(' ')
+}
+
+/** Lists a command's aliases as they'd be typed, e.g. `/j, /channel`. Empty when it has none. */
+export function formatAliases(command: ChatCommand): string {
+  return (command.aliases ?? []).map(alias => `/${alias}`).join(', ')
+}

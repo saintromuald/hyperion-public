@@ -1,0 +1,1292 @@
+import { generateKeyPairSync, KeyObject, sign as signEd25519 } from 'node:crypto'
+import { container } from 'tsyringe'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { GameSource } from '../../../common/games/configuration'
+import {
+  NetcodeV2DepartureNotification,
+  NetcodeV2DesyncNotification,
+  NetcodeV2ResultNotification,
+  NetcodeV2SessionClosedNotification,
+  NetcodeV2SessionStartedNotification,
+  NetcodeV2SlotConnectedNotification,
+  NetcodeV2SlotStartedNotification,
+} from '../../../common/games/netcode-v2'
+import {
+  GameClientResult,
+  GameResultErrorCode,
+  SubmitGameResultsRequest,
+} from '../../../common/games/results'
+import { asMockedFunction } from '../../../common/testing/mocks'
+import { makeSbUserId } from '../../../common/users/sb-user-id'
+import {
+  getGameRecord,
+  getNetcodeV2DebugInfo,
+  hasFinalGameSetupResolution,
+} from '../games/game-models'
+import { GameResultServiceError } from '../games/game-result-service'
+import { recordDesyncEvent } from '../models/game-desync-events'
+import { recordUserDeparture } from '../models/games-users'
+import {
+  checkGameEventWebhookAuth,
+  recordDepartureNotification,
+  recordDesyncNotification,
+  recordLobbyViolationNotification,
+  recordResultNotification,
+  recordSessionClosedNotification,
+  recordSessionStartedNotification,
+  recordSlotConnectedEvidenceNotification,
+  recordSlotConnectedNotification,
+  recordSlotEvidenceNotification,
+  recordSlotStartedNotification,
+} from './netcode-v2-game-event-service'
+import { TenantPubkeyCache } from './tenant-pubkey-cache'
+
+vi.mock('../models/games-users', () => ({
+  recordUserDeparture: vi.fn(),
+}))
+vi.mock('../models/game-desync-events', () => ({
+  recordDesyncEvent: vi.fn(),
+}))
+// Defaults to "game not found" so tests that don't care about the exemption check (i.e. don't pass
+// their own `getGameRecordFn`) behave exactly as they did before it existed — the real DB-backed
+// implementation would otherwise blow up in this unit test environment.
+vi.mock('../games/game-models', () => ({
+  getGameRecord: vi.fn().mockResolvedValue(undefined),
+  getNetcodeV2DebugInfo: vi.fn(),
+  hasFinalGameSetupResolution: vi.fn().mockResolvedValue(false),
+}))
+
+const GAME_ID = '11111111-2222-4333-8444-555555555555'
+
+/** Raw 32-byte Ed25519 public key, hex-encoded — the wire format the coordinator returns. */
+function rawPublicKeyHex(publicKey: KeyObject): string {
+  return (publicKey.export({ type: 'spki', format: 'der' }) as Buffer).subarray(-32).toString('hex')
+}
+
+/** Signs a game-events webhook request exactly as the production verification expects. */
+function signWebhookRequest(privateKey: KeyObject, timestamp: string, rawBody: Buffer): string {
+  const message = Buffer.concat([Buffer.from(`rp2-webhook-v1:${timestamp}:`, 'utf8'), rawBody])
+  return signEd25519(null, message, privateKey).toString('base64')
+}
+
+function makeDepartureNotification(
+  overrides: Partial<NetcodeV2DepartureNotification> = {},
+): NetcodeV2DepartureNotification {
+  return {
+    event: 'departure',
+    tenant: 'sb-dev',
+    session: 1,
+    externalId: GAME_ID,
+    slot: 0,
+    externalRef: '42',
+    kind: 'left',
+    reason: 3,
+    leaveSeq: 1,
+    ...overrides,
+  }
+}
+
+function makeDesyncNotification(
+  overrides: Partial<NetcodeV2DesyncNotification> = {},
+): NetcodeV2DesyncNotification {
+  return {
+    event: 'desync',
+    tenant: 'sb-dev',
+    session: 1,
+    externalId: GAME_ID,
+    syncOrdinal: 17,
+    gameFrame: 512,
+    detectedAtMs: Date.now(),
+    noMajority: false,
+    diverged: [{ slot: 2, externalRef: '42' }],
+    ...overrides,
+  }
+}
+
+/** base64-encodes a `SubmitGameResultsRequest` the way the DLL's opaque relay payload would be. */
+function encodeResultPayload(overrides: Partial<SubmitGameResultsRequest> = {}): string {
+  const body: SubmitGameResultsRequest = {
+    userId: makeSbUserId(42),
+    resultCode: 'abc123',
+    time: 12345,
+    playerResults: [[makeSbUserId(42), { result: GameClientResult.Victory, race: 'z', apm: 100 }]],
+    ...overrides,
+  }
+  return Buffer.from(JSON.stringify(body), 'utf8').toString('base64')
+}
+
+function makeResultNotification(
+  overrides: Partial<NetcodeV2ResultNotification> = {},
+): NetcodeV2ResultNotification {
+  return {
+    event: 'result',
+    tenant: 'sb-dev',
+    session: 1,
+    externalId: GAME_ID,
+    slot: 0,
+    externalRef: '42',
+    payload: encodeResultPayload(),
+    arrivalMs: Date.now(),
+    sessionFrame: 100,
+    ...overrides,
+  }
+}
+
+function makeSessionClosedNotification(
+  overrides: Partial<NetcodeV2SessionClosedNotification> = {},
+): NetcodeV2SessionClosedNotification {
+  return {
+    event: 'sessionClosed',
+    tenant: 'sb-dev',
+    session: 1,
+    externalId: GAME_ID,
+    ...overrides,
+  }
+}
+
+describe('netcode-v2/checkGameEventWebhookAuth', () => {
+  const { publicKey, privateKey } = generateKeyPairSync('ed25519')
+  const pubkeyHex = rawPublicKeyHex(publicKey)
+  const rawBody = Buffer.from('{"tenant":"sb-dev"}', 'utf8')
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  /**
+   * Stubs netcode v2 as configured (coordinator URL + tenant + client key), as `loadConfigFromEnv`
+   * expects — the client key is required whenever the coordinator URL is set.
+   */
+  function configureNetcodeV2() {
+    vi.stubEnv('SB_RP2_COORDINATOR_URL', 'http://coordinator.example')
+    vi.stubEnv('SB_RP2_TENANT', 'sb-dev')
+    vi.stubEnv('SB_RP2_CLIENT_KEY', '11'.repeat(32))
+  }
+
+  test('returns 404 when netcode v2 is not configured, regardless of the headers', async () => {
+    vi.stubEnv('SB_RP2_COORDINATOR_URL', undefined)
+    const cache = new TenantPubkeyCache(vi.fn())
+
+    const timestamp = String(Date.now())
+    const signature = signWebhookRequest(privateKey, timestamp, rawBody)
+
+    expect(await checkGameEventWebhookAuth(timestamp, signature, rawBody, cache)).toBe(404)
+    expect(await checkGameEventWebhookAuth('', '', rawBody, cache)).toBe(404)
+  })
+
+  test('returns 401 when the timestamp header is missing or not a decimal integer', async () => {
+    configureNetcodeV2()
+    const cache = new TenantPubkeyCache(vi.fn().mockResolvedValue(pubkeyHex))
+
+    const timestamp = String(Date.now())
+    const signature = signWebhookRequest(privateKey, timestamp, rawBody)
+
+    expect(await checkGameEventWebhookAuth('', signature, rawBody, cache)).toBe(401)
+    expect(await checkGameEventWebhookAuth('not-a-number', signature, rawBody, cache)).toBe(401)
+    expect(await checkGameEventWebhookAuth('-100', signature, rawBody, cache)).toBe(401)
+  })
+
+  test('returns 401 when the timestamp is outside the replay window', async () => {
+    configureNetcodeV2()
+    const cache = new TenantPubkeyCache(vi.fn().mockResolvedValue(pubkeyHex))
+
+    const staleTimestamp = String(Date.now() - 6 * 60 * 1000)
+    const signature = signWebhookRequest(privateKey, staleTimestamp, rawBody)
+
+    expect(await checkGameEventWebhookAuth(staleTimestamp, signature, rawBody, cache)).toBe(401)
+  })
+
+  test('returns 401 when the signature header is missing or not 64 bytes of base64', async () => {
+    configureNetcodeV2()
+    const cache = new TenantPubkeyCache(vi.fn().mockResolvedValue(pubkeyHex))
+
+    const timestamp = String(Date.now())
+
+    expect(await checkGameEventWebhookAuth(timestamp, '', rawBody, cache)).toBe(401)
+    expect(await checkGameEventWebhookAuth(timestamp, 'not-valid-base64!!!', rawBody, cache)).toBe(
+      401,
+    )
+    expect(
+      await checkGameEventWebhookAuth(
+        timestamp,
+        Buffer.alloc(63).toString('base64'),
+        rawBody,
+        cache,
+      ),
+    ).toBe(401)
+  })
+
+  test('returns 401 when the signature does not cover the actual raw body (tampered)', async () => {
+    configureNetcodeV2()
+    const cache = new TenantPubkeyCache(vi.fn().mockResolvedValue(pubkeyHex))
+
+    const timestamp = String(Date.now())
+    const signature = signWebhookRequest(privateKey, timestamp, rawBody)
+    const tamperedBody = Buffer.from('{"tenant":"someone-else"}', 'utf8')
+
+    expect(await checkGameEventWebhookAuth(timestamp, signature, tamperedBody, cache)).toBe(401)
+  })
+
+  test('returns 401 when the key fetch fails (coordinator down/timeout)', async () => {
+    configureNetcodeV2()
+    const cache = new TenantPubkeyCache(vi.fn().mockRejectedValue(new Error('boom')))
+
+    const timestamp = String(Date.now())
+    const signature = signWebhookRequest(privateKey, timestamp, rawBody)
+
+    expect(await checkGameEventWebhookAuth(timestamp, signature, rawBody, cache)).toBe(401)
+  })
+
+  test('returns null on a valid, fresh, correctly-signed request (fetches the key on first use)', async () => {
+    configureNetcodeV2()
+    const fetchPubkeyHex = vi.fn().mockResolvedValue(pubkeyHex)
+    const cache = new TenantPubkeyCache(fetchPubkeyHex)
+
+    const timestamp = String(Date.now())
+    const signature = signWebhookRequest(privateKey, timestamp, rawBody)
+
+    expect(await checkGameEventWebhookAuth(timestamp, signature, rawBody, cache)).toBeNull()
+    expect(fetchPubkeyHex).toHaveBeenCalledTimes(1)
+  })
+
+  test('returns 401 when the signature does not verify against the fetched pubkey', async () => {
+    configureNetcodeV2()
+    const otherKeypair = generateKeyPairSync('ed25519')
+    const cache = new TenantPubkeyCache(vi.fn().mockResolvedValue(pubkeyHex))
+
+    const timestamp = String(Date.now())
+    // Signed with a different keypair than the one the coordinator "returns".
+    const signature = signWebhookRequest(otherKeypair.privateKey, timestamp, rawBody)
+
+    expect(await checkGameEventWebhookAuth(timestamp, signature, rawBody, cache)).toBe(401)
+  })
+
+  test('rotation: re-fetches once and re-verifies when the cached key no longer matches', async () => {
+    configureNetcodeV2()
+    const rotatedKeypair = generateKeyPairSync('ed25519')
+    const fetchPubkeyHex = vi
+      .fn()
+      .mockResolvedValueOnce(pubkeyHex)
+      .mockResolvedValueOnce(rawPublicKeyHex(rotatedKeypair.publicKey))
+    const cache = new TenantPubkeyCache(fetchPubkeyHex)
+    // Prime the cache with the "old" (soon to be stale) key.
+    await cache.getKey()
+
+    const timestamp = String(Date.now())
+    // Signed with the *new* (rotated) key — verification against the stale cached key fails first.
+    const signature = signWebhookRequest(rotatedKeypair.privateKey, timestamp, rawBody)
+
+    expect(await checkGameEventWebhookAuth(timestamp, signature, rawBody, cache)).toBeNull()
+    expect(fetchPubkeyHex).toHaveBeenCalledTimes(2)
+  })
+
+  test('re-fetch rate limit: a second verification failure within the cooldown does not re-fetch', async () => {
+    configureNetcodeV2()
+    const attackerKeypair = generateKeyPairSync('ed25519')
+    const fetchPubkeyHex = vi.fn().mockResolvedValue(pubkeyHex)
+    const cache = new TenantPubkeyCache(fetchPubkeyHex)
+    await cache.getKey() // primes the cache: one fetch so far
+
+    const timestamp = String(Date.now())
+    const badSignature = signWebhookRequest(attackerKeypair.privateKey, timestamp, rawBody)
+
+    // First garbage signature: fails against the cached key, triggers one rate-limited re-fetch
+    // attempt (which returns the same key, so it still fails).
+    expect(await checkGameEventWebhookAuth(timestamp, badSignature, rawBody, cache)).toBe(401)
+    expect(fetchPubkeyHex).toHaveBeenCalledTimes(2)
+
+    // A second garbage signature immediately after is well inside the 30s cooldown — must not
+    // trigger another request to the coordinator.
+    expect(await checkGameEventWebhookAuth(timestamp, badSignature, rawBody, cache)).toBe(401)
+    expect(fetchPubkeyHex).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('netcode-v2/recordDepartureNotification', () => {
+  beforeEach(() => {
+    asMockedFunction(recordUserDeparture).mockReset()
+  })
+
+  test('records the departure when it is genuine', async () => {
+    asMockedFunction(recordUserDeparture).mockResolvedValue(true)
+    const submitGameResults = vi.fn().mockResolvedValue(undefined)
+    const scheduleKnownCompleteReconcile = vi.fn().mockResolvedValue(undefined)
+
+    await recordDepartureNotification(
+      makeDepartureNotification({ kind: 'dropped' }),
+      submitGameResults,
+      scheduleKnownCompleteReconcile,
+    )
+
+    expect(recordUserDeparture).toHaveBeenCalledWith({
+      userId: makeSbUserId(42),
+      gameId: GAME_ID,
+      kind: 'dropped',
+      time: expect.any(Date),
+    })
+    expect(submitGameResults).not.toHaveBeenCalled()
+    expect(scheduleKnownCompleteReconcile).toHaveBeenCalledWith(GAME_ID)
+  })
+
+  test('completes without error on a duplicate departure, and still checks reconcile eligibility', async () => {
+    asMockedFunction(recordUserDeparture).mockResolvedValue(false)
+    const submitGameResults = vi.fn().mockResolvedValue(undefined)
+    const scheduleKnownCompleteReconcile = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      recordDepartureNotification(
+        makeDepartureNotification(),
+        submitGameResults,
+        scheduleKnownCompleteReconcile,
+      ),
+    ).resolves.toBeUndefined()
+
+    expect(recordUserDeparture).toHaveBeenCalledTimes(1)
+    expect(scheduleKnownCompleteReconcile).toHaveBeenCalledWith(GAME_ID)
+  })
+
+  test('does not call the model when externalRef is not an integer', async () => {
+    const submitGameResults = vi.fn()
+    const scheduleKnownCompleteReconcile = vi.fn()
+
+    await recordDepartureNotification(
+      makeDepartureNotification({ externalRef: 'not-a-number' }),
+      submitGameResults,
+      scheduleKnownCompleteReconcile,
+    )
+
+    expect(recordUserDeparture).not.toHaveBeenCalled()
+    expect(scheduleKnownCompleteReconcile).not.toHaveBeenCalled()
+  })
+
+  test('does not call the model when externalRef is missing', async () => {
+    await recordDepartureNotification(makeDepartureNotification({ externalRef: undefined }))
+
+    expect(recordUserDeparture).not.toHaveBeenCalled()
+  })
+
+  test('does not call the model when externalId is not a valid gameId', async () => {
+    const submitGameResults = vi.fn()
+    const scheduleKnownCompleteReconcile = vi.fn()
+
+    await recordDepartureNotification(
+      makeDepartureNotification({ externalId: 'not-a-uuid' }),
+      submitGameResults,
+      scheduleKnownCompleteReconcile,
+    )
+
+    expect(recordUserDeparture).not.toHaveBeenCalled()
+    expect(scheduleKnownCompleteReconcile).not.toHaveBeenCalled()
+  })
+
+  test('does not call the model when externalId is missing', async () => {
+    await recordDepartureNotification(makeDepartureNotification({ externalId: undefined }))
+
+    expect(recordUserDeparture).not.toHaveBeenCalled()
+  })
+
+  describe('embedded result', () => {
+    test('submits and stamps the embedded result before recording the departure', async () => {
+      const callOrder: string[] = []
+      asMockedFunction(recordUserDeparture).mockImplementation(async () => {
+        callOrder.push('departure')
+        return true
+      })
+      const submitGameResults = vi.fn().mockImplementation(async () => {
+        callOrder.push('submit')
+      })
+      const scheduleKnownCompleteReconcile = vi.fn().mockResolvedValue(undefined)
+      const notification = makeDepartureNotification({
+        kind: 'dropped',
+        result: {
+          payload: encodeResultPayload(),
+          arrivalMs: 12345,
+          sessionFrame: 200,
+        },
+      })
+
+      await recordDepartureNotification(
+        notification,
+        submitGameResults,
+        scheduleKnownCompleteReconcile,
+      )
+
+      expect(submitGameResults).toHaveBeenCalledWith({
+        gameId: GAME_ID,
+        report: {
+          userId: makeSbUserId(42),
+          resultCode: 'abc123',
+          time: 12345,
+          playerResults: [
+            [makeSbUserId(42), { result: GameClientResult.Victory, race: 'z', apm: 100 }],
+          ],
+        },
+        relayReportTime: new Date(12345),
+        relayReportFrame: 200,
+        logger: expect.anything(),
+      })
+      expect(callOrder).toEqual(['submit', 'departure'])
+      expect(scheduleKnownCompleteReconcile).toHaveBeenCalledWith(GAME_ID)
+    })
+
+    test('does not touch the submission service when no result is embedded', async () => {
+      asMockedFunction(recordUserDeparture).mockResolvedValue(true)
+      const submitGameResults = vi.fn()
+
+      await recordDepartureNotification(
+        makeDepartureNotification({ result: undefined }),
+        submitGameResults,
+      )
+
+      expect(submitGameResults).not.toHaveBeenCalled()
+      expect(recordUserDeparture).toHaveBeenCalledTimes(1)
+    })
+
+    test('silently skips an embedded result the user already reported, and still records the departure', async () => {
+      asMockedFunction(recordUserDeparture).mockResolvedValue(true)
+      const submitGameResults = vi
+        .fn()
+        .mockRejectedValue(new GameResultServiceError(GameResultErrorCode.AlreadyReported, 'dup'))
+      const scheduleKnownCompleteReconcile = vi.fn().mockResolvedValue(undefined)
+      const notification = makeDepartureNotification({
+        result: { payload: encodeResultPayload(), arrivalMs: Date.now() },
+      })
+
+      await expect(
+        recordDepartureNotification(
+          notification,
+          submitGameResults,
+          scheduleKnownCompleteReconcile,
+        ),
+      ).resolves.toBeUndefined()
+
+      expect(recordUserDeparture).toHaveBeenCalledTimes(1)
+      expect(scheduleKnownCompleteReconcile).toHaveBeenCalledWith(GAME_ID)
+    })
+
+    test('drops a malformed embedded payload without throwing, and still records the departure', async () => {
+      asMockedFunction(recordUserDeparture).mockResolvedValue(true)
+      const submitGameResults = vi.fn()
+      const scheduleKnownCompleteReconcile = vi.fn().mockResolvedValue(undefined)
+      const notification = makeDepartureNotification({
+        result: { payload: '!!!not valid base64 json!!!', arrivalMs: Date.now() },
+      })
+
+      await expect(
+        recordDepartureNotification(
+          notification,
+          submitGameResults,
+          scheduleKnownCompleteReconcile,
+        ),
+      ).resolves.toBeUndefined()
+
+      expect(submitGameResults).not.toHaveBeenCalled()
+      expect(recordUserDeparture).toHaveBeenCalledTimes(1)
+      expect(scheduleKnownCompleteReconcile).toHaveBeenCalledWith(GAME_ID)
+    })
+
+    test('drops an embedded payload whose userId does not match externalRef, and still records the departure', async () => {
+      asMockedFunction(recordUserDeparture).mockResolvedValue(true)
+      const submitGameResults = vi.fn()
+      const notification = makeDepartureNotification({
+        externalRef: '99',
+        result: {
+          payload: encodeResultPayload({ userId: makeSbUserId(42) }),
+          arrivalMs: Date.now(),
+        },
+      })
+
+      await recordDepartureNotification(notification, submitGameResults)
+
+      expect(submitGameResults).not.toHaveBeenCalled()
+      expect(recordUserDeparture).toHaveBeenCalledTimes(1)
+    })
+
+    test('rethrows an unexpected (non-domain) error from the embedded result submission', async () => {
+      const submitGameResults = vi.fn().mockRejectedValue(new Error('boom'))
+      const notification = makeDepartureNotification({
+        result: { payload: encodeResultPayload(), arrivalMs: Date.now() },
+      })
+
+      await expect(recordDepartureNotification(notification, submitGameResults)).rejects.toThrow(
+        'boom',
+      )
+      expect(recordUserDeparture).not.toHaveBeenCalled()
+    })
+
+    test('drops an embedded result for a results-exempt (computer) game, but still records the departure', async () => {
+      asMockedFunction(recordUserDeparture).mockResolvedValue(true)
+      const submitGameResults = vi.fn()
+      const scheduleKnownCompleteReconcile = vi.fn().mockResolvedValue(undefined)
+      const getGameRecordFn = vi.fn().mockResolvedValue({
+        config: { resultsExempt: true },
+      })
+      const notification = makeDepartureNotification({
+        result: { payload: encodeResultPayload(), arrivalMs: Date.now() },
+      })
+
+      await recordDepartureNotification(
+        notification,
+        submitGameResults,
+        scheduleKnownCompleteReconcile,
+        getGameRecordFn,
+      )
+
+      expect(submitGameResults).not.toHaveBeenCalled()
+      expect(recordUserDeparture).toHaveBeenCalledTimes(1)
+      expect(scheduleKnownCompleteReconcile).toHaveBeenCalledWith(GAME_ID)
+    })
+  })
+})
+
+describe('netcode-v2/recordDesyncNotification', () => {
+  beforeEach(() => {
+    asMockedFunction(recordDesyncEvent).mockReset()
+  })
+
+  test('records the desync event with parsed diverged user ids', async () => {
+    asMockedFunction(recordDesyncEvent).mockResolvedValue(true)
+
+    await recordDesyncNotification(makeDesyncNotification())
+
+    expect(recordDesyncEvent).toHaveBeenCalledWith({
+      gameId: GAME_ID,
+      syncOrdinal: 17,
+      detectedAt: expect.any(Date),
+      gameFrame: 512,
+      noMajority: false,
+      divergedUserIds: [makeSbUserId(42)],
+    })
+  })
+
+  test('completes without error on a duplicate (game_id, sync_ordinal)', async () => {
+    asMockedFunction(recordDesyncEvent).mockResolvedValue(false)
+
+    await expect(recordDesyncNotification(makeDesyncNotification())).resolves.toBeUndefined()
+
+    expect(recordDesyncEvent).toHaveBeenCalledTimes(1)
+  })
+
+  test('persists a no-majority event with an empty diverged set', async () => {
+    asMockedFunction(recordDesyncEvent).mockResolvedValue(true)
+
+    await recordDesyncNotification(makeDesyncNotification({ noMajority: true, diverged: [] }))
+
+    expect(recordDesyncEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ noMajority: true, divergedUserIds: [] }),
+    )
+  })
+
+  test('skips diverged entries with a missing/unparseable externalRef but still records the rest', async () => {
+    asMockedFunction(recordDesyncEvent).mockResolvedValue(true)
+
+    await recordDesyncNotification(
+      makeDesyncNotification({
+        diverged: [
+          { slot: 1, externalRef: 'not-a-number' },
+          { slot: 2, externalRef: '42' },
+          { slot: 3 },
+        ],
+      }),
+    )
+
+    expect(recordDesyncEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ divergedUserIds: [makeSbUserId(42)] }),
+    )
+  })
+
+  test('records the slots missing their state hash reports as at fault too', async () => {
+    asMockedFunction(recordDesyncEvent).mockResolvedValue(true)
+
+    await recordDesyncNotification(
+      makeDesyncNotification({
+        diverged: [],
+        missing: [{ slot: 1, externalRef: '7' }],
+      }),
+    )
+
+    expect(recordDesyncEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ noMajority: false, divergedUserIds: [makeSbUserId(7)] }),
+    )
+  })
+
+  test('records nobody at fault for a no-majority event, even with missing reports', async () => {
+    asMockedFunction(recordDesyncEvent).mockResolvedValue(true)
+
+    await recordDesyncNotification(
+      makeDesyncNotification({
+        noMajority: true,
+        diverged: [],
+        missing: [
+          { slot: 1, externalRef: '7' },
+          { slot: 2, externalRef: '42' },
+        ],
+      }),
+    )
+
+    expect(recordDesyncEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ noMajority: true, divergedUserIds: [] }),
+    )
+  })
+
+  test('does not call the model when externalId is not a valid gameId', async () => {
+    await recordDesyncNotification(makeDesyncNotification({ externalId: 'not-a-uuid' }))
+
+    expect(recordDesyncEvent).not.toHaveBeenCalled()
+  })
+
+  test('does not call the model when externalId is missing (unknown game warns + accepts)', async () => {
+    await recordDesyncNotification(makeDesyncNotification({ externalId: undefined }))
+
+    expect(recordDesyncEvent).not.toHaveBeenCalled()
+  })
+})
+
+describe('netcode-v2/recordResultNotification', () => {
+  test('submits the decoded report and stamps relay fields', async () => {
+    const submitGameResults = vi.fn().mockResolvedValue(undefined)
+    const scheduleKnownCompleteReconcile = vi.fn().mockResolvedValue(undefined)
+    const notification = makeResultNotification()
+
+    await recordResultNotification(notification, submitGameResults, scheduleKnownCompleteReconcile)
+
+    expect(submitGameResults).toHaveBeenCalledWith({
+      gameId: GAME_ID,
+      report: {
+        userId: makeSbUserId(42),
+        resultCode: 'abc123',
+        time: 12345,
+        playerResults: [
+          [makeSbUserId(42), { result: GameClientResult.Victory, race: 'z', apm: 100 }],
+        ],
+      },
+      relayReportTime: new Date(notification.arrivalMs),
+      relayReportFrame: 100,
+      logger: expect.anything(),
+    })
+    expect(scheduleKnownCompleteReconcile).toHaveBeenCalledWith(GAME_ID)
+  })
+
+  test('stamps a null relayReportFrame when sessionFrame is absent', async () => {
+    const submitGameResults = vi.fn().mockResolvedValue(undefined)
+
+    await recordResultNotification(
+      makeResultNotification({ sessionFrame: undefined }),
+      submitGameResults,
+      vi.fn().mockResolvedValue(undefined),
+    )
+
+    expect(submitGameResults).toHaveBeenCalledWith(
+      expect.objectContaining({ relayReportFrame: null }),
+    )
+  })
+
+  test('completes silently on a duplicate (AlreadyReported) submission, without checking reconcile eligibility', async () => {
+    const submitGameResults = vi
+      .fn()
+      .mockRejectedValue(new GameResultServiceError(GameResultErrorCode.AlreadyReported, 'dup'))
+    const scheduleKnownCompleteReconcile = vi.fn()
+
+    await expect(
+      recordResultNotification(
+        makeResultNotification(),
+        submitGameResults,
+        scheduleKnownCompleteReconcile,
+      ),
+    ).resolves.toBeUndefined()
+    expect(scheduleKnownCompleteReconcile).not.toHaveBeenCalled()
+  })
+
+  test('drops (without throwing) on other submission-service errors', async () => {
+    const submitGameResults = vi
+      .fn()
+      .mockRejectedValue(new GameResultServiceError(GameResultErrorCode.NotFound, 'no game'))
+
+    await expect(
+      recordResultNotification(makeResultNotification(), submitGameResults),
+    ).resolves.toBeUndefined()
+  })
+
+  test('rethrows an unexpected (non-domain) error from the submission service', async () => {
+    const submitGameResults = vi.fn().mockRejectedValue(new Error('boom'))
+
+    await expect(
+      recordResultNotification(makeResultNotification(), submitGameResults),
+    ).rejects.toThrow('boom')
+  })
+
+  test('drops a payload that cannot be decoded as base64 JSON, without throwing', async () => {
+    const submitGameResults = vi.fn()
+    const notification = makeResultNotification({ payload: '!!!not valid base64 json!!!' })
+
+    await expect(recordResultNotification(notification, submitGameResults)).resolves.toBeUndefined()
+    expect(submitGameResults).not.toHaveBeenCalled()
+  })
+
+  test('drops a payload that fails schema validation, without throwing', async () => {
+    const submitGameResults = vi.fn()
+    const badPayload = Buffer.from(JSON.stringify({ userId: 42 }), 'utf8').toString('base64')
+    const notification = makeResultNotification({ payload: badPayload })
+
+    await expect(recordResultNotification(notification, submitGameResults)).resolves.toBeUndefined()
+    expect(submitGameResults).not.toHaveBeenCalled()
+  })
+
+  test('drops a payload whose userId does not match externalRef', async () => {
+    const submitGameResults = vi.fn()
+    const notification = makeResultNotification({
+      externalRef: '99',
+      payload: encodeResultPayload({ userId: makeSbUserId(42) }),
+    })
+
+    await expect(recordResultNotification(notification, submitGameResults)).resolves.toBeUndefined()
+    expect(submitGameResults).not.toHaveBeenCalled()
+  })
+
+  test('does not call the service when externalId is missing', async () => {
+    const submitGameResults = vi.fn()
+
+    await recordResultNotification(
+      makeResultNotification({ externalId: undefined }),
+      submitGameResults,
+    )
+
+    expect(submitGameResults).not.toHaveBeenCalled()
+  })
+
+  test('does not call the service when externalRef is missing', async () => {
+    const submitGameResults = vi.fn()
+
+    await recordResultNotification(
+      makeResultNotification({ externalRef: undefined }),
+      submitGameResults,
+    )
+
+    expect(submitGameResults).not.toHaveBeenCalled()
+  })
+
+  test('drops a result for a results-exempt (computer) game without submitting or scheduling reconcile', async () => {
+    const submitGameResults = vi.fn()
+    const scheduleKnownCompleteReconcile = vi.fn()
+    const getGameRecordFn = vi.fn().mockResolvedValue({
+      config: { resultsExempt: true },
+    })
+
+    await recordResultNotification(
+      makeResultNotification(),
+      submitGameResults,
+      scheduleKnownCompleteReconcile,
+      getGameRecordFn,
+    )
+
+    expect(submitGameResults).not.toHaveBeenCalled()
+    expect(scheduleKnownCompleteReconcile).not.toHaveBeenCalled()
+  })
+
+  test('submits normally when the game record has no exemption flag set (legacy record)', async () => {
+    const submitGameResults = vi.fn().mockResolvedValue(undefined)
+    const scheduleKnownCompleteReconcile = vi.fn().mockResolvedValue(undefined)
+    const getGameRecordFn = vi.fn().mockResolvedValue({ config: {} })
+
+    await recordResultNotification(
+      makeResultNotification(),
+      submitGameResults,
+      scheduleKnownCompleteReconcile,
+      getGameRecordFn,
+    )
+
+    expect(submitGameResults).toHaveBeenCalledTimes(1)
+    expect(scheduleKnownCompleteReconcile).toHaveBeenCalledWith(GAME_ID)
+  })
+})
+
+describe('netcode-v2/recordSessionClosedNotification', () => {
+  test('force-reconciles the resolved game', async () => {
+    const forceReconcile = vi.fn().mockResolvedValue(undefined)
+
+    await recordSessionClosedNotification(makeSessionClosedNotification(), forceReconcile)
+
+    expect(forceReconcile).toHaveBeenCalledWith(GAME_ID)
+    expect(forceReconcile).toHaveBeenCalledTimes(1)
+  })
+
+  test('drops (without forcing) when externalId is missing', async () => {
+    const forceReconcile = vi.fn()
+
+    await recordSessionClosedNotification(
+      makeSessionClosedNotification({ externalId: undefined }),
+      forceReconcile,
+    )
+
+    expect(forceReconcile).not.toHaveBeenCalled()
+  })
+
+  test('drops (without forcing) when externalId is not a valid gameId', async () => {
+    const forceReconcile = vi.fn()
+
+    await recordSessionClosedNotification(
+      makeSessionClosedNotification({ externalId: 'not-a-uuid' }),
+      forceReconcile,
+    )
+
+    expect(forceReconcile).not.toHaveBeenCalled()
+  })
+})
+
+function makeSlotConnectedNotification(
+  overrides: Partial<NetcodeV2SlotConnectedNotification> = {},
+): NetcodeV2SlotConnectedNotification {
+  return {
+    event: 'slotConnected',
+    tenant: 'sb-dev',
+    session: 1,
+    externalId: GAME_ID,
+    slot: 0,
+    externalRef: '42',
+    resumed: false,
+    connectedAtMs: Date.now(),
+    ...overrides,
+  }
+}
+
+function makeSessionStartedNotification(
+  overrides: Partial<NetcodeV2SessionStartedNotification> = {},
+): NetcodeV2SessionStartedNotification {
+  return {
+    event: 'sessionStarted',
+    tenant: 'sb-dev',
+    session: 1,
+    externalId: GAME_ID,
+    startedAtMs: Date.now(),
+    ...overrides,
+  }
+}
+
+function makeSlotStartedNotification(
+  overrides: Partial<NetcodeV2SlotStartedNotification> = {},
+): NetcodeV2SlotStartedNotification {
+  return {
+    event: 'slotStarted',
+    tenant: 'sb-dev',
+    session: 1,
+    externalId: GAME_ID,
+    slot: 0,
+    externalRef: '42',
+    arrivalMs: Date.now(),
+    ...overrides,
+  }
+}
+
+describe('netcode-v2/recordSlotConnectedNotification', () => {
+  test('records the resolved game + player as connected', () => {
+    const recordPlayerConnected = vi.fn().mockReturnValue(true)
+
+    recordSlotConnectedNotification(makeSlotConnectedNotification(), recordPlayerConnected)
+
+    expect(recordPlayerConnected).toHaveBeenCalledWith(GAME_ID, makeSbUserId(42))
+  })
+
+  test('drops a notification whose externalId is missing or invalid', () => {
+    const recordPlayerConnected = vi.fn()
+
+    recordSlotConnectedNotification(
+      makeSlotConnectedNotification({ externalId: undefined }),
+      recordPlayerConnected,
+    )
+    recordSlotConnectedNotification(
+      makeSlotConnectedNotification({ externalId: 'not-a-uuid' }),
+      recordPlayerConnected,
+    )
+
+    expect(recordPlayerConnected).not.toHaveBeenCalled()
+  })
+
+  test('drops a notification whose externalRef is missing or invalid', () => {
+    const recordPlayerConnected = vi.fn()
+
+    recordSlotConnectedNotification(
+      makeSlotConnectedNotification({ externalRef: undefined }),
+      recordPlayerConnected,
+    )
+    recordSlotConnectedNotification(
+      makeSlotConnectedNotification({ externalRef: 'not-a-number' }),
+      recordPlayerConnected,
+    )
+
+    expect(recordPlayerConnected).not.toHaveBeenCalled()
+  })
+
+  test('is a no-op for a game the loader no longer knows about', () => {
+    // A load can complete or be cancelled before this webhook lands; the loader saying "no such
+    // game" must not become an error back to the coordinator.
+    const recordPlayerConnected = vi.fn().mockReturnValue(false)
+
+    expect(() =>
+      recordSlotConnectedNotification(makeSlotConnectedNotification(), recordPlayerConnected),
+    ).not.toThrow()
+  })
+})
+
+describe('netcode-v2/recordSlotConnectedEvidenceNotification', () => {
+  beforeEach(() => {
+    vi.stubEnv('SB_RP2_COORDINATOR_URL', 'http://coordinator.example')
+    vi.stubEnv('SB_RP2_TENANT', 'sb-dev')
+    vi.stubEnv('SB_RP2_CLIENT_KEY', '11'.repeat(32))
+  })
+  afterEach(() => vi.unstubAllEnvs())
+
+  const evidence = {
+    connectionId: Buffer.alloc(32, 1).toString('base64'),
+    sequence: 1,
+    assignmentRevision: 0,
+    verdict: 'valid' as const,
+    keyId: 42,
+    body: 'AP+A',
+  }
+
+  test('passes the session and slot to authoritative storage without using externalRef', async () => {
+    const store = vi.fn().mockResolvedValue('stored')
+    await recordSlotConnectedEvidenceNotification(
+      makeSlotConnectedNotification({ evidence, externalRef: '999999' }),
+      store,
+    )
+    expect(store).toHaveBeenCalledExactlyOnceWith(
+      { gameId: GAME_ID, tenant: 'sb-dev', session: 1 },
+      [{ slot: 0, observation: evidence }],
+    )
+  })
+
+  test('ignores another tenant, missing observations, and invalid game ids', async () => {
+    const store = vi.fn()
+    for (const overrides of [
+      { evidence, tenant: 'another-tenant' },
+      { evidence: undefined },
+      { evidence, externalId: 'invalid' },
+    ]) {
+      expect(
+        await recordSlotConnectedEvidenceNotification(
+          makeSlotConnectedNotification(overrides),
+          store,
+        ),
+      ).toBe('ignored')
+    }
+    expect(store).not.toHaveBeenCalled()
+  })
+
+  test('preserves a pending mapping so the webhook requests redelivery', async () => {
+    const store = vi.fn().mockResolvedValue('pending')
+    expect(
+      await recordSlotConnectedEvidenceNotification(
+        makeSlotConnectedNotification({ evidence }),
+        store,
+      ),
+    ).toBe('pending')
+  })
+
+  test('a persistence failure cannot delay the synchronous load-progress callback', async () => {
+    const store = vi.fn().mockRejectedValue(new Error('database unavailable'))
+    const connected = vi.fn().mockReturnValue(true)
+    const notification = makeSlotConnectedNotification({ evidence })
+    recordSlotConnectedNotification(notification, connected)
+    expect(connected).toHaveBeenCalledExactlyOnceWith(GAME_ID, makeSbUserId(42))
+    await expect(recordSlotConnectedEvidenceNotification(notification, store)).rejects.toThrow(
+      'database unavailable',
+    )
+  })
+})
+
+describe('netcode-v2/recordSessionStartedNotification', () => {
+  test('records the resolved game session as started', () => {
+    const recordSessionStarted = vi.fn().mockReturnValue(true)
+
+    recordSessionStartedNotification(makeSessionStartedNotification(), recordSessionStarted)
+
+    expect(recordSessionStarted).toHaveBeenCalledWith(GAME_ID)
+  })
+
+  test('drops a notification whose externalId is missing or invalid', () => {
+    const recordSessionStarted = vi.fn()
+
+    recordSessionStartedNotification(
+      makeSessionStartedNotification({ externalId: undefined }),
+      recordSessionStarted,
+    )
+    recordSessionStartedNotification(
+      makeSessionStartedNotification({ externalId: 'not-a-uuid' }),
+      recordSessionStarted,
+    )
+
+    expect(recordSessionStarted).not.toHaveBeenCalled()
+  })
+
+  test('is a no-op for a game the loader no longer knows about', () => {
+    const recordSessionStarted = vi.fn().mockReturnValue(false)
+
+    expect(() =>
+      recordSessionStartedNotification(makeSessionStartedNotification(), recordSessionStarted),
+    ).not.toThrow()
+  })
+})
+
+describe('netcode-v2/recordSlotStartedNotification', () => {
+  test('completes the resolved player load', () => {
+    const registerGameAsLoaded = vi.fn().mockReturnValue(true)
+
+    recordSlotStartedNotification(makeSlotStartedNotification(), registerGameAsLoaded)
+
+    expect(registerGameAsLoaded).toHaveBeenCalledWith(GAME_ID, makeSbUserId(42))
+  })
+
+  test('drops a notification whose externalId is missing or invalid', () => {
+    const registerGameAsLoaded = vi.fn()
+
+    recordSlotStartedNotification(
+      makeSlotStartedNotification({ externalId: undefined }),
+      registerGameAsLoaded,
+    )
+    recordSlotStartedNotification(
+      makeSlotStartedNotification({ externalId: 'not-a-uuid' }),
+      registerGameAsLoaded,
+    )
+
+    expect(registerGameAsLoaded).not.toHaveBeenCalled()
+  })
+
+  test('drops a notification whose externalRef is missing or invalid', () => {
+    const registerGameAsLoaded = vi.fn()
+
+    recordSlotStartedNotification(
+      makeSlotStartedNotification({ externalRef: undefined }),
+      registerGameAsLoaded,
+    )
+    recordSlotStartedNotification(
+      makeSlotStartedNotification({ externalRef: '0' }),
+      registerGameAsLoaded,
+    )
+
+    expect(registerGameAsLoaded).not.toHaveBeenCalled()
+  })
+
+  test('is a no-op for a game the loader no longer knows about', () => {
+    const registerGameAsLoaded = vi.fn().mockReturnValue(false)
+
+    expect(() =>
+      recordSlotStartedNotification(makeSlotStartedNotification(), registerGameAsLoaded),
+    ).not.toThrow()
+  })
+})
+
+describe('netcode-v2/recordLobbyViolationNotification', () => {
+  beforeEach(() => {
+    vi.stubEnv('SB_RP2_COORDINATOR_URL', 'http://coordinator.example')
+    vi.stubEnv('SB_RP2_TENANT', 'sb-dev')
+    vi.stubEnv('SB_RP2_CLIENT_KEY', '11'.repeat(32))
+  })
+  afterEach(() => vi.unstubAllEnvs())
+
+  const notification = {
+    event: 'lobbyViolation' as const,
+    tenant: 'sb-dev',
+    session: 123,
+    externalId: GAME_ID,
+    slot: 1,
+    externalRef: '42',
+    arrivalMs: 123456,
+  }
+
+  test('passes the complete authenticated identity to the loader and awaits persistence', async () => {
+    const cancel = vi.fn().mockResolvedValue(true)
+    const record = vi.fn()
+    await recordLobbyViolationNotification(notification, cancel, record)
+    expect(cancel).toHaveBeenCalledWith(GAME_ID, 123, 1, makeSbUserId(42), new Date(123456), record)
+    cancel.mockRejectedValueOnce(new Error('database unavailable'))
+    await expect(recordLobbyViolationNotification(notification, cancel, record)).rejects.toThrow(
+      'database unavailable',
+    )
+  })
+
+  test.each([
+    { tenant: 'other-tenant' },
+    { externalId: 'invalid' },
+    { externalRef: 'invalid' },
+    { externalRef: '9007199254740992' },
+    { externalRef: undefined },
+  ])('ignores invalid correlation %j', async override => {
+    const cancel = vi.fn()
+    await recordLobbyViolationNotification({ ...notification, ...override }, cancel, vi.fn())
+    expect(cancel).not.toHaveBeenCalled()
+  })
+})
+
+describe('delayed lobby violation evidence', () => {
+  const notice = {
+    event: 'lobbyViolation' as const,
+    tenant: 'sb-dev',
+    session: 123,
+    externalId: GAME_ID,
+    slot: 1,
+    externalRef: '42',
+    arrivalMs: 123456,
+  }
+  const userId = makeSbUserId(42)
+  const service = { finishCancellation: vi.fn(), record: vi.fn() }
+  beforeEach(() => {
+    vi.stubEnv('SB_RP2_COORDINATOR_URL', 'http://coordinator.example')
+    vi.stubEnv('SB_RP2_TENANT', 'sb-dev')
+    vi.stubEnv('SB_RP2_CLIENT_KEY', '11'.repeat(32))
+    vi.spyOn(container, 'resolve').mockReturnValue(service)
+    service.finishCancellation.mockResolvedValue(undefined)
+    service.record.mockResolvedValue(undefined)
+    asMockedFunction(hasFinalGameSetupResolution).mockResolvedValue(false)
+    asMockedFunction(getGameRecord).mockResolvedValue({
+      canceledAt: new Date(),
+      cancellationReason: 'playerFailed',
+      config: { gameSource: GameSource.Matchmaking },
+    } as any)
+    asMockedFunction(getNetcodeV2DebugInfo).mockResolvedValue({
+      session: 123,
+      relays: [],
+      requestedRegions: [{ slot: 1, userId, observer: false, manual: false }],
+    })
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.clearAllMocks()
+    vi.unstubAllEnvs()
+  })
+
+  test('routes late evidence through durable penalty recovery for the same canceled game', async () => {
+    await recordLobbyViolationNotification(notice, vi.fn().mockResolvedValue(false), vi.fn())
+    expect(service.finishCancellation).toHaveBeenCalledWith(GAME_ID)
+    expect(service.record).toHaveBeenCalledWith(GAME_ID, userId, new Date(123456))
+  })
+
+  test.each(['running', 'wrongSession', 'wrongSlot', 'wrongUser', 'custom'])(
+    'does not penalize %s',
+    async kind => {
+      if (kind === 'running')
+        asMockedFunction(getGameRecord).mockResolvedValue({ canceledAt: null } as any)
+      if (kind === 'custom')
+        asMockedFunction(getGameRecord).mockResolvedValue({
+          canceledAt: new Date(),
+          config: { gameSource: GameSource.Lobby },
+        } as any)
+      if (kind.startsWith('wrong'))
+        asMockedFunction(getNetcodeV2DebugInfo).mockResolvedValue({
+          session: kind === 'wrongSession' ? 999 : 123,
+          relays: [],
+          requestedRegions: [
+            {
+              slot: kind === 'wrongSlot' ? 0 : 1,
+              userId: kind === 'wrongUser' ? makeSbUserId(9) : userId,
+              observer: false,
+              manual: false,
+            },
+          ],
+        })
+      await recordLobbyViolationNotification(notice, vi.fn().mockResolvedValue(false), vi.fn())
+      expect(service.record).not.toHaveBeenCalled()
+    },
+  )
+
+  test('does not reopen an authoritative ordinary setup decision', async () => {
+    asMockedFunction(hasFinalGameSetupResolution).mockResolvedValue(true)
+    await recordLobbyViolationNotification(notice, vi.fn().mockResolvedValue(false), vi.fn())
+    expect(service.record).not.toHaveBeenCalled()
+  })
+
+  test('failed penalty remains retryable and does not issue a premature ban', async () => {
+    service.record.mockRejectedValueOnce(new Error('database unavailable'))
+    await expect(
+      recordLobbyViolationNotification(notice, vi.fn().mockResolvedValue(false), vi.fn()),
+    ).rejects.toThrow('database unavailable')
+  })
+})
+
+describe('netcode-v2/recordSlotEvidenceNotification', () => {
+  beforeEach(() => {
+    vi.stubEnv('SB_RP2_COORDINATOR_URL', 'http://coordinator.example')
+    vi.stubEnv('SB_RP2_TENANT', 'sb-dev')
+    vi.stubEnv('SB_RP2_CLIENT_KEY', '11'.repeat(32))
+  })
+  afterEach(() => vi.unstubAllEnvs())
+
+  const evidence = {
+    connectionId: Buffer.alloc(32, 1).toString('base64'),
+    sampleId: 3,
+    sequence: 9,
+    assignmentRevision: 1,
+    verdict: 'valid' as const,
+    keyId: 42,
+    body: 'AP+A',
+  }
+  const notification = {
+    event: 'slotEvidence' as const,
+    tenant: 'sb-dev',
+    session: 1,
+    externalId: GAME_ID,
+    externalRef: '999999',
+    slot: 0,
+    observedAtMs: 123,
+    evidence,
+  }
+
+  test('uses the stored roster instead of the supplied user reference', async () => {
+    const store = vi.fn().mockResolvedValue('stored')
+    expect(await recordSlotEvidenceNotification(notification, store)).toBe('stored')
+    expect(store).toHaveBeenCalledExactlyOnceWith(
+      { gameId: GAME_ID, tenant: 'sb-dev', session: 1 },
+      [{ slot: 0, observedAtMs: 123, observation: evidence }],
+    )
+  })
+
+  test('preserves interruption and cumulative history metadata when mapping to storage', async () => {
+    const store = vi.fn().mockResolvedValue('stored')
+    const sample = {
+      ...evidence,
+      verdict: 'missing' as const,
+      body: '',
+      interruption: 'timeout' as const,
+    }
+    expect(
+      await recordSlotEvidenceNotification(
+        {
+          ...notification,
+          historical: true,
+          failureCount: 7,
+          evidence: sample,
+        },
+        store,
+      ),
+    ).toBe('stored')
+    expect(store).toHaveBeenCalledExactlyOnceWith(
+      { gameId: GAME_ID, tenant: 'sb-dev', session: 1 },
+      [{ slot: 0, observedAtMs: 123, historical: true, failureCount: 7, observation: sample }],
+    )
+  })
+
+  test('ignores another tenant, invalid correlation, and admission samples', async () => {
+    const store = vi.fn()
+    for (const overrides of [
+      { tenant: 'other' },
+      { externalId: 'invalid' },
+      ...[undefined, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1].map(sampleId => ({
+        evidence: { ...evidence, sampleId },
+      })),
+    ]) {
+      expect(await recordSlotEvidenceNotification({ ...notification, ...overrides }, store)).toBe(
+        'ignored',
+      )
+    }
+    expect(store).not.toHaveBeenCalled()
+  })
+
+  test('preserves pending mapping and persistence failures for redelivery', async () => {
+    const store = vi
+      .fn()
+      .mockResolvedValueOnce('pending')
+      .mockRejectedValueOnce(new Error('offline'))
+    expect(await recordSlotEvidenceNotification(notification, store)).toBe('pending')
+    await expect(recordSlotEvidenceNotification(notification, store)).rejects.toThrow('offline')
+  })
+})

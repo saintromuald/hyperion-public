@@ -1,0 +1,513 @@
+import { ChannelPermissions, SbChannelId } from '../../common/chat'
+import { GameRecordJson } from '../../common/games/games'
+import { ClientLeagueUserChangeJson, LeagueId, LeagueJson } from '../../common/leagues/leagues'
+import { SbLobbyId } from '../../common/lobbies/sb-lobby-id'
+import { SbMapId } from '../../common/maps'
+import {
+  CancelLoadingEvent,
+  LobbyViolationPenaltyEvent,
+  MatchCanceledReason,
+  MatchmakingSeasonJson,
+  PublicMatchmakingRatingChangeJson,
+} from '../../common/matchmaking'
+import { GameDefaultsPreset } from '../../common/settings/local-settings'
+import { SbUserId } from '../../common/users/sb-user-id'
+
+export enum DialogType {
+  AcceptableUse = 'acceptableUse',
+  AcceptMatch = 'acceptMatch',
+  AdminCloseChannel = 'adminCloseChannel',
+  AdminDeleteChannel = 'adminDeleteChannel',
+  AdminRenameChannel = 'adminRenameChannel',
+  BugReport = 'bugReport',
+  ChangeDisplayName = 'changeDisplayName',
+  ChangeEmail = 'changeEmail',
+  ChangeLoginName = 'changeLoginName',
+  ChangePassword = 'changePassword',
+  ChatCommandHelp = 'chatCommandHelp',
+  ChannelBanUser = 'channelBanUser',
+  ChannelCreateConfirmation = 'channelCreateConfirmation',
+  ChannelDeleteMessage = 'channelDeleteMessage',
+  ChannelInviteLink = 'channelInviteLink',
+  ChannelKickUserConfirmation = 'channelKickUserConfirmation',
+  ChannelLeaveConfirmation = 'channelLeaveConfirmation',
+  ChannelTransferOwnership = 'channelTransferOwnership',
+  ChannelUnbanUser = 'channelUnbanUser',
+  ChannelUserPermissions = 'channelUserPermissions',
+  CreatePlaylist = 'createPlaylist',
+  DeletePlaylist = 'deletePlaylist',
+  DiscordActivityPrompt = 'discordActivityPrompt',
+  Download = 'download',
+  EmailVerification = 'emailVerification',
+  ExternalLink = 'externalLink',
+  FailedToAcceptMatch = 'failedToAcceptMatch',
+  GameDefaultsApply = 'gameDefaultsApply',
+  GameDefaultsFirstRun = 'gameDefaultsFirstRun',
+  JoinCode = 'joinCode',
+  LaunchingGame = 'launchingGame',
+  LeagueExplainer = 'leagueExplainer',
+  LeaveLeague = 'leaveLeague',
+  LobbyLeaveAndCreate = 'lobbyLeaveAndCreate',
+  LobbyLeaveAndJoin = 'lobbyLeaveAndJoin',
+  MapDetails = 'mapDetails',
+  MapDownload = 'mapDownload',
+  MapPreview = 'mapPreview',
+  Markdown = 'markdown',
+  MatchCanceled = 'matchCanceled',
+  MatchmakingBanned = 'matchmakingBanned',
+  NewsPostDeleteConfirmation = 'newsPostDeleteConfirmation',
+  NewsPostSettings = 'newsPostSettings',
+  PostMatch = 'postMatch',
+  PrivacyPolicy = 'privacyPolicy',
+  RemoveUserAvatar = 'removeUserAvatar',
+  RenamePlaylist = 'renamePlaylist',
+  ReplayInfo = 'replayInfo',
+  ReplayLoad = 'replayLoad',
+  ReportGame = 'reportGame',
+  ResolveGameResults = 'resolveGameResults',
+  Simple = 'simple',
+  ShieldBatteryHealth = 'shieldBatteryHealth',
+  StarcraftHealth = 'starcraftHealth',
+  TermsOfService = 'termsOfService',
+  TwitchRemoveLiveStreamConfirmation = 'twitchRemoveLiveStreamConfirmation',
+}
+
+type BaseDialogPayload<D, DataType = undefined> = DataType extends undefined
+  ? { type: D; initData?: undefined; keepOnTop?: boolean }
+  : { type: D; initData: DataType; keepOnTop?: boolean }
+
+type AcceptableUseDialogPayload = BaseDialogPayload<typeof DialogType.AcceptableUse>
+type AcceptMatchDialogPayload = BaseDialogPayload<typeof DialogType.AcceptMatch>
+type AdminCloseChannelDialogPayload = BaseDialogPayload<
+  typeof DialogType.AdminCloseChannel,
+  {
+    channelId: SbChannelId
+    channelName: string
+    /** Called once the channel has been closed successfully. */
+    onSuccess?: () => void
+  }
+>
+type AdminDeleteChannelDialogPayload = BaseDialogPayload<
+  typeof DialogType.AdminDeleteChannel,
+  {
+    channelId: SbChannelId
+    channelName: string
+    /** Called once the channel has been deleted successfully. */
+    onSuccess?: () => void
+  }
+>
+type AdminRenameChannelDialogPayload = BaseDialogPayload<
+  typeof DialogType.AdminRenameChannel,
+  {
+    channelId: SbChannelId
+    channelName: string
+    /** Called once the channel has been renamed successfully. */
+    onSuccess?: () => void
+  }
+>
+type BugReportDialogPayload = BaseDialogPayload<typeof DialogType.BugReport>
+type ChangeDisplayNameDialogPayload = BaseDialogPayload<
+  typeof DialogType.ChangeDisplayName,
+  {
+    currentName: string
+    lastChange?: Date
+    canChangeDisplayName: boolean
+    nextDisplayNameChangeAllowedAt?: Date
+  }
+>
+type ChangeEmailDialogPayload = BaseDialogPayload<
+  typeof DialogType.ChangeEmail,
+  { currentEmail: string }
+>
+type ChangeLoginNameDialogPayload = BaseDialogPayload<
+  typeof DialogType.ChangeLoginName,
+  { currentLoginName: string; lastChange?: Date }
+>
+type ChangePasswordDialogPayload = BaseDialogPayload<typeof DialogType.ChangePassword>
+type ChannelBanUserDialogPayload = BaseDialogPayload<
+  typeof DialogType.ChannelBanUser,
+  {
+    channelId: SbChannelId
+    userId: SbUserId
+    /** A reason to prefill the dialog's reason field with; the user can still edit it. */
+    banReason?: string
+    /** Called once the user has been banned successfully. */
+    onSuccess?: () => void
+  }
+>
+type ChannelCreateConfirmationDialogPayload = BaseDialogPayload<
+  typeof DialogType.ChannelCreateConfirmation,
+  {
+    /** The name of the channel that would be created (without a leading `#`). */
+    channelName: string
+    /** Performs the join that creates the channel once the user confirms. */
+    onConfirm: () => void
+  }
+>
+type ChannelDeleteMessageDialogPayload = BaseDialogPayload<
+  typeof DialogType.ChannelDeleteMessage,
+  {
+    channelId: SbChannelId
+    messageId: string
+    /** Called once the message has been deleted successfully. */
+    onSuccess?: () => void
+  }
+>
+type ChannelInviteLinkDialogPayload = BaseDialogPayload<
+  typeof DialogType.ChannelInviteLink,
+  {
+    channelId: SbChannelId
+  }
+>
+type ChatCommandHelpDialogPayload = BaseDialogPayload<
+  typeof DialogType.ChatCommandHelp,
+  {
+    /** Every command that can be run where the dialog was opened from, in display order. */
+    commands: Array<{
+      /** The canonical name, without its leading slash. */
+      name: string
+      /** Other names that reach the command, without their leading slashes. Empty when there are none. */
+      aliases: string[]
+      /** The arguments in order, as usage strings spell them. */
+      args: Array<{ label: string; optional: boolean }>
+      /** Already localized. */
+      description: string
+      /**
+       * The heading the dialog lists the command under. Spelled out rather than imported: this
+       * file can't depend on the command modules without a dependency cycle through the reducers,
+       * and the dialog's props type checks it against the real union.
+       */
+      group: 'chat' | 'people' | 'matchmaking' | 'moderation' | 'fun'
+    }>
+  }
+>
+type ChannelKickUserConfirmationDialogPayload = BaseDialogPayload<
+  typeof DialogType.ChannelKickUserConfirmation,
+  {
+    channelId: SbChannelId
+    userId: SbUserId
+    /** Called once the user has been kicked successfully. */
+    onSuccess?: () => void
+  }
+>
+type ChannelLeaveConfirmationDialogPayload = BaseDialogPayload<
+  typeof DialogType.ChannelLeaveConfirmation,
+  {
+    channelId: SbChannelId
+  }
+>
+type ChannelTransferOwnershipDialogPayload = BaseDialogPayload<
+  typeof DialogType.ChannelTransferOwnership,
+  {
+    channelId: SbChannelId
+    userId: SbUserId
+    /**
+     * The name of the channel, used to make it clear which channel is being handed over when the
+     * viewer is the owner losing it. Viewers that aren't the owner (and callers that don't know
+     * the name) get a generic prompt instead.
+     */
+    channelName?: string
+    /** Called once the ownership has been transferred successfully. */
+    onSuccess?: () => void
+  }
+>
+type ChannelUnbanUserDialogPayload = BaseDialogPayload<
+  typeof DialogType.ChannelUnbanUser,
+  {
+    channelId: SbChannelId
+    userId: SbUserId
+    /** The name of the channel, used to make it clear which channel the user is being unbanned from. */
+    channelName: string
+    /** Called once the user has been unbanned successfully. */
+    onSuccess: () => void
+  }
+>
+type ChannelUserPermissionsDialogPayload = BaseDialogPayload<
+  typeof DialogType.ChannelUserPermissions,
+  {
+    channelId: SbChannelId
+    userId: SbUserId
+    permissions: ChannelPermissions
+    onSuccess: (userId: SbUserId, newPermissions: ChannelPermissions) => void
+  }
+>
+type CreatePlaylistDialogPayload = BaseDialogPayload<
+  typeof DialogType.CreatePlaylist,
+  {
+    /** Called with the new playlist's id/name once it's been created (before the dialog closes). */
+    onCreated: (id: number, name: string) => void
+  }
+>
+type DeletePlaylistDialogPayload = BaseDialogPayload<
+  typeof DialogType.DeletePlaylist,
+  {
+    playlistId: number
+    name: string
+  }
+>
+type DiscordActivityPromptDialogPayload = BaseDialogPayload<typeof DialogType.DiscordActivityPrompt>
+type DownloadDialogPayload = BaseDialogPayload<typeof DialogType.Download>
+type EmailVerificationDialogPayload = BaseDialogPayload<
+  typeof DialogType.EmailVerification,
+  | {
+      showExplanation?: boolean
+    }
+  | undefined
+>
+type ExternalLinkDialogPayload = BaseDialogPayload<
+  typeof DialogType.ExternalLink,
+  {
+    href: string
+    domain: string
+  }
+>
+type FailedToAcceptMatchDialogPayload = BaseDialogPayload<typeof DialogType.FailedToAcceptMatch>
+type GameDefaultsApplyDialogPayload = BaseDialogPayload<
+  typeof DialogType.GameDefaultsApply,
+  {
+    preset: GameDefaultsPreset
+    /**
+     * Whether the user just switched to `preset` (versus asking to re-apply the one already
+     * selected), which changes how the dialog is titled.
+     */
+    justSwitched: boolean
+  }
+>
+type GameDefaultsFirstRunDialogPayload = BaseDialogPayload<typeof DialogType.GameDefaultsFirstRun>
+type JoinCodeDialogPayload = BaseDialogPayload<typeof DialogType.JoinCode>
+type LaunchingGameDialogPayload = BaseDialogPayload<typeof DialogType.LaunchingGame>
+type LeagueExplainerDialogPayload = BaseDialogPayload<typeof DialogType.LeagueExplainer>
+
+type LeaveLeagueDialogPayload = BaseDialogPayload<
+  typeof DialogType.LeaveLeague,
+  {
+    leagueId: LeagueId
+    userId?: SbUserId
+    onRemoved: () => void
+  }
+>
+type LobbyLeaveAndCreateDialogPayload = BaseDialogPayload<
+  typeof DialogType.LobbyLeaveAndCreate,
+  {
+    /** Performs the create the form's submit was holding for confirmation. */
+    onConfirm: () => void
+  }
+>
+type LobbyLeaveAndJoinDialogPayload = BaseDialogPayload<
+  typeof DialogType.LobbyLeaveAndJoin,
+  {
+    lobbyId: SbLobbyId
+    /** The target lobby's name, used to build the URL a successful join navigates to. */
+    name?: string
+    /** Ask for an observer seat specifically, failing rather than taking a player seat or the bench. */
+    asObserver?: boolean
+    /** Called with a user-facing message and the underlying error when the join fails. */
+    onJoinFailed?: (message: string, error: unknown) => void
+  }
+>
+
+type MapDetailsDialogPayload = BaseDialogPayload<
+  typeof DialogType.MapDetails,
+  {
+    mapId: SbMapId
+  }
+>
+type MapDownloadDialogPayload = BaseDialogPayload<
+  typeof DialogType.MapDownload,
+  {
+    mapId: SbMapId
+  }
+>
+type MapPreviewDialogPayload = BaseDialogPayload<
+  typeof DialogType.MapPreview,
+  {
+    mapId: SbMapId
+  }
+>
+type MarkdownDialogPayload = BaseDialogPayload<
+  typeof DialogType.Markdown,
+  {
+    title: string
+    markdownContent: string
+    hasButton?: boolean
+  }
+>
+type MatchCanceledDialogPayload = BaseDialogPayload<
+  typeof DialogType.MatchCanceled,
+  {
+    phase: 'draft' | 'load'
+    reason: MatchCanceledReason
+    penalty?: CancelLoadingEvent['penalty'] | LobbyViolationPenaltyEvent['penalty']
+    requeued?: boolean
+    queueRemoved?: boolean
+  }
+>
+type MatchmakingBannedDialogPayload = BaseDialogPayload<typeof DialogType.MatchmakingBanned>
+// Kept as an inline shape (rather than importing from the dialog's own file) so this file stays
+// free of dependencies on dialog implementations, which would otherwise cycle back here through
+// the dialog's use of form/state hooks that ultimately import the dialog reducer.
+type NewsPostStatus =
+  | { kind: 'draft' }
+  | { kind: 'scheduled'; date: Date }
+  | { kind: 'published'; date: Date }
+type NewsPostDeleteConfirmationDialogPayload = BaseDialogPayload<
+  typeof DialogType.NewsPostDeleteConfirmation,
+  {
+    /** The post's title, shown in the dialog so the editor can see what they are deleting. */
+    title: string
+    /** Performs the deletion once the user confirms. */
+    onConfirm: () => void
+  }
+>
+type NewsPostSettingsValues = {
+  summary: string
+  publishMode: 'draft' | 'now' | 'schedule' | 'published'
+  scheduledAt: string
+  coverImagePath: string | null
+  coverImageUrl: string | null
+}
+type NewsPostSettingsDialogPayload = BaseDialogPayload<
+  typeof DialogType.NewsPostSettings,
+  {
+    savedStatus: NewsPostStatus
+    settings: NewsPostSettingsValues
+    /**
+     * Shows validation errors for the dialog's fields as soon as it opens, rather than waiting for
+     * the fields to be edited or the dialog submitted. Used when the dialog is opened because a
+     * save attempt failed validation on a field that only lives in this dialog, so the failure
+     * would otherwise be invisible until the user edited something or clicked Done.
+     */
+    showErrorsOnOpen?: boolean
+    /** Called with the edited settings once the dialog is submitted. */
+    onApply: (settings: NewsPostSettingsValues) => void
+  }
+>
+export type PostMatchDialogPayload = BaseDialogPayload<
+  typeof DialogType.PostMatch,
+  {
+    game: GameRecordJson
+    mmrChange: PublicMatchmakingRatingChangeJson
+    leagueChanges: ClientLeagueUserChangeJson[]
+    leagues: LeagueJson[]
+    season: MatchmakingSeasonJson
+  }
+>
+type PrivacyPolicyDialogPayload = BaseDialogPayload<typeof DialogType.PrivacyPolicy>
+type RemoveUserAvatarDialogPayload = BaseDialogPayload<
+  typeof DialogType.RemoveUserAvatar,
+  {
+    userId: SbUserId
+  }
+>
+type RenamePlaylistDialogPayload = BaseDialogPayload<
+  typeof DialogType.RenamePlaylist,
+  {
+    playlistId: number
+    currentName: string
+  }
+>
+type ReplayInfoDialogPayload = BaseDialogPayload<
+  typeof DialogType.ReplayInfo,
+  {
+    filePath: string
+  }
+>
+type ReplayLoadDialogPayload = BaseDialogPayload<
+  typeof DialogType.ReplayLoad,
+  {
+    gameId: string
+  }
+>
+type ReportGameDialogPayload = BaseDialogPayload<
+  typeof DialogType.ReportGame,
+  {
+    gameId: string
+    reportedUserCandidates: SbUserId[]
+    /** The player to start with selected, e.g. when reporting from that player's row or menu. */
+    initialReportedUserId?: SbUserId
+  }
+>
+type ResolveGameResultsDialogPayload = BaseDialogPayload<
+  typeof DialogType.ResolveGameResults,
+  {
+    gameId: string
+  }
+>
+type SimpleDialogPayload = BaseDialogPayload<
+  typeof DialogType.Simple,
+  {
+    simpleTitle: string
+    simpleContent: React.ReactNode
+    hasButton: boolean
+  }
+>
+type ShieldBatteryHealthDialogPayload = BaseDialogPayload<typeof DialogType.ShieldBatteryHealth>
+type StarcraftHealthDialogPayload = BaseDialogPayload<typeof DialogType.StarcraftHealth>
+type TermsOfServiceDialogPayload = BaseDialogPayload<typeof DialogType.TermsOfService>
+type TwitchRemoveLiveStreamConfirmationDialogPayload = BaseDialogPayload<
+  typeof DialogType.TwitchRemoveLiveStreamConfirmation,
+  {
+    /** The streamer's display name, used in the dialog's title and body copy. */
+    name: string
+    /** Performs the removal (and its own undo snackbar) once the user confirms. */
+    onConfirm: () => void
+  }
+>
+
+export type DialogPayload =
+  | AcceptableUseDialogPayload
+  | AcceptMatchDialogPayload
+  | AdminCloseChannelDialogPayload
+  | AdminDeleteChannelDialogPayload
+  | AdminRenameChannelDialogPayload
+  | BugReportDialogPayload
+  | ChannelUserPermissionsDialogPayload
+  | ChangeDisplayNameDialogPayload
+  | ChangeEmailDialogPayload
+  | ChangeLoginNameDialogPayload
+  | ChangePasswordDialogPayload
+  | ChannelBanUserDialogPayload
+  | ChannelCreateConfirmationDialogPayload
+  | ChannelDeleteMessageDialogPayload
+  | ChannelInviteLinkDialogPayload
+  | ChatCommandHelpDialogPayload
+  | ChannelKickUserConfirmationDialogPayload
+  | ChannelLeaveConfirmationDialogPayload
+  | ChannelTransferOwnershipDialogPayload
+  | ChannelUnbanUserDialogPayload
+  | CreatePlaylistDialogPayload
+  | DeletePlaylistDialogPayload
+  | DiscordActivityPromptDialogPayload
+  | DownloadDialogPayload
+  | EmailVerificationDialogPayload
+  | ExternalLinkDialogPayload
+  | FailedToAcceptMatchDialogPayload
+  | GameDefaultsApplyDialogPayload
+  | GameDefaultsFirstRunDialogPayload
+  | JoinCodeDialogPayload
+  | LaunchingGameDialogPayload
+  | LeagueExplainerDialogPayload
+  | LeaveLeagueDialogPayload
+  | LobbyLeaveAndCreateDialogPayload
+  | LobbyLeaveAndJoinDialogPayload
+  | MapDetailsDialogPayload
+  | MapDownloadDialogPayload
+  | MapPreviewDialogPayload
+  | MarkdownDialogPayload
+  | MatchCanceledDialogPayload
+  | MatchmakingBannedDialogPayload
+  | NewsPostDeleteConfirmationDialogPayload
+  | NewsPostSettingsDialogPayload
+  | PostMatchDialogPayload
+  | PrivacyPolicyDialogPayload
+  | RemoveUserAvatarDialogPayload
+  | RenamePlaylistDialogPayload
+  | ReplayInfoDialogPayload
+  | ReplayLoadDialogPayload
+  | ReportGameDialogPayload
+  | ResolveGameResultsDialogPayload
+  | SimpleDialogPayload
+  | ShieldBatteryHealthDialogPayload
+  | StarcraftHealthDialogPayload
+  | TermsOfServiceDialogPayload
+  | TwitchRemoveLiveStreamConfirmationDialogPayload

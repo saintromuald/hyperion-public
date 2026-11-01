@@ -1,0 +1,132 @@
+import { Cache, cacheExchange, KeyingConfig, UpdatesConfig } from '@urql/exchange-graphcache'
+import { Client, fetchExchange } from 'urql'
+import { ServerConfig } from '../../common/server-config'
+import { SbUserId } from '../../common/users/sb-user-id'
+import schema from '../gql/schema.json'
+import { CREDENTIAL_STORAGE } from './fetch'
+import { requestPolicyExchange } from './improved-request-policy-exchange'
+
+export function createGraphqlClient(
+  serverConfig: ServerConfig,
+  // NOTE(tec27): We don't technically need this for this code, but it is implicitly depended on
+  // because we want a cache per user, so we require this such that any `useMemo`/`useEffect` that
+  // calls this will re-run
+  currentUserId: SbUserId | undefined,
+) {
+  const url = new URL(serverConfig.graphqlOrigin)
+  url.pathname = '/gql'
+
+  return new Client({
+    url: url.toString(),
+    exchanges: [
+      requestPolicyExchange({
+        ttl: 60 * 1000,
+        shouldUpgrade: operation => operation.context.requestPolicy !== 'cache-only',
+      }),
+      cacheExchange({ schema, updates: cacheUpdates, keys: cacheKeys }),
+      fetchExchange,
+    ],
+    suspense: true,
+    fetchOptions: () => {
+      const jwt = CREDENTIAL_STORAGE.get()
+      return jwt
+        ? {
+            headers: {
+              Authorization: `Bearer ${jwt}`,
+            },
+          }
+        : {}
+    },
+  })
+}
+
+// Publishing, unpublishing or deleting a post changes which lists it belongs to (home feed,
+// archive, admin list). Those lists are cached under every argument combination they were
+// queried with, so each variant is invalidated explicitly.
+function invalidateNewsPostLists(cache: Cache) {
+  for (const field of cache.inspectFields('Query')) {
+    if (field.fieldName === 'newsPosts') {
+      cache.invalidate('Query', field.fieldName, field.arguments ?? undefined)
+    }
+  }
+}
+
+// TODO(tec27): Devise a way to split this between the different feature areas
+const cacheUpdates: UpdatesConfig = {
+  Mutation: {
+    newsSetUrgentMessage: (result, _args, cache) => {
+      if (result.newsSetUrgentMessage) {
+        cache.invalidate('Query', 'urgentMessage')
+      }
+    },
+    userDeleteRestrictedName: (result, args, cache) => {
+      if (result.userDeleteRestrictedName) {
+        cache.invalidate({
+          __typename: 'NameRestriction',
+          id: args.id as any,
+        })
+      }
+    },
+    // Blocking/unblocking a stream changes both the live-streams feed and the admin blocked-streams
+    // list, which are otherwise served cache-first for up to the request-policy TTL and would go
+    // stale. Invalidating here refreshes every surface uniformly (home feed, `/live`, admin page).
+    blockStream: (_result, _args, cache) => {
+      cache.invalidate('Query', 'liveStreams')
+      cache.invalidate('Query', 'blockedStreams')
+    },
+    unblockStream: (_result, _args, cache) => {
+      cache.invalidate('Query', 'liveStreams')
+      cache.invalidate('Query', 'blockedStreams')
+    },
+    // A report removes the reported player's commend and report options for that game.
+    reportGame: (_result, args, cache) => {
+      cache.invalidate({ __typename: 'GameFeedback', id: (args.input as any).gameId })
+    },
+    newsUpdatePost: (_result, _args, cache) => invalidateNewsPostLists(cache),
+    newsDeletePost: (result, args, cache) => {
+      if (result.newsDeletePost) {
+        cache.invalidate({ __typename: 'NewsPost', id: args.id as string })
+        invalidateNewsPostLists(cache)
+      }
+    },
+  },
+}
+
+const NON_KEYED_EMBEDDED = () => null
+
+// TODO(tec27): Devise a way to split this between the different feature areas
+const cacheKeys: KeyingConfig = {
+  // NOTE(tec27): In general this should just be for disabling keying for types that are embedded,
+  // prefer creating "real" `id` fields in the GraphQL API (e.g. for things with composite keys,
+  // make a field that combines those fields into something unique)
+  GameConfigDataLobby: NON_KEYED_EMBEDDED,
+  GameConfigDataMatchmaking: NON_KEYED_EMBEDDED,
+  GamePlayer: NON_KEYED_EMBEDDED,
+  GameReportReplay: NON_KEYED_EMBEDDED,
+  GameReportUserStats: NON_KEYED_EMBEDDED,
+  MapForce: NON_KEYED_EMBEDDED,
+  MapForcePlayer: NON_KEYED_EMBEDDED,
+  MatchmakerConfigDefaults: NON_KEYED_EMBEDDED,
+  MatchmakerConfigView: NON_KEYED_EMBEDDED,
+  MatchmakerModeConfigOverrides: NON_KEYED_EMBEDDED,
+  MatchmakerPerModeOverride: NON_KEYED_EMBEDDED,
+  MatchmakingExtra1V1Data: NON_KEYED_EMBEDDED,
+  MatchmakingExtra1V1FastestData: NON_KEYED_EMBEDDED,
+  MatchmakingExtra2V2Data: NON_KEYED_EMBEDDED,
+  // A one-shot payload carrying the OAuth URL to send the user to. It describes an action about to
+  // happen rather than a thing that persists, so there is nothing to identify it by.
+  TwitchLinkStart: NON_KEYED_EMBEDDED,
+  // Rating history is a per-user, per-mode series: the points have no identity of their own
+  // and the containers are only meaningful under the query that asked for them. Without
+  // this the cache warns once per point, which is hundreds of warnings for one chart.
+  RatingHistory: NON_KEYED_EMBEDDED,
+  RatingHistoryPoint: NON_KEYED_EMBEDDED,
+  UserRankedMode: NON_KEYED_EMBEDDED,
+  UrgentMessageTranslation: NON_KEYED_EMBEDDED,
+  ReconciledPlayerResultEntry: NON_KEYED_EMBEDDED,
+  // Pieces of a game's commend/report state, only ever read through their (keyed) GameFeedback or
+  // the mutation result that carries one.
+  CommendPlayerPayload: NON_KEYED_EMBEDDED,
+  GivenGameFeedback: NON_KEYED_EMBEDDED,
+  RecentCommend: NON_KEYED_EMBEDDED,
+}

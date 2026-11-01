@@ -1,0 +1,171 @@
+import { ReadonlyDeep } from 'type-fest'
+import {
+  DEFAULT_REPLAY_NAME_TEMPLATE,
+  MAX_REPLAY_NAME_TEMPLATE_LENGTH,
+} from '../replay-name-template'
+import { isUserAvailability, UserAvailability } from '../users/availability'
+
+/**
+ * Settings that are a property of the account rather than the machine: stored on the server,
+ * delivered to every session on connect and pushed live to all of them whenever one changes a
+ * value. Anything tied to a particular install (paths, audio devices, window geometry, launch
+ * options) belongs in `LocalSettings` instead and never syncs.
+ *
+ * Every key must have a default in `DEFAULT_ACCOUNT_SETTINGS`: the server stores only the keys a
+ * user has changed and merges them over the defaults on every read, which is what lets a new key
+ * apply to existing accounts without a migration.
+ */
+export interface AccountSettings {
+  /**
+   * While this client is in a game, channel messages (mentions included) play no alert sound and
+   * don't ask the main process for attention (transient tray icon / taskbar flash); unread and
+   * mention marks still record so the true state shows after the game.
+   */
+  quietChannelsWhileInGame: boolean
+  /**
+   * While this client is in a game, an incoming whisper plays no alert sound and doesn't ask the
+   * main process for attention; the conversation still records as unread so it shows after the
+   * game.
+   */
+  quietWhispersWhileInGame: boolean
+  /**
+   * Whether a chat message that would alert (channel, whisper, lobby or match draft chat) plays the
+   * message alert sound. Event sounds that need a response, like a found match, are unaffected.
+   */
+  playMessageSounds: boolean
+  /**
+   * Whether the app may flash its taskbar button to ask for attention, both for messages aimed at
+   * the user and for events like a found match or a player joining their lobby. Off still shows
+   * the transient tray icon for new messages.
+   */
+  flashTaskbar: boolean
+  /**
+   * Whispers sent and received are echoed as a line into whatever chat is on screen, so they can
+   * be read and answered without switching to the conversation. Off is for people who stream
+   * their screen.
+   */
+  showWhispersEverywhere: boolean
+  /**
+   * How available the user has said they are. Unlike the other keys this is visible to other users:
+   * friends and everyone sharing a chat channel see it while the user is online.
+   */
+  availability: UserAvailability
+  /** How text messages are laid out in every chat surface that shares the message list. */
+  chatDisplayMode: ChatDisplayMode
+  /**
+   * Whether text messages from blocked users are left out of every chat surface that shares the
+   * message list entirely, rather than shown as a collapsed placeholder that can be expanded.
+   */
+  hideBlockedMessages: boolean
+  /**
+   * The filename template for replays auto-saved after each game (see
+   * `common/replay-name-template.ts` for the token syntax).
+   */
+  replayNameTemplate: string
+  /**
+   * Whether the desktop app shows the user's lobbies and games as Rich Presence on the Discord
+   * account signed in to the Discord desktop app on the same computer.
+   */
+  shareDiscordActivity: DiscordActivitySharing
+}
+
+/**
+ * Whether the user shares their activity on Discord. `notAsked` means they haven't answered yet:
+ * nothing is shared, and the desktop app asks once while Discord runs (see
+ * `client/discord/discord-activity-prompt.tsx`). Changing it in Settings answers it too.
+ */
+export type DiscordActivitySharing = 'notAsked' | 'on' | 'off'
+
+export const ALL_DISCORD_ACTIVITY_SHARING: ReadonlyArray<DiscordActivitySharing> = [
+  'notAsked',
+  'on',
+  'off',
+]
+
+export function isDiscordActivitySharing(value: unknown): value is DiscordActivitySharing {
+  return ALL_DISCORD_ACTIVITY_SHARING.includes(value as DiscordActivitySharing)
+}
+
+/**
+ * How chat renders text messages. `classic` is one dense IRC-style line per message with the
+ * author's name on every line. `cozy` groups consecutive messages from one author under a header
+ * with their avatar, name and time, with the following messages showing only their text.
+ */
+export type ChatDisplayMode = 'classic' | 'cozy'
+
+export const ALL_CHAT_DISPLAY_MODES: ReadonlyArray<ChatDisplayMode> = ['classic', 'cozy']
+
+export function isChatDisplayMode(value: unknown): value is ChatDisplayMode {
+  return ALL_CHAT_DISPLAY_MODES.includes(value as ChatDisplayMode)
+}
+
+export const DEFAULT_ACCOUNT_SETTINGS: ReadonlyDeep<AccountSettings> = {
+  quietChannelsWhileInGame: true,
+  quietWhispersWhileInGame: true,
+  playMessageSounds: true,
+  flashTaskbar: true,
+  showWhispersEverywhere: true,
+  availability: UserAvailability.Online,
+  chatDisplayMode: 'classic',
+  hideBlockedMessages: false,
+  replayNameTemplate: DEFAULT_REPLAY_NAME_TEMPLATE,
+  shareDiscordActivity: 'notAsked',
+}
+
+export const ALL_ACCOUNT_SETTINGS_KEYS: ReadonlyArray<keyof AccountSettings> = Object.keys(
+  DEFAULT_ACCOUNT_SETTINGS,
+) as Array<keyof AccountSettings>
+
+/**
+ * Builds a complete `AccountSettings` from a possibly partial, possibly untrusted stored copy (a DB
+ * row or a local cache written by an older version). Only known keys whose value has the same type
+ * as the default are kept; everything else falls back to the default.
+ */
+export function fillAccountSettingsDefaults(stored: unknown): AccountSettings {
+  const result: AccountSettings = { ...DEFAULT_ACCOUNT_SETTINGS }
+  if (typeof stored !== 'object' || stored === null) {
+    return result
+  }
+
+  const partial = stored as Record<string, unknown>
+  for (const key of ALL_ACCOUNT_SETTINGS_KEYS) {
+    const value = partial[key]
+    if (typeof value === typeof DEFAULT_ACCOUNT_SETTINGS[key]) {
+      // Cast needed because TS can't tell that `value` has the type of `result[key]`
+      // after the runtime check above.
+      ;(result[key] as unknown) = value
+    }
+  }
+  if (!isUserAvailability(result.availability)) {
+    result.availability = DEFAULT_ACCOUNT_SETTINGS.availability
+  }
+  if (!isChatDisplayMode(result.chatDisplayMode)) {
+    result.chatDisplayMode = DEFAULT_ACCOUNT_SETTINGS.chatDisplayMode
+  }
+  if (result.replayNameTemplate.length > MAX_REPLAY_NAME_TEMPLATE_LENGTH) {
+    result.replayNameTemplate = DEFAULT_ACCOUNT_SETTINGS.replayNameTemplate
+  }
+  if (!isDiscordActivitySharing(result.shareDiscordActivity)) {
+    result.shareDiscordActivity = DEFAULT_ACCOUNT_SETTINGS.shareDiscordActivity
+  }
+
+  return result
+}
+
+/** Body of a request to change account settings. Only the keys present are changed. */
+export type UpdateAccountSettingsRequest = Partial<AccountSettings>
+
+export interface AccountSettingsResponse {
+  settings: AccountSettings
+}
+
+/**
+ * Sent on `/account-settings/:userId` with the user's complete settings, both as the initial data
+ * when a session subscribes and whenever any session changes a setting.
+ */
+export interface AccountSettingsUpdateEvent {
+  action: 'update'
+  settings: AccountSettings
+}
+
+export type AccountSettingsEvent = AccountSettingsUpdateEvent

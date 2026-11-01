@@ -1,0 +1,692 @@
+import { assertUnreachable } from '../../../common/assert-unreachable'
+import { appendToMultimap } from '../../../common/data-structures/maps'
+import { League, LeagueId } from '../../../common/leagues/leagues'
+import { MatchmakingResult, MatchmakingType } from '../../../common/matchmaking'
+import { Patch } from '../../../common/patch'
+import { RaceStats } from '../../../common/races'
+import { SbUserId } from '../../../common/users/sb-user-id'
+import db, { DbClient } from '../db'
+import { sql, sqlConcat } from '../db/sql'
+import { Dbify } from '../db/types'
+import { getUrl } from '../files'
+
+type DbLeague = Dbify<League>
+
+function convertLeagueFromDb(props: DbLeague): League {
+  return {
+    id: props.id,
+    name: props.name,
+    matchmakingType: props.matchmaking_type,
+    description: props.description,
+    signupsAfter: props.signups_after,
+    startAt: props.start_at,
+    endAt: props.end_at,
+    imagePath: props.image_path ? getUrl(props.image_path) : undefined,
+    badgePath: props.badge_path ? getUrl(props.badge_path) : undefined,
+    rulesAndInfo: props.rules_and_info ?? undefined,
+    link: props.link ?? undefined,
+  }
+}
+
+export async function createLeague(
+  {
+    name,
+    matchmakingType,
+    description,
+    signupsAfter,
+    startAt,
+    endAt,
+    imagePath,
+    badgePath,
+    rulesAndInfo,
+    link,
+  }: Omit<League, 'id'>,
+  withClient?: DbClient,
+): Promise<League> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<DbLeague>(sql`
+      INSERT INTO leagues (
+        name, matchmaking_type, description, signups_after, start_at, end_at,
+        image_path, badge_path, rules_and_info, link
+      ) VALUES (
+        ${name}, ${matchmakingType}, ${description}, ${signupsAfter}, ${startAt}, ${endAt},
+        ${imagePath}, ${badgePath}, ${rulesAndInfo}, ${link}
+      ) RETURNING *
+    `)
+    return convertLeagueFromDb(result.rows[0])
+  } finally {
+    done()
+  }
+}
+
+export async function updateLeague(
+  id: LeagueId,
+  updates: Patch<Omit<League, 'id'>>,
+  withClient?: DbClient,
+): Promise<League> {
+  const { client, done } = await db(withClient)
+  try {
+    let query = sql`
+      UPDATE leagues
+      SET
+    `
+    const updateEntries = Object.entries(updates).filter(([_, value]) => value !== undefined)
+    if (!updateEntries.length) {
+      throw new Error('No columns updated')
+    }
+
+    query = query.append(
+      sqlConcat(
+        ', ',
+        updateEntries.map(([_key, value]) => {
+          const key = _key as keyof typeof updates
+
+          switch (key) {
+            case 'name':
+              return sql`name = ${value}`
+            case 'matchmakingType':
+              return sql`matchmaking_type = ${value}`
+            case 'description':
+              return sql`description = ${value}`
+            case 'signupsAfter':
+              return sql`signups_after = ${value}`
+            case 'startAt':
+              return sql`start_at = ${value}`
+            case 'endAt':
+              return sql`end_at = ${value}`
+            case 'imagePath':
+              return sql`image_path = ${value}`
+            case 'badgePath':
+              return sql`badge_path = ${value}`
+            case 'rulesAndInfo':
+              return sql`rules_and_info = ${value}`
+            case 'link':
+              return sql`link = ${value}`
+
+            default:
+              return assertUnreachable(key)
+          }
+        }),
+      ),
+    )
+
+    query = query.append(sql`
+      WHERE id = ${id}
+      RETURNING *
+    `)
+
+    const result = await client.query<DbLeague>(query)
+    return convertLeagueFromDb(result.rows[0])
+  } finally {
+    done()
+  }
+}
+
+export async function deleteLeague(id: LeagueId, withClient?: DbClient): Promise<void> {
+  const { client, done } = await db(withClient)
+  try {
+    await client.query(sql`
+      DELETE FROM leagues
+      WHERE id = ${id}
+    `)
+  } finally {
+    done()
+  }
+}
+
+/** Returns a league with the matching ID if it exists and should be visible to normal users. */
+export async function getLeague(
+  id: LeagueId,
+  now: Date,
+  withClient?: DbClient,
+): Promise<League | undefined> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query(sql`
+      SELECT * FROM leagues
+      WHERE id = ${id}
+      AND signups_after <= ${now}
+    `)
+
+    return result.rows.length ? convertLeagueFromDb(result.rows[0]) : undefined
+  } finally {
+    done()
+  }
+}
+
+export async function getLeaguesById(
+  ids: ReadonlyArray<LeagueId>,
+  withClient?: DbClient,
+): Promise<League[]> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<DbLeague>(sql`
+      SELECT * FROM leagues
+      WHERE id = ANY(${ids})
+    `)
+
+    return result.rows.map(convertLeagueFromDb)
+  } finally {
+    done()
+  }
+}
+
+// TODO(tec27): Paginate these queries
+/**
+ * Returns the leagues that have ended.
+ */
+export async function getPastLeagues(date: Date, withClient?: DbClient): Promise<League[]> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<DbLeague>(sql`
+      SELECT *
+      FROM leagues
+      WHERE end_at <= ${date}
+      ORDER BY end_at DESC
+    `)
+    return result.rows.map(convertLeagueFromDb)
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Returns the leagues that are currently running.
+ */
+export async function getCurrentLeagues(date: Date, withClient?: DbClient): Promise<League[]> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<DbLeague>(sql`
+      SELECT *
+      FROM leagues
+      WHERE start_at <= ${date} AND end_at > ${date}
+      ORDER BY start_at DESC
+    `)
+    return result.rows.map(convertLeagueFromDb)
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Returns the leagues that are accepting signups but not currently running.
+ */
+export async function getFutureLeagues(date: Date, withClient?: DbClient): Promise<League[]> {
+  const { client, done } = await db(withClient)
+  try {
+    // TODO(tec27): Should this sort ascending instead? It's a bit confusing with the other 2
+    // queries here but might do a better job of highlighting the "latest" leagues to sign up for
+    const result = await client.query<DbLeague>(sql`
+      SELECT *
+      FROM leagues
+      WHERE end_at > ${date} AND start_at > ${date} AND signups_after <= ${date}
+      ORDER BY start_at DESC
+    `)
+    return result.rows.map(convertLeagueFromDb)
+  } finally {
+    done()
+  }
+}
+
+export async function adminGetAllLeagues(withClient?: DbClient): Promise<League[]> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<DbLeague>(sql`
+      SELECT *
+      FROM leagues
+      ORDER BY start_at DESC
+    `)
+    return result.rows.map(convertLeagueFromDb)
+  } finally {
+    done()
+  }
+}
+
+export async function adminGetLeague(
+  id: LeagueId,
+  withClient?: DbClient,
+): Promise<League | undefined> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<DbLeague>(sql`
+      SELECT *
+      FROM leagues
+      WHERE id = ${id}
+    `)
+
+    return result.rows.length ? convertLeagueFromDb(result.rows[0]) : undefined
+  } finally {
+    done()
+  }
+}
+
+export interface LeagueUser extends RaceStats {
+  leagueId: LeagueId
+  userId: SbUserId
+  isBanned: boolean
+  lastPlayedDate?: Date
+  points: number
+  pointsConverged: boolean
+  wins: number
+  losses: number
+}
+
+type DbLeagueUser = Dbify<LeagueUser>
+
+function convertLeagueUserFromDb(dbUser: DbLeagueUser): LeagueUser {
+  return {
+    leagueId: dbUser.league_id,
+    userId: dbUser.user_id,
+    isBanned: dbUser.is_banned,
+    lastPlayedDate: dbUser.last_played_date ?? undefined,
+    points: dbUser.points,
+    pointsConverged: dbUser.points_converged,
+    wins: dbUser.wins,
+    losses: dbUser.losses,
+    pWins: dbUser.p_wins,
+    pLosses: dbUser.p_losses,
+    tWins: dbUser.t_wins,
+    tLosses: dbUser.t_losses,
+    zWins: dbUser.z_wins,
+    zLosses: dbUser.z_losses,
+    rWins: dbUser.r_wins,
+    rLosses: dbUser.r_losses,
+    rPWins: dbUser.r_p_wins,
+    rPLosses: dbUser.r_p_losses,
+    rTWins: dbUser.r_t_wins,
+    rTLosses: dbUser.r_t_losses,
+    rZWins: dbUser.r_z_wins,
+    rZLosses: dbUser.r_z_losses,
+  }
+}
+
+export async function getLeagueUser(
+  leagueId: LeagueId,
+  userId: SbUserId,
+  withClient?: DbClient,
+): Promise<LeagueUser | undefined> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<DbLeagueUser>(sql`
+      SELECT * FROM league_users
+      WHERE league_id = ${leagueId} AND user_id = ${userId} AND left_at IS NULL
+    `)
+
+    return result.rows.length ? convertLeagueUserFromDb(result.rows[0]) : undefined
+  } finally {
+    done()
+  }
+}
+
+export async function getManyLeagueUsers(
+  leagueId: LeagueId,
+  userIds: ReadonlyArray<SbUserId>,
+  withClient?: DbClient,
+): Promise<LeagueUser[]> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<DbLeagueUser>(sql`
+      SELECT * FROM league_users
+      WHERE league_id = ${leagueId} AND user_id = ANY(${userIds}) AND left_at IS NULL
+    `)
+
+    return result.rows.map(convertLeagueUserFromDb)
+  } finally {
+    done()
+  }
+}
+
+export async function getAllLeaguesForUser(
+  userId: SbUserId,
+  withClient?: DbClient,
+): Promise<LeagueUser[]> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<DbLeagueUser>(sql`
+      SELECT * FROM league_users
+      WHERE user_id = ${userId} AND left_at IS NULL
+    `)
+
+    return result.rows.map(convertLeagueUserFromDb)
+  } finally {
+    done()
+  }
+}
+
+export async function joinLeagueForUser(
+  leagueId: LeagueId,
+  userId: SbUserId,
+  withClient?: DbClient,
+): Promise<LeagueUser> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query(sql`
+      INSERT INTO league_users (league_id, user_id)
+      VALUES (${leagueId}, ${userId})
+      ON CONFLICT (league_id, user_id) DO UPDATE SET
+        joined_at = CASE WHEN league_users.left_at IS NOT NULL THEN clock_timestamp()
+          ELSE league_users.joined_at END,
+        left_at = NULL
+      RETURNING *
+    `)
+
+    return convertLeagueUserFromDb(result.rows[0])
+  } finally {
+    done()
+  }
+}
+
+export async function updateLeagueUser(leagueUser: LeagueUser, client: DbClient) {
+  await client.query(sql`
+    UPDATE league_users
+    SET
+      last_played_date = ${leagueUser.lastPlayedDate},
+      points = ${leagueUser.points},
+      points_converged = ${leagueUser.pointsConverged},
+      wins = ${leagueUser.wins},
+      losses = ${leagueUser.losses},
+      p_wins = ${leagueUser.pWins},
+      p_losses = ${leagueUser.pLosses},
+      t_wins = ${leagueUser.tWins},
+      t_losses = ${leagueUser.tLosses},
+      z_wins = ${leagueUser.zWins},
+      z_losses = ${leagueUser.zLosses},
+      r_wins = ${leagueUser.rWins},
+      r_losses = ${leagueUser.rLosses},
+      r_p_wins = ${leagueUser.rPWins},
+      r_p_losses = ${leagueUser.rPLosses},
+      r_t_wins = ${leagueUser.rTWins},
+      r_t_losses = ${leagueUser.rTLosses},
+      r_z_wins = ${leagueUser.rZWins},
+      r_z_losses = ${leagueUser.rZLosses}
+    WHERE league_id = ${leagueUser.leagueId} AND user_id = ${leagueUser.userId}
+  `)
+}
+
+/** Forfeits a membership's points and statistics while retaining its ban and game history. */
+export async function leaveLeagueForUser(
+  leagueId: LeagueId,
+  userId: SbUserId,
+  client: DbClient,
+): Promise<void> {
+  await client.query(sql`
+    UPDATE league_users SET
+      left_at = clock_timestamp(), last_played_date = NULL,
+      points = 0, points_converged = FALSE, wins = 0, losses = 0,
+      p_wins = 0, p_losses = 0, t_wins = 0, t_losses = 0, z_wins = 0, z_losses = 0,
+      r_wins = 0, r_losses = 0, r_p_wins = 0, r_p_losses = 0,
+      r_t_wins = 0, r_t_losses = 0, r_z_wins = 0, r_z_losses = 0
+    WHERE league_id = ${leagueId} AND user_id = ${userId} AND left_at IS NULL
+  `)
+}
+
+/** Locks memberships in the same order as result reconciliation, including departed members. */
+export async function getLeagueLeaderboardEntriesWithLock(
+  memberships: ReadonlyArray<Pick<LeagueUser, 'leagueId' | 'userId'>>,
+  client: DbClient,
+) {
+  const result = await client.query<{
+    league_id: LeagueId
+    user_id: SbUserId
+    points: number
+    left_at: Date | null
+    last_played_date: Date | null
+  }>(sql`
+    SELECT league_id, user_id, points, left_at, last_played_date
+    FROM league_users
+    WHERE (league_id, user_id) IN (${sqlConcat(
+      ', ',
+      memberships.map(m => sql`(${m.leagueId}, ${m.userId})`),
+    )})
+    ORDER BY league_id, user_id
+    FOR UPDATE
+  `)
+  return result.rows.map(row => ({
+    leagueId: row.league_id,
+    userId: row.user_id,
+    points: row.points,
+    leftAt: row.left_at,
+    lastPlayedDate: row.last_played_date,
+  }))
+}
+
+/**
+ * Restores league points to a user for a nullified game (adds `pointsRefund` back). Returns the
+ * updated league user (so callers can refresh the leaderboard), or `undefined` if no matching row
+ * exists. See game-points-refund-service.
+ */
+export async function refundLeaguePoints(
+  client: DbClient,
+  {
+    userId,
+    leagueId,
+    pointsRefund,
+    gameId,
+  }: { userId: SbUserId; leagueId: LeagueId; pointsRefund: number; gameId: string },
+): Promise<LeagueUser | undefined> {
+  const result = await client.query<DbLeagueUser>(sql`
+    UPDATE league_users
+    SET points = points + ${pointsRefund}
+    WHERE league_id = ${leagueId} AND user_id = ${userId}
+      AND left_at IS NULL
+      AND joined_at <= (SELECT start_time AT TIME ZONE 'UTC' FROM games WHERE id = ${gameId})
+    RETURNING *;
+  `)
+  return result.rows.length ? convertLeagueUserFromDb(result.rows[0]) : undefined
+}
+
+export async function banLeagueUser(leagueUser: LeagueUser, withClient?: DbClient) {
+  const { client, done } = await db(withClient)
+  try {
+    await client.query(sql`
+      UPDATE league_users
+      SET is_banned = TRUE
+      WHERE league_id = ${leagueUser.leagueId} AND user_id = ${leagueUser.userId}
+    `)
+  } finally {
+    done()
+  }
+}
+
+export async function unbanLeagueUser(leagueUser: LeagueUser, withClient?: DbClient) {
+  const { client, done } = await db(withClient)
+  try {
+    await client.query(sql`
+      UPDATE league_users
+      SET is_banned = FALSE
+      WHERE league_id = ${leagueUser.leagueId} AND user_id = ${leagueUser.userId}
+    `)
+  } finally {
+    done()
+  }
+}
+
+/** A player's entry in a running league, along with when that league runs. */
+export interface ActiveLeagueUser extends LeagueUser {
+  leagueStartAt: Date
+  leagueEndAt: Date
+}
+
+/**
+ * Returns a Map of `userId` -> `ActiveLeagueUser`s for all specified users where the leagues are of
+ * `matchmakingType` and running as of `atDate`, locking every returned `league_users` row against
+ * other transactions until this one completes.
+ *
+ * The lock is what makes reading these rows and writing back derived values (points, win/loss
+ * counters, activity dates) safe when two games for the same league membership are applied
+ * concurrently, so this must be called with a transaction's client. Rows are locked in a fixed
+ * order so overlapping transactions can't deadlock against each other. Only the `league_users` rows
+ * are locked: the joined `leagues` rows are read-only here, and locking them would block unrelated
+ * league administration for the duration of the transaction.
+ */
+export async function getActiveLeaguesForUsersWithLock(
+  userIds: ReadonlyArray<SbUserId>,
+  matchmakingType: MatchmakingType,
+  atDate: Date,
+  client: DbClient,
+): Promise<Map<SbUserId, ActiveLeagueUser[]>> {
+  const result = await client.query<Dbify<ActiveLeagueUser>>(sql`
+    SELECT lu.*, l.start_at AS league_start_at, l.end_at AS league_end_at
+    FROM league_users lu
+    JOIN leagues l ON l.id = lu.league_id
+    WHERE lu.user_id = ANY(${userIds})
+      AND lu.left_at IS NULL
+      AND lu.joined_at <= ${atDate}
+      AND l.end_at > ${atDate}
+      AND l.start_at <= ${atDate}
+      AND l.matchmaking_type = ${matchmakingType}
+    ORDER BY lu.league_id, lu.user_id
+    FOR UPDATE OF lu
+  `)
+
+  const leaguesByUser: Map<SbUserId, ActiveLeagueUser[]> = new Map()
+  for (const row of result.rows) {
+    const leagueUser: ActiveLeagueUser = {
+      ...convertLeagueUserFromDb(row),
+      leagueStartAt: row.league_start_at,
+      leagueEndAt: row.league_end_at,
+    }
+    appendToMultimap(leaguesByUser, leagueUser.userId, leagueUser)
+  }
+
+  return leaguesByUser
+}
+
+export interface LeagueUserChange {
+  userId: SbUserId
+  leagueId: LeagueId
+  gameId: string
+  changeDate: Date
+
+  outcome: MatchmakingResult
+  points: number
+  pointsChange: number
+  pointsConverged: boolean
+}
+
+type DbLeagueUserChange = Dbify<LeagueUserChange>
+
+function convertLeagueUserChangeFromDb(dbChange: DbLeagueUserChange): LeagueUserChange {
+  return {
+    userId: dbChange.user_id,
+    leagueId: dbChange.league_id,
+    gameId: dbChange.game_id,
+    changeDate: dbChange.change_date,
+    outcome: dbChange.outcome,
+    points: dbChange.points,
+    pointsChange: dbChange.points_change,
+    pointsConverged: dbChange.points_converged,
+  }
+}
+
+export async function insertLeagueUserChange(
+  change: LeagueUserChange,
+  client: DbClient,
+): Promise<void> {
+  await client.query(sql`
+    INSERT INTO league_user_changes
+      (user_id, league_id, game_id, change_date, outcome, points, points_change, points_converged)
+    VALUES
+      (${change.userId}, ${change.leagueId}, ${change.gameId}, ${change.changeDate},
+       ${change.outcome}, ${change.points}, ${change.pointsChange}, ${change.pointsConverged})
+  `)
+}
+
+export async function getLeagueUserChangesForGame(
+  gameId: string,
+  withClient?: DbClient,
+): Promise<LeagueUserChange[]> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<DbLeagueUserChange>(sql`
+      SELECT * FROM league_user_changes
+      WHERE game_id = ${gameId}
+    `)
+
+    return result.rows.map(convertLeagueUserChangeFromDb)
+  } finally {
+    done()
+  }
+}
+
+/** Returns the leagues whose start notifications haven't been handled yet. */
+export async function getLeaguesPendingStartNotification(
+  withClient?: DbClient,
+): Promise<Array<{ id: LeagueId; startAt: Date }>> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<{ id: LeagueId; start_at: Date }>(sql`
+      SELECT id, start_at
+      FROM leagues
+      WHERE start_notified_at IS NULL
+    `)
+    return result.rows.map(row => ({ id: row.id, startAt: row.start_at }))
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Marks a league's start notifications as handled if the league has started as of `now` and they
+ * haven't been handled yet, returning the league if so. A league is only ever returned by one
+ * call, even across concurrent callers.
+ */
+export async function claimLeagueStartNotification(
+  leagueId: LeagueId,
+  now: Date,
+  withClient?: DbClient,
+): Promise<{ name: string; endAt: Date } | undefined> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<{ name: string; end_at: Date }>(sql`
+      UPDATE leagues
+      SET start_notified_at = ${now}
+      WHERE id = ${leagueId} AND start_notified_at IS NULL AND start_at <= ${now}
+      RETURNING name, end_at
+    `)
+    return result.rows.length
+      ? { name: result.rows[0].name, endAt: result.rows[0].end_at }
+      : undefined
+  } finally {
+    done()
+  }
+}
+
+/**
+ * Clears a league's start notification claim so that a later `claimLeagueStartNotification` call
+ * returns it again.
+ */
+export async function releaseLeagueStartNotificationClaim(
+  leagueId: LeagueId,
+  withClient?: DbClient,
+): Promise<void> {
+  const { client, done } = await db(withClient)
+  try {
+    await client.query(sql`
+      UPDATE leagues
+      SET start_notified_at = NULL
+      WHERE id = ${leagueId}
+    `)
+  } finally {
+    done()
+  }
+}
+
+/** Returns the IDs of every user in the league who hasn't been banned from it. */
+export async function getUnbannedLeagueUserIds(
+  leagueId: LeagueId,
+  withClient?: DbClient,
+): Promise<SbUserId[]> {
+  const { client, done } = await db(withClient)
+  try {
+    const result = await client.query<{ user_id: SbUserId }>(sql`
+      SELECT user_id
+      FROM league_users
+      WHERE league_id = ${leagueId} AND NOT is_banned AND left_at IS NULL
+    `)
+    return result.rows.map(row => row.user_id)
+  } finally {
+    done()
+  }
+}

@@ -1,0 +1,915 @@
+import { ReactNode, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import styled from 'styled-components'
+import { ReadonlyDeep } from 'type-fest'
+import {
+  ALL_RESTRICTION_KINDS,
+  RESTRICTION_REASONS_BY_KIND,
+  RestrictionKind,
+  RestrictionReason,
+  restrictionReasonToLabel,
+} from '../../../common/users/restrictions'
+import { SbUser, SelfUserJson } from '../../../common/users/sb-user'
+import { SbUserId } from '../../../common/users/sb-user-id'
+import {
+  AdminUnbanUserResponse,
+  BanHistoryEntryJson,
+  banSourceToLabel,
+  UserRestrictionHistoryJson,
+} from '../../../common/users/user-network'
+import { useSelfUser } from '../../auth/auth-utils'
+import { openDialog } from '../../dialogs/action-creators'
+import { DialogType } from '../../dialogs/dialog-type'
+import { useForm, useFormCallbacks } from '../../forms/form-hook'
+import { dateTimeFormat, useFormat } from '../../i18n/locale-formats'
+import { FilledButton, TextButton } from '../../material/button'
+import { DateTimeTextField } from '../../material/datetime-text-field'
+import { SelectOption } from '../../material/select/option'
+import { Select } from '../../material/select/select'
+import { TextField } from '../../material/text-field'
+import { LoadingDotsArea } from '../../progress/dots'
+import { useNow } from '../../react/date-hooks'
+import { useAppDispatch } from '../../redux-hooks'
+import { bodyLarge, BodyMedium, bodyMedium, labelMedium, TitleLarge } from '../../styles/typography'
+import {
+  adminApplyRestriction,
+  adminBanUser,
+  adminGetUserBanHistory,
+  adminGetUserRestrictions,
+  adminLiftRestriction,
+  adminUnbanUser,
+} from '../action-creators'
+import { ConnectedUsername } from '../connected-username'
+import {
+  ALL_PUNISHMENT_DURATIONS,
+  presetEndTime,
+  PunishmentDuration,
+  punishmentDurationToLabel,
+} from './punishment-durations'
+
+const AdminSection = styled.div`
+  block-size: min-content;
+  padding: 16px 16px 0;
+  margin-bottom: 32px;
+
+  border: 1px solid var(--theme-outline-variant);
+  border-radius: 4px;
+`
+
+const LoadingError = styled.div`
+  ${bodyLarge};
+  width: 100%;
+  margin-top: 40px;
+  margin-bottom: 48px;
+`
+
+const BanTable = styled.table`
+  width: 100%;
+  table-layout: fixed;
+
+  text-align: left;
+  margin: 16px 0 32px;
+
+  th,
+  td {
+    ${bodyMedium};
+
+    padding: 4px;
+
+    border: 1px solid var(--theme-outline-variant);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: top;
+  }
+
+  th {
+    ${labelMedium};
+    color: var(--theme-on-surface-variant);
+  }
+`
+
+const BanRow = styled.tr<{ $expired?: boolean }>`
+  color: ${props =>
+    !props.$expired
+      ? 'var(--theme-on-surface)'
+      : 'rgb(from var(--theme-on-surface) r g b / var(--theme-disabled-opacity))'};
+`
+
+const EmptyState = styled.td`
+  ${bodyLarge};
+  color: var(--theme-on-surface-variant);
+`
+
+const banDateFormat = dateTimeFormat({
+  year: 'numeric',
+  month: 'short',
+  day: '2-digit',
+  hour: 'numeric',
+  minute: '2-digit',
+})
+
+interface DurationFormModel {
+  duration: PunishmentDuration
+  /** Only used when `duration` is `Custom`. */
+  endTime: string
+}
+
+interface BanFormModel extends DurationFormModel {
+  reason?: string
+}
+
+interface UnbanFormModel {
+  reason?: string
+}
+
+interface RestrictionFormModel extends DurationFormModel {
+  kind: RestrictionKind
+  reason?: RestrictionReason
+  adminNotes?: string
+}
+
+const BAN_FORM_DEFAULTS: BanFormModel = {
+  duration: PunishmentDuration.OneDay,
+  endTime: '',
+  reason: '',
+}
+
+const UNBAN_FORM_DEFAULTS: UnbanFormModel = {
+  reason: '',
+}
+
+const RESTRICTION_FORM_DEFAULTS: RestrictionFormModel = {
+  kind: RestrictionKind.Chat,
+  duration: PunishmentDuration.OneDay,
+  endTime: '',
+  reason: RESTRICTION_REASONS_BY_KIND[RestrictionKind.Chat][0],
+  adminNotes: '',
+}
+
+/**
+ * Returns the end time (in ms) to submit for a form's chosen duration. Presets are measured from
+ * the moment this is called, so it should be called at submit time.
+ */
+function resolveEndTime({ duration, endTime }: ReadonlyDeep<DurationFormModel>): number {
+  return duration === PunishmentDuration.Custom
+    ? Date.parse(endTime)
+    : presetEndTime(duration, Date.now())
+}
+
+function validateCustomEndTime(
+  value: string,
+  model: ReadonlyDeep<DurationFormModel>,
+): string | undefined {
+  if (model.duration !== PunishmentDuration.Custom) {
+    return undefined
+  }
+  if (!value || Date.parse(value) <= Date.now()) {
+    return 'End time must be in the future'
+  }
+  return undefined
+}
+
+const DurationRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+`
+
+const DurationSelect = styled(Select)`
+  width: 200px;
+  flex-shrink: 0;
+`
+
+const DurationEndPreview = styled.div`
+  ${bodyMedium};
+  color: var(--theme-on-surface-variant);
+`
+
+function DurationPicker({
+  duration,
+  onDurationChange,
+  endTimeInput,
+}: {
+  duration: PunishmentDuration
+  onDurationChange: (duration: PunishmentDuration) => void
+  endTimeInput: ReactNode
+}) {
+  const now = useNow(15_000)
+  const banDateFormatter = useFormat(banDateFormat)
+
+  return (
+    <>
+      <DurationRow>
+        <DurationSelect
+          value={duration}
+          onChange={onDurationChange}
+          label='Length'
+          allowErrors={false}
+          tabIndex={0}>
+          {ALL_PUNISHMENT_DURATIONS.map(d => (
+            <SelectOption key={d} value={d} text={punishmentDurationToLabel(d)} />
+          ))}
+        </DurationSelect>
+        {duration !== PunishmentDuration.Custom ? (
+          <DurationEndPreview>
+            Ends {banDateFormatter.format(presetEndTime(duration, now))}
+          </DurationEndPreview>
+        ) : null}
+      </DurationRow>
+      {duration === PunishmentDuration.Custom ? endTimeInput : null}
+    </>
+  )
+}
+
+export interface AdminPunishmentsPageProps {
+  user: SbUser
+}
+
+export function AdminPunishmentsPage({ user }: AdminPunishmentsPageProps) {
+  const selfUser = useSelfUser()!
+
+  return (
+    <>
+      <AdminAvatarSection user={user} />
+      <BanHistory user={user} selfUser={selfUser} />
+      <RestrictionHistory user={user} selfUser={selfUser} />
+    </>
+  )
+}
+
+function AdminAvatarSection({ user }: { user: SbUser }) {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+
+  const onRemoveAvatarClick = () => {
+    dispatch(openDialog({ type: DialogType.RemoveUserAvatar, initData: { userId: user.id } }))
+  }
+
+  return (
+    <AdminSection data-testid='avatar-section'>
+      <TitleLarge>{t('users.admin.avatar.title', 'Avatar')}</TitleLarge>
+      {user.avatarUrl ? (
+        <>
+          <BodyMedium>
+            {t(
+              'users.admin.avatar.description',
+              "Permanently remove this user's avatar. This can't be undone.",
+            )}
+          </BodyMedium>
+          <FilledButton
+            label={t('users.profile.admin.removeAvatarAction', 'Remove avatar')}
+            onClick={onRemoveAvatarClick}
+          />
+        </>
+      ) : (
+        <BodyMedium>
+          {t('users.admin.avatar.none', 'This user does not have an avatar set.')}
+        </BodyMedium>
+      )}
+    </AdminSection>
+  )
+}
+
+function BanHistory({ user, selfUser }: { user: SbUser; selfUser: SelfUserJson }) {
+  const dispatch = useAppDispatch()
+  const [banHistory, setBanHistory] = useState<ReadonlyDeep<BanHistoryEntryJson[]>>()
+  const [unbanResult, setUnbanResult] = useState<ReadonlyDeep<AdminUnbanUserResponse>>()
+
+  const [requestError, setRequestError] = useState<Error>()
+  const cancelLoadRef = useRef(new AbortController())
+
+  const userId = user.id
+  const isSelf = userId === selfUser.id
+
+  const now = useNow(60_000)
+
+  useEffect(() => {
+    cancelLoadRef.current.abort()
+    const abortController = new AbortController()
+    cancelLoadRef.current = abortController
+
+    dispatch(
+      adminGetUserBanHistory(userId, {
+        signal: abortController.signal,
+        onStart: () => {
+          setBanHistory(undefined)
+          setUnbanResult(undefined)
+        },
+        onSuccess: response => {
+          setRequestError(undefined)
+          setBanHistory(response.bans)
+        },
+        onError: err => setRequestError(err),
+      }),
+    )
+
+    return () => {
+      abortController.abort()
+    }
+  }, [userId, dispatch])
+
+  return (
+    <AdminSection data-testid='ban-history-section'>
+      <TitleLarge>Ban history</TitleLarge>
+      {requestError ? <LoadingError>{requestError.message}</LoadingError> : null}
+      {banHistory === undefined ? (
+        <LoadingDotsArea />
+      ) : (
+        <BanHistoryList banHistory={banHistory} now={now} />
+      )}
+      {!isSelf ? (
+        <>
+          <BanUserForm
+            key={`form-${userId}`}
+            model={BAN_FORM_DEFAULTS}
+            onSubmit={model => {
+              dispatch(
+                adminBanUser(
+                  {
+                    userId,
+                    endTime: resolveEndTime(model),
+                    reason: model.reason?.length ? model.reason : undefined,
+                  },
+                  {
+                    onSuccess: response => {
+                      setBanHistory(history => {
+                        if (!history?.some(b => b.id === response.ban.id)) {
+                          return [response.ban].concat(history || [])
+                        }
+
+                        return history
+                      })
+                      setRequestError(undefined)
+                    },
+                    onError: err => setRequestError(err),
+                  },
+                ),
+              )
+            }}
+          />
+          <UnbanUserForm
+            key={`unban-form-${userId}`}
+            model={UNBAN_FORM_DEFAULTS}
+            onSubmit={model => {
+              dispatch(
+                adminUnbanUser(
+                  {
+                    userId,
+                    reason: model.reason?.length ? model.reason : undefined,
+                  },
+                  {
+                    onSuccess: response => {
+                      const lifted = new Map(response.bans.map(b => [b.id, b]))
+                      setBanHistory(history => history?.map(b => lifted.get(b.id) ?? b))
+                      setRequestError(undefined)
+                      setUnbanResult(response)
+                    },
+                    onError: err => setRequestError(err),
+                  },
+                ),
+              )
+            }}
+          />
+          {unbanResult ? <UnbanResult result={unbanResult} userId={userId} /> : null}
+        </>
+      ) : null}
+    </AdminSection>
+  )
+}
+
+function UnbanResult({
+  result,
+  userId,
+}: {
+  result: ReadonlyDeep<AdminUnbanUserResponse>
+  userId: SbUserId
+}) {
+  const otherUsers = result.unbannedUsers.filter(id => id !== userId)
+
+  return (
+    <BodyMedium>
+      {result.bans.length
+        ? `Lifted ${result.bans.length} ban(s) on this account`
+        : 'This account had no active ban'}
+      {` and expired ${result.liftedIdentifierBans} identifier ban(s).`}
+      {otherUsers.length ? (
+        <>
+          {' Connected accounts also unbanned: '}
+          {otherUsers.map((id, i) => (
+            <span key={id}>
+              {i > 0 ? ', ' : ''}
+              <ConnectedUsername userId={id} />
+            </span>
+          ))}
+        </>
+      ) : null}
+    </BodyMedium>
+  )
+}
+
+const TimeCell = styled.td`
+  width: 192px;
+`
+
+const UsernameCell = styled.td`
+  width: 96px;
+`
+
+function BanHistoryList({
+  banHistory,
+  now,
+}: {
+  banHistory: ReadonlyDeep<BanHistoryEntryJson[]>
+  now: number
+}) {
+  const banDateFormatter = useFormat(banDateFormat)
+  return (
+    <BanTable>
+      <thead>
+        <tr>
+          <TimeCell as='th'>Start time</TimeCell>
+          <TimeCell as='th'>End time</TimeCell>
+          <UsernameCell as='th'>Banned by</UsernameCell>
+          <th>Reason</th>
+          <th>Unbanned</th>
+        </tr>
+      </thead>
+      <tbody>
+        {banHistory.length ? (
+          banHistory.map((b, i) => (
+            <BanRow key={i} $expired={b.startTime <= now && b.endTime <= now}>
+              <TimeCell>{banDateFormatter.format(b.startTime)}</TimeCell>
+              <TimeCell>{banDateFormatter.format(b.endTime)}</TimeCell>
+              <UsernameCell>
+                {b.bannedBy !== undefined ? (
+                  <ConnectedUsername userId={b.bannedBy} />
+                ) : (
+                  <span>- {banSourceToLabel(b.source).toLowerCase()} -</span>
+                )}
+                {b.cascadedFrom !== undefined ? (
+                  <div>
+                    Linked to <ConnectedUsername userId={b.cascadedFrom} />
+                  </div>
+                ) : null}
+              </UsernameCell>
+              <td>{b.reason ?? ''}</td>
+              <td>
+                {b.unbannedBy !== undefined || b.unbannedAt !== undefined ? (
+                  <>
+                    <div>
+                      {b.unbannedBy !== undefined ? (
+                        <ConnectedUsername userId={b.unbannedBy} />
+                      ) : (
+                        <span>- system -</span>
+                      )}
+                      {b.unbannedAt !== undefined
+                        ? ` ${banDateFormatter.format(b.unbannedAt)}`
+                        : ''}
+                    </div>
+                    {b.unbanReason !== undefined ? <div>{b.unbanReason}</div> : null}
+                  </>
+                ) : null}
+              </td>
+            </BanRow>
+          ))
+        ) : (
+          <BanRow>
+            <EmptyState colSpan={5}>No bans found</EmptyState>
+          </BanRow>
+        )}
+      </tbody>
+    </BanTable>
+  )
+}
+
+function BanUserForm({
+  model,
+  onSubmit,
+}: {
+  model: BanFormModel
+  onSubmit: (model: ReadonlyDeep<BanFormModel>) => void
+}) {
+  const { submit, bindInput, bindCustom, getInputValue, form } = useForm<BanFormModel>(model, {
+    endTime: validateCustomEndTime,
+  })
+
+  useFormCallbacks(form, {
+    onSubmit,
+  })
+
+  return (
+    <form noValidate={true} onSubmit={submit}>
+      <TitleLarge>Ban user</TitleLarge>
+      <DurationPicker
+        duration={getInputValue('duration')}
+        onDurationChange={bindCustom('duration').onChange}
+        endTimeInput={
+          <DateTimeTextField
+            {...bindInput('endTime')}
+            label='End time'
+            floatingLabel={true}
+            inputProps={{ tabIndex: 0 }}
+          />
+        }
+      />
+      <BodyMedium>This reason will be visible to the user!</BodyMedium>
+      <TextField
+        {...bindInput('reason')}
+        label='Ban reason'
+        floatingLabel={true}
+        inputProps={{
+          tabIndex: 0,
+          autoCapitalize: 'off',
+          autoComplete: 'off',
+          autoCorrect: 'off',
+          spellCheck: false,
+        }}
+      />
+      <FilledButton label='Ban' tabIndex={0} onClick={submit} />
+    </form>
+  )
+}
+
+function UnbanUserForm({
+  model,
+  onSubmit,
+}: {
+  model: UnbanFormModel
+  onSubmit: (model: ReadonlyDeep<UnbanFormModel>) => void
+}) {
+  const { submit, bindInput, form } = useForm<UnbanFormModel>(model, {})
+
+  useFormCallbacks(form, {
+    onSubmit,
+  })
+
+  return (
+    <form noValidate={true} onSubmit={submit}>
+      <TitleLarge>Unban user</TitleLarge>
+      <BodyMedium>
+        Lifts every active ban on this account and on any accounts connected to it by shared
+        identifiers, and clears the machine bans on their identifiers so they won't be flagged for
+        ban evasion.
+      </BodyMedium>
+      <TextField
+        {...bindInput('reason')}
+        label='Notes (optional, admin-only)'
+        floatingLabel={true}
+        inputProps={{
+          tabIndex: 0,
+          autoCapitalize: 'off',
+          autoComplete: 'off',
+          autoCorrect: 'off',
+          spellCheck: false,
+        }}
+      />
+      <FilledButton label='Unban' tabIndex={0} onClick={submit} />
+    </form>
+  )
+}
+
+function RestrictionHistory({ user, selfUser }: { user: SbUser; selfUser: SelfUserJson }) {
+  const dispatch = useAppDispatch()
+  const [restrictionHistory, setRestrictionHistory] =
+    useState<ReadonlyDeep<UserRestrictionHistoryJson[]>>()
+
+  const [requestError, setRequestError] = useState<Error>()
+  const cancelLoadRef = useRef(new AbortController())
+
+  const userId = user.id
+  const isSelf = userId === selfUser.id
+
+  const now = useNow(60_000)
+
+  useEffect(() => {
+    cancelLoadRef.current.abort()
+    const abortController = new AbortController()
+    cancelLoadRef.current = abortController
+
+    dispatch(
+      adminGetUserRestrictions(userId, {
+        signal: abortController.signal,
+        onStart: () => {
+          setRestrictionHistory(undefined)
+        },
+        onSuccess: response => {
+          setRequestError(undefined)
+          setRestrictionHistory(response.restrictions)
+        },
+        onError: err => setRequestError(err),
+      }),
+    )
+
+    return () => {
+      abortController.abort()
+    }
+  }, [userId, dispatch])
+
+  return (
+    <AdminSection data-testid='restriction-history-section'>
+      <TitleLarge>Restriction history</TitleLarge>
+      {requestError ? <LoadingError>{requestError.message}</LoadingError> : null}
+      {restrictionHistory === undefined ? (
+        <LoadingDotsArea />
+      ) : (
+        <RestrictionHistoryList
+          restrictionHistory={restrictionHistory}
+          now={now}
+          onLift={
+            isSelf
+              ? undefined
+              : (kind, reason, onDone) => {
+                  dispatch(
+                    adminLiftRestriction(
+                      { userId, kind, reason },
+                      {
+                        onSuccess: response => {
+                          const lifted = new Map(response.restrictions.map(r => [r.id, r]))
+                          setRestrictionHistory(history => history?.map(r => lifted.get(r.id) ?? r))
+                          setRequestError(undefined)
+                          onDone()
+                        },
+                        onError: err => {
+                          setRequestError(err)
+                          onDone()
+                        },
+                      },
+                    ),
+                  )
+                }
+          }
+        />
+      )}
+      {!isSelf ? (
+        <RestrictUserForm
+          key={`restriction-form-${userId}`}
+          model={RESTRICTION_FORM_DEFAULTS}
+          onSubmit={model => {
+            dispatch(
+              adminApplyRestriction(
+                {
+                  userId,
+                  kind: model.kind,
+                  endTime: resolveEndTime(model),
+                  reason: model.reason,
+                  adminNotes: model.adminNotes?.length ? model.adminNotes.slice(0, 500) : undefined,
+                },
+                {
+                  onSuccess: response => {
+                    setRestrictionHistory(history => {
+                      if (!history?.some(r => r.id === response.restriction.id)) {
+                        return [response.restriction].concat(history || [])
+                      }
+
+                      return history
+                    })
+                    setRequestError(undefined)
+                  },
+                  onError: err => setRequestError(err),
+                },
+              ),
+            )
+          }}
+        />
+      ) : null}
+    </AdminSection>
+  )
+}
+
+const RestrictionKindCell = styled.td`
+  width: 96px;
+`
+
+const RestrictionReasonCell = styled.td`
+  width: 112px;
+`
+
+type LiftRestrictionHandler = (
+  kind: RestrictionKind,
+  reason: string | undefined,
+  onDone: () => void,
+) => void
+
+function RestrictionHistoryList({
+  restrictionHistory,
+  now,
+  onLift,
+}: {
+  restrictionHistory: ReadonlyDeep<UserRestrictionHistoryJson[]>
+  now: number
+  /** Called to lift a restriction kind. Lift actions are hidden when this is undefined. */
+  onLift?: LiftRestrictionHandler
+}) {
+  const { t } = useTranslation()
+  const banDateFormatter = useFormat(banDateFormat)
+  return (
+    <BanTable>
+      <thead>
+        <tr>
+          <RestrictionKindCell as='th'>Kind</RestrictionKindCell>
+          <TimeCell as='th'>Start time</TimeCell>
+          <TimeCell as='th'>End time</TimeCell>
+          <UsernameCell as='th'>Restricted by</UsernameCell>
+          <RestrictionReasonCell as='th'>Reason</RestrictionReasonCell>
+          <th>Admin notes</th>
+          <th>Lifted</th>
+        </tr>
+      </thead>
+      <tbody>
+        {restrictionHistory.length ? (
+          restrictionHistory.map(r => (
+            <BanRow key={r.id} $expired={r.startTime <= now && r.endTime <= now}>
+              <RestrictionKindCell>{r.kind}</RestrictionKindCell>
+              <TimeCell>{banDateFormatter.format(r.startTime)}</TimeCell>
+              <TimeCell>{banDateFormatter.format(r.endTime)}</TimeCell>
+              <UsernameCell>
+                {r.restrictedBy !== undefined ? (
+                  <ConnectedUsername userId={r.restrictedBy} />
+                ) : (
+                  <span>- system -</span>
+                )}
+              </UsernameCell>
+              <RestrictionReasonCell>
+                {r.reason !== undefined ? restrictionReasonToLabel(r.reason, t) : ''}
+              </RestrictionReasonCell>
+              <td>{r.adminNotes ?? ''}</td>
+              <td>
+                <RestrictionLiftCell restriction={r} now={now} onLift={onLift} />
+              </td>
+            </BanRow>
+          ))
+        ) : (
+          <BanRow>
+            <EmptyState colSpan={7}>No restrictions found</EmptyState>
+          </BanRow>
+        )}
+      </tbody>
+    </BanTable>
+  )
+}
+
+function RestrictionLiftCell({
+  restriction: r,
+  now,
+  onLift,
+}: {
+  restriction: ReadonlyDeep<UserRestrictionHistoryJson>
+  now: number
+  onLift?: LiftRestrictionHandler
+}) {
+  const banDateFormatter = useFormat(banDateFormat)
+  if (r.liftedAt !== undefined) {
+    return (
+      <>
+        <div>
+          {r.liftedBy !== undefined ? (
+            <ConnectedUsername userId={r.liftedBy} />
+          ) : (
+            <span>- system -</span>
+          )}
+          {` ${banDateFormatter.format(r.liftedAt)}`}
+        </div>
+        {r.liftReason !== undefined ? <div>{r.liftReason}</div> : null}
+      </>
+    )
+  }
+
+  return onLift && r.endTime > now ? <LiftRestrictionAction kind={r.kind} onLift={onLift} /> : null
+}
+
+const LiftForm = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+`
+
+const LiftButtons = styled.div`
+  display: flex;
+  gap: 4px;
+`
+
+function LiftRestrictionAction({
+  kind,
+  onLift,
+}: {
+  kind: RestrictionKind
+  onLift: LiftRestrictionHandler
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [note, setNote] = useState('')
+  const [lifting, setLifting] = useState(false)
+
+  if (!expanded) {
+    return <TextButton label='Lift' onClick={() => setExpanded(true)} />
+  }
+
+  return (
+    <LiftForm>
+      <div>
+        Ends every active {kind} restriction on this account and on accounts connected to it.
+      </div>
+      <TextField
+        value={note}
+        onChange={event => setNote(event.target.value)}
+        label='Notes (optional, admin-only)'
+        dense={true}
+        allowErrors={false}
+        maxLength={500}
+        disabled={lifting}
+        inputProps={{
+          autoCapitalize: 'off',
+          autoComplete: 'off',
+          autoCorrect: 'off',
+          spellCheck: false,
+        }}
+      />
+      <LiftButtons>
+        <TextButton
+          label='Lift'
+          disabled={lifting}
+          onClick={() => {
+            setLifting(true)
+            onLift(kind, note.trim().length ? note.trim() : undefined, () => setLifting(false))
+          }}
+        />
+        <TextButton label='Cancel' disabled={lifting} onClick={() => setExpanded(false)} />
+      </LiftButtons>
+    </LiftForm>
+  )
+}
+
+function RestrictUserForm({
+  model,
+  onSubmit,
+}: {
+  model: RestrictionFormModel
+  onSubmit: (model: ReadonlyDeep<RestrictionFormModel>) => void
+}) {
+  const { t } = useTranslation()
+  const { submit, bindInput, bindCustom, getInputValue, setInputValue, form } =
+    useForm<RestrictionFormModel>(model, {
+      endTime: validateCustomEndTime,
+    })
+
+  useFormCallbacks(form, {
+    onSubmit,
+  })
+
+  const kind = getInputValue('kind')
+  const reasonOptions = RESTRICTION_REASONS_BY_KIND[kind]
+
+  return (
+    <form noValidate={true} onSubmit={submit}>
+      <TitleLarge>Restrict user</TitleLarge>
+      <Select
+        {...bindCustom('kind')}
+        label='Restriction type'
+        tabIndex={0}
+        onChange={(value: RestrictionKind) => {
+          bindCustom('kind').onChange(value)
+          // Reasons are per-kind: reset to the new kind's first preset, or clear it entirely for
+          // kinds that don't use a reason (e.g. reporting).
+          const newReasons = RESTRICTION_REASONS_BY_KIND[value]
+          setInputValue('reason', newReasons.length ? newReasons[0] : undefined)
+        }}>
+        {ALL_RESTRICTION_KINDS.map(kind => (
+          <SelectOption key={kind} value={kind} text={kind} />
+        ))}
+      </Select>
+      <DurationPicker
+        duration={getInputValue('duration')}
+        onDurationChange={bindCustom('duration').onChange}
+        endTimeInput={
+          <DateTimeTextField
+            {...bindInput('endTime')}
+            label='End time'
+            floatingLabel={true}
+            inputProps={{ tabIndex: 0 }}
+          />
+        }
+      />
+      {reasonOptions.length ? (
+        <Select {...bindCustom('reason')} label='Reason' tabIndex={0}>
+          {reasonOptions.map(reason => (
+            <SelectOption key={reason} value={reason} text={restrictionReasonToLabel(reason, t)} />
+          ))}
+        </Select>
+      ) : null}
+      <TextField
+        {...bindInput('adminNotes')}
+        label='Admin notes (optional)'
+        floatingLabel={true}
+        inputProps={{
+          tabIndex: 0,
+          autoCapitalize: 'off',
+          autoComplete: 'off',
+          autoCorrect: 'off',
+          spellCheck: false,
+        }}
+      />
+      <FilledButton label='Apply restriction' tabIndex={0} onClick={submit} />
+    </form>
+  )
+}
