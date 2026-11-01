@@ -698,10 +698,24 @@ void SbSetLaunch(const char *pszSetupFile)
   fclose(f);
   g_launch.setup[static_cast<size_t>(n)] = '\0';
   g_launch.bOn = true;
+}
+
+// The room's launch: the setup JSON arrives in the launch itself, not a file
+// (SbSetLaunch's file form serves the command line's --sb-setup).
+void SbSetLaunchJson(const char *pszSetupJson)
+{
+  g_launch = Launch();
+  if (pszSetupJson == NULL || pszSetupJson[0] == '\0') {
+    Log("the launch's setup JSON is empty");
+    g_launch.bFailed = true;
+    return;
+  }
+  g_launch.setup = pszSetupJson;
+  g_launch.bOn = true;
   g_launch.bStarted = false;
   g_launch.bFailed = false;
   g_launch.nRoster = JsonInt(g_launch.setup, "rosterSize", 0);
-  Log("a relay session is set (\"%s\", %d slots)", pszSetupFile, g_launch.nRoster);
+  Log("a relay session is set (the launch's JSON, %d slots)", g_launch.nRoster);
 }
 
 bool SbLaunchOn(void)

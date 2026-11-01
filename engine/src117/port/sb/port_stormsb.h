@@ -19,6 +19,8 @@ void SbListProvider(void *pfnCallback);
 // session is running or fails (bounded by the bridge), so call it during the
 // launch cover, never from the game loop.
 void SbSetLaunch(const char *pszSetupFile);
+// The room's launch: the setup JSON as the launch carries it.
+void SbSetLaunchJson(const char *pszSetupJson);
 bool SbLaunchOn(void);
 // The launch's rosterSize (the session's slots), 0 when none was written.
 int SbRosterCount(void);

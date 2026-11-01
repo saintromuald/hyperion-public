@@ -72,7 +72,7 @@ for _ in range(30):
             break
     except socket.timeout:
         pass
-send({"t": "start"})
+send({"t": "start", "match": 1})
 time.sleep(3)
 s.close()
 EOF

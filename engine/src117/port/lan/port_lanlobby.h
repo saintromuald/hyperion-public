@@ -13,6 +13,8 @@ bool PortLaunchNetGame(const PortJson &launch);
 // The SB relay launch (--sb-setup, --sb-role): the same flow, the launch read
 // from the command line and the provider the rally point's.
 bool PortSbLaunchNetGame(void);
+// The room's launch: the same flow, with the room's values and setup JSON.
+bool PortSbLaunchNetGame(const PortJson &launch);
 void PortLanLobbyEnd(void);
 
 // A LAN room's match (port_lanlobby.cpp): 1.17's chat room played for its players,
