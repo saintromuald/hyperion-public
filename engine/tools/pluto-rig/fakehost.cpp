@@ -185,6 +185,17 @@ static void TapLog(const Tap &t, EXCEPTION_POINTERS *e) {
           reinterpret_cast<void *>(*reinterpret_cast<DWORD *>(esp)),
           reinterpret_cast<void *>(*reinterpret_cast<DWORD *>(esp + 4)),
           reinterpret_cast<void *>(*reinterpret_cast<DWORD *>(esp + 8)));
+  DWORD fp = e->ContextRecord->Ebp;
+  fprintf(f, "  frames:");
+  for (int i = 0; i < 8 && fp > 0x10000 && fp < 0x80000000; ++i) {
+    DWORD old = *reinterpret_cast<DWORD *>(fp);
+    DWORD ret = *reinterpret_cast<DWORD *>(fp + 4);
+    fprintf(f, " %08x->%08x", fp, ret);
+    if (old <= fp)
+      break;
+    fp = old;
+  }
+  fprintf(f, "\\n");
   fclose(f);
   // Only for a hit exactly at the walk's entry: dump its this and the record head.
   if (e->ExceptionRecord->ExceptionAddress != t.at)
@@ -330,6 +341,164 @@ static void MeasureTypes() {
   fclose(f);
 }
 
+// --- StarCraft 1.16.1 memory emulation ---------------------------------------
+//
+// Pluto reads the real game's memory directly, by absolute address. patch_pluto.py
+// remaps every such address onto the rig's stand-in buffers:
+//   addr <  0x400000  ->  0x21000000 + addr
+//   addr >= 0x400000  ->  0x21400000 + (addr - 0x400000)
+// so the stand-ins must hold a miniature 1.16.1 image (the bot's reads land there).
+// Offsets are BWAPI 4.4.0's (Offsets.h, BWGame.h, CUnit.h); sc-addresses.txt lists
+// every address the v2.0 DLL touches.
+static unsigned char *Sc(unsigned addr) {
+  return reinterpret_cast<unsigned char *>(
+      addr < 0x400000 ? 0x21000000u + addr : 0x21400000u + (addr - 0x400000));
+}
+template <typename T> static T *ScT(unsigned addr) {
+  return reinterpret_cast<T *>(Sc(addr));
+}
+
+#pragma pack(push, 1)
+struct ScUnit {  // CUnit, 0x150 bytes
+  uint32_t prev, next;         // 0x00, 0x04
+  int32_t  hitPoints;          // 0x08  (x256)
+  uint32_t sprite;             // 0x0C
+  uint16_t moveTargetX;        // 0x10
+  uint16_t moveTargetY;        // 0x12
+  uint8_t  _p14[0x28 - 0x14];
+  uint16_t posX;               // 0x28
+  uint16_t posY;               // 0x2A
+  uint8_t  _p2c[0x4C - 0x2C];
+  uint8_t  playerID;           // 0x4C
+  uint8_t  orderID;            // 0x4D
+  uint8_t  orderState;         // 0x4E
+  uint8_t  orderSignal;        // 0x4F
+  uint16_t orderUnitType;      // 0x50
+  uint8_t  _p52[0x58 - 0x52];
+  uint32_t orderTargetX;       // 0x58
+  uint32_t orderTargetY;       // 0x5C
+  uint32_t shieldPoints;       // 0x60
+  uint16_t unitType;           // 0x64
+  uint8_t  _p66[0x68 - 0x66];
+  uint32_t prevPlayerUnit;     // 0x68
+  uint32_t nextPlayerUnit;     // 0x6C
+  uint8_t  _p70[0xA2 - 0x70];
+  uint16_t energy;             // 0xA2
+  uint8_t  _pA4[0xDC - 0xA4];
+  uint32_t statusFlags;        // 0xDC
+  uint8_t  _pE0[0xE4 - 0xE0];
+  int32_t  visibilityStatus;   // 0xE4
+  uint8_t  _pE8[0x150 - 0xE8];
+};
+#pragma pack(pop)
+static_assert(sizeof(ScUnit) == 0x150, "ScUnit must be a 1.16.1 CUnit");
+
+static const unsigned SC_UNITS = 0x59CCA8;    // UnitNodeTable, 1700 x 0x150
+static const unsigned SC_VIS_FIRST = 0x628430;  // UnitNodeList_VisibleUnit_First
+static const unsigned SC_PLAYERS = 0x57EEE0;    // PlayerInfo[12], stride 0x24
+static const unsigned SC_STATUS = 0x57F0B8;     // playerStatusArray[8]
+static const unsigned SC_GAME = 0x57F0F0;       // BWGame
+static const unsigned SC_SENDTURN = 0x485A40;   // BWFXN_sendTurn, called by the bot
+
+static void UpdateScMemory() {
+  // The ActiveTileArray at 0x6D1260 is a POINTER to a 4-byte-a-tile array; the bot
+  // indexes it by map tile. Point it at a rig buffer: visible, explored, walkable.
+  static void *s_tiles;
+  if (!s_tiles) {
+    s_tiles = VirtualAlloc(NULL, 256 * 256 * 4, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    unsigned char *t = static_cast<unsigned char *>(s_tiles);
+    for (int i = 0; i < 256 * 256; ++i) {
+      t[i * 4 + 0] = 1;  // visibility flags: visible
+      t[i * 4 + 1] = 1;  // explored flags: explored
+      t[i * 4 + 2] = 1;  // walkable
+      t[i * 4 + 3] = 0;
+    }
+    *ScT<void *>(0x6D1260) = s_tiles;
+    printf("[fakehost] active tile array at %p\n", s_tiles);
+  }
+  ScUnit *units = ScT<ScUnit>(SC_UNITS);
+  // Every slot: no unit. Type 228 = None; player 0xFF = nobody.
+  for (int i = 0; i < 1700; ++i) {
+    units[i].unitType = 228;
+    units[i].playerID = 0xFF;
+    units[i].statusFlags = 0;
+    units[i].prev = units[i].next = 0;
+  }
+  // The scripted units, linked through the visible-unit list.
+  unsigned prevPtr = 0;
+  for (int i = 0; i < g->initialUnitCount && i < 1700; ++i) {
+    const UnitData &u = g->units[i];
+    ScUnit &su = units[i];
+    su.hitPoints = u.hitPoints * 256;
+    su.posX = static_cast<uint16_t>(u.positionX);
+    su.posY = static_cast<uint16_t>(u.positionY);
+    su.playerID = static_cast<uint8_t>(u.player);
+    su.orderID = static_cast<uint8_t>(u.order);
+    su.shieldPoints = u.shields * 256;
+    su.unitType = static_cast<uint16_t>(u.type);
+    su.energy = u.energy * 256;
+    su.statusFlags = 1;  // Completed
+    su.visibilityStatus = 1;  // visible
+    unsigned me = 0x21400000u + (SC_UNITS - 0x400000) + i * 0x150;
+    su.prev = prevPtr;
+    su.next = 0;
+    if (prevPtr)
+      units[i - 1].next = me;
+    else
+      *ScT<unsigned>(SC_VIS_FIRST) = me;
+    prevPtr = me;
+  }
+  // Players.
+  for (int i = 0; i < 12; ++i) {
+    unsigned char *p = Sc(SC_PLAYERS) + i * 0x24;
+    if (i < 2) {
+      *reinterpret_cast<unsigned *>(p + 0x00) = i;              // dwPlayerID
+      *reinterpret_cast<unsigned *>(p + 0x04) = i;              // dwStormId
+      p[0x08] = 2;                                              // nType: human
+      p[0x09] = static_cast<unsigned char>(g->players[i].race); // nRace
+      p[0x0A] = 0;                                              // nTeam
+      snprintf(reinterpret_cast<char *>(p + 0x0B), 25, "%s", g->players[i].name);
+    } else {
+      p[0x08] = 0;
+      p[0x0B] = '\0';
+    }
+  }
+  for (int i = 0; i < 8; ++i)
+    ScT<unsigned>(SC_STATUS)[i] = 1;  // playing
+  unsigned char *gg = Sc(SC_GAME);
+  for (int i = 0; i < 12; ++i) {
+    *reinterpret_cast<int *>(gg + 0x00 + i * 4) = g->players[i].minerals;
+    *reinterpret_cast<int *>(gg + 0x30 + i * 4) = g->players[i].gas;
+  }
+  *reinterpret_cast<uint16_t *>(gg + 0xE4) = g->mapWidth;
+  *reinterpret_cast<uint16_t *>(gg + 0xE6) = g->mapHeight;
+  *reinterpret_cast<uint32_t *>(gg + 0x14C) = g->frameCount;
+  snprintf(reinterpret_cast<char *>(gg + 0xC4C), 0x100, "HyperionRig.scm");
+  // Supplies: SuppliesPerRace[3] { available[12], used[12], max[12] } at +0x3054.
+  for (int r = 0; r < 3; ++r)
+    for (int i = 0; i < 12; ++i) {
+      unsigned char *s = gg + 0x3054 + r * 0x90 + i * 4;
+      *reinterpret_cast<int *>(s) = 0;
+      *reinterpret_cast<int *>(s + 0x30) = 0;
+      *reinterpret_cast<int *>(s + 0x60) = 0;
+    }
+  for (int i = 0; i < 2; ++i) {
+    *reinterpret_cast<int *>(gg + 0x3054 + 0 * 0x90 + i * 4) = g->players[i].supplyTotal[0];  // avail
+    *reinterpret_cast<int *>(gg + 0x3054 + 0 * 0x90 + 0x30 + i * 4) = g->players[i].supplyUsed[0];  // used
+  }
+  // Unit counts: all[type][player], 12 dwords a type row, at +0x3234.
+  for (int i = 0; i < 2; ++i)
+    for (int t = 0; t < 234; ++t)
+      *reinterpret_cast<int *>(gg + 0x3234 + t * 0x30 + i * 4) = g->players[i].allUnitCount[t];
+  // NetMode (LAN), gwGameMode.
+  *reinterpret_cast<int *>(Sc(0x59688C)) = 2;
+  *reinterpret_cast<uint16_t *>(Sc(0x596904)) = 0;
+  // The bot calls SC's sendTurn (0x485A40): a ret stub in the stand-in.
+  Sc(SC_SENDTURN)[0] = 0xC3;
+  // The bot treats 0x400001 as a string: an empty one.
+  Sc(0x400001)[0] = '\0';
+}
+
 static DWORD WINAPI ServePipe(LPVOID p) {  HANDLE hPipe = static_cast<HANDLE>(p);
   if (!ConnectNamedPipe(hPipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED)
     return 1;
@@ -472,6 +641,7 @@ int main(int argc, char **argv) {
   AddUnit(UnitTypes::Enum::Terran_Marine, 1, 3272, 3272, 40);
   printf("[fakehost] %d units\n", g->initialUnitCount);
   fflush(stdout);
+  UpdateScMemory();
 
   // 2. The game list the client's connect() opens.
   HANDLE hList = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0,
@@ -649,6 +819,7 @@ int main(int argc, char **argv) {
   for (int f = 0; f < 1200; ++f) {
     g->frameCount = f;
     g->elapsedTime = f * 42;
+    UpdateScMemory();
     g->eventCount = 1;
     g->events[0].type = f == 0 ? EventType::Enum::MatchStart : EventType::Enum::MatchFrame;
     g->events[0].v1 = f;
@@ -666,63 +837,57 @@ int main(int argc, char **argv) {
     ArmTaps();
     handoff.onMatchFrame();
     onFrame(mod);
-    // Watch the bot's per-unit record list: the obs-state object is the global at
-    // base+0x73120 (the writer's this is base+0x54160, a different object), so the
-    // list head is at 0x7b1a3120+0x1EC.
-    if (f % 5 == 0) {
+    // Capture the live pipeline: the bot's own handshake (inside onStart) points
+    // the client's view at the real BWRL_SHM mapping it shares with the engine, so
+    // dump that mapping (the obs requests) and SC's TurnBuffer (the bot's issued
+    // commands, 0x654880 with the byte count at 0x654AA0) on the step cadence.
+    if (f % 6 == 0) {
+      MEMORY_BASIC_INFORMATION q;
+      void *view = reinterpret_cast<void *>(
+          *reinterpret_cast<unsigned *>(0x7b1e4160 + 0x18));
+      bool ok = VirtualQuery(view, &q, sizeof q) == sizeof q;
+      if (ok) {
+        // copy page-wise, skipping unmapped or unreadable pages
+        char path[64];
+        snprintf(path, sizeof path, "dump/live-f%05d.bin", f);
+        FILE *f2 = fopen(path, "wb");
+        if (f2) {
+          unsigned char *p = reinterpret_cast<unsigned char *>(view);
+          for (unsigned off = 0; off < 0x90000; off += 0x1000) {
+            MEMORY_BASIC_INFORMATION m;
+            unsigned char *pg = p + off;
+            if (VirtualQuery(pg, &m, sizeof m) != sizeof m || m.State != MEM_COMMIT ||
+                m.Protect & (PAGE_NOACCESS | PAGE_GUARD))
+              fwrite("\0\0\0\0", 1, 0x1000, f2);  // unmapped: zero-fill keeps offsets
+            else
+              fwrite(pg, 1, 0x1000, f2);
+          }
+          fclose(f2);
+        }
+      }
+      unsigned char *turn = Sc(0x654880);
+      unsigned used = *ScT<unsigned>(0x654AA0);
+      if (used > 0x10000)
+        used = 0;
+      {
+        char path[64];
+        snprintf(path, sizeof path, "dump/acts-f%05d.bin", f);
+        FILE *f2 = fopen(path, "wb");
+        if (f2) {
+          fwrite(turn, 1, used, f2);
+          fclose(f2);
+        }
+      }
       FILE *uf = fopen("dump/unitlist.txt", f == 0 ? "w" : "a");
       if (uf) {
-        unsigned char *c = reinterpret_cast<unsigned char *>(0x7b1a3120);
         unsigned char *gates = reinterpret_cast<unsigned char *>(0x7b1a2640);
-        unsigned head;
-        memcpy(&head, c + 0x1EC, 4);
-        fprintf(uf, "f%d head=%08x gate654=%08x gate658=%02x gate661=%02x gate660=%02x a2a4=%08x\n",
-                f, head, *reinterpret_cast<unsigned *>(gates + 0x14),
-                gates[0x18], gates[0x21], gates[0x20],
-                *reinterpret_cast<unsigned *>(c + 0x2A4));
-        // The module owns an obs-state copy (module+0x10F4 = 0x7b203120): its
-        // record list is a forward_list {head(+0x1E4), size(+0x1E8)}.
-        unsigned char *m = reinterpret_cast<unsigned char *>(0x7b203120);
-        MEMORY_BASIC_INFORMATION q;
-        unsigned lhead = 0, lsize = 0;
-        if (VirtualQuery(m, &q, sizeof q) == sizeof q && q.State == MEM_COMMIT &&
-            !(q.Protect & (PAGE_NOACCESS | PAGE_GUARD))) {
-          memcpy(&lhead, m + 0x1E4, 4);
-          memcpy(&lsize, m + 0x1E8, 4);
-        }
-        fprintf(uf, "  module-list head=%08x size=%u\n", lhead, lsize);
-        unsigned lnode = lhead;
-        for (int i = 0; i < 6 && lnode > 0x10000 && lnode < 0x80000000; ++i) {
-          MEMORY_BASIC_INFORMATION nq;
-          unsigned char *n = reinterpret_cast<unsigned char *>(lnode);
-          if (VirtualQuery(n, &nq, sizeof nq) != sizeof nq || nq.State != MEM_COMMIT ||
-              nq.Protect & (PAGE_NOACCESS | PAGE_GUARD))
-            break;
-          fprintf(uf, "    node %d (%p):", i, reinterpret_cast<void *>(lnode));
-          for (int k = 0; k < 28; k += 4) {
-            unsigned v;
-            memcpy(&v, n + k, 4);
-            fprintf(uf, " %08x", v);
-          }
-          fprintf(uf, "\n");
-          memcpy(&lnode, n, 4);
-        }
-        unsigned node = head;
-        for (int i = 0; i < 8 && node > 0x10000 && node < 0x80000000; ++i) {
-          MEMORY_BASIC_INFORMATION mbi;
-          unsigned char *n = reinterpret_cast<unsigned char *>(node);
-          if (VirtualQuery(n, &mbi, sizeof mbi) != sizeof mbi ||
-              mbi.State != MEM_COMMIT || mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD))
-            break;
-          fprintf(uf, "  n%d (%p):", i, reinterpret_cast<void *>(node));
-          for (int k = 0; k < 28; k += 4) {
-            unsigned v;
-            memcpy(&v, n + k, 4);
-            fprintf(uf, " %08x", v);
-          }
-          fprintf(uf, "\n");
-          memcpy(&node, n, 4);
-        }
+        fprintf(uf, "f%d gate654=%08x gate658=%02x gate661=%02x view=%p turnused=%u\n",
+                f, *reinterpret_cast<unsigned *>(gates + 0x14),
+                gates[0x18], gates[0x21],
+                reinterpret_cast<void *>(*reinterpret_cast<unsigned *>(0x7b1e4160 + 0x18)),
+                used);
+        if (ok)
+          fprintf(uf, "  view region: state=%lx prot=%lx size=%lx\\n", q.State, q.Protect, q.RegionSize);
         fclose(uf);
       }
     }
@@ -737,12 +902,14 @@ int main(int argc, char **argv) {
       gates[0x21] = 1;                                  // engine "ready"
     }
     if (scenario == 2 && f >= 600) {
+      // Teleport the marine (unit 7) far away, so the obs diff names its fields.
       UnitData &m = g->units[7];
-      m.positionY -= 1;
+      m.positionX = 1600;
+      m.positionY = 1600;
       m.isMoving = true;
       m.order = Orders::Enum::Move;
-      m.orderTargetPositionX = m.positionX;
-      m.orderTargetPositionY = m.positionY - 200;
+      m.orderTargetPositionX = 1600;
+      m.orderTargetPositionY = 1600;
     }
     DumpShm(f);
     if (f % 100 == 0)

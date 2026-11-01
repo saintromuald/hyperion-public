@@ -66,151 +66,41 @@ The bot now completes its entire startup in the rig:
   announcement ("Pluto online (v2.0 md09b_1331000). gl hf!"), the engine's shm
   handshake ("inference server up ... shm transport").
 
-Open (next session):
-- The bot's set-returning Unit slots (63 getLoadedUnits / 65 getInterceptors /
-  67 getLarva) crash its iteration — its set layout/convention is still to pin down
-  (12-byte vector-style with an sret pointer is the current hypothesis; the empty-set
-  shim is in place and being adjusted).
-- After that: the observation builder completes per frame, `dump/` fills with
-  BWRL_SHM captures, and the schema extraction begins (differential scenarios).
+## State 2026-11-01 (session 4) — the full pipeline runs; the schema is captured
 
-## State 2026-11-01 (session 2, continued)
+The miniature 1.16.1 memory image in the stand-in buffers unblocked everything:
 
-- Slot audit (PMF encoding) corrected the shims: the set-returning Unit slots are
-  64 getLoadedUnits / 66 getInterceptors / 68 getLarva (the vtable has one more
-  leading entry than assumed; getHatchery=67, getTransport=63).
-- fakehost now installs a vectored exception handler: every fault logs eip/esp/ret/
-  eax/ecx/edx to fault.log (the caller address is the key to the bot's desynced
-  disassembly regions).
-- Remaining blocker: after a complete onStart (race, bandit, engine handshake, chat),
-  the bot crashes in its engine-launch continuation: caller 0x63f8d9c8 -> its
-  "probe" 0x63f815d0 -> the vt[1] mid-entry at 0x63f81490 (skips the null checks;
-  ebx must be self — set by the desynced real caller code), finally executing a null
-  function pointer. Next: single-step under winedbg (break 0x63f8d9c8, dump the
-  real code there — objdump and llvm-objdump both desync in that region), or
-  alternatively disassemble 0x63f8d9c8's real caller with ndisasm (present on the
-  machine) to see what sets eax/ebx before the call.
-- After that: the obs builder finishes per frame; BWRL_SHM dumps land in dump/ and
-  the schema extraction starts.
-
-## State 2026-11-01 (session 2, third pass)
-
-The frame loop RUNS: after onStart the bot's onFrame executes hundreds of frames
-("frame 0/100/200/300"), with a vectored handler redirecting the one null-call to a
-ret stub so the bot limps on. The remaining crash shows the true scale of the ABI
-gap: the bot's fork has different BY-VALUE TYPE LAYOUTS than public BWAPI 4.4.0
-(UnitType, Race, Position, Order, ...). Those layouts are measurable directly: the
-bot's own static type instances (UnitTypes::Terran_Marine etc., 233 consecutive
-objects) live in the DLL's data — the spacing between consecutive statics gives each
-type's size, and the fields follow by diffing against known values. Next: measure the
-type layouts from the DLL's statics, then add shims for every by-value return, then
-the obs builder completes and dump/ captures begin.
-
-## State 2026-11-01 (session 2, fourth pass) — the game loop runs
-
-- The rig now plays a complete 1200-frame game: onStart (race, bandit, engine, chat) and
-  every onFrame, with only one absorbed null-call. The stack corruption was the
-  empty-set shim zeroing 16 bytes where the bot's set is 12 ({begin,end,cap}); fixed.
-- Slot-numbered call tracing confirms the bot calls the host's Unit/Player/Game slots
-  exactly at the 4.4.0 layout (+2 shift from the header order — the CRTP base and the
-  inline destructor), except the known fork slots (Player[4] race getter with an
-  out-param, the set-returning Unit slots, the Game chat slot).
-- Enum id tables found in the bot's .rdata (0x57080 and 0x57160, with the categorized
-  unit-id subtables after them) — the fork's type data lives in the loaded image and
-  is measurable there.
-- Remaining for the obs capture: the one null-call is the bot's shm-send entry
-  (ret=0x7b19d9cd, the wrapper's continuation) — find the gate that initialises its
-  send pointer, then dump/ fills with the observation and the schema extraction starts.
-
-## State 2026-11-01 (session 2, final pass of the day)
-
-- The transient null-call is the bot's first engine-launch attempt failing and being
-  retried (its own retry path probes the race before the engine is up); absorbing it is
-  harmless — the launch succeeds on a later attempt.
-- The bot's obs never ships: at run end "BWRL_SHM" does not exist in the host's
-  namespace (err=2), so the bot's per-game shm client is never initialised in the rig.
-  The remaining gate is the bot's send-side init (its client object / the engine's
-  ready event path). Next: trace the onFrame's send path (the slot-numbered call log
-  plus the fault handler's frame walk), find the gate, satisfy it, then dump/ captures
-  the observation per frame and the schema extraction starts.
-
-## State 2026-11-01 (final finding of the session)
-
-- **The shm is the bot's own .data**: the PLO1 header sits at loaded address
-  0x7b190000+0x54080 (found by scanning for the magic; `shm-header-reference.bin` is
-  the first 8KB: magic PLO1, version 4, the -0.9f resign threshold, the section
-  offsets 0xCC/0xA4/0xA8/0xB0/0xB4/0xB8, and the arm-table region). No file mapping
-  named BWRL_SHM exists — the send writes into this in-process region (shared with
-  the engine via a mapping of it).
-- The obs region after the header is byte-static across all 1200 frames: the bot's
-  per-frame obs serializer runs (helpers 0x63fb0130 etc. called each frame) but the
-  commit to the region is gated on the engine's ready-reply pump, which the rig does
-  not yet service. Next: single-step the commit gate (the reply event), then the
-  region fills and the schema extraction is mechanical.
-
-## State 2026-11-01 (session 2, closing)
-
-- The obs-send gate found and opened: the client is a static object at base+0x54160;
-  the handshake leaves its view pointer (+0x18) and send flag (+0x1C) unset in the
-  rig — setting view=0x7b1e4000 (the .data page holding the PLO1 header) and flag=1
-  makes the bot's writer (0x63fb4960) run: it writes the request header at
-  [view+0xC0] (N units) and serializes the obs at [view+0x100].
-- The obs serialization now crashes on the bot's unit-record walk — the last
-  unknown is the fork's per-unit record format (the serializer's node shape
-  {next, a..e} at 0x63fb0130). Next: measure the record format from the serializer's
-  disassembly + the client object, then the schema is complete and the Hyperion-side
-  sender can be written.
-
-
-## State 2026-11-01 (session 3)
-
-The obs path is now mapped end to end; the schema extraction is one gate away.
-
-- The writer runs with a real writable view: a 1 MB buffer seeded with the bot's .data
-  page, instead of the .data page itself. The writer writes the obs at
-  view+0xC0..+0x85F1C, past .data's end (base+0x54678) into read-only .rdata, which
-  crashed it before.
-- The writer's this is the shm client at base+0x54160 (view +0x18, send flag +0x1C,
-  a frame counter +0x20); its three args are the obs objects: the local build
-  ([arg1+0x54] = N units), a second object (W/H at +0x18/+0x1C), and the global at
-  base+0x73254.
-- The obs layout the writer produces: the request header at view+0xC0 (N, W, H, then
-  zeros), then fixed-offset spans: +0xC100, +0x79100, +0x79500, +0x79900, +0x79940,
-  +0x79A40, +0x79F00, +0x81F00, +0x85F00 — each a (begin,end) span copied from the
-  obs objects.
-- The build is gated by three globals, all read by the driver at base+0xD01B..0xD04E:
-  base+0x72654 (dword, the next obs frame), base+0x72658 (byte, already sent) and
-  base+0x72661 (byte, engine ready). The driver builds the obs, walks the record list
-  (the walk, base+0x30130) and calls the writer (base+0x34960); the writer's success
-  sets "already sent", and the engine's reply pump clears it in a real game.
-- The record node shape, from the walk's disassembly: {next(+0), b(+4), c(+8), d(+0xC),
-  e(+0x10), f(+0x14), g(+0x18)} — 28 bytes; the obs unit entry is the six fields
-  {b..g}, 24 bytes, appended by base+0x2E110.
-- The walk's this is the obs-state object: a static at base+0x73120, and a copy owned
-  by the module object (a tap caught the module at 0x7B20202C walking its copy at
-  0x7B203120, module+0x10F4). The record-list head field is +0x1EC in both.
-- The per-unit obs-entry writer (base+0x307F0/0x30850, floats written to [esi]) reads
-  the unit record at ecx: position x/y scaled by the map size, an id, and more.
-- The harness now has: the writable view buffer, the BSS zero-fill tail made writable
-  (Wine maps it read-only; base+0x72000..0x74000 covers the gates and the static
-  obs-state), fault logging with the fault address and code, and guard-page taps
-  (PAGE_GUARD + the vectored handler) on the driver, walk and writer pages that log
-  every execution with the full register context.
+- The emulation fills the UnitNodeTable (0x59CCA8, 8 scripted CUnit entries linked
+  through UnitNodeList_VisibleUnit_First at 0x628430, the rest type 228 = None), the
+  Players array (0x57EEE0), playerStatusArray, and the BWGame fields the bot reads:
+  minerals/gas (+0x00/+0x30), mapTileSize (+0xE4), frameCount (+0x14C, per frame),
+  mapFileName (+0xC4C), supplies (+0x3054), unitCounts (+0x3234), NetMode/gwGameMode.
+  The ActiveTileArray at 0x6D1260 is a POINTER, so it points at a rig tile buffer
+  (visible, explored, walkable). The bot's call into SC's sendTurn (0x485A40) gets a
+  ret stub in the stand-in.
+- With that, the bot plays: 200 inference steps over 1200 frames (33 ms a step),
+  issues orders (raw net commands into SC's TurnBuffer at 0x654880, byte count at
+  0x654AA0), and even credits its bandit at the end.
+- The obs is captured from the bot's own BWRL_SHM mapping (the client's view at
+  base+0x54160+0x18, set by the bot's own handshake inside onStart — do NOT inject
+  over it). The layout: request header at +0xC0 (N, W, H), the per-unit feature
+  block from +0xC100 (one 436-byte entry a unit, 9 used of 768), 32x32 feature
+  planes at +0x79100/+0x79500, small vectors at +0x79900/+0x79940/+0x79A40, a
+  128x128 u16 map plane at +0x79F00, a 128x128 byte plane at +0x81F00, and the
+  globals/counts from +0x85F00.
+- The unit entry (436 bytes = 109 floats) starts with x, y scaled by 1/4096, then
+  float flags (isMoving, isIdle, ...). A differential run (the marine teleported at
+  frame 600) names the position fields and the flags; the rest is read straight
+  from the feature writer's disassembly (base+0x307F0, the fstp [esi+off] list).
+- The actions decode as the classic net commands: 0x09 Select (count, u16 unit ids),
+  0x14 RightClick (x, y, target, type, queued), 0x15 Action (x, y, target, type,
+  order, queued) — the same command language Hyperion's net_cmds.cpp parses. The
+  bot's unit ids (0x2494..) are its own; Hyperion just echoes them.
 
 Open (next session):
 
-- **The bot reads the real game's memory directly**, not through the host's BWAPI
-  impls: 133 absolute StarCraft 1.16.1 addresses, extracted from the patched DLL
-  (`sc-addresses.txt`), including the unit table at 0x59CCA8 (entry stride 0x150 =
-  336; the float writer reads entry+0x64 as the type, +0x10/+0x12 as position, and
-  more), the per-(type,player) attribute table at 0x58D2B0 (stride 0x2E per player),
-  per-player tables around 0x57EE..-0x586D.., and the game globals at 0x5124D8.
-  patch_pluto.py remaps all of them onto the rig's stand-in buffers, which are zero,
-  so the builder records zeros. The module's record list (module+0x10F4, a
-  forward_list {head(+0x1E4), size(+0x1E8)}) holds one all-zero record because of it.
-- Next: fill the stand-ins with a miniature 1.16.1 memory image — the unit table
-  entries for the scripted units (id, type, player, position, visibility), the
-  per-player tables, and the attribute tables the writer reads — then the records
-  fill, the writer's header (view+0xC0) fills with N, and dump/ captures the
-  observation; the differential scenarios (move a unit, change resources) name every
-  field.
+- Read the feature writer's disassembly end to end for the exact per-unit field
+  list (the fstp [esi+off] sequence), then the Hyperion-side obs builder is
+  mechanical: the header, the unit features, the map planes, the globals.
+- The action executor: the reply's Select/RightClick/Action commands translate to
+  Hyperion's unit orders (the command layer is the same as a classic replay's).
