@@ -133,7 +133,7 @@ static void *__attribute__((thiscall)) UnitEmptySet(void *self, void *sret) {
   (void)self;
   { static int s_n; if (s_n < 10) { FILE *tf = fopen("c:\\rigtrace.log", "a"); if (tf) { fprintf(tf, "EMPTYSET sret=%p caller=%p\\n", sret, (void*)__builtin_return_address(0)); fclose(tf); } s_n++; } }
   if (sret) {
-    memset(sret, 0, 16);  // an empty {begin,end,cap} or {head,size}: all null
+    memset(sret, 0, 12);  // an empty {begin,end,cap}: all null
   }
   return sret;
 }
@@ -178,9 +178,68 @@ static LONG CALLBACK VecHandler(EXCEPTION_POINTERS *e) {
       fp = old;
     }
     fprintf(f, "\\n");
+    fprintf(f, "stack:");
+    unsigned char *sp = reinterpret_cast<unsigned char *>(e->ContextRecord->Esp);
+    for (int i = -16; i < 16; i += 4)
+      fprintf(f, " %08x", *reinterpret_cast<unsigned *>(sp + i * 4));
+    fprintf(f, "\\n");
     fclose(f);
   }
   return EXCEPTION_CONTINUE_SEARCH;
+}
+
+// Hunts the bot's static type instances in its loaded data: the enum statics are
+// consecutive objects whose first dword is the running enum id (0,1,2,...). The stride
+// between objects is the type's size, and the other dwords are its layout.
+static void MeasureTypes() {
+  FILE *f = fopen("c:\\measure.log", "w");
+  if (!f)
+    return;
+  unsigned char *base = reinterpret_cast<unsigned char *>(0x7b190000);
+  // page-guarded scan of the loaded image for the enum statics: consecutive objects
+  // whose id field runs 0,1,2,... at a regular stride.
+  for (unsigned start = 0x1000; start < 0x75000; start += 4) {
+    MEMORY_BASIC_INFORMATION mbi;
+    if (VirtualQuery(base + start, &mbi, sizeof mbi) != sizeof mbi ||
+        mbi.State != MEM_COMMIT || mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD))
+      continue;
+    for (int S : {4, 8, 12, 16, 20, 24, 28, 32, 40, 48, 64}) {
+      for (int off = 0; off + 4 <= S; off += 4) {
+        int run = 0;
+        for (int i = 0; i < 12; ++i) {
+          unsigned v;
+          memcpy(&v, base + start + off + i * S, 4);
+          if (v == static_cast<unsigned>(i))
+            ++run;
+          else
+            break;
+        }
+        if (run >= 8) {
+          fprintf(f, "run: start=%08x stride=%d idoff=%d n=%d\n", start, S, off, run);
+          for (int i = 0; i < 3; ++i) {
+            fprintf(f, "  obj%d:", i);
+            for (int k = 0; k < S; k += 4) {
+              unsigned v;
+              memcpy(&v, base + start + i * S + k, 4);
+              fprintf(f, " %08x", v);
+            }
+            fprintf(f, "\n");
+          }
+          // the neighborhood: 256 dwords around the run
+          for (int i = -32; i < 96; i += 8) {
+            fprintf(f, "  n%+04x:", i * 4);
+            for (int k = 0; k < 8; ++k) {
+              unsigned v;
+              memcpy(&v, base + start + i * 4 + k * 4, 4);
+              fprintf(f, " %08x", v);
+            }
+            fprintf(f, "\n");
+          }
+        }
+      }
+    }
+  }
+  fclose(f);
 }
 
 static DWORD WINAPI ServePipe(LPVOID p) {  HANDLE hPipe = static_cast<HANDLE>(p);
@@ -330,6 +389,7 @@ int main(int argc, char **argv) {
     printf("[fakehost] exports missing\n");
     return 1;
   }
+  MeasureTypes();
   {
     unsigned char *img = reinterpret_cast<unsigned char *>(GetModuleHandleA("pluto.patched.dll"));
     printf("[fakehost] image bytes at +0x153f: %02x %02x %02x %02x %02x %02x %02x\n",
