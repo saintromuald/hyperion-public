@@ -1,6 +1,6 @@
 # Porting ShieldBattery netcode (rally-point2) into Hyperion
 
-Status: **in progress** (Phases 0–6 done; Phase 7 next) · Branch: `netcode/sb-rally-port` · Owner: saintromuald
+Status: **done through Phase 7** (all gates green; the console toggle and CI game gates remain) · Branch: `netcode/sb-rally-port` · Owner: saintromuald
 
 This document is the ground-up plan for giving Hyperion internet multiplayer by
 integrating ShieldBattery's netcode v2 ("rally-point2"). It records the
@@ -494,5 +494,17 @@ with no manual steps beyond the toolchain installs.
       match, the room mints a 2-slot session, and both seats reach in-game
       lockstep through the relay (the console's `start` now carries the
       match id — the same fix lands in `lan_ref.sh`).
-- [ ] Phase 7: pinning, CI, packaging (and the console's transport toggle,
-      which today's scripted console sets directly).
+- [x] **Phase 7 — packaging, pinning, CI, legal**:
+      - the vendored tree's rev is pinned (`engine/tools/rallypoint2/PINNED.md`,
+        fork `saintromuald/rally-point2`, branch `bridge`, commit `95dd16f`), and
+        `THIRD-PARTY.md` carries the MIT/Apache-2.0 notice and attribution;
+      - `BUILDING.md` has the Rust toolchain requirement, the bridge build and the
+        relay/coordinator runbook;
+      - CI (`.github/workflows/sb-netcode.yml`) builds the workspace, runs the
+        bridge's C ABI test and the command-table conformance check — the parts
+        that need no StarCraft files;
+      - `engine/docs/modules/lan.md` gained the "Online play" section; the parked
+        item is un-parked.
+      Left for later, noted in the docs: the console's transport toggle (the
+      scripted console sets `"transport":"sb"` directly today) and the two-seat
+      gates on CI (they need the game's files).
