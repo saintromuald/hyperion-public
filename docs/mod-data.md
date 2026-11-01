@@ -204,7 +204,8 @@ Fields of the mod's own, not columns:
   base's script, which those frames fit, and the log says so.
 - `requires` (units, techs and upgrades): what a player needs to train the unit, research the tech or upgrade the upgrade, in order, each one met:
   `"broodwar"` (an expansion game), a unit's name (one finished), `{"at": unit}` (the
-  unit that trains it) or `{"tech": tech}` (researched); a list among them is
+  unit that trains it), `{"addon": unit}` (the add-on it must have attached) or
+  `{"tech": tech}` (researched); a list among them is
   alternatives. The Hybrid Reaver's is `[{"at": "protoss_gateway"},
   "protoss_templar_archives"]`, as 1.17 writes the Dark Templar's. A unit without it is
   trained nowhere. A tech with it is researched where its `{"at": building}` says, for its
@@ -291,8 +292,9 @@ same keeps its card.
 
 `position` is the card's slot, 1 to 9, left to right and top to bottom; `train` the mod's
 unit to train, `upgrade` the mod's upgrade to upgrade (shown while its next level is allowed),
-`research` the mod's tech to research (one with `requires`; the button
-shows while the research is allowed, and goes once it is done, as 1.17's do), or `cast` the
+`research` the mod's tech to research, or one of the original's a mod's edit
+gives requirements (the button shows while the research is allowed, and goes
+once it is done, as 1.17's do), or `cast` the
 mod's order to give, which the button gives at once at the
 caster's own place (the button shows while the order's tech's `use_requires` are met), or
 with `"target": true` once the player has aimed it at a unit or a place, as 1.17's spell

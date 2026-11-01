@@ -483,8 +483,7 @@ def graft_requires(mod_dir, tables, names):
                     elif w == 0xFF04:
                         op = run[i + 1] if i + 1 < len(run) else 0
                         i += 2
-                        unsupported.append((graft, subject,
-                                            f"0xFF04 needs addon {op} attached: not expressible yet"))
+                        group.append({"addon": uref(op)})
                     elif w == 0xFF01:
                         i += 1  # the next opcode continues this group
                     elif w < 0xFF00:
@@ -646,9 +645,8 @@ def button_cards(mod_dir, tables, names, repo, researchable=frozenset()):
                     continue  # the vanilla card already trains 1.17's units
                 entry["train"] = uref(act_var)
             elif act_id == kActResearch:
-                if act_var < kV117["techs"] or act_var not in researchable:
-                    continue  # 1.17's techs are on the vanilla card already,
-                    # and the loader needs the tech's research requires
+                if act_var not in researchable:
+                    continue  # the loader needs the tech's research requires
                 entry["research"] = tref(act_var)
             elif act_id == kActUpgrade:
                 if act_var < kV117["upgrades"]:
