@@ -186,7 +186,7 @@ export class UserSocketsGroup extends SocketGroup<UserSocketsGroup> {
 
 export class ClientSocketsGroup extends SocketGroup<ClientSocketsGroup> {
   readonly clientId: string
-  readonly clientType: 'electron' | 'web'
+  readonly clientType: 'electron' | 'web' | 'hyperion'
   readonly developmentClient: boolean
 
   constructor(nydus: NydusServer, session: SessionInfo) {

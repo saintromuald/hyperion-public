@@ -6,7 +6,7 @@ import { NydusServer, NydusServerOptions } from 'nydus'
 import { container, inject, instanceCachingFactory, singleton } from 'tsyringe'
 import registerLobbySocketApi from './lib/lobbies/lobby-socket-api'
 import log from './lib/logging/logger'
-import { isElectronClient } from './lib/network/electron-clients'
+import { isElectronClient, isHyperionClient } from './lib/network/electron-clients'
 import { getSingleQueryParam } from './lib/network/query-param'
 import { CORS_MAX_AGE_SECONDS } from './lib/security/cors'
 import { StateWithJwt } from './lib/session/jwt-session-middleware'
@@ -126,7 +126,7 @@ export class WebsocketServer {
       }
 
       const clientId = getSingleQueryParam(ctx.query.clientId) ?? nanoid()
-      const clientType = isElectronClient(ctx) ? 'electron' : 'web'
+      const clientType = isHyperionClient(ctx) ? 'hyperion' : isElectronClient(ctx) ? 'electron' : 'web'
       const developmentClient = getSingleQueryParam(ctx.query.developmentClient) === 'true'
       if (developmentClient) {
         if (clientType !== 'electron') throw new Error('Development mode requires an app client')

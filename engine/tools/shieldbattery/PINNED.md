@@ -28,13 +28,33 @@ Changes made to the vendored tree, tracked here so a rebase can re-apply them:
 
 - `.gitignore`: `target/` (Rust build output for `server-rs`; upstream's list
   has no Rust ignores because upstream builds Rust outside this tree).
+- `common/games/configuration.ts`: `GameEngine` (`'scr' | 'hyperion'`) and an
+  optional `engine` field on game configs (absent = `scr`).
+- `server/lib/network/electron-clients.ts`: `isHyperionClient` — an
+  `Origin: hyperion://…` connection is a Hyperion engine client.
+- `server/websockets.ts`, `server/lib/websockets/session-lookup.ts`,
+  `server/lib/websockets/socket-groups.ts`: a third `clientType`, `'hyperion'`.
+- `server/lib/matchmaking/matchmaking-api.ts`: `/find` no longer requires
+  `clientPubkey` (Hyperion clients have no netcode v2 session to mint).
+- `server/lib/matchmaking/matchmaking-service.ts`: the queue carries each
+  player's engine (derived from client socket type); Electron clients without
+  a pubkey are refused in the service; mixed-engine matches are refused; the
+  stored game config carries `engine` for Hyperion games.
+- `server/lib/games/game-loader.ts`: Hyperion games never create a netcode v2
+  session; their `localOnly` load completes on the players' own
+  `PUT /:gameId/status` Playing reports (fault for a missing report falls on
+  that player, like a lone-human game's).
+- `server/lib/games/game-api.ts`: `POST /api/1/games/:gameId/results` — the
+  resultCode-authed result submission the Hyperion engine uses instead of a
+  relay webhook; the report validates against
+  `SUBMIT_GAME_RESULTS_REQUEST_SCHEMA` (legacy or raw shape).
 
 ## Rebasing
 
 Copy a fresh clone at the new rev with the same trim:
 
-    rsync -a --exclude .git --exclude app --exclude game --exclude integration \
-        --exclude deployment --exclude server/public \
+    rsync -a --exclude .git --exclude /app --exclude /game --exclude /integration \
+        --exclude /deployment --exclude /server/public \
         <fresh-clone>/ engine/tools/shieldbattery/
 
 then re-apply the delta list above, diff against the previous pinned rev to
