@@ -121,3 +121,15 @@ the obs builder completes and dump/ captures begin.
 - Remaining for the obs capture: the one null-call is the bot's shm-send entry
   (ret=0x7b19d9cd, the wrapper's continuation) — find the gate that initialises its
   send pointer, then dump/ fills with the observation and the schema extraction starts.
+
+## State 2026-11-01 (session 2, final pass of the day)
+
+- The transient null-call is the bot's first engine-launch attempt failing and being
+  retried (its own retry path probes the race before the engine is up); absorbing it is
+  harmless — the launch succeeds on a later attempt.
+- The bot's obs never ships: at run end "BWRL_SHM" does not exist in the host's
+  namespace (err=2), so the bot's per-game shm client is never initialised in the rig.
+  The remaining gate is the bot's send-side init (its client object / the engine's
+  ready event path). Next: trace the onFrame's send path (the slot-numbered call log
+  plus the fault handler's frame walk), find the gate, satisfy it, then dump/ captures
+  the observation per frame and the schema extraction starts.
