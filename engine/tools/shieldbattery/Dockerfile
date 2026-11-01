@@ -1,0 +1,97 @@
+# Get sqlx-cli so we can run migrations (Linux version needs to match what we run on below)
+FROM ghcr.io/shieldbattery/shieldbattery/base:sqlx-tools AS rust-tools
+
+# Install dependencies in a separate stage for better caching
+FROM node:24-bookworm-slim AS deps
+RUN corepack enable
+# By default, `slim` images don't have the necessary tools to install native add-ons, so we use the
+# multistage build to install the necessary tools, and build the dependencies which will then be
+# copied over to the next stage (this stage will be discarded, along with the installed tools, to
+# make the image lighter).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  python3 make g++ git cmake \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /shieldbattery
+# Ensure that we don't spend time installing dependencies that are only needed for the client
+# application.
+ENV SB_SERVER_ONLY=1
+
+# Copy package files first for better caching. pnpm-workspace.yaml is required because it holds our
+# dependency `overrides` (and other pnpm settings); without it `pnpm install --frozen-lockfile` fails
+# with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH since the lockfile records overrides this stage can't see.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+  pnpm install --frozen-lockfile
+
+# Build the server scripts (Linux version needs to match what we run on below)
+FROM deps AS builder
+# Copy the whole repository to the image, *except* the stuff marked in the `.dockerignore` file
+COPY . .
+
+# Prebuild the web client assets so we can simply copy them over
+ENV NODE_ENV=production
+RUN pnpm run build-web-client
+
+# Compile the server ahead of time (after the client build: the compiled tree carries the client
+# shell + public assets alongside the code, see tsdown.server.config.ts)
+RUN pnpm run build-server
+
+# Then prune the server deps to only the production ones
+RUN pnpm prune --prod
+
+
+# Setup the actual image
+FROM node:24-bookworm-slim
+
+# Run pnpm once so we ensure it gets installed by corepack during the container build
+RUN corepack enable && pnpm --version
+
+ENV NODE_ENV=production
+
+# We need python to execute some python scripts (e.g. `s3cmd`). The `s3cmd` package pulls in its own
+# Python dependencies (including python-dateutil).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  bash ca-certificates logrotate jq python3 s3cmd \
+  && rm -rf /var/lib/apt/lists/*
+
+# Set up log rotation
+COPY --from=builder /shieldbattery/server/deployment_files/logrotate.conf /etc/logrotate.d/shieldbattery
+
+# Give the logrotate status file to the node user since the entrypoint runs logrotate as that user.
+RUN touch /var/lib/logrotate.status && chown node:node /var/lib/logrotate.status
+
+# Set the user to `node` for any subsequent `RUN` and `CMD` instructions
+USER node
+
+# Set the working directory to the home directory of the `node` user
+WORKDIR /home/node/shieldbattery
+
+# Copy sqlx binary for migrations
+COPY --chown=node:node --from=rust-tools /usr/local/bin/sqlx tools/sqlx
+
+# Copy the compiled server and the few scripts that run from their source-tree locations. No
+# TypeScript sources or transpiler ship in this image: the server runs ahead-of-time-compiled
+# code from server-dist/.
+COPY --chown=node:node --from=builder /shieldbattery/node_modules ./node_modules
+COPY --chown=node:node --from=builder /shieldbattery/server-dist ./server-dist
+COPY --chown=node:node --from=builder /shieldbattery/migrations ./migrations
+COPY --chown=node:node --from=builder /shieldbattery/package.json ./
+COPY --chown=node:node --from=builder /shieldbattery/server/deployment_files ./server/deployment_files
+COPY --chown=node:node --from=builder /shieldbattery/server/update_server.sh ./server/update_server.sh
+COPY --chown=node:node --from=builder /shieldbattery/server/testing/run_mailgun.sh /shieldbattery/server/testing/run_google_cloud.sh ./server/testing/
+COPY --chown=node:node --from=builder /shieldbattery/server/deployment_files/entrypoint.sh /entrypoint.sh
+
+# Allow the various scripts to be run
+RUN chmod +x ./server/deployment_files/wait.sh ./server/update_server.sh ./server/testing/run_mailgun.sh ./server/testing/run_google_cloud.sh /entrypoint.sh
+
+# Make the various volume locations as the right user (if we let Docker do it they end up owned by
+# root and not writeable)
+RUN mkdir ./server/logs && mkdir ./server/uploaded_files && mkdir ./server/bw_sprite_data
+
+RUN touch /var/lib/logrotate.status
+
+# http (generally reverse-proxied to)
+EXPOSE 5555/tcp
+
+CMD ["/entrypoint.sh"]

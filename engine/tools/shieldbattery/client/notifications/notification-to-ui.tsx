@@ -1,0 +1,226 @@
+import React from 'react'
+import { NotificationType, SbNotification } from '../../common/notifications'
+import { UserRestrictedNotificationUi } from '../auth/user-restricted-notification-ui'
+import {
+  ChannelBanNotificationUi,
+  ChannelClosedNotificationUi,
+  ChannelDeletedNotificationUi,
+  ChannelKickNotificationUi,
+  ChannelUnbanNotificationUi,
+} from '../chat/channel-moderation-notification-ui'
+import { CommendReceivedNotificationUi } from '../games/commend-received-notification-ui'
+import { GamePointsRefundedNotificationUi } from '../games/game-points-refunded-notification-ui'
+import { GameReportActionedNotificationUi } from '../games/game-report-actioned-notification-ui'
+import {
+  LeagueBanNotificationUi,
+  LeagueUnbanNotificationUi,
+} from '../leagues/league-ban-notification-ui'
+import { LeagueStartNotificationUi } from '../leagues/league-start-notification-ui'
+import { logger } from '../logging/logger'
+import { MatchmakingBanNotificationUi } from '../matchmaking/matchmaking-ban-notification-ui'
+import { PolicyUpdateNotificationUi } from '../policies/policy-update-notification-ui'
+import {
+  FriendRequestNotificationUi,
+  FriendStartNotificationUi,
+} from '../social/relationship-notifications'
+
+/**
+ * Returns whether we have a renderable UI for a particular notification. If we don't,
+ * NotificationUi should not be rendered. This is mainly useful for notification types that exist
+ * but are no longer used.
+ */
+export function notificationHasUi(notification: SbNotification) {
+  switch (notification.type) {
+    case NotificationType.PolicyUpdated:
+    case NotificationType.FriendRequest:
+    case NotificationType.FriendStart:
+    case NotificationType.UserRestricted:
+    case NotificationType.LeagueBan:
+    case NotificationType.LeagueUnban:
+    case NotificationType.LeagueStart:
+    case NotificationType.ChannelKick:
+    case NotificationType.ChannelBan:
+    case NotificationType.ChannelUnban:
+    case NotificationType.ChannelClosed:
+    case NotificationType.ChannelDeleted:
+    case NotificationType.GameReportActioned:
+    case NotificationType.GamePointsRefunded:
+    case NotificationType.CommendReceived:
+    case NotificationType.MatchmakingBan:
+      return true
+    case NotificationType.PartyInvite:
+      return false
+    default:
+      notification satisfies never
+      logger.warning(`Unhandled notification type checked for UI: ${(notification as any).type}`)
+      return false
+  }
+}
+
+export interface NotificationUiProps {
+  notification: SbNotification
+  showDivider: boolean
+  ref?: React.Ref<HTMLDivElement>
+}
+
+/**
+ * Converts a notification entry into the relevant UI elements for displaying in a list or as a
+ * popup.
+ */
+export function NotificationUi({ notification, showDivider, ref }: NotificationUiProps) {
+  switch (notification.type) {
+    case NotificationType.PartyInvite:
+      return null
+    case NotificationType.PolicyUpdated:
+      return (
+        <PolicyUpdateNotificationUi
+          ref={ref}
+          showDivider={showDivider}
+          read={notification.read}
+          policyType={notification.policyType}
+        />
+      )
+    case NotificationType.FriendRequest:
+      return (
+        <FriendRequestNotificationUi
+          ref={ref}
+          notificationId={notification.id}
+          showDivider={showDivider}
+          read={notification.read}
+          from={notification.from}
+        />
+      )
+    case NotificationType.FriendStart:
+      return (
+        <FriendStartNotificationUi
+          ref={ref}
+          showDivider={showDivider}
+          read={notification.read}
+          otherUser={notification.with}
+        />
+      )
+    case NotificationType.UserRestricted:
+      return (
+        <UserRestrictedNotificationUi
+          ref={ref}
+          showDivider={showDivider}
+          read={notification.read}
+          kind={notification.kind}
+          endTime={notification.endTime}
+          reason={notification.reason}
+        />
+      )
+    case NotificationType.LeagueBan:
+      return (
+        <LeagueBanNotificationUi
+          ref={ref}
+          showDivider={showDivider}
+          read={notification.read}
+          notification={notification}
+        />
+      )
+    case NotificationType.LeagueUnban:
+      return (
+        <LeagueUnbanNotificationUi
+          ref={ref}
+          showDivider={showDivider}
+          read={notification.read}
+          notification={notification}
+        />
+      )
+    case NotificationType.LeagueStart:
+      return (
+        <LeagueStartNotificationUi
+          ref={ref}
+          showDivider={showDivider}
+          read={notification.read}
+          notification={notification}
+        />
+      )
+    case NotificationType.ChannelKick:
+      return (
+        <ChannelKickNotificationUi
+          ref={ref}
+          showDivider={showDivider}
+          read={notification.read}
+          notification={notification}
+        />
+      )
+    case NotificationType.ChannelBan:
+      return (
+        <ChannelBanNotificationUi
+          ref={ref}
+          showDivider={showDivider}
+          read={notification.read}
+          notification={notification}
+        />
+      )
+    case NotificationType.ChannelUnban:
+      return (
+        <ChannelUnbanNotificationUi
+          ref={ref}
+          showDivider={showDivider}
+          read={notification.read}
+          notification={notification}
+        />
+      )
+    case NotificationType.ChannelClosed:
+      return (
+        <ChannelClosedNotificationUi
+          ref={ref}
+          showDivider={showDivider}
+          read={notification.read}
+          notification={notification}
+        />
+      )
+    case NotificationType.ChannelDeleted:
+      return (
+        <ChannelDeletedNotificationUi
+          ref={ref}
+          showDivider={showDivider}
+          read={notification.read}
+          notification={notification}
+        />
+      )
+    case NotificationType.GameReportActioned:
+      return (
+        <GameReportActionedNotificationUi
+          ref={ref}
+          showDivider={showDivider}
+          read={notification.read}
+        />
+      )
+    case NotificationType.GamePointsRefunded:
+      return (
+        <GamePointsRefundedNotificationUi
+          ref={ref}
+          showDivider={showDivider}
+          read={notification.read}
+        />
+      )
+    case NotificationType.CommendReceived:
+      return (
+        <CommendReceivedNotificationUi
+          ref={ref}
+          commenderId={notification.commenderId}
+          showDivider={showDivider}
+          read={notification.read}
+        />
+      )
+    case NotificationType.MatchmakingBan:
+      return (
+        <MatchmakingBanNotificationUi
+          ref={ref}
+          showDivider={showDivider}
+          read={notification.read}
+          bannedUntil={notification.bannedUntil}
+        />
+      )
+    default:
+      notification satisfies never
+      logger.warning(
+        `Unhandled notification type when converting to UI: ${(notification as any).type}`,
+      )
+      return null
+  }
+}

@@ -1,0 +1,306 @@
+import { RouterContext } from '@koa/router'
+import Joi from 'joi'
+import { container } from 'tsyringe'
+import { assertUnreachable } from '../../../common/assert-unreachable'
+import { SbUserId } from '../../../common/users/sb-user-id'
+import {
+  GetSessionHistoryResponse,
+  GetWhisperConversationsResponse,
+  GetWhisperMessageLinkResponse,
+  GetWhisperSessionsResponse,
+  MarkWhisperReadRequest,
+  SendWhisperMessageRequest,
+  WHISPER_CONVERSATIONS_LIMIT,
+  WhisperServiceErrorCode,
+} from '../../../common/whispers'
+import { makeErrorConverterMiddleware } from '../errors/coded-error'
+import { asHttpError } from '../errors/error-with-payload'
+import { httpApi, httpBeforeAll } from '../http/http-api'
+import { httpBefore, httpDelete, httpGet, httpPost } from '../http/route-decorators'
+import { rolledOutcomeRequestBody } from '../messaging/rolled-outcome-request-schema'
+import ensureLoggedIn from '../session/ensure-logged-in'
+import createThrottle from '../throttle/create-throttle'
+import throttleMiddleware, { throttleByUser } from '../throttle/middleware'
+import { findUserByName } from '../users/user-model'
+import { joiUserId, joiUsername } from '../users/user-validators'
+import { joiTimestampMillis } from '../validation/joi-timestamp'
+import { validateRequest } from '../validation/joi-validator'
+import WhisperService, { WhisperServiceError } from './whisper-service'
+
+const getWhisperSessionsThrottle = createThrottle('whispersessions', {
+  rate: 10,
+  burst: 20,
+  window: 60000,
+})
+
+// Opening a conversation from the whispers page starts its session, so this has to allow clicking
+// through past conversations at a normal pace.
+const startThrottle = createThrottle('whisperstart', {
+  rate: 20,
+  burst: 40,
+  window: 60000,
+})
+
+const closeThrottle = createThrottle('whisperclose', {
+  rate: 10,
+  burst: 20,
+  window: 60000,
+})
+
+const sendThrottle = createThrottle('whispersend', {
+  rate: 30,
+  burst: 90,
+  window: 60000,
+})
+
+const retrievalThrottle = createThrottle('whisperretrieval', {
+  rate: 30,
+  burst: 120,
+  window: 60000,
+})
+
+const markReadThrottle = createThrottle('whispermarkread', {
+  rate: 30,
+  burst: 60,
+  window: 60000,
+})
+
+const convertWhisperServiceErrors = makeErrorConverterMiddleware(err => {
+  if (!(err instanceof WhisperServiceError)) {
+    throw err
+  }
+
+  switch (err.code) {
+    case WhisperServiceErrorCode.UserNotFound:
+    case WhisperServiceErrorCode.MessageNotFound:
+      throw asHttpError(404, err)
+    case WhisperServiceErrorCode.InvalidGetSessionHistoryAction:
+      throw asHttpError(400, err)
+    case WhisperServiceErrorCode.NoSelfMessaging:
+    case WhisperServiceErrorCode.UserChatRestricted:
+      throw asHttpError(403, err)
+    default:
+      assertUnreachable(err.code)
+  }
+})
+
+@httpApi('/whispers')
+@httpBeforeAll(ensureLoggedIn, convertWhisperServiceErrors)
+export class WhisperApi {
+  constructor(private whisperService: WhisperService) {
+    container.resolve(WhisperService)
+  }
+
+  @httpGet('/sessions')
+  @httpBefore(throttleMiddleware(getWhisperSessionsThrottle, throttleByUser))
+  async getWhisperSessions(ctx: RouterContext): Promise<GetWhisperSessionsResponse> {
+    return await this.whisperService.getWhisperSessions(ctx.session!.user.id)
+  }
+
+  @httpGet('/conversations')
+  @httpBefore(throttleMiddleware(retrievalThrottle, throttleByUser))
+  async getConversations(ctx: RouterContext): Promise<GetWhisperConversationsResponse> {
+    const {
+      query: { limit, beforeTime, beforeTarget },
+    } = validateRequest(ctx, {
+      query: Joi.object<{ limit: number; beforeTime?: number; beforeTarget?: SbUserId }>({
+        limit: Joi.number().integer().min(1).max(WHISPER_CONVERSATIONS_LIMIT).required(),
+        beforeTime: joiTimestampMillis().integer().min(0),
+        beforeTarget: joiUserId(),
+      }).and('beforeTime', 'beforeTarget'),
+    })
+
+    return await this.whisperService.getConversations(
+      ctx.session!.user.id,
+      limit,
+      beforeTime !== undefined && beforeTarget !== undefined
+        ? { lastMessageTime: beforeTime, targetId: beforeTarget }
+        : undefined,
+    )
+  }
+
+  @httpPost('/by-name/:targetName')
+  @httpBefore(throttleMiddleware(startThrottle, throttleByUser))
+  async startWhisperSessionByName(ctx: RouterContext): Promise<{ userId: SbUserId }> {
+    const {
+      params: { targetName },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ targetName: string }>({
+        targetName: joiUsername().required(),
+      }),
+    })
+
+    const targetUser = await findUserByName(targetName)
+
+    if (!targetUser) {
+      throw new WhisperServiceError(WhisperServiceErrorCode.UserNotFound, 'user not found')
+    }
+
+    await this.whisperService.startWhisperSession(ctx.session!.user.id, targetUser.id)
+
+    return { userId: targetUser.id }
+  }
+
+  @httpPost('/:targetId')
+  @httpBefore(throttleMiddleware(startThrottle, throttleByUser))
+  async startWhisperSessionById(ctx: RouterContext): Promise<void> {
+    const {
+      params: { targetId },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ targetId: SbUserId }>({
+        targetId: joiUserId().required(),
+      }),
+    })
+
+    await this.whisperService.startWhisperSession(ctx.session!.user.id, targetId)
+
+    ctx.status = 204
+  }
+
+  @httpDelete('/:targetId')
+  @httpBefore(throttleMiddleware(closeThrottle, throttleByUser))
+  async closeWhisperSession(ctx: RouterContext): Promise<void> {
+    const {
+      params: { targetId },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ targetId: SbUserId }>({
+        targetId: joiUserId().required(),
+      }),
+    })
+
+    await this.whisperService.closeWhisperSession(ctx.session!.user.id, targetId)
+
+    ctx.status = 204
+  }
+
+  @httpPost('/:targetId/messages')
+  @httpBefore(throttleMiddleware(sendThrottle, throttleByUser))
+  async sendWhisperMessage(ctx: RouterContext): Promise<void> {
+    const {
+      params: { targetId },
+      body: { message, emote },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ targetId: SbUserId }>({
+        targetId: joiUserId().required(),
+      }),
+      body: Joi.object<SendWhisperMessageRequest>({
+        message: Joi.string().min(1).required(),
+        emote: Joi.boolean(),
+      }),
+    })
+
+    await this.whisperService.sendWhisperMessage(ctx.session!.user.id, targetId, message, {
+      emote,
+    })
+
+    ctx.status = 204
+  }
+
+  @httpPost('/:targetId/outcomes')
+  @httpBefore(throttleMiddleware(sendThrottle, throttleByUser))
+  async sendOutcome(ctx: RouterContext): Promise<void> {
+    const {
+      params: { targetId },
+      body,
+    } = validateRequest(ctx, {
+      params: Joi.object<{ targetId: SbUserId }>({
+        targetId: joiUserId().required(),
+      }),
+      body: rolledOutcomeRequestBody,
+    })
+
+    await this.whisperService.sendOutcome(ctx.session!.user.id, targetId, body)
+
+    ctx.status = 204
+  }
+
+  @httpPost('/:targetId/mark-read')
+  @httpBefore(throttleMiddleware(markReadThrottle, throttleByUser))
+  async markWhisperRead(ctx: RouterContext): Promise<void> {
+    const {
+      params: { targetId },
+      body: { lastReadTime },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ targetId: SbUserId }>({
+        targetId: joiUserId().required(),
+      }),
+      body: Joi.object<MarkWhisperReadRequest>({
+        lastReadTime: joiTimestampMillis().integer().min(0).required(),
+      }),
+    })
+
+    await this.whisperService.markRead(ctx.session!.user.id, targetId, new Date(lastReadTime))
+
+    ctx.status = 204
+  }
+
+  // Leaving the old API with a dummy payload in order to not break the auto-update functionality
+  // for old clients.
+  // Last used: 8.0.2 (November 2021)
+  @httpGet('/:targetName/messages')
+  @httpBefore(throttleMiddleware(retrievalThrottle, throttleByUser))
+  getSessionHistoryOld(
+    ctx: RouterContext,
+  ): Omit<
+    GetSessionHistoryResponse,
+    'mentions' | 'channelMentions' | 'deletedChannels' | 'hasMoreBefore' | 'hasMoreAfter'
+  > {
+    return {
+      messages: [],
+      users: [],
+    }
+  }
+
+  @httpGet('/:targetId/messages2')
+  @httpBefore(throttleMiddleware(retrievalThrottle, throttleByUser))
+  async getSessionHistory(ctx: RouterContext): Promise<GetSessionHistoryResponse> {
+    const {
+      params: { targetId },
+      query: { limit, beforeTime, afterTime, aroundTime, aroundMessageId },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ targetId: SbUserId }>({
+        targetId: joiUserId().required(),
+      }),
+      query: Joi.object<{
+        limit: number
+        beforeTime?: number
+        afterTime?: number
+        aroundTime?: number
+        aroundMessageId?: string
+      }>({
+        limit: Joi.number().min(1).max(100),
+        beforeTime: joiTimestampMillis().min(-1),
+        afterTime: joiTimestampMillis().min(0),
+        aroundTime: joiTimestampMillis().min(0),
+        aroundMessageId: Joi.string().uuid(),
+      }).oxor('beforeTime', 'afterTime', 'aroundTime', 'aroundMessageId'),
+    })
+
+    return await this.whisperService.getSessionHistory(
+      ctx.session!.user.id,
+      targetId,
+      limit,
+      beforeTime,
+      afterTime,
+      aroundTime,
+      aroundMessageId,
+    )
+  }
+
+  // The literal `message-links` first segment can never be matched by the `:targetId` routes above
+  // (a user id is numeric, but more to the point their second path segment is a different literal,
+  // e.g. `messages2`), so this doesn't need to be registered ahead of them to win a conflict.
+  @httpGet('/message-links/:messageId')
+  @httpBefore(throttleMiddleware(retrievalThrottle, throttleByUser))
+  async getMessageLinkTarget(ctx: RouterContext): Promise<GetWhisperMessageLinkResponse> {
+    const {
+      params: { messageId },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ messageId: string }>({
+        messageId: Joi.string().uuid().required(),
+      }),
+    })
+
+    return await this.whisperService.getMessageLinkTarget(ctx.session!.user.id, messageId)
+  }
+}

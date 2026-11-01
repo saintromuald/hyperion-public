@@ -1,0 +1,915 @@
+import { Immutable } from 'immer'
+import * as React from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import styled from 'styled-components'
+import { ReadonlyDeep } from 'type-fest'
+import { useQuery } from 'urql'
+import { assertUnreachable } from '../../common/assert-unreachable'
+import { GameRecordJson } from '../../common/games/games'
+import { getRankedTypesByActivity } from '../../common/ladder/ladder'
+import { MatchmakingSeasonJson, SeasonId } from '../../common/matchmaking'
+import { RaceChar } from '../../common/races'
+import { SbUser } from '../../common/users/sb-user'
+import { SbUserId } from '../../common/users/sb-user-id'
+import { UserProfileJson } from '../../common/users/user-network'
+import { useHasAnyPermission } from '../admin/admin-permissions'
+import { useSelfUser } from '../auth/auth-utils'
+import { ConnectedAvatar } from '../avatars/avatar'
+import { CommendIcon } from '../games/commend-icon'
+import { graphql } from '../gql'
+import TwitchIcon from '../icons/brands/twitch.svg?react'
+import { RaceIcon } from '../lobbies/race-icon'
+import { FilledButton, IconButton } from '../material/button'
+import { usePopoverController, useRefAnchorPosition } from '../material/popover'
+import { TabItem, Tabs } from '../material/tabs'
+import { Tooltip } from '../material/tooltip'
+import { CopyLinkButton } from '../navigation/copy-link-button'
+import { useScrollMemory } from '../navigation/router-hooks'
+import { replace } from '../navigation/routing'
+import { LoadingDotsArea } from '../progress/dots'
+import { useAppDispatch, useAppSelector } from '../redux-hooks'
+import { CenteredContentContainer } from '../styles/centered-container'
+import { selectableTextContainer } from '../styles/text-selection'
+import {
+  bodyLarge,
+  bodySmall,
+  headlineLarge,
+  labelLarge,
+  labelMedium,
+  labelSmall,
+  singleLine,
+  titleLarge,
+  TitleMedium,
+  titleSmall,
+} from '../styles/typography'
+import {
+  LivePill,
+  TWITCH_PURPLE,
+  TwitchMark,
+  UptimePill,
+  ViewerCountPill,
+} from '../twitch/live-indicators'
+import { LIVE_STREAMS_POLL_INTERVAL_MS, useQueryPolling } from '../twitch/live-state'
+import {
+  correctUsernameForProfile,
+  navigateToUserProfile,
+  updateExpandedRanksUrlParam,
+  useIsExpandedRanksRequested,
+  viewUserProfile,
+} from './action-creators'
+import { AvailabilityDot } from './availability'
+import { ExpandableRankDisplays } from './expandable-rank-displays'
+import { ConnectedMatchHistory } from './match-history'
+import { MiniMatchHistory } from './mini-match-history'
+import { ConnectedUserContextMenu } from './user-context-menu'
+import { UserProfileSeasons } from './user-profile-seasons'
+import { UserProfileSubPage } from './user-profile-sub-page'
+import { UserRankDisplay } from './user-rank-display'
+
+const LoadableAdminUserPageLayout = React.lazy(async () => ({
+  default: (await import('./admin/admin-layout')).AdminUserPageLayout,
+}))
+
+// Split out because it pulls in recharts, which is by some way the largest thing in the
+// bundle. Only visitors who open the Stats tab should pay for it.
+const LoadableUserProfileStats = React.lazy(async () => ({
+  default: (await import('./user-profile-stats')).UserProfileStats,
+}))
+
+const LoadingError = styled.div`
+  ${bodyLarge};
+  width: 100%;
+  margin-top: 40px;
+  margin-bottom: 48px;
+  padding: 0 24px;
+`
+
+export interface ConnectedUserProfilePageProps {
+  userId: SbUserId
+  username: string
+  subPage?: UserProfileSubPage
+}
+
+export function ConnectedUserProfilePage({
+  userId,
+  username: usernameFromRoute,
+  subPage = UserProfileSubPage.Summary,
+}: ConnectedUserProfilePageProps) {
+  if (isNaN(userId)) {
+    replace('/')
+  }
+
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const user = useAppSelector(s => s.users.byId.get(userId))
+  const profile = useAppSelector(s => s.users.idToProfile.get(userId))
+  const matchHistory = useAppSelector(s => s.users.idToMatchHistory.get(userId)) ?? []
+  const isAdmin = useHasAnyPermission('editPermissions', 'banUsers')
+  const seasons = useAppSelector(s => s.matchmakingSeasons.byId)
+
+  const [loadingError, setLoadingError] = useState<Error>()
+  const cancelLoadRef = useRef(new AbortController())
+
+  // TODO(tec27): Move this inside the summary tab instead?
+  useEffect(() => {
+    cancelLoadRef.current.abort()
+    const abortController = new AbortController()
+    cancelLoadRef.current = abortController
+
+    dispatch(
+      viewUserProfile(userId, {
+        signal: abortController.signal,
+        onSuccess: () => setLoadingError(undefined),
+        onError: err => setLoadingError(err),
+      }),
+    )
+
+    return () => {
+      abortController.abort()
+    }
+  }, [userId, user, dispatch])
+
+  useEffect(() => {
+    if (user && usernameFromRoute !== user.name) {
+      correctUsernameForProfile(user.id, user.name)
+    }
+  }, [usernameFromRoute, user])
+
+  useEffect(() => {
+    if (subPage === UserProfileSubPage.Admin && !isAdmin) {
+      navigateToUserProfile(userId, usernameFromRoute, UserProfileSubPage.Summary, replace)
+    }
+  }, [subPage, isAdmin, userId, usernameFromRoute])
+
+  if (loadingError) {
+    // TODO(tec27): Handle specific errors, e.g. not found vs server error
+    return (
+      <LoadingError>
+        {t('users.errors.profile.loadUser', 'There was a problem loading this user.')}
+      </LoadingError>
+    )
+  }
+  if (!user || !profile) {
+    return <LoadingDotsArea />
+  }
+
+  return (
+    <UserProfilePage
+      user={user}
+      profile={profile}
+      matchHistory={matchHistory}
+      subPage={subPage}
+      onTabChange={(tab: UserProfileSubPage) => {
+        navigateToUserProfile(user?.id ?? userId, user?.name ?? '_', tab)
+      }}
+      isAdmin={isAdmin}
+      seasons={seasons}
+    />
+  )
+}
+
+const TopSection = styled.div`
+  height: 100px;
+  width: 100%;
+  margin-top: 24px;
+  margin-bottom: 32px;
+  padding: 0 24px;
+
+  display: flex;
+  align-items: center;
+`
+
+const AvatarCircle = styled.div<{ $isLive?: boolean }>`
+  width: 100px;
+  height: 100px;
+  flex-shrink: 0;
+  position: relative;
+
+  background-color: var(--color-blue30);
+  border: 12px solid ${props => (props.$isLive ? 'var(--theme-live)' : 'var(--color-blue40)')};
+  border-radius: 50%;
+`
+
+const StyledAvatar = styled(ConnectedAvatar)`
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  top: calc(50% - 28px);
+  left: calc(50% - 28px);
+`
+
+/** Sized up from the default so it stays in proportion with this page's larger avatar. */
+const ProfileAvailabilityDot = styled(AvailabilityDot)`
+  width: 20px;
+  height: 20px;
+  max-width: 20px;
+  max-height: 20px;
+`
+
+const LiveBadge = styled.div`
+  ${labelSmall};
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+
+  display: flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+
+  border-radius: 10px;
+  background-color: var(--theme-live);
+  color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+`
+
+/**
+ * One 24px row under the title, shared by the commend count and the Twitch link. `TopSection` is a
+ * fixed 100px tall, and the name row (48px, set by the copy-link button), the title (24px) and this
+ * row (4px + 24px) fill it exactly, so anything else added to the header needs to fit in here rather
+ * than go on a row of its own.
+ */
+const ProfileMetaRow = styled.div`
+  height: 24px;
+  margin-top: 4px;
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+  gap: 16px;
+`
+
+const CommendBox = styled.div`
+  ${labelLarge};
+  height: 24px;
+  padding: 0 8px 0 6px;
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  background-color: var(--theme-container);
+  border: 1px solid var(--theme-outline-variant);
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+`
+
+const CommendBoxIcon = styled(CommendIcon).attrs({ size: 18 })`
+  color: var(--theme-amber);
+`
+
+const TwitchChannelLink = styled.a`
+  ${bodyLarge};
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  &,
+  &:link,
+  &:visited {
+    color: var(--theme-on-surface-variant);
+  }
+
+  &:hover {
+    color: var(--theme-on-surface);
+  }
+`
+
+const TwitchChannelName = styled.span`
+  ${singleLine};
+`
+
+const TwitchChannelIcon = styled(TwitchIcon)`
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: ${TWITCH_PURPLE};
+`
+
+const UserProfileHeaderQuery = graphql(/* GraphQL */ `
+  query UserProfileHeader($userId: SbUserId!) {
+    user(id: $userId) {
+      id
+      commendCount
+      twitchChannel {
+        id
+        twitchLogin
+        twitchDisplayName
+      }
+      liveStream {
+        id
+        twitchLogin
+        title
+        gameName
+        viewerCount
+        startedAt
+        thumbnailUrl
+      }
+    }
+  }
+`)
+
+const UsernameAndTitle = styled.div`
+  ${selectableTextContainer};
+  flex-grow: 1;
+  min-width: 0;
+  margin-left: 24px;
+`
+
+const ProfileMenuButton = styled(IconButton)`
+  align-self: flex-start;
+  flex-shrink: 0;
+  margin-left: 16px;
+`
+
+function UserProfileActions({ userId }: { userId: SbUserId }) {
+  const { t } = useTranslation()
+  const [anchorRef, anchorX, anchorY, refreshAnchorPos] = useRefAnchorPosition('right', 'top')
+  const [menuOpen, openMenu, closeMenu] = usePopoverController({ refreshAnchorPos })
+
+  return (
+    <>
+      <ProfileMenuButton
+        ref={anchorRef}
+        icon='more_vert'
+        title={t('users.profile.moreActions', 'More actions')}
+        ariaHasPopup='menu'
+        ariaExpanded={menuOpen}
+        onClick={openMenu}
+      />
+      <ConnectedUserContextMenu
+        userId={userId}
+        variant='profile'
+        popoverProps={{
+          open: menuOpen,
+          onDismiss: closeMenu,
+          anchorX: anchorX ?? 0,
+          anchorY: anchorY ?? 0,
+          originX: 'right',
+          originY: 'top',
+        }}
+      />
+    </>
+  )
+}
+
+const UsernameRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`
+
+const Username = styled.div`
+  ${headlineLarge};
+  ${singleLine};
+  /* Allows the username to shrink (truncating with an ellipsis) so the copy-link button next to
+     it stays visible even for very long names. */
+  min-width: 0;
+  color: var(--theme-amber);
+`
+
+const TabArea = styled.div`
+  width: 100%;
+  max-width: 720px;
+  margin-bottom: 24px;
+  padding: 0 24px;
+`
+
+const BottomSpacer = styled.div`
+  height: 24px;
+`
+
+export interface UserProfilePageProps {
+  user: SbUser
+  profile: UserProfileJson
+  matchHistory: Immutable<GameRecordJson[]>
+  subPage?: UserProfileSubPage
+  onTabChange: (tab: UserProfileSubPage) => void
+  isAdmin: boolean
+  seasons: ReadonlyDeep<Map<SeasonId, MatchmakingSeasonJson>>
+}
+
+export function UserProfilePage({
+  user,
+  profile,
+  matchHistory,
+  subPage = UserProfileSubPage.Summary,
+  onTabChange,
+  isAdmin,
+  seasons,
+}: UserProfilePageProps) {
+  const { t } = useTranslation()
+  const selfUser = useSelfUser()
+  // TODO(tec27): Build the title feature :)
+  const title = t('users.titles.novice', 'Novice')
+
+  const [scrollerElem, setScrollerElem] = useState<HTMLDivElement | null>(null)
+  // The match history list remembers and restores this container's scroll position itself.
+  useScrollMemory(subPage === UserProfileSubPage.MatchHistory ? null : scrollerElem)
+
+  // `suspense: false` so a first (uncached) fetch doesn't suspend the profile page (blanking it
+  // behind a loading fallback) just to resolve the commend count and the optional Twitch
+  // channel/live state -- these render in once they arrive. The poll below keeps the Live
+  // badge/banner consistent with the app-wide avatar badges, which refresh on their own interval.
+  const [{ data: headerData }, reexecuteHeaderQuery] = useQuery({
+    query: UserProfileHeaderQuery,
+    variables: { userId: user.id },
+    context: { suspense: false },
+  })
+  useQueryPolling(reexecuteHeaderQuery, LIVE_STREAMS_POLL_INTERVAL_MS)
+  const commendCount = headerData?.user?.commendCount
+  const commendCountLabel = t('users.profile.commendCount', {
+    defaultValue: '{{count}} commends',
+    defaultValue_one: '{{count}} commend',
+    count: commendCount ?? 0,
+  })
+  const twitchChannel = headerData?.user?.twitchChannel
+  const liveStream = headerData?.user?.liveStream ?? undefined
+  const isLive = !!liveStream
+
+  let content: React.ReactNode
+  switch (subPage) {
+    case UserProfileSubPage.Summary:
+      content = (
+        <SummaryPage user={user} profile={profile} matchHistory={matchHistory} seasons={seasons} />
+      )
+      break
+
+    case UserProfileSubPage.MatchHistory:
+      // Keyed by user id so switching to a different user's profile remounts the list instead of
+      // carrying over the previous user's accumulated games and scroll-restore window.
+      content = <ConnectedMatchHistory key={user.id} userId={user.id} scrollParent={scrollerElem} />
+      break
+
+    case UserProfileSubPage.Stats:
+      content = (
+        <React.Suspense fallback={<LoadingDotsArea />}>
+          <LoadableUserProfileStats userId={user.id} profile={profile} seasons={seasons} />
+        </React.Suspense>
+      )
+      break
+
+    case UserProfileSubPage.Seasons:
+      content = <UserProfileSeasons user={user} />
+      break
+
+    case UserProfileSubPage.Admin:
+      // Parent component should navigate away from this page in a useEffect if not admin, so null
+      // is fine in that case
+      content = isAdmin ? (
+        <React.Suspense fallback={<LoadingDotsArea />}>
+          <LoadableAdminUserPageLayout user={user} />
+        </React.Suspense>
+      ) : null
+      break
+
+    default:
+      content = assertUnreachable(subPage)
+  }
+
+  return (
+    <CenteredContentContainer ref={setScrollerElem}>
+      <TopSection>
+        <AvatarCircle $isLive={isLive}>
+          <StyledAvatar userId={user.id} showLiveIndicator={false} />
+          <ProfileAvailabilityDot userId={user.id} showOffline={true} />
+          {isLive ? <LiveBadge>{t('users.profile.twitch.liveBadge', 'Live')}</LiveBadge> : null}
+        </AvatarCircle>
+        <UsernameAndTitle>
+          <UsernameRow>
+            <Username>{user.name}</Username>
+            <CopyLinkButton
+              tooltipPosition='right'
+              startingText={t('users.profile.copyLink', 'Copy link to profile')}
+            />
+          </UsernameRow>
+          <TitleMedium>{title}</TitleMedium>
+          <ProfileMetaRow>
+            {commendCount !== undefined ? (
+              <Tooltip text={commendCountLabel} position='bottom'>
+                <CommendBox aria-label={commendCountLabel}>
+                  <CommendBoxIcon />
+                  {commendCount}
+                </CommendBox>
+              </Tooltip>
+            ) : null}
+            {twitchChannel ? (
+              <TwitchChannelLink
+                href={`https://twitch.tv/${twitchChannel.twitchLogin}`}
+                target='_blank'
+                rel='noopener'>
+                <TwitchChannelIcon />
+                <TwitchChannelName>{twitchChannel.twitchDisplayName}</TwitchChannelName>
+              </TwitchChannelLink>
+            ) : null}
+          </ProfileMetaRow>
+        </UsernameAndTitle>
+        {selfUser && selfUser.id !== user.id ? (
+          <UserProfileActions key={user.id} userId={user.id} />
+        ) : null}
+      </TopSection>
+
+      {liveStream ? (
+        <ProfileLiveBanner
+          twitchLogin={liveStream.twitchLogin}
+          title={liveStream.title}
+          gameName={liveStream.gameName}
+          viewerCount={liveStream.viewerCount}
+          thumbnailUrl={liveStream.thumbnailUrl}
+          startedAt={liveStream.startedAt}
+        />
+      ) : null}
+
+      <TabArea>
+        <Tabs activeTab={subPage} onChange={onTabChange}>
+          <TabItem
+            value={UserProfileSubPage.Summary}
+            text={t('users.profile.tabs.summary', 'Summary')}
+          />
+          <TabItem value={UserProfileSubPage.Stats} text={t('users.profile.tabs.stats', 'Stats')} />
+          <TabItem
+            value={UserProfileSubPage.MatchHistory}
+            text={t('users.profile.tabs.matchHistory', 'Match history')}
+          />
+          <TabItem
+            value={UserProfileSubPage.Seasons}
+            text={t('users.profile.tabs.season', 'Seasons')}
+          />
+          {isAdmin ? (
+            <TabItem
+              value={UserProfileSubPage.Admin}
+              text={t('users.profile.tabs.admin', 'Admin')}
+            />
+          ) : null}
+        </Tabs>
+      </TabArea>
+
+      {content}
+      <BottomSpacer />
+    </CenteredContentContainer>
+  )
+}
+
+const LiveBannerContainer = styled.div`
+  width: 100%;
+  max-width: 720px;
+  margin: 0 0 32px;
+  padding: 0 24px;
+`
+
+const LiveBannerRoot = styled.a`
+  display: flex;
+  gap: 14px;
+  padding: 12px;
+
+  border: 1px solid rgba(224, 29, 60, 0.35);
+  border-radius: 8px;
+  background:
+    linear-gradient(100deg, var(--theme-live-container), transparent 70%),
+    var(--theme-container-low);
+  color: inherit;
+  text-decoration: none;
+  contain: content;
+
+  &:link,
+  &:visited {
+    color: inherit;
+  }
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--theme-live);
+    text-decoration: none;
+    outline: none;
+  }
+`
+
+const BannerThumb = styled.div`
+  position: relative;
+  width: 176px;
+  aspect-ratio: 16 / 9;
+  flex-shrink: 0;
+
+  border-radius: 6px;
+  overflow: hidden;
+`
+
+const BannerThumbImg = styled.img`
+  display: block;
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+  background-color: var(--theme-container-highest);
+`
+
+const BannerViewerCorner = styled.div`
+  position: absolute;
+  top: 6px;
+  right: 6px;
+`
+
+const BannerUptimeCorner = styled.div`
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+`
+
+const BannerBody = styled.div`
+  min-width: 0;
+  flex: 1;
+
+  display: flex;
+  flex-direction: column;
+`
+
+const BannerTop = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const BannerCategory = styled.div`
+  ${bodySmall};
+  ${singleLine};
+  color: var(--theme-on-surface-variant);
+`
+
+const BannerMark = styled.div`
+  margin-left: auto;
+`
+
+const BannerTitle = styled.div`
+  ${titleSmall};
+  margin-top: 8px;
+
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+`
+
+const BannerFoot = styled.div`
+  margin-top: auto;
+  padding-top: 10px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+`
+
+const BannerViewers = styled.div`
+  ${bodySmall};
+  color: var(--theme-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+`
+
+export function ProfileLiveBanner({
+  twitchLogin,
+  title,
+  gameName,
+  viewerCount,
+  thumbnailUrl,
+  startedAt,
+}: {
+  twitchLogin: string
+  title: string
+  gameName: string
+  viewerCount: number
+  thumbnailUrl: string
+  startedAt: string
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <LiveBannerContainer>
+      <LiveBannerRoot href={`https://twitch.tv/${twitchLogin}`} target='_blank' rel='noopener'>
+        <BannerThumb>
+          <BannerThumbImg src={thumbnailUrl} alt='' loading='lazy' />
+          <BannerViewerCorner>
+            <ViewerCountPill count={viewerCount} />
+          </BannerViewerCorner>
+          <BannerUptimeCorner>
+            <UptimePill startedAt={startedAt} />
+          </BannerUptimeCorner>
+        </BannerThumb>
+        <BannerBody>
+          <BannerTop>
+            <LivePill />
+            <BannerCategory>{gameName}</BannerCategory>
+            <BannerMark>
+              <TwitchMark />
+            </BannerMark>
+          </BannerTop>
+          <BannerTitle>{title}</BannerTitle>
+          <BannerFoot>
+            <BannerViewers>
+              {t('twitch.liveStreams.viewers', '{{count}} watching', { count: viewerCount })}
+            </BannerViewers>
+            <FilledButton
+              styledAs='div'
+              label={t('twitch.live.watch', 'Watch stream')}
+              iconStart='play_arrow'
+            />
+          </BannerFoot>
+        </BannerBody>
+      </LiveBannerRoot>
+    </LiveBannerContainer>
+  )
+}
+
+const SectionOverline = styled.div`
+  ${labelMedium};
+  ${singleLine};
+  color: var(--theme-on-surface-variant);
+  margin: 12px 24px;
+`
+
+const RankedSection = styled(ExpandableRankDisplays)`
+  padding: 0 24px;
+  margin-bottom: 48px;
+`
+
+const TotalGamesSection = styled.div`
+  padding: 0 24px;
+  margin-bottom: 48px;
+
+  display: flex;
+  align-items: center;
+`
+
+const TotalGamesSpacer = styled.div`
+  width: 8px;
+  height: 1px;
+  flex-grow: 1;
+`
+
+const EmptyListText = styled.div`
+  ${bodyLarge};
+  margin: 0 24px;
+  color: var(--theme-on-surface-variant);
+`
+
+interface RaceStats {
+  race: RaceChar
+  wins: number
+  losses: number
+}
+
+function SummaryPage({
+  user,
+  profile,
+  matchHistory,
+  seasons,
+}: {
+  user: SbUser
+  profile: UserProfileJson
+  matchHistory: Immutable<GameRecordJson[]>
+  seasons: ReadonlyDeep<Map<SeasonId, MatchmakingSeasonJson>>
+}) {
+  const { t } = useTranslation()
+
+  const stats = profile.userStats
+  const pStats: RaceStats = {
+    race: 'p',
+    wins: stats.pWins + stats.rPWins,
+    losses: stats.pLosses + stats.rPLosses,
+  }
+  const tStats: RaceStats = {
+    race: 't',
+    wins: stats.tWins + stats.rTWins,
+    losses: stats.tLosses + stats.rTLosses,
+  }
+  const zStats: RaceStats = {
+    race: 'z',
+    wins: stats.zWins + stats.rZWins,
+    losses: stats.zLosses + stats.rZLosses,
+  }
+  const sortedStats = [pStats, tStats, zStats].sort(
+    (a, b) => b.wins + b.losses - (a.wins + a.losses),
+  )
+
+  const hasAnyRanks = getRankedTypesByActivity(profile.ladder).length > 0
+  const expandedRanks = useIsExpandedRanksRequested()
+
+  return (
+    <>
+      {hasAnyRanks && (
+        <RankedSection
+          ladder={profile.ladder}
+          expanded={expandedRanks}
+          onExpandedChange={updateExpandedRanksUrlParam}>
+          {(matchmakingType, ladderPlayer) => (
+            <UserRankDisplay
+              matchmakingType={matchmakingType}
+              ladderPlayer={ladderPlayer}
+              season={seasons.get(profile.seasonId)!}
+            />
+          )}
+        </RankedSection>
+      )}
+
+      <SectionOverline>{t('users.profile.totalGames', 'Total games')}</SectionOverline>
+      <TotalGamesSection>
+        {sortedStats.map((s, i) => (
+          <React.Fragment key={s.race}>
+            {i > 0 ? <TotalGamesSpacer /> : null}
+            <TotalGamesEntry race={s.race} wins={s.wins} losses={s.losses} />
+          </React.Fragment>
+        ))}
+      </TotalGamesSection>
+
+      <SectionOverline>{t('users.profile.latestGames', 'Latest games')}</SectionOverline>
+      <MiniMatchHistory forUserId={user.id} games={matchHistory} />
+
+      <SectionOverline>{t('users.profile.achievements', 'Achievements')}</SectionOverline>
+      <EmptyListText>{t('common.lists.empty', 'Nothing to see here')}</EmptyListText>
+    </>
+  )
+}
+
+const TotalGamesEntryRoot = styled.div`
+  flex-shrink: 1;
+
+  display: flex;
+  align-items: center;
+`
+
+const RaceCircle = styled.div`
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  position: relative;
+  margin-right: 12px;
+
+  background-color: var(--color-blue30);
+  border: 6px solid var(--color-blue40);
+  border-radius: 50%;
+`
+
+const RaceCircleIcon = styled(RaceIcon)`
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  top: calc(50% - 20px);
+  left: calc(50% - 20px);
+
+  fill: var(--theme-on-surface);
+`
+
+const TotalGamesText = styled.div`
+  ${titleLarge};
+  ${singleLine};
+`
+
+const WinLossText = styled.div`
+  ${labelMedium};
+  color: var(--theme-on-surface-variant);
+`
+
+function TotalGamesEntry({ race, wins, losses }: { race: RaceChar; wins: number; losses: number }) {
+  const { t } = useTranslation()
+
+  const total = wins + losses
+  const winrate = total > 0 ? Math.round((wins * 100 * 10) / total) / 10 : 0
+
+  let raceText: string
+  switch (race) {
+    case 'p':
+      raceText = t('game.race.protoss', 'Protoss')
+      break
+    case 't':
+      raceText = t('game.race.terran', 'Terran')
+      break
+    case 'z':
+      raceText = t('game.race.zerg', 'Zerg')
+      break
+    case 'r':
+      raceText = t('game.race.random', 'Random')
+      break
+    default:
+      raceText = assertUnreachable(race)
+  }
+
+  return (
+    <TotalGamesEntryRoot>
+      <RaceCircle>
+        <RaceCircleIcon race={race} ariaLabel={raceText} />
+      </RaceCircle>
+      <div>
+        <TotalGamesText>{wins + losses}</TotalGamesText>
+        <WinLossText>
+          {wins} {t('game.results.winShort', 'W')} &ndash; {losses}{' '}
+          {t('game.results.lossShort', 'L')} &ndash; {winrate}%
+        </WinLossText>
+      </div>
+    </TotalGamesEntryRoot>
+  )
+}

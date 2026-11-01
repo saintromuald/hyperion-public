@@ -1,0 +1,348 @@
+import { describe, expect, test } from 'vitest'
+import { GameSource } from '../../common/games/configuration'
+import { GameType } from '../../common/games/game-type'
+import { GameRecordJson } from '../../common/games/games'
+import { makeSbMapId } from '../../common/maps'
+import { RaceChar } from '../../common/races'
+import { ReplayLibraryEntry, ReplayLibraryPlayer } from '../../common/replays-library'
+import { makeSbUserId } from '../../common/users/sb-user-id'
+import {
+  encodeViewPathname,
+  getGameRecordUserIds,
+  getReplayDisplayTeams,
+  groupReplaysByDay,
+  isManualPlaylistOrder,
+  parseViewPathname,
+  playersToDisplayTeams,
+  shouldShowTeamLabels,
+} from './replay-library-helpers'
+
+function makePlayer(
+  overrides: Partial<ReplayLibraryPlayer> & { slot: number; team: number; race: RaceChar },
+): ReplayLibraryPlayer {
+  return {
+    name: `player-${overrides.slot}`,
+    isComputer: false,
+    ...overrides,
+  }
+}
+
+function makeEntry(id: number, gameTime: number): ReplayLibraryEntry {
+  return {
+    id,
+    path: `C:\\replays\\${id}.rep`,
+    fileName: `${id}.rep`,
+    fileSize: 1000,
+    gameTime,
+    mapName: 'Fighting Spirit',
+    gameType: 2,
+    durationFrames: 24 * 600,
+    parseError: false,
+    players: [],
+  }
+}
+
+/** Mirrors `makeParseErrorRecord`: zeroed `gameTime`/`durationFrames`, `parseError: true`. */
+function makeParseErrorEntry(id: number): ReplayLibraryEntry {
+  return {
+    id,
+    path: `C:\\replays\\${id}.rep`,
+    fileName: `${id}.rep`,
+    fileSize: 1000,
+    gameTime: 0,
+    mapName: '',
+    gameType: 2,
+    durationFrames: 0,
+    parseError: true,
+    players: [],
+  }
+}
+
+describe('getReplayDisplayTeams', () => {
+  test('splits a single team of two into a 1v1', () => {
+    const players = [
+      makePlayer({ slot: 0, team: 1, race: 't' }),
+      makePlayer({ slot: 1, team: 1, race: 'z' }),
+    ]
+    const layout = getReplayDisplayTeams(players)
+    expect(layout.kind).toBe('oneVsOne')
+    expect(layout.teams).toHaveLength(2)
+    expect(layout.teams[0]).toHaveLength(1)
+    expect(layout.teams[1]).toHaveLength(1)
+    expect(shouldShowTeamLabels(layout)).toBe(false)
+  })
+
+  test('keeps two explicit teams as-is', () => {
+    const players = [
+      makePlayer({ slot: 0, team: 1, race: 't' }),
+      makePlayer({ slot: 1, team: 1, race: 't' }),
+      makePlayer({ slot: 2, team: 2, race: 'z' }),
+      makePlayer({ slot: 3, team: 2, race: 'z' }),
+    ]
+    const layout = getReplayDisplayTeams(players)
+    expect(layout.kind).toBe('teams')
+    expect(layout.teams.map(t => t.length)).toEqual([2, 2])
+    expect(shouldShowTeamLabels(layout)).toBe(true)
+  })
+
+  test('orders teams by team number', () => {
+    const players = [
+      makePlayer({ slot: 0, team: 3, race: 'z' }),
+      makePlayer({ slot: 1, team: 1, race: 't' }),
+    ]
+    const layout = getReplayDisplayTeams(players)
+    // Two singleton teams => kept as teams, ordered by team number.
+    expect(layout.kind).toBe('teams')
+    expect(layout.teams[0][0].team).toBe(1)
+    expect(layout.teams[1][0].team).toBe(3)
+  })
+
+  test('treats many singleton teams as an unlabeled FFA', () => {
+    const players = [
+      makePlayer({ slot: 0, team: 1, race: 't' }),
+      makePlayer({ slot: 1, team: 2, race: 'z' }),
+      makePlayer({ slot: 2, team: 3, race: 'p' }),
+      makePlayer({ slot: 3, team: 4, race: 't' }),
+    ]
+    const layout = getReplayDisplayTeams(players)
+    expect(layout.kind).toBe('teams')
+    expect(layout.teams).toHaveLength(4)
+    expect(shouldShowTeamLabels(layout)).toBe(false)
+  })
+
+  test('balances an unsplittable single team across two columns', () => {
+    const players = [
+      makePlayer({ slot: 0, team: 1, race: 't' }),
+      makePlayer({ slot: 1, team: 1, race: 'z' }),
+      makePlayer({ slot: 2, team: 1, race: 'p' }),
+    ]
+    const layout = getReplayDisplayTeams(players)
+    expect(layout.kind).toBe('flat')
+    expect(layout.teams.map(t => t.length)).toEqual([2, 1])
+    expect(shouldShowTeamLabels(layout)).toBe(false)
+  })
+
+  test('renders a lone player as a single column', () => {
+    const players = [makePlayer({ slot: 0, team: 1, race: 'p' })]
+    const layout = getReplayDisplayTeams(players)
+    expect(layout.kind).toBe('flat')
+    expect(layout.teams).toHaveLength(1)
+    expect(layout.teams[0]).toHaveLength(1)
+  })
+})
+
+function makeGameRecord(config: Partial<GameRecordJson['config']>): GameRecordJson {
+  return {
+    id: 'game-id',
+    startTime: 0,
+    mapId: makeSbMapId('map-id'),
+    config: {
+      gameSource: GameSource.Lobby,
+      gameType: GameType.Melee,
+      gameSubType: 0,
+      teams: [],
+      ...config,
+    } as GameRecordJson['config'],
+    disputable: false,
+    disputeRequested: false,
+    disputeReviewed: false,
+    gameLength: null,
+    results: null,
+    selectedMatchup: null,
+    assignedMatchup: null,
+    manuallyResolved: false,
+  }
+}
+
+describe('getGameRecordUserIds', () => {
+  test('is empty without a game record', () => {
+    expect(getGameRecordUserIds(undefined).size).toBe(0)
+  })
+
+  test('includes human players and observers but not computers', () => {
+    const game = makeGameRecord({
+      teams: [
+        [
+          { id: makeSbUserId(1), race: 't', isComputer: false },
+          { id: makeSbUserId(2), race: 'z', isComputer: true },
+        ],
+        [{ id: makeSbUserId(3), race: 'p', isComputer: false }],
+      ],
+      observers: [makeSbUserId(4)],
+    })
+    expect([...getGameRecordUserIds(game)].toSorted()).toEqual([
+      makeSbUserId(1),
+      makeSbUserId(3),
+      makeSbUserId(4),
+    ])
+  })
+
+  test('tolerates records without an observers field', () => {
+    const game = makeGameRecord({
+      teams: [[{ id: makeSbUserId(1), race: 't', isComputer: false }]],
+    })
+    expect([...getGameRecordUserIds(game)]).toEqual([makeSbUserId(1)])
+  })
+})
+
+describe('playersToDisplayTeams', () => {
+  const computerLabel = 'Computer'
+
+  test('uses the in-replay name and omits userId by default', () => {
+    const layout = getReplayDisplayTeams([
+      makePlayer({ slot: 0, team: 1, race: 't', name: 'raw-name', sbUserId: makeSbUserId(1) }),
+    ])
+    const teams = playersToDisplayTeams(layout, computerLabel)
+    expect(teams[0][0].name).toBe('raw-name')
+    expect(teams[0][0].userId).toBeUndefined()
+  })
+
+  test('includes the userId alongside the raw name when it is in linkedUserIds', () => {
+    const layout = getReplayDisplayTeams([
+      makePlayer({ slot: 0, team: 1, race: 't', name: 'raw-name', sbUserId: makeSbUserId(1) }),
+    ])
+    const teams = playersToDisplayTeams(layout, computerLabel, new Set([makeSbUserId(1)]))
+    expect(teams[0][0].name).toBe('raw-name')
+    expect(teams[0][0].userId).toBe(makeSbUserId(1))
+  })
+
+  test('omits the userId when it is not in linkedUserIds', () => {
+    const layout = getReplayDisplayTeams([
+      makePlayer({ slot: 0, team: 1, race: 't', name: 'raw-name', sbUserId: makeSbUserId(1) }),
+    ])
+    const teams = playersToDisplayTeams(layout, computerLabel, new Set([makeSbUserId(2)]))
+    expect(teams[0][0].name).toBe('raw-name')
+    expect(teams[0][0].userId).toBeUndefined()
+  })
+
+  test('omits the userId for players without an sbUserId even when linkedUserIds is provided', () => {
+    const layout = getReplayDisplayTeams([
+      makePlayer({ slot: 0, team: 1, race: 't', name: 'bnet-name' }),
+    ])
+    const teams = playersToDisplayTeams(layout, computerLabel, new Set([makeSbUserId(1)]))
+    expect(teams[0][0].name).toBe('bnet-name')
+    expect(teams[0][0].userId).toBeUndefined()
+  })
+
+  test('always shows the computer label and omits userId for computer players', () => {
+    const layout = getReplayDisplayTeams([
+      makePlayer({
+        slot: 0,
+        team: 1,
+        race: 't',
+        name: 'Computer',
+        isComputer: true,
+        sbUserId: makeSbUserId(1),
+      }),
+    ])
+    const teams = playersToDisplayTeams(layout, computerLabel, new Set([makeSbUserId(1)]))
+    expect(teams[0][0].name).toBe(computerLabel)
+    expect(teams[0][0].userId).toBeUndefined()
+  })
+})
+
+describe('groupReplaysByDay', () => {
+  test('buckets consecutive entries by local calendar day, newest-first', () => {
+    // Use local-time constructors so the expectation matches the machine's timezone.
+    const day1Evening = new Date(2024, 4, 10, 21, 30).getTime()
+    const day1Morning = new Date(2024, 4, 10, 8, 15).getTime()
+    const day2 = new Date(2024, 4, 9, 12, 0).getTime()
+
+    const entries = [makeEntry(3, day1Evening), makeEntry(2, day1Morning), makeEntry(1, day2)]
+    const groups = groupReplaysByDay(entries)
+
+    expect(groups).toHaveLength(2)
+    expect(groups[0].entries.map(e => e.id)).toEqual([3, 2])
+    expect(groups[1].entries.map(e => e.id)).toEqual([1])
+    expect(groups[0].dayStartMs).toBe(new Date(2024, 4, 10, 0, 0, 0, 0).getTime())
+    expect(groups[1].dayStartMs).toBe(new Date(2024, 4, 9, 0, 0, 0, 0).getTime())
+  })
+
+  test('returns no groups for an empty list', () => {
+    expect(groupReplaysByDay([])).toEqual([])
+  })
+
+  test('trailing parse-error entries land in a single unreadable group after the day groups', () => {
+    const day1 = new Date(2024, 4, 10, 21, 30).getTime()
+    const day2 = new Date(2024, 4, 9, 12, 0).getTime()
+
+    const entries = [
+      makeEntry(3, day1),
+      makeEntry(2, day2),
+      makeParseErrorEntry(102),
+      makeParseErrorEntry(101),
+    ]
+    const groups = groupReplaysByDay(entries)
+
+    expect(groups).toHaveLength(3)
+    expect(groups[0].entries.map(e => e.id)).toEqual([3])
+    expect(groups[1].entries.map(e => e.id)).toEqual([2])
+    expect(groups[2].unreadable).toBe(true)
+    expect(groups[2].entries.map(e => e.id)).toEqual([102, 101])
+  })
+
+  test('a list of only parse-error entries yields just the unreadable group', () => {
+    const entries = [makeParseErrorEntry(2), makeParseErrorEntry(1)]
+    const groups = groupReplaysByDay(entries)
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0].unreadable).toBe(true)
+    expect(groups[0].entries.map(e => e.id)).toEqual([2, 1])
+  })
+})
+
+describe('parseViewPathname / encodeViewPathname', () => {
+  test('parses "/replays" and "/replays/" as the "all" view', () => {
+    expect(parseViewPathname('/replays')).toEqual({ kind: 'all' })
+    expect(parseViewPathname('/replays/')).toEqual({ kind: 'all' })
+  })
+
+  test('parses "/replays/bookmarked" and its trailing-slash form as the bookmarked view', () => {
+    expect(parseViewPathname('/replays/bookmarked')).toEqual({ kind: 'bookmarked' })
+    expect(parseViewPathname('/replays/bookmarked/')).toEqual({ kind: 'bookmarked' })
+  })
+
+  test('parses "/replays/playlists/<id>" as a playlist view', () => {
+    expect(parseViewPathname('/replays/playlists/42')).toEqual({ kind: 'playlist', id: 42 })
+  })
+
+  test('falls back to "all" for a playlists subpath missing an id', () => {
+    expect(parseViewPathname('/replays/playlists')).toEqual({ kind: 'all' })
+  })
+
+  test('falls back to "all" for a malformed playlist id', () => {
+    expect(parseViewPathname('/replays/playlists/notanumber')).toEqual({ kind: 'all' })
+  })
+
+  test('falls back to "all" for an unrecognized subpath', () => {
+    expect(parseViewPathname('/replays/something-else')).toEqual({ kind: 'all' })
+  })
+
+  test('encodes each view kind to its canonical pathname', () => {
+    expect(encodeViewPathname({ kind: 'all' })).toBe('/replays')
+    expect(encodeViewPathname({ kind: 'bookmarked' })).toBe('/replays/bookmarked')
+    expect(encodeViewPathname({ kind: 'playlist', id: 42 })).toBe('/replays/playlists/42')
+  })
+
+  test('round-trips a playlist view through encode then parse', () => {
+    expect(parseViewPathname(encodeViewPathname({ kind: 'playlist', id: 7 }))).toEqual({
+      kind: 'playlist',
+      id: 7,
+    })
+  })
+})
+
+describe('isManualPlaylistOrder', () => {
+  test('is true only for a playlist view with no explicit sort', () => {
+    expect(isManualPlaylistOrder({ kind: 'playlist', id: 1 }, '')).toBe(true)
+  })
+
+  test('is false when a sort is explicitly chosen', () => {
+    expect(isManualPlaylistOrder({ kind: 'playlist', id: 1 }, 'latest')).toBe(false)
+  })
+
+  test('is false for non-playlist views', () => {
+    expect(isManualPlaylistOrder({ kind: 'all' }, '')).toBe(false)
+    expect(isManualPlaylistOrder({ kind: 'bookmarked' }, '')).toBe(false)
+  })
+})

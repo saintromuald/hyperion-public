@@ -1,0 +1,823 @@
+import * as React from 'react'
+import { useTranslation } from 'react-i18next'
+import styled from 'styled-components'
+import { ReadonlyDeep } from 'type-fest'
+import { ServerChatMessageType } from '../../common/chat'
+import { ChatDisplayMode } from '../../common/settings/account-settings'
+import { UserRelationshipJson } from '../../common/users/relationships'
+import { SbUserId } from '../../common/users/sb-user-id'
+import { useSelfUser } from '../auth/auth-utils'
+import { observeResize } from '../dom/dimension-hooks'
+import InfiniteScrollList from '../lists/infinite-scroll-list'
+import { animationFrameHandler } from '../material/animation-frame-handler'
+import { useAppSelector } from '../redux-hooks'
+import { selectableTextContainer } from '../styles/text-selection'
+import { bodyLarge } from '../styles/typography'
+import { captureChatViewAnchor, chatViewAnchorStore } from './chat-view-anchor'
+import {
+  BlockedMessage,
+  NewDayMessage,
+  TextMessage,
+  TextMessageLayout,
+  UNREAD_LINE_SELECTOR,
+  UnreadLineMessage,
+} from './common-message-layout'
+import { LocalLineMessage } from './local-line-message'
+import {
+  CommonMessageType,
+  CommonNewDayMessage,
+  isServerOriginMessage,
+  SbMessage,
+} from './message-records'
+import { WhisperEchoMessage } from './whisper-echo-message'
+
+/**
+ * Returns the index of the message the unread divider should be rendered in front of, or -1 if the
+ * divider shouldn't be rendered. That's the first message with a server-recorded time newer than
+ * the given read position; messages that only exist on the client can't be compared against it at
+ * all, and a message at exactly the read position has been read.
+ *
+ * When every loaded server message is newer than the read position and more history exists, the
+ * true boundary lies above the loaded window, so no index is returned — rendering the divider at
+ * the top of the window would misrepresent where the unread messages start. Loading more history
+ * eventually brings a read message (or the very beginning) into the window, at which point the
+ * divider gets a real position.
+ */
+export function findUnreadLineIndex(
+  messages: ReadonlyArray<SbMessage>,
+  unreadLineTime: number | undefined,
+  hasMoreHistory: boolean | undefined,
+): number {
+  if (unreadLineTime === undefined) {
+    return -1
+  }
+
+  const index = messages.findIndex(m => isServerOriginMessage(m) && m.time > unreadLineTime)
+  if (index === -1) {
+    return -1
+  }
+
+  const hasReadMessageAbove = messages.slice(0, index).some(m => isServerOriginMessage(m))
+  return hasReadMessageAbove || !hasMoreHistory ? index : -1
+}
+
+function isSameDay(d1: Date, d2: Date) {
+  return (
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+  )
+}
+
+/** Whether a message is a text message sent by a user the viewer has blocked. */
+function isBlockedTextMessage(
+  message: SbMessage,
+  blockedUsers: ReadonlyDeep<Map<SbUserId, UserRelationshipJson>>,
+): boolean {
+  return (
+    (message.type === CommonMessageType.TextMessage ||
+      message.type === ServerChatMessageType.TextMessage) &&
+    blockedUsers.has(message.from)
+  )
+}
+
+/**
+ * The longest gap between two messages from one author that still lets the later one continue the
+ * earlier one's group in the cozy display mode.
+ */
+export const CHAT_GROUPING_WINDOW_MS = 5 * 60 * 1000
+
+/** The last message of a cozy group, which the next message may continue. */
+export interface CozyGroupTail {
+  userId: SbUserId
+  time: number
+}
+
+/**
+ * Decides how a message is laid out in the cozy display mode, given the tail of the group before
+ * it. Only plain text messages from unblocked authors take part in grouping: they continue the
+ * group before them when it's the same author's and the gap is within `CHAT_GROUPING_WINDOW_MS`,
+ * and start a new group otherwise. Everything else (action lines, blocked messages, system lines,
+ * lines only this user sees) gets no cozy layout and ends the group, as does a divider rendered in
+ * front of the message.
+ */
+export function cozyLayoutFor(
+  message: SbMessage,
+  prev: CozyGroupTail | undefined,
+  hasDividerBefore: boolean,
+  blockedUsers: ReadonlyDeep<Map<SbUserId, UserRelationshipJson>>,
+): { layout: TextMessageLayout | undefined; next: CozyGroupTail | undefined } {
+  if (
+    message.type !== CommonMessageType.TextMessage &&
+    message.type !== ServerChatMessageType.TextMessage
+  ) {
+    return { layout: undefined, next: undefined }
+  }
+  const isActionLine =
+    ('emote' in message && message.emote === true) ||
+    ('outcome' in message && message.outcome !== undefined)
+  if (isActionLine || blockedUsers.has(message.from)) {
+    return { layout: undefined, next: undefined }
+  }
+
+  const continuesGroup =
+    !hasDividerBefore &&
+    prev !== undefined &&
+    prev.userId === message.from &&
+    message.time - prev.time <= CHAT_GROUPING_WINDOW_MS
+
+  return {
+    layout: continuesGroup ? 'cozyContinuation' : 'cozyHeader',
+    next: { userId: message.from, time: message.time },
+  }
+}
+
+/** A message a list renders, along with the dividers that go in front of it. */
+export interface MessageListEntry {
+  message: SbMessage
+  newDayBefore: boolean
+  unreadLineBefore: boolean
+  /** How the message is laid out in the cozy display mode, see `cozyLayoutFor`. */
+  layout: TextMessageLayout | undefined
+}
+
+/**
+ * Works out what a message list renders: which messages show, which dividers go in front of them
+ * and how text messages are laid out.
+ *
+ * With `hideBlocked`, text messages from blocked users are left out entirely and everything else is
+ * placed as if they had never been sent: a day holding only hidden messages gets no divider, an
+ * unread divider that would go in front of a hidden message goes in front of the next rendered one
+ * instead, and a hidden message doesn't break a cozy group. A hidden message has still been read,
+ * though, so it still shows the unread boundary falls within the loaded window.
+ */
+export function layoutMessageList(
+  messages: ReadonlyArray<SbMessage>,
+  {
+    unreadLineTime,
+    hasMoreHistory,
+    blockedUsers,
+    hideBlocked,
+    cozy,
+  }: {
+    unreadLineTime: number | undefined
+    hasMoreHistory: boolean | undefined
+    blockedUsers: ReadonlyDeep<Map<SbUserId, UserRelationshipJson>>
+    hideBlocked: boolean
+    cozy: boolean
+  },
+): MessageListEntry[] {
+  const isHidden = (m: SbMessage) => hideBlocked && isBlockedTextMessage(m, blockedUsers)
+
+  const unreadLineIndex = findUnreadLineIndex(messages, unreadLineTime, hasMoreHistory)
+  const unreadLineMessage =
+    unreadLineIndex === -1 ? undefined : messages.slice(unreadLineIndex).find(m => !isHidden(m))
+
+  const entries: MessageListEntry[] = []
+  let prev: SbMessage | undefined
+  let cozyTail: CozyGroupTail | undefined
+  for (const message of messages) {
+    if (isHidden(message)) {
+      continue
+    }
+
+    const newDayBefore = !!prev && !isSameDay(new Date(prev.time), new Date(message.time))
+    const unreadLineBefore = message === unreadLineMessage
+    let layout: TextMessageLayout | undefined
+    if (cozy) {
+      const cozyResult = cozyLayoutFor(
+        message,
+        cozyTail,
+        newDayBefore || unreadLineBefore,
+        blockedUsers,
+      )
+      layout = cozyResult.layout
+      cozyTail = cozyResult.next
+    }
+
+    entries.push({ message, newDayBefore, unreadLineBefore, layout })
+    prev = message
+  }
+
+  return entries
+}
+
+/**
+ * How many pixels a user can be away from the bottom of the scrollable area and still be
+ * considered "at the bottom" for the purposes of autoscrolling.
+ */
+const AUTOSCROLL_LEEWAY_PX = 8
+
+/**
+ * Whether a scroller counts as sitting at the bottom of its content. Everything that acts on "the
+ * user is caught up" has to agree on this, so it's the one definition: an exact comparison would
+ * disagree with it, since scroll offsets can be fractional (at fractional display scaling, say)
+ * while the heights they're compared against are not.
+ */
+export function isScrolledToBottom(scroller: HTMLElement): boolean {
+  return scroller.scrollTop + scroller.clientHeight + AUTOSCROLL_LEEWAY_PX >= scroller.scrollHeight
+}
+
+const Scrollable = styled.div`
+  padding: 8px 16px 0px 8px;
+  overflow-y: auto;
+  /**
+    This component fully manages its own scroll position (pinning to the bottom, compensating for
+    prepended history). Browser scroll anchoring fights that: e.g. when messages are trimmed from
+    the top while pinned to the bottom, it adjusts the scroll position to keep the old content in
+    view, silently unpinning the list.
+  */
+  overflow-anchor: none;
+`
+
+const EmptyList = styled.div`
+  ${bodyLarge};
+  padding: 32px 16px 48px;
+
+  color: var(--theme-on-surface-variant);
+  text-align: center;
+`
+
+const Messages = styled.div`
+  ${selectableTextContainer}
+`
+
+function CommonMessageOrFallback({
+  message,
+  selfUserId,
+  blockedUsers,
+  FallbackComponent,
+  layout,
+}: {
+  message: SbMessage
+  selfUserId: SbUserId
+  blockedUsers: ReadonlyDeep<Map<SbUserId, UserRelationshipJson>>
+  FallbackComponent?: MessageComponentType
+  /** How a text message is laid out, see `TextMessageLayout`. */
+  layout?: TextMessageLayout
+}) {
+  switch (message.type) {
+    case CommonMessageType.NewDayMessage:
+      return <NewDayMessage key={message.id} time={message.time} />
+    case CommonMessageType.LocalLine:
+      return <LocalLineMessage key={message.id} kind={message.kind} content={message.content} />
+    case CommonMessageType.WhisperEcho:
+      return <WhisperEchoMessage key={message.id} message={message} />
+    // TODO(2Pac): Reconcile these types into one when everything is moved to immer
+    case CommonMessageType.TextMessage:
+    case ServerChatMessageType.TextMessage: {
+      // Several text message shapes share this type value, and only the ones that come from a
+      // surface with a `/me` command carry an action-line flag or a server-settled outcome.
+      const emote = 'emote' in message && message.emote === true
+      const outcome = 'outcome' in message ? message.outcome : undefined
+      // TODO(tec27): Would probably be nice to collect adjacent blocked messages into a single
+      // item?
+      return blockedUsers.has(message.from) ? (
+        <BlockedMessage
+          key={message.id}
+          msgId={message.id}
+          userId={message.from}
+          selfUserId={selfUserId}
+          time={message.time}
+          text={message.text}
+          emote={emote}
+          outcome={outcome}
+        />
+      ) : (
+        <TextMessage
+          key={message.id}
+          msgId={message.id}
+          userId={message.from}
+          selfUserId={selfUserId}
+          time={message.time}
+          text={message.text}
+          emote={emote}
+          outcome={outcome}
+          layout={layout}
+        />
+      )
+    }
+    default:
+      return FallbackComponent ? (
+        <FallbackComponent
+          key={message.id}
+          message={message}
+          blockedUsers={blockedUsers}
+          selfUserId={selfUserId}
+        />
+      ) : null
+  }
+}
+
+interface PureMessageListProps {
+  messages: ReadonlyArray<SbMessage>
+  showEmptyState: boolean
+  MessageComponent?: MessageComponentType
+  unreadLineTime?: number
+  hasMoreHistory?: boolean
+  /** Whether more history is currently being requested for this list. */
+  loading?: boolean
+  /** Whether the older edge is showing an error for a history request that failed. */
+  hasHistoryError: boolean
+  displayMode?: ChatDisplayMode
+}
+
+function PureMessageList({
+  messages,
+  showEmptyState,
+  MessageComponent,
+  unreadLineTime,
+  hasMoreHistory,
+  loading,
+  hasHistoryError,
+  displayMode,
+}: PureMessageListProps) {
+  const { t } = useTranslation()
+  const selfUser = useSelfUser()
+  const blocks = useAppSelector(s => s.relationships.blocks)
+  const accountDisplayMode = useAppSelector(s => s.settings.account.chatDisplayMode)
+  const hideBlocked = useAppSelector(s => s.settings.account.hideBlockedMessages)
+  const effectiveDisplayMode = displayMode ?? accountDisplayMode
+
+  // Message lists only exist behind a login in the real app, but /dev pages mount outside that
+  // gate and can render one with no session — show nothing there rather than crash.
+  if (!selfUser) {
+    return undefined
+  }
+  const selfUserId = selfUser.id
+
+  const entries = layoutMessageList(messages, {
+    unreadLineTime,
+    hasMoreHistory,
+    blockedUsers: blocks,
+    hideBlocked,
+    cozy: effectiveDisplayMode === 'cozy',
+  })
+
+  if (entries.length < 1) {
+    if (loading || hasHistoryError) {
+      // The surrounding infinite scroll list is already accounting for the empty window at its
+      // edge — a loader saying messages are on their way, or an error row saying they couldn't be
+      // had. Empty state text alongside either would read as a contradiction.
+      return undefined
+    }
+    if (messages.length > 0 && hasMoreHistory) {
+      // Everything loaded is hidden, which says nothing about the older history still to come.
+      return undefined
+    }
+    return showEmptyState ? (
+      <EmptyList>{t('common.lists.empty', 'Nothing to see here')}</EmptyList>
+    ) : undefined
+  }
+
+  return (
+    <Messages>
+      {entries.map(({ message: m, newDayBefore, unreadLineBefore, layout }) => {
+        const messageLayout = (
+          <CommonMessageOrFallback
+            key={m.id}
+            message={m}
+            selfUserId={selfUserId}
+            blockedUsers={blocks}
+            FallbackComponent={MessageComponent}
+            layout={layout}
+          />
+        )
+
+        if (!newDayBefore && !unreadLineBefore) {
+          return messageLayout
+        }
+
+        const dividers: React.ReactNode[] = []
+        if (newDayBefore) {
+          const newDayMessage: CommonNewDayMessage = {
+            id: m.time + '-' + CommonMessageType.NewDayMessage,
+            type: CommonMessageType.NewDayMessage,
+            time: m.time,
+          }
+
+          dividers.push(
+            <CommonMessageOrFallback
+              key={'newday-' + m.id}
+              message={newDayMessage}
+              selfUserId={selfUserId}
+              blockedUsers={blocks}
+            />,
+          )
+        }
+        if (unreadLineBefore) {
+          dividers.push(<UnreadLineMessage key={'unread-' + m.id} />)
+        }
+
+        return [...dividers, messageLayout]
+      })}
+    </Messages>
+  )
+}
+
+export interface MessageComponentProps {
+  message: SbMessage
+  selfUserId: SbUserId
+  blockedUsers: ReadonlyDeep<Map<SbUserId, UserRelationshipJson>>
+}
+
+/** Component type to render a particular message. */
+export type MessageComponentType = React.ComponentType<MessageComponentProps>
+
+/** What brought a message list scroll update about. */
+export type ScrollUpdateReason =
+  /**
+   * The list mounted and pinned itself to the bottom. A mount always starts there, so anyone who
+   * wants the viewport somewhere else has to hear about every one of them. Mounts aren't in
+   * one-to-one correspondence with conversations — a remount that reuses the owner's state (as
+   * development StrictMode does) would otherwise pin to the bottom with nobody left to place the
+   * viewport again.
+   */
+  | 'mount'
+  /**
+   * The scroller emitted a scroll event. Scrolling the list from code emits these as well, so an
+   * update for this reason is not by itself the user moving the viewport.
+   */
+  | 'scroll'
+  /** The list's content changed, and the list has placed the viewport within the new content. */
+  | 'content'
+  /**
+   * The scroller changed size, and the list has placed the viewport within the new one. Nothing
+   * about the content changed, but everything measured against the viewport (how far from the
+   * bottom the list sits, what part of it the unread divider falls in) has to be read again.
+   */
+  | 'resize'
+
+export interface MessageListProps {
+  messages: ReadonlyArray<SbMessage>
+  /** Whether to show empty state text when they are no messages. Defaults to true. */
+  showEmptyState?: boolean
+  /**
+   * Content shown above the oldest message once the beginning of the history is loaded, marking
+   * where the conversation starts.
+   */
+  historyStartContent?: React.ReactNode
+  /**
+   * Component type which will be used to render each message that is not a common message type. If
+   * not provided, only common messages will be rendered.
+   */
+  MessageComponent?: MessageComponentType
+  className?: string
+  /** Whether we are currently requesting more history for this message list. */
+  loading?: boolean
+  /** Whether this message list has more history available that could be requested. */
+  hasMoreHistory?: boolean
+  /**
+   * Whether messages newer than the loaded window exist, that is, whether the window is detached
+   * from the present.
+   */
+  hasNewerMessages?: boolean
+  /**
+   * A value that changes exactly when the loaded window is replaced or dropped wholesale (rather
+   * than having messages added at one of its ends). On such an update the list leaves the viewport
+   * alone — there's no previous content to hold in view — and whoever asked for the swap places it.
+   */
+  windowGeneration?: number
+  /** Whether we are currently requesting newer messages for this message list. */
+  loadingNewer?: boolean
+  /**
+   * Content rendered at the older edge in place of the loading indicator when that edge's last
+   * request failed. While it's set, the edge isn't requested automatically, so whatever retry it
+   * offers is the only thing that asks for that page again.
+   */
+  historyError?: React.ReactNode
+  /**
+   * Content rendered at the newer edge in place of the loading indicator when that edge's last
+   * request failed. While it's set, the edge isn't requested automatically, so whatever retry it
+   * offers is the only thing that asks for that page again.
+   */
+  newerError?: React.ReactNode
+  /**
+   * A value that changes when the values the list is displaying change, e.g. if the list is now
+   * displaying a different chat channel.
+   */
+  refreshToken?: unknown
+  /**
+   * Callback whenever the scroll position or scroll height has been updated (debounced to
+   * animation frames), told what brought the update about.
+   */
+  onScrollUpdate?: (scrollTarget: EventTarget, reason: ScrollUpdateReason) => void
+  onLoadMoreMessages?: () => void
+  onLoadNewerMessages?: () => void
+  /**
+   * The read position (epoch millis) the unread divider should be placed at, if the list should
+   * show one. The divider goes in front of the first message with a server-recorded time newer
+   * than this.
+   */
+  unreadLineTime?: number
+  /**
+   * Key identifying the conversation being displayed, under which the reading position the user
+   * leaves it at is saved. Surfaces whose chat is only meaningful for as long as it's on screen
+   * (lobby chat, say) leave this unset, which turns saving off entirely.
+   */
+  viewStateKey?: string
+  /**
+   * Whether the list is still on its way to the saved reading position for the given key rather
+   * than showing it. Reading a position out of the DOM while that's true would overwrite the saved
+   * one with a position the user never chose.
+   */
+  isRestorePending?: (viewStateKey: string) => boolean
+  /**
+   * How text messages are displayed, overriding the user's account setting. Surfaces that show
+   * chat for inspection rather than conversation (the admin channel viewer, say) pin this.
+   */
+  displayMode?: ChatDisplayMode
+}
+
+interface MessageListSnapshot {
+  /** Whether the user was scrolled to the bottom of the content before the last update. */
+  wasAtBottom: boolean
+  /** What the scroll offset from top of the content was before the last update. */
+  lastScrollTop: number
+  /** What the scroll height of the content was before the last update. */
+  lastScrollHeight: number
+  /** Whether an unread divider that this update removes sat entirely above the viewport. */
+  removedUnreadLineAboveViewport: boolean
+}
+
+export class MessageList extends React.Component<MessageListProps> {
+  private scrollableRef = React.createRef<HTMLDivElement>()
+  private unobserveResize: (() => void) | undefined
+  /**
+   * Whether the list sat at the bottom of its content as of the last thing that moved it. A
+   * scroller that shrinks takes the bottom of the content out of view without touching the scroll
+   * offset, so by the time the shrink can be observed the scroller already reads as scrolled away
+   * from the bottom; only a value recorded beforehand says whether the user was caught up.
+   */
+  private wasAtBottom = true
+  /**
+   * The scroller's size as of the last observation acted on, so an observation that reports the
+   * size it already had (the one every observer delivers when it starts) moves nothing.
+   */
+  private lastSize: { width: number; height: number } | undefined
+
+  private onScroll = animationFrameHandler(target => {
+    if (target && this.props.onScrollUpdate) {
+      this.props.onScrollUpdate(target, 'scroll')
+    }
+    this.recordAtBottom()
+  })
+
+  override componentWillUnmount() {
+    this.onScroll.cancel()
+    this.unobserveResize?.()
+    this.unobserveResize = undefined
+
+    if (this.props.viewStateKey !== undefined) {
+      this.saveViewState(this.props.viewStateKey, this.props.messages)
+    }
+  }
+
+  /**
+   * Records where the viewport has ended up, for the next resize to decide from. Everything that
+   * moves the list calls this once the move (and whatever the owner does in response to hearing
+   * about it) is done.
+   */
+  private recordAtBottom() {
+    const scrollable = this.scrollableRef.current
+    if (scrollable) {
+      this.wasAtBottom = isScrolledToBottom(scrollable)
+    }
+  }
+
+  /**
+   * Puts a list that was following the conversation back at the bottom after the scroller changes
+   * size. A shrinking scroller (the chat input growing to a second line, the window getting
+   * shorter) otherwise leaves the newest message clipped off the bottom edge, and far enough past
+   * the at-bottom leeway that the list stops following new messages entirely.
+   *
+   * A list the user has scrolled up in is left exactly where they put it, and a move that hasn't
+   * landed yet is left armed: a resize brings it no closer, so it still finishes on the content
+   * update that can carry it.
+   */
+  private onResize = () => {
+    const scrollable = this.scrollableRef.current
+    if (!scrollable) {
+      return
+    }
+
+    const size = { width: scrollable.clientWidth, height: scrollable.clientHeight }
+    if (this.lastSize?.width === size.width && this.lastSize.height === size.height) {
+      return
+    }
+    this.lastSize = size
+
+    if (this.wasAtBottom) {
+      scrollable.scrollTop = scrollable.scrollHeight
+    }
+
+    this.props.onScrollUpdate?.(scrollable, 'resize')
+    this.recordAtBottom()
+  }
+
+  /**
+   * Records where the user is reading in a conversation, so returning to it can pick up there.
+   * Being at the bottom is the position message lists open at anyway, so it's stored as the absence
+   * of an entry.
+   */
+  private saveViewState(viewStateKey: string, messages: ReadonlyArray<SbMessage>) {
+    const scrollable = this.scrollableRef.current
+    if (!scrollable || this.props.isRestorePending?.(viewStateKey)) {
+      return
+    }
+
+    const anchor = isScrolledToBottom(scrollable)
+      ? undefined
+      : captureChatViewAnchor(scrollable, messages)
+
+    if (anchor) {
+      chatViewAnchorStore.set(viewStateKey, anchor)
+    } else {
+      chatViewAnchorStore.delete(viewStateKey)
+    }
+  }
+
+  override getSnapshotBeforeUpdate(prevProps: MessageListProps) {
+    const prevViewStateKey = prevProps.viewStateKey
+    if (prevViewStateKey !== undefined && prevViewStateKey !== this.props.viewStateKey) {
+      // The DOM still holds the conversation that's being swapped out, so this is both the last
+      // chance to read where the user was in it and the only one where the incoming conversation's
+      // content can't have clamped the scroll position first.
+      this.saveViewState(prevViewStateKey, prevProps.messages)
+    }
+
+    if (!this.scrollableRef.current) {
+      return {
+        wasAtBottom: true,
+        lastScrollTop: 0,
+        lastScrollHeight: 0,
+        removedUnreadLineAboveViewport: false,
+      }
+    }
+
+    const scrollable = this.scrollableRef.current
+    const lastScrollTop = scrollable.scrollTop
+    const lastScrollHeight = scrollable.scrollHeight
+
+    // The DOM still holds the divider this update takes away, so this is the only chance to see
+    // where it was relative to the viewport.
+    let removedUnreadLineAboveViewport = false
+    if (prevProps.unreadLineTime !== undefined && this.props.unreadLineTime === undefined) {
+      const unreadLine = scrollable.querySelector<HTMLElement>(UNREAD_LINE_SELECTOR)
+      removedUnreadLineAboveViewport =
+        !!unreadLine &&
+        unreadLine.getBoundingClientRect().bottom <= scrollable.getBoundingClientRect().top
+    }
+
+    return {
+      wasAtBottom: isScrolledToBottom(scrollable),
+      lastScrollTop,
+      lastScrollHeight,
+      removedUnreadLineAboveViewport,
+    }
+  }
+
+  override componentDidMount() {
+    const scrollable = this.scrollableRef.current
+    if (scrollable) {
+      scrollable.scrollTop = scrollable.scrollHeight
+
+      this.props.onScrollUpdate?.(scrollable, 'mount')
+      this.recordAtBottom()
+
+      this.lastSize = { width: scrollable.clientWidth, height: scrollable.clientHeight }
+      this.unobserveResize = observeResize(scrollable, this.onResize)
+    }
+  }
+
+  override componentDidUpdate(
+    prevProps: MessageListProps,
+    _: never,
+    snapshot: MessageListSnapshot,
+  ) {
+    const scrollable = this.scrollableRef.current
+    if (!scrollable) {
+      return
+    }
+
+    this.placeViewportInNewContent(prevProps, snapshot, scrollable)
+    this.recordAtBottom()
+  }
+
+  /** Puts the viewport where the content this update brought calls for. */
+  private placeViewportInNewContent(
+    prevProps: MessageListProps,
+    snapshot: MessageListSnapshot,
+    scrollable: HTMLDivElement,
+  ) {
+    if (
+      this.props.viewStateKey !== undefined &&
+      prevProps.viewStateKey !== this.props.viewStateKey
+    ) {
+      // A different conversation's messages have taken this one's place, so nothing of the old
+      // viewport carries over and the list starts at the bottom exactly like a fresh mount does.
+      // Owners that want it somewhere else move it from the scroll update below, which still runs
+      // before anything is painted.
+      scrollable.scrollTop = scrollable.scrollHeight
+      this.props.onScrollUpdate?.(scrollable, 'content')
+      return
+    }
+
+    // A divider that moves to a different spot in the same window changes nothing about the scroll
+    // height, but it does change what the owner's unread affordances should say, so it's reported
+    // like any other change to the content.
+    const unreadLineMoved = prevProps.unreadLineTime !== this.props.unreadLineTime
+    if (scrollable.scrollHeight === snapshot.lastScrollHeight && !unreadLineMoved) {
+      return
+    }
+
+    // A window that was swapped out for a different one (rather than having messages added to one
+    // of its ends) leaves no previous content to hold in view, so whoever asked for the swap places
+    // the viewport instead. This has to come from the explicit generation signal: comparing the
+    // arrays' endpoints can't tell a swap from an ordinary append that trimmed the top in the same
+    // update, which changes both ends too.
+    const messagesReplaced = prevProps.windowGeneration !== this.props.windowGeneration
+    // A window detached from the present only ever grows by loading pages, so pinning to the bottom
+    // would drag the user past a page that just appeared below them. The previous props matter as
+    // much as the current ones: the update that loads the last page is also the one that reattaches
+    // the window.
+    const detached = prevProps.hasNewerMessages || this.props.hasNewerMessages
+
+    if (!messagesReplaced) {
+      if (snapshot.wasAtBottom && !detached) {
+        // Auto-scroll
+        scrollable.scrollTop = scrollable.scrollHeight
+      } else if (
+        prevProps.messages.length < this.props.messages.length &&
+        prevProps.messages[0] !== this.props.messages[0]
+      ) {
+        // Inserted elements at the top, maintain scroll position relative to the last top element
+        scrollable.scrollTop =
+          snapshot.lastScrollTop + scrollable.scrollHeight - snapshot.lastScrollHeight
+      } else if (snapshot.removedUnreadLineAboveViewport) {
+        // The divider that went away sat above the viewport, so what's on screen would slide up by
+        // its height unless the scroll position gives that height back. A divider below the
+        // viewport needs no compensation, since nothing above the viewport changed.
+        scrollable.scrollTop =
+          snapshot.lastScrollTop + scrollable.scrollHeight - snapshot.lastScrollHeight
+      }
+    }
+
+    if (this.props.onScrollUpdate) {
+      this.props.onScrollUpdate(scrollable, 'content')
+    }
+  }
+
+  override render() {
+    const {
+      messages,
+      loading,
+      hasMoreHistory,
+      hasNewerMessages,
+      loadingNewer,
+      historyError,
+      newerError,
+      refreshToken,
+      MessageComponent,
+      onLoadMoreMessages,
+      onLoadNewerMessages,
+      showEmptyState = true,
+      historyStartContent,
+      unreadLineTime,
+      displayMode,
+    } = this.props
+    const atHistoryStart = !hasMoreHistory && !loading && !historyError && messages.length > 0
+
+    return (
+      <Scrollable
+        ref={this.scrollableRef}
+        className={this.props.className}
+        onScroll={this.onScroll.handler}>
+        <InfiniteScrollList
+          prevLoadingEnabled={true}
+          nextLoadingEnabled={true}
+          isLoadingPrev={loading}
+          isLoadingNext={loadingNewer}
+          hasPrevData={hasMoreHistory}
+          hasNextData={hasNewerMessages}
+          prevError={historyError}
+          nextError={newerError}
+          refreshToken={refreshToken}
+          onLoadPrevData={onLoadMoreMessages}
+          onLoadNextData={onLoadNewerMessages}>
+          {atHistoryStart ? historyStartContent : null}
+          <PureMessageList
+            showEmptyState={showEmptyState}
+            messages={messages}
+            MessageComponent={MessageComponent}
+            unreadLineTime={unreadLineTime}
+            hasMoreHistory={hasMoreHistory}
+            loading={loading}
+            hasHistoryError={!!historyError}
+            displayMode={displayMode}
+          />
+        </InfiniteScrollList>
+      </Scrollable>
+    )
+  }
+}

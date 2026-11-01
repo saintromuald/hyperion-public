@@ -1,0 +1,71 @@
+import styled from 'styled-components'
+import { Link } from 'wouter'
+import { DevChat } from './chat/devonly/dev-chat'
+import { DevSection } from './debug/dev-section'
+import { DevDownload } from './download/devonly/routes'
+import { DevHome } from './home/devonly/dev-home'
+import { DevLadder } from './ladder/devonly/routes'
+import DevLists from './lists/devonly/routes'
+import DevLobbies from './lobbies/devonly/routes'
+import DevMatchmaking from './matchmaking/devonly/routes'
+import DevMaterial from './material/devonly/routes'
+import { ConnectionStatusTest } from './network/devonly/connection-status-test'
+import { DevPageMetadata } from './page-metadata/devonly/routes'
+import { DotsTest } from './progress/devonly/dots-test'
+import { DevReplays } from './replays/devonly/routes'
+import { DevSettings } from './settings/devonly/routes'
+import { DevStarcraft } from './starcraft/devonly/dev-starcraft'
+import { DevTwitch } from './twitch/devonly/dev-twitch'
+import { DevUsers } from './users/devonly/routes'
+
+const Container = styled.div`
+  width: 100%;
+  height: calc(100% - var(--sb-system-bar-height, 0px));
+  overflow: hidden;
+`
+
+const HomeLink = styled.div`
+  width: 100%;
+  height: 32px;
+  padding-left: 16px;
+  line-height: 32px;
+  border-bottom: 1px solid var(--theme-outline);
+`
+
+const Content = styled.div`
+  height: calc(100% - 32px);
+  overflow-y: auto;
+`
+
+export default function Dev() {
+  return (
+    <Container>
+      <HomeLink>
+        <Link href='/'>Home</Link>
+      </HomeLink>
+      <Content>
+        <DevSection
+          baseUrl='/dev'
+          routes={[
+            ['Chat components', 'chat', DevChat],
+            ['Download components', 'download', DevDownload],
+            ['Home components', 'home', DevHome],
+            ['Ladder components', 'ladder', DevLadder],
+            ['Link previews', 'page-metadata', DevPageMetadata],
+            ['List components', 'lists', DevLists],
+            ['Lobby components', 'lobbies', DevLobbies],
+            ['Matchmaking components', 'matchmaking', DevMatchmaking],
+            ['Material components', 'material', DevMaterial],
+            ['Network status', 'network', ConnectionStatusTest],
+            ['Progress indicators', 'progress', DotsTest],
+            ['Replay components', 'replays', DevReplays],
+            ['Settings components', 'settings', DevSettings],
+            ['Starcraft', 'starcraft', DevStarcraft],
+            ['Twitch components', 'twitch', DevTwitch],
+            ['User components', 'users', DevUsers],
+          ]}
+        />
+      </Content>
+    </Container>
+  )
+}

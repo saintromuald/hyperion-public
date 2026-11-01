@@ -1,0 +1,79 @@
+import { describe, expect, test } from 'vitest'
+import { ALL_USER_AVAILABILITIES } from '../users/availability'
+import { DEFAULT_ACCOUNT_SETTINGS, fillAccountSettingsDefaults } from './account-settings'
+
+describe('common/settings/account-settings', () => {
+  describe('fillAccountSettingsDefaults', () => {
+    test.each(ALL_USER_AVAILABILITIES)(
+      'drops retired status text from stored settings while preserving %s',
+      availability => {
+        expect(
+          fillAccountSettingsDefaults({
+            availability,
+            statusMessage: 'back soon',
+            quietWhispersWhileInGame: false,
+          }),
+        ).toEqual({
+          ...DEFAULT_ACCOUNT_SETTINGS,
+          availability,
+          quietWhispersWhileInGame: false,
+        })
+      },
+    )
+
+    test('an empty object yields the defaults', () => {
+      expect(fillAccountSettingsDefaults({})).toEqual(DEFAULT_ACCOUNT_SETTINGS)
+      expect(fillAccountSettingsDefaults({}).chatDisplayMode).toBe('classic')
+    })
+
+    test('non-object input yields the defaults', () => {
+      expect(fillAccountSettingsDefaults(undefined)).toEqual(DEFAULT_ACCOUNT_SETTINGS)
+      expect(fillAccountSettingsDefaults(null)).toEqual(DEFAULT_ACCOUNT_SETTINGS)
+    })
+
+    test('a known chat display mode is kept', () => {
+      expect(fillAccountSettingsDefaults({ chatDisplayMode: 'cozy' }).chatDisplayMode).toBe('cozy')
+    })
+
+    test('an unknown chat display mode falls back to the default', () => {
+      expect(fillAccountSettingsDefaults({ chatDisplayMode: 'compact' }).chatDisplayMode).toBe(
+        'classic',
+      )
+    })
+
+    test('a wrong-typed chat display mode falls back to the default', () => {
+      expect(fillAccountSettingsDefaults({ chatDisplayMode: 7 }).chatDisplayMode).toBe('classic')
+    })
+
+    test('a stored replay name template is kept', () => {
+      expect(
+        fillAccountSettingsDefaults({ replayNameTemplate: '{matchup}' }).replayNameTemplate,
+      ).toBe('{matchup}')
+    })
+
+    test('an overlong replay name template falls back to the default', () => {
+      expect(
+        fillAccountSettingsDefaults({ replayNameTemplate: 'x'.repeat(201) }).replayNameTemplate,
+      ).toBe(DEFAULT_ACCOUNT_SETTINGS.replayNameTemplate)
+    })
+
+    test('Discord activity sharing defaults to not asked', () => {
+      expect(fillAccountSettingsDefaults({}).shareDiscordActivity).toBe('notAsked')
+    })
+
+    test('a stored Discord activity answer is kept', () => {
+      expect(fillAccountSettingsDefaults({ shareDiscordActivity: 'on' }).shareDiscordActivity).toBe(
+        'on',
+      )
+      expect(
+        fillAccountSettingsDefaults({ shareDiscordActivity: 'off' }).shareDiscordActivity,
+      ).toBe('off')
+    })
+
+    test('an unknown Discord activity sharing state falls back to not asked', () => {
+      expect(
+        fillAccountSettingsDefaults({ shareDiscordActivity: 'friendsOnly' }).shareDiscordActivity,
+      ).toBe('notAsked')
+    })
+  })
+})

@@ -1,0 +1,1694 @@
+import { castDraft, Immutable } from 'immer'
+import { nanoid } from 'nanoid'
+import {
+  BasicChannelInfo,
+  ChannelModerationAction,
+  ChannelPermissions,
+  ChannelPreferences,
+  ChatMessage,
+  ChatUserProfileJson,
+  ClientChatMessageType,
+  DetailedChannelInfo,
+  InitialChannelData,
+  JoinedChannelInfo,
+  SbChannelId,
+  ServerChatMessage,
+} from '../../common/chat'
+import { SbUserId } from '../../common/users/sb-user-id'
+import type { HistoryLoadError } from '../messaging/message-load-error'
+import { isServerOriginMessage, LocalMessage } from '../messaging/message-records'
+import { isUnreadLineSpent, placeUnreadLine, UnreadLine } from '../messaging/unread-line'
+import { immerKeyedReducer } from '../reducers/keyed-reducer'
+
+// How many messages should be kept for inactive channels
+const INACTIVE_CHANNEL_MAX_HISTORY = 150
+
+// How many client-only messages (join/leave banners, command output and the like) a channel keeps
+// waiting for a loaded window that covers their time, once the window they were loaded in has been
+// dropped or replaced. These messages exist nowhere but this session's memory, so this bounds how
+// much of a long session's history of channel detours it can carry rather than dropping any of it.
+const MAX_CARRIED_CLIENT_MESSAGES = 50
+
+/**
+ * Everything a channel's message list can hold: the messages the server stores for the channel,
+ * plus the ones this client puts there itself (the answers to the commands run in the channel, and
+ * whispers echoed into it).
+ */
+export type ChannelMessage = ChatMessage | LocalMessage
+
+export interface UsersState {
+  active: Set<SbUserId>
+  offline: Set<SbUserId>
+
+  hasLoadedUserList: boolean
+  loadingUserList: boolean
+  /**
+   * Whether the last user list request for this channel failed. While it's set, the panel shows an
+   * error row with a retry in place of quietly listing whichever members the join events happened to
+   * cover.
+   */
+  userListError: boolean
+}
+
+export interface MessagesState {
+  messages: ChannelMessage[]
+
+  loadingHistory: boolean
+  hasHistory: boolean
+  loadingNewer: boolean
+  /**
+   * Whether messages newer than the loaded window exist on the server, i.e. the window is detached
+   * from the present. While this is set, live messages are not appended (they belong on the far
+   * side of the gap), and the window is never trimmed.
+   */
+  hasNewer: boolean
+  /**
+   * The newest server-recorded time (epoch ms) of a message that arrived live while the window was
+   * detached and so was not appended to it. The window has caught back up to the present only once
+   * it has loaded at least this far, which closes the race where a message arrives between the
+   * server running the last page's query and this client applying its response.
+   */
+  detachedNewestTime?: number
+  /**
+   * Counts how many times the loaded window has been replaced or dropped. Every history request
+   * carries the generation it was issued for, and the reducer discards responses that no longer
+   * match, since a page has no boundary in common with a window it wasn't fetched for.
+   */
+  windowGen: number
+  /**
+   * Client-only messages (join/leave banners and the like) that were in a window dropped or
+   * replaced wholesale, held here until a loaded window's covered time range reaches where they
+   * happened, at which point they're spliced back into `messages`. These messages are never
+   * persisted anywhere but this session's memory, so this is the only thing standing between a
+   * window drop and losing them for good.
+   */
+  carriedClientMessages: ChannelMessage[]
+  /**
+   * The failed request the older edge of the window is showing an error for, if any. While it's
+   * set, the older edge shows an error row instead of a loading indicator and isn't requested
+   * automatically; it's cleared when a request for that edge starts or succeeds, when the window is
+   * replaced or dropped, and when the channel is deactivated, so a fresh visit makes a fresh
+   * attempt.
+   */
+  historyError?: HistoryLoadError
+  /**
+   * Whether the newer edge of the window is showing an error for a failed request. Cleared under
+   * exactly the same conditions as `historyError`.
+   */
+  newerError: boolean
+}
+
+export interface ChatState {
+  /** A set of joined chat channels */
+  joinedChannels: Set<SbChannelId>
+  /** A map of channel ID -> basic channel info (used in channel mentions, etc.) */
+  idToBasicInfo: Map<SbChannelId, BasicChannelInfo>
+  /** A map of channel ID -> detailed channel info (used in channel info card, etc.) */
+  idToDetailedInfo: Map<SbChannelId, DetailedChannelInfo>
+  /** A map of channel ID -> joined channel info (used in user's joined channel page, etc.) */
+  idToJoinedInfo: Map<SbChannelId, JoinedChannelInfo>
+  /**
+   * A map of channel ID -> the members of that channel holding a moderation permission (kick, ban
+   * or editPermissions). A channel absent from the map has unknown roles, that is, its
+   * initialization data hasn't arrived; that is not the same as a channel with no moderators,
+   * which maps to an empty set.
+   */
+  idToModeratorIds: Map<SbChannelId, Set<SbUserId>>
+  /** A map of channel ID -> channel users */
+  idToUsers: Map<SbChannelId, UsersState>
+  /** A map of channel ID -> channel messages */
+  idToMessages: Map<SbChannelId, MessagesState>
+  /** A nested map of channel ID -> a map of user ID -> chat channel user profile */
+  idToUserProfiles: Map<SbChannelId, Map<SbUserId, ChatUserProfileJson>>
+  /** A map of channel ID -> your own preferences for this chat channel */
+  idToSelfPreferences: Map<SbChannelId, ChannelPreferences>
+  /** A map of channel ID -> your own permissions for this chat channel */
+  idToSelfPermissions: Map<SbChannelId, ChannelPermissions>
+  /** A set of joined chat channels that are activated */
+  activatedChannels: Set<SbChannelId>
+  /** A set of joined chat channels whose message list is scrolled to the bottom */
+  atBottomChannels: Set<SbChannelId>
+  /**
+   * A set of joined chat channels that are unread: a message from another user is newer than the
+   * channel's read position. Being on screen is no exemption — a message that arrives while the
+   * view is scrolled up, its window is detached from the present, or the app window is unfocused
+   * is unread until the read position covers it.
+   */
+  unreadChannels: Set<SbChannelId>
+  /** A set of channel IDs saved in various chat messages that no longer exist. */
+  deletedChannels: Set<SbChannelId>
+  /**
+   * Channels known to exist whose info the server withheld because they're private and the user
+   * isn't a member. An id leaves this set as soon as its info arrives (e.g. after the user is
+   * invited and joins).
+   */
+  privateChannels: Set<SbChannelId>
+  /**
+   * A map of channel ID -> the client's view of the server-recorded read position (epoch ms).
+   * Seeded from the server at init, advanced optimistically whenever the client reports a mark-read
+   * for the channel, and advanced over a message that lands in front of the user's eyes (see
+   * `recordLiveArrival`), ahead of the view reporting that same position.
+   */
+  idToLastReadTime: Map<SbChannelId, number>
+  /**
+   * A map of channel ID -> the newest known time (epoch ms) of a server message from another,
+   * non-blocked user that mentions the current user. Compared against `idToLastReadTime` (via
+   * `channelHasUnreadMention`) to derive whether the channel has an unread mention; there is no
+   * separate boolean flag or clear logic for this, since the read position advancing past it is
+   * exactly what "read" means here.
+   */
+  idToLatestMentionTime: Map<SbChannelId, number>
+  /**
+   * A map of channel ID -> the server's word (epoch ms) on how far the channel's unread messages
+   * ran when this client last initialized it. Seeded at init, where the channel's history is empty
+   * and nothing else would say that anything past the read position exists; without it a read
+   * position arriving from another of the user's sessions would look like it covered a channel this
+   * client knows nothing about, and clear the badge over messages nobody has seen.
+   *
+   * Never cleared: it is a message time like any other, and `newestKnownChannelTime` only ever
+   * compares it against the read position, so it stops mattering the moment that position passes
+   * it.
+   */
+  idToLatestUnreadTime: Map<SbChannelId, number>
+  /**
+   * A map of channel ID -> the unread divider for the channel's current activation. Captured when
+   * an unread channel activates, or when a message goes unseen in an activated channel (its view
+   * scrolled up, its window detached from the present, or the app window unfocused) that either has
+   * no divider or has one the read position has already moved past. It then holds still while the
+   * user reads through it, so it doesn't chase `idToLastReadTime` as that keeps advancing
+   * underneath it, and is dropped when the user sends a message, explicitly marks the channel read,
+   * leaves it from the bottom having read past the divider, or has looked at the divider, gone away
+   * from the bottom and come back to it with the read position past the divider.
+   */
+  idToUnreadLine: Map<SbChannelId, UnreadLine>
+}
+
+const DEFAULT_CHAT_STATE: Immutable<ChatState> = {
+  joinedChannels: new Set(),
+  idToBasicInfo: new Map(),
+  idToDetailedInfo: new Map(),
+  idToJoinedInfo: new Map(),
+  idToModeratorIds: new Map(),
+  idToUsers: new Map(),
+  idToMessages: new Map(),
+  idToUserProfiles: new Map(),
+  idToSelfPreferences: new Map(),
+  idToSelfPermissions: new Map(),
+  activatedChannels: new Set(),
+  atBottomChannels: new Set(),
+  unreadChannels: new Set(),
+  deletedChannels: new Set(),
+  privateChannels: new Set(),
+  idToLastReadTime: new Map(),
+  idToLatestMentionTime: new Map(),
+  idToLatestUnreadTime: new Map(),
+  idToUnreadLine: new Map(),
+}
+
+/**
+ * Returns whether `channelId` has an unread message that mentions the current user. This is derived
+ * from the read position alone — having the channel on screen is not the same as having read it, so
+ * a channel being viewed keeps an unread mention until its read position covers it. The server
+ * always sends a read marker for a joined channel (falling back to one millisecond before the
+ * member's join date when none has been recorded), so a joined channel with mention state should
+ * always have an `idToLastReadTime` entry; if one is somehow missing, `?? Infinity` fails toward
+ * "everything is read" rather than flipping the badge to urgent with nothing to compare the
+ * mention time against.
+ */
+export function channelHasUnreadMention(
+  chatState: Immutable<ChatState>,
+  channelId: SbChannelId,
+): boolean {
+  const latestMentionTime = chatState.idToLatestMentionTime.get(channelId)
+  if (latestMentionTime === undefined) {
+    return false
+  }
+
+  return latestMentionTime > (chatState.idToLastReadTime.get(channelId) ?? Infinity)
+}
+
+/**
+ * Returns whether the current user has muted `channelId`. Channels the user hasn't loaded
+ * preferences for are treated as unmuted, matching the default preferences.
+ */
+export function isChannelMuted(chatState: Immutable<ChatState>, channelId: SbChannelId): boolean {
+  return chatState.idToSelfPreferences.get(channelId)?.muted ?? false
+}
+
+/**
+ * Returns whether `channelId` should be pulling the user's attention passively: the sidebar's
+ * unread dot, the social button's indicator, and the tray's tracked unread state. A muted channel
+ * qualifies only through an unread mention, since a mention is aimed at the user personally while
+ * mute is about the channel's ambient traffic.
+ *
+ * Mute is applied here, at read time, rather than when unread state is recorded, so that unmuting
+ * immediately surfaces whatever accumulated while the channel was muted.
+ */
+export function channelNeedsAttention(
+  chatState: Immutable<ChatState>,
+  channelId: SbChannelId,
+): boolean {
+  return (
+    (chatState.unreadChannels.has(channelId) && !isChannelMuted(chatState, channelId)) ||
+    channelHasUnreadMention(chatState, channelId)
+  )
+}
+
+// These loop rather than using iterator helpers (`joinedChannels.values().some(...)`)
+// because those are missing from Safari before 18.4, which the web client still supports.
+
+/** Returns whether any joined channel passes `channelNeedsAttention`. */
+export function anyChannelNeedsAttention(chatState: Immutable<ChatState>): boolean {
+  for (const channelId of chatState.joinedChannels) {
+    if (channelNeedsAttention(chatState, channelId)) {
+      return true
+    }
+  }
+  return false
+}
+
+/** Returns whether any joined channel passes `channelHasUnreadMention`. */
+export function anyChannelHasUnreadMention(chatState: Immutable<ChatState>): boolean {
+  for (const channelId of chatState.joinedChannels) {
+    if (channelHasUnreadMention(chatState, channelId)) {
+      return true
+    }
+  }
+  return false
+}
+
+function removeUserFromChannel(
+  state: ChatState,
+  channelId: SbChannelId,
+  userId: SbUserId,
+  time: number,
+  arrival: LiveArrival,
+  newOwnerId?: SbUserId,
+  reason?: ChannelModerationAction,
+) {
+  const joinedChannelInfo = state.idToJoinedInfo.get(channelId)
+  const channelUsers = state.idToUsers.get(channelId)
+  const channelUserProfiles = state.idToUserProfiles.get(channelId)
+  const detailedChannelInfo = state.idToDetailedInfo.get(channelId)
+  if (!joinedChannelInfo || !channelUsers || !channelUserProfiles || !detailedChannelInfo) {
+    return
+  }
+
+  channelUsers.active.delete(userId)
+  channelUsers.offline.delete(userId)
+  channelUserProfiles.delete(userId)
+  state.idToModeratorIds.get(channelId)?.delete(userId)
+  detailedChannelInfo.userCount -= 1
+
+  let messageType:
+    | ClientChatMessageType.LeaveChannel
+    | ClientChatMessageType.KickUser
+    | ClientChatMessageType.BanUser = ClientChatMessageType.LeaveChannel
+  if (reason === ChannelModerationAction.Kick) {
+    messageType = ClientChatMessageType.KickUser
+  } else if (reason === ChannelModerationAction.Ban) {
+    messageType = ClientChatMessageType.BanUser
+  }
+
+  updateMessages(state, channelId, arrival, m => {
+    m.push({
+      id: nanoid(),
+      type: messageType,
+      channelId,
+      time,
+      userId,
+    })
+    return m
+  })
+
+  if (newOwnerId) {
+    setChannelOwner(state, channelId, newOwnerId, time, arrival)
+  }
+}
+
+function setChannelOwner(
+  state: ChatState,
+  channelId: SbChannelId,
+  newOwnerId: SbUserId,
+  time: number,
+  arrival: LiveArrival,
+) {
+  const joinedChannelInfo = state.idToJoinedInfo.get(channelId)
+  if (!joinedChannelInfo) {
+    return
+  }
+
+  joinedChannelInfo.ownerId = newOwnerId
+
+  updateMessages(state, channelId, arrival, m => {
+    m.push({
+      id: nanoid(),
+      type: ClientChatMessageType.NewChannelOwner,
+      channelId,
+      time,
+      newOwnerId,
+    })
+    return m
+  })
+}
+
+function removeSelfFromChannel(state: ChatState, channelId: SbChannelId) {
+  state.joinedChannels.delete(channelId)
+  state.idToJoinedInfo.delete(channelId)
+  state.idToModeratorIds.delete(channelId)
+  state.idToUsers.delete(channelId)
+  state.idToMessages.delete(channelId)
+  state.idToUserProfiles.delete(channelId)
+  state.idToSelfPreferences.delete(channelId)
+  state.idToSelfPermissions.delete(channelId)
+  state.activatedChannels.delete(channelId)
+  state.atBottomChannels.delete(channelId)
+  state.unreadChannels.delete(channelId)
+  state.idToLastReadTime.delete(channelId)
+  state.idToLatestMentionTime.delete(channelId)
+  state.idToLatestUnreadTime.delete(channelId)
+  state.idToUnreadLine.delete(channelId)
+}
+
+/**
+ * Returns the time (epoch ms) of the newest message in `messages` that carries a server-recorded
+ * timestamp, or `undefined` if there is none. Client-only messages (join/leave banners and the
+ * like) carry the server's time of the event they announce, but they aren't stored, so they can't
+ * mark where a fetched page ends or stand in for a message the server could page from.
+ */
+export function newestServerOriginTime(messages: readonly ChannelMessage[]): number | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (isServerOriginMessage(messages[i])) {
+      return messages[i].time
+    }
+  }
+
+  return undefined
+}
+
+/**
+ * The newest time (epoch ms) of anything known to exist in a channel: the newest loaded
+ * server-origin message, the present of a detached window, the latest mention, and the extent of
+ * the unread backlog the server reported at init. A read position covering this covers everything
+ * the client knows about.
+ *
+ * The init-reported extent is what makes this answer the same question whether or not any history
+ * has been loaded: a channel initialized but never opened has no messages of its own to speak for
+ * the backlog behind it.
+ */
+export function newestKnownChannelTime(
+  chatState: Immutable<ChatState>,
+  channelId: SbChannelId,
+): number | undefined {
+  const channelMessages = chatState.idToMessages.get(channelId)
+  const knownTimes = [
+    channelMessages ? newestServerOriginTime(channelMessages.messages) : undefined,
+    channelMessages?.detachedNewestTime,
+    chatState.idToLatestMentionTime.get(channelId),
+    chatState.idToLatestUnreadTime.get(channelId),
+  ].filter(t => t !== undefined)
+
+  return knownTimes.length ? Math.max(...knownTimes) : undefined
+}
+
+/**
+ * Returns the time (epoch ms) of the oldest message in `messages` that carries a server-recorded
+ * timestamp, or `undefined` if there is none. See `newestServerOriginTime` for why client-only
+ * messages are excluded: a window can open with one at its head (the self-join banner, or all
+ * that's left after a drop leaves only carried messages behind), and such a message isn't stored, so
+ * its time means nothing as a server request cursor or a window boundary.
+ */
+export function oldestServerOriginTime(messages: readonly ChannelMessage[]): number | undefined {
+  for (const message of messages) {
+    if (isServerOriginMessage(message)) {
+      return message.time
+    }
+  }
+
+  return undefined
+}
+
+/**
+ * Returns `incoming` with every message already present in `existing` removed. The history
+ * endpoints seek by millisecond-precision time, so a page boundary landing inside a group of
+ * messages that share a timestamp can hand back messages the window already holds.
+ */
+function dedupeAgainst(
+  incoming: ChannelMessage[],
+  existing: readonly ChannelMessage[],
+): ChannelMessage[] {
+  if (!existing.length) {
+    return incoming
+  }
+
+  const existingIds = new Set(existing.map(m => m.id))
+  return incoming.filter(m => !existingIds.has(m.id))
+}
+
+/**
+ * Whether a channel's view sits at the newest message: at the bottom of a window attached to the
+ * present. The bottom of a detached window is only the end of what's loaded rather than the newest
+ * message, so a view there is still mid-backlog no matter what the at-bottom flag says.
+ */
+function isAtPresentBottom(state: ChatState, channelId: SbChannelId): boolean {
+  return (
+    state.atBottomChannels.has(channelId) && !(state.idToMessages.get(channelId)?.hasNewer ?? false)
+  )
+}
+
+/**
+ * Records that a live message or event reached a channel. It either counts as read on arrival —
+ * the channel is being viewed at the bottom of a window attached to the present with the app window
+ * focused, the one combination that puts the message in front of the user's eyes — in which case
+ * the read position advances over it here, ahead of the view reporting that same position, so the
+ * channel never reads as unread for even a frame; or it went unseen, and the unread flag goes up.
+ * A channel being viewed also freezes its unread divider at the read position whenever a new run of
+ * unread messages starts, so the divider marks where the user left off instead of chasing the read
+ * position as it keeps advancing underneath it.
+ *
+ * Kept separate from `updateMessages` because a message arriving while the loaded window is
+ * detached from the present isn't added to the window at all, yet counts as unread exactly the same.
+ */
+function recordLiveArrival(state: ChatState, channelId: SbChannelId, arrival: LiveArrival) {
+  const isChannelActivated = state.activatedChannels.has(channelId)
+  const readOnArrival =
+    isChannelActivated && isAtPresentBottom(state, channelId) && arrival.windowFocused
+
+  if (readOnArrival) {
+    if (arrival.time !== undefined) {
+      state.idToLastReadTime.set(
+        channelId,
+        Math.max(state.idToLastReadTime.get(channelId) ?? -Infinity, arrival.time),
+      )
+    }
+    return
+  }
+
+  state.unreadChannels.add(channelId)
+
+  if (isChannelActivated) {
+    // A new run of unread messages starts both where there is no divider yet and where the read
+    // position has moved past the one that is there: the user read through that divider and then
+    // looked away, scrolled up, or paged into history, so it no longer marks anything they haven't
+    // seen and this message is where what they haven't seen begins. A divider the read position has
+    // not passed marks a run that is still growing, and stays where it is.
+    const lastReadTime = state.idToLastReadTime.get(channelId)
+    const line = state.idToUnreadLine.get(channelId)
+    if (lastReadTime !== undefined && (line === undefined || lastReadTime > line.time)) {
+      state.idToUnreadLine.set(
+        channelId,
+        placeUnreadLine(lastReadTime, isAtPresentBottom(state, channelId)),
+      )
+    }
+  }
+}
+
+/**
+ * Advances a channel's read position to `time`, never backwards, and lowers the unread flag once the
+ * position in effect covers everything the client knows exists. Returns that effective position.
+ *
+ * A detached window's present has run ahead of what's loaded, so the newest loaded message isn't the
+ * newest one known to exist; the helper covers that along with a mention newer than anything loaded.
+ * Clearing the flag against the loaded window alone would call the channel read on the strength of a
+ * position that only covers that window.
+ */
+function advanceReadPosition(state: ChatState, channelId: SbChannelId, time: number): number {
+  const existing = state.idToLastReadTime.get(channelId)
+  if (existing === undefined || time > existing) {
+    state.idToLastReadTime.set(channelId, time)
+  }
+  const effective = state.idToLastReadTime.get(channelId)!
+
+  const newestKnownTime = newestKnownChannelTime(state, channelId)
+  if (newestKnownTime === undefined || newestKnownTime <= effective) {
+    state.unreadChannels.delete(channelId)
+  }
+
+  return effective
+}
+
+/**
+ * Records that a message the user sent reached the channel. Having just spoken, the user is caught
+ * up: the read position advances over their own message, which lowers the unread flag once it covers
+ * everything known, and the unread divider is dropped, since nothing that came before their own
+ * message is news to them. This holds whether the message was sent from this session or from another
+ * of the user's sessions, since the read position is per user, and regardless of whether the channel
+ * is activated or where its view sits. The view moves to the bottom on send separately, and the read
+ * report from there is what persists the position taken optimistically here; the server does not
+ * advance the read position on send.
+ */
+function recordSelfMessage(state: ChatState, channelId: SbChannelId, time: number) {
+  advanceReadPosition(state, channelId, time)
+  state.idToUnreadLine.delete(channelId)
+}
+
+/**
+ * Puts one client-only message on a channel's carry list, for a message that has no window to live
+ * in right now. Unlike a server message it can never be re-fetched, so the carry list is the only
+ * thing standing between that and losing it for good; `mergeCarriedMessages` is what eventually
+ * gives it back a home. Idempotent against a message already carried (deduped by id), and caps the
+ * list at `MAX_CARRIED_CLIENT_MESSAGES`, evicting the oldest by time.
+ */
+function carryClientMessage(channelMessages: MessagesState, message: ChannelMessage) {
+  if (channelMessages.carriedClientMessages.some(m => m.id === message.id)) {
+    return
+  }
+
+  channelMessages.carriedClientMessages.push(message)
+
+  if (channelMessages.carriedClientMessages.length > MAX_CARRIED_CLIENT_MESSAGES) {
+    channelMessages.carriedClientMessages.sort((a, b) => a.time - b.time)
+    channelMessages.carriedClientMessages = channelMessages.carriedClientMessages.slice(
+      -MAX_CARRIED_CLIENT_MESSAGES,
+    )
+  }
+}
+
+/**
+ * Moves every client-only message out of `channelMessages.messages` and into its carry list, ahead
+ * of the window being dropped or replaced wholesale.
+ */
+function carryClientMessages(channelMessages: MessagesState) {
+  for (const message of channelMessages.messages) {
+    if (!isServerOriginMessage(message)) {
+      carryClientMessage(channelMessages, message)
+    }
+  }
+}
+
+/**
+ * Splices carried client-only messages (see `carryClientMessages`) back into the loaded window
+ * wherever the window now covers the moment they happened, removing them from the carry list so a
+ * later call can't merge the same message twice. Must run after anything that changes what time
+ * range the window covers — a fetched page or a reattach — since that's the only way a carried
+ * message's moment can come back into view.
+ *
+ * The covered range runs from the oldest server-origin message's time to the newest, extended to
+ * unbounded-older when `hasHistory` is false (nothing precedes what's loaded) and to
+ * unbounded-newer when `hasNewer` is false (the window is attached to the present, so it covers
+ * everything from here on, same as a live message keeps appending to it). A bound whose flag says
+ * it's *not* unbounded but which has no server-origin message to anchor to (an empty or
+ * all-client-only window) covers nothing on that side.
+ */
+function mergeCarriedMessages(channelMessages: MessagesState) {
+  if (!channelMessages.carriedClientMessages.length) {
+    return
+  }
+
+  const lowerBound = channelMessages.hasHistory
+    ? (oldestServerOriginTime(channelMessages.messages) ?? Infinity)
+    : -Infinity
+  const upperBound = channelMessages.hasNewer
+    ? (newestServerOriginTime(channelMessages.messages) ?? -Infinity)
+    : Infinity
+
+  const stillCarried: ChannelMessage[] = []
+  const reclaimed: ChannelMessage[] = []
+  for (const message of channelMessages.carriedClientMessages) {
+    if (message.time >= lowerBound && message.time <= upperBound) {
+      reclaimed.push(message)
+    } else {
+      stillCarried.push(message)
+    }
+  }
+
+  if (!reclaimed.length) {
+    return
+  }
+
+  channelMessages.carriedClientMessages = stillCarried
+  channelMessages.messages = channelMessages.messages
+    .concat(reclaimed)
+    .sort((a, b) => a.time - b.time)
+}
+
+/**
+ * Discards everything loaded for a channel, returning it to the shape a freshly-joined channel has:
+ * nothing loaded, older history assumed to exist, attached to the present. Advancing the generation
+ * makes the reducer discard any page still in flight for the window that was just dropped.
+ */
+function dropMessageWindow(channelMessages: MessagesState) {
+  carryClientMessages(channelMessages)
+  channelMessages.messages = []
+  channelMessages.hasHistory = true
+  channelMessages.hasNewer = false
+  channelMessages.detachedNewestTime = undefined
+  // In-flight requests for the dropped window will be discarded by the generation check when they
+  // land, so their loading flags have to be lowered here or they'd stay raised forever.
+  channelMessages.loadingHistory = false
+  channelMessages.loadingNewer = false
+  // Nothing of the window an error was recorded against survives this, so neither does the error.
+  channelMessages.historyError = undefined
+  channelMessages.newerError = false
+  channelMessages.windowGen += 1
+}
+
+/**
+ * The conditions a message or system event arrived under when it reached the channel live. Pages of
+ * history and deletions carry no arrival and do no unread bookkeeping, and neither does the sender's
+ * echoed message, whose bookkeeping is `recordSelfMessage`'s instead; other live events can go
+ * unseen.
+ */
+interface LiveArrival {
+  /** Whether the app window was focused at the moment the message arrived. */
+  windowFocused: boolean
+  /**
+   * The server-recorded time (epoch ms) of the arriving message: a message read on arrival advances
+   * the read position over it. Unset for the client-only leave/kick/ban/owner-change banners, which
+   * never count toward unreadness, so seeing one says nothing about the stored messages a read
+   * position covers.
+   */
+  time?: number
+}
+
+/**
+ * Update the messages field for a channel, keeping the `hasUnread` flag in proper sync.
+ *
+ * @param state The complete chat state which holds all of the channels.
+ * @param channelId The ID of the channel in which to update the messages.
+ * @param arrival The conditions a live message arrived under, or `undefined` when this isn't a live
+ *   arrival and so nothing can have gone unread.
+ * @param updateFn A function which performs the update operation on the messages field. It may
+ *   mutate the passed-in array in place (e.g. via `push`) and must return the array to use as the
+ *   new messages value.
+ */
+function updateMessages(
+  state: ChatState,
+  channelId: SbChannelId,
+  arrival: LiveArrival | undefined,
+  updateFn: (messages: ChannelMessage[]) => ChannelMessage[],
+) {
+  const channelMessages = state.idToMessages.get(channelId)
+  if (!channelMessages) {
+    return
+  }
+
+  channelMessages.messages = updateFn(channelMessages.messages)
+
+  const isChannelActivated = state.activatedChannels.has(channelId)
+
+  // Trimming is safe when nobody is reading scrollback: either the channel isn't being viewed, or
+  // the viewer is pinned to the bottom, where auto-scroll makes removing top messages invisible. A
+  // detached window is never trimmed: the user is paging through it in both directions, and there's
+  // no scroll compensation for messages disappearing off its top. Nor is a window with an older
+  // page in flight: that page was fetched against the window's current oldest message, and dropping
+  // messages from the top before it lands would leave a gap between the two.
+  const canTrim =
+    !channelMessages.hasNewer &&
+    !channelMessages.loadingHistory &&
+    (!isChannelActivated || state.atBottomChannels.has(channelId))
+
+  let sliced = false
+  if (canTrim && channelMessages.messages.length > INACTIVE_CHANNEL_MAX_HISTORY) {
+    channelMessages.messages = channelMessages.messages.slice(-INACTIVE_CHANNEL_MAX_HISTORY)
+    sliced = true
+  }
+
+  if (arrival) {
+    recordLiveArrival(state, channelId, arrival)
+  }
+
+  channelMessages.hasHistory = channelMessages.hasHistory || sliced
+}
+
+/**
+ * Places a live server-origin message in a channel, honoring the split between the contiguous loaded
+ * window and the present that window may have fallen behind. A window attached to the present simply
+ * grows by the message. A detached one doesn't take it at all and only raises its record of how far
+ * the present has run ahead: the message belongs past the gap at the window's far end rather than at
+ * the end of what's loaded, and appending it there would drag the window's forward cursor
+ * (`newestServerOriginTime`) past every message still unloaded inside that gap, so paging forward
+ * would seek from beyond them and the window would then look as though it had caught up. Holding the
+ * present separately is what lets the window tell, once it really has paged forward, that it has.
+ *
+ * Either way the arrival is recorded, so whether a message counts as unread never depends on where
+ * the loaded window happens to sit.
+ *
+ * Server-origin messages only, as the parameter's type enforces: the banners this client puts in a
+ * channel itself can never be re-fetched, so withholding one loses it for good (`carryClientMessage`
+ * is what holds those), and with nothing stored behind them their times are no use as a history
+ * cursor regardless.
+ */
+function addLiveServerMessage(
+  state: ChatState,
+  channelId: SbChannelId,
+  message: ServerChatMessage,
+  arrival: LiveArrival | undefined,
+) {
+  const channelMessages = state.idToMessages.get(channelId)
+  if (!channelMessages) {
+    return
+  }
+
+  if (channelMessages.hasNewer) {
+    channelMessages.detachedNewestTime = Math.max(
+      channelMessages.detachedNewestTime ?? -Infinity,
+      message.time,
+    )
+    if (arrival) {
+      recordLiveArrival(state, channelId, arrival)
+    }
+    return
+  }
+
+  updateMessages(state, channelId, arrival, messages => {
+    messages.push(message)
+    return messages
+  })
+}
+
+function updateChannelInfos(
+  state: ChatState,
+  basicChannelInfos: BasicChannelInfo[],
+  detailedChannelInfos: DetailedChannelInfo[] = [],
+  joinedChannelInfos: JoinedChannelInfo[] = [],
+) {
+  for (const channel of basicChannelInfos) {
+    state.idToBasicInfo.set(channel.id, channel)
+    state.deletedChannels.delete(channel.id)
+    state.privateChannels.delete(channel.id)
+  }
+  for (const channel of detailedChannelInfos) {
+    state.idToDetailedInfo.set(channel.id, channel)
+  }
+  for (const channel of joinedChannelInfos) {
+    state.idToJoinedInfo.set(channel.id, channel)
+  }
+}
+
+function updateDeletedChannels(state: ChatState, deletedChannels: SbChannelId[]) {
+  for (const channelId of deletedChannels) {
+    state.deletedChannels.add(channelId)
+  }
+}
+
+function updatePrivateChannels(state: ChatState, privateChannels: SbChannelId[]) {
+  for (const channelId of privateChannels) {
+    state.privateChannels.add(channelId)
+  }
+}
+
+function initChannelUsers(state: ChatState, channelId: SbChannelId, activeUserIds?: SbUserId[]) {
+  const channelUsers = state.idToUsers.get(channelId)
+  if (channelUsers) {
+    if (activeUserIds) {
+      channelUsers.active = new Set(activeUserIds)
+    }
+  } else {
+    state.idToUsers.set(channelId, {
+      active: new Set(activeUserIds),
+      offline: new Set(),
+      hasLoadedUserList: false,
+      loadingUserList: false,
+      userListError: false,
+    })
+  }
+}
+
+/**
+ * Puts the joined channels in the given order. Listed channels the user isn't in are skipped, and
+ * joined channels that aren't listed keep their relative order after the listed ones.
+ */
+function applyChannelOrder(state: ChatState, channelIds: ReadonlyArray<SbChannelId>) {
+  state.joinedChannels = new Set([
+    ...channelIds.filter(id => state.joinedChannels.has(id)),
+    ...state.joinedChannels,
+  ])
+}
+
+function initChannel(state: ChatState, channelId: SbChannelId, data: InitialChannelData) {
+  const {
+    channelInfo,
+    detailedChannelInfo,
+    joinedChannelInfo,
+    selfPreferences,
+    selfPermissions,
+    moderatorIds,
+    latestUnreadTime,
+    lastReadTime,
+    latestMentionTime,
+    time,
+  } = data
+
+  const messagesState: MessagesState = {
+    messages: [],
+    loadingHistory: false,
+    hasHistory: true,
+    loadingNewer: false,
+    hasNewer: false,
+    detachedNewestTime: undefined,
+    windowGen: 0,
+    carriedClientMessages: [],
+    historyError: undefined,
+    newerError: false,
+  }
+  state.joinedChannels.add(channelId)
+  updateChannelInfos(state, [channelInfo], [detailedChannelInfo], [joinedChannelInfo])
+  state.idToModeratorIds.set(channelId, new Set(moderatorIds))
+  initChannelUsers(state, channelId)
+  state.idToMessages.set(channelId, messagesState)
+  state.idToUserProfiles.set(channelId, new Map())
+  state.idToSelfPreferences.set(channelId, selfPreferences)
+  state.idToSelfPermissions.set(channelId, selfPermissions)
+
+  if (latestMentionTime !== undefined) {
+    const existing = state.idToLatestMentionTime.get(channelId)
+    state.idToLatestMentionTime.set(
+      channelId,
+      existing === undefined ? latestMentionTime : Math.max(existing, latestMentionTime),
+    )
+  }
+
+  // Seeds the unread badge and the extent of the backlog behind it from the server, so both survive
+  // a restart instead of resetting to "read" until the next message arrives. Whether the channel is
+  // on screen doesn't enter into it: the badge follows the read position either way, and a read
+  // report lowers it once that position covers the extent seeded here.
+  if (latestUnreadTime !== undefined) {
+    const existing = state.idToLatestUnreadTime.get(channelId)
+    state.idToLatestUnreadTime.set(
+      channelId,
+      existing === undefined ? latestUnreadTime : Math.max(existing, latestUnreadTime),
+    )
+    state.unreadChannels.add(channelId)
+  }
+
+  // A mark-read made in another of the user's sessions can arrive between the reconnect that clears
+  // this state and the initialization data that refills it, so the read position that comes with
+  // that data is merged rather than installed: whichever position is newer wins. The badge is then
+  // derived from that position against the extent seeded above, rather than being left as the
+  // initialization data found it. Both arrival orders land in the same place — a position covering
+  // the backlog lowers the badge, one that stops short of it leaves the badge up.
+  const readTime = lastReadTime ?? state.idToLastReadTime.get(channelId)
+  if (readTime !== undefined) {
+    advanceReadPosition(state, channelId, readTime)
+  }
+
+  updateMessages(state, channelId, undefined, m => {
+    m.push({
+      id: nanoid(),
+      type: ClientChatMessageType.SelfJoinChannel,
+      channelId,
+      time,
+    })
+    return m
+  })
+}
+
+export default immerKeyedReducer(DEFAULT_CHAT_STATE, {
+  ['@chat/getJoinedChannels'](state, action) {
+    for (const channel of action.payload) {
+      initChannel(state, channel.channelInfo.id, channel)
+    }
+    // `initChannel` leaves a channel that was already in the set (e.g. one joined while the list was
+    // loading) where it was, so the server's order has to be applied separately.
+    applyChannelOrder(
+      state,
+      action.payload.map(c => c.channelInfo.id),
+    )
+  },
+
+  ['@chat/channelOrderChanged'](state, action) {
+    applyChannelOrder(state, action.payload.channelIds)
+  },
+
+  ['@chat/initChannel'](state, action) {
+    initChannel(state, action.meta.channelId, action.payload)
+  },
+
+  ['@chat/initActiveUsers'](state, action) {
+    const { activeUserIds } = action.payload
+    const { channelId } = action.meta
+
+    initChannelUsers(state, channelId, activeUserIds)
+  },
+
+  ['@chat/updateJoin'](state, action) {
+    const { user, message } = action.payload
+    const { channelId, windowFocused } = action.meta
+
+    const channelUsers = state.idToUsers.get(channelId)
+    const detailedChannelInfo = state.idToDetailedInfo.get(channelId)
+    if (!channelUsers || !detailedChannelInfo) {
+      return
+    }
+
+    // Membership lands ahead of the message, so a join moves the count and the active list at once
+    // even when the loaded window sits too far behind the present to hold the banner yet.
+    channelUsers.active.add(user.id)
+    detailedChannelInfo.userCount += 1
+
+    addLiveServerMessage(state, channelId, message, { windowFocused, time: message.time })
+  },
+
+  ['@chat/updateLeave'](state, action) {
+    const { userId, newOwnerId, time } = action.payload
+    const { channelId, windowFocused } = action.meta
+
+    removeUserFromChannel(state, channelId, userId, time, { windowFocused }, newOwnerId)
+  },
+
+  ['@chat/updateLeaveSelf'](state, action) {
+    const { channelId } = action.meta
+
+    removeSelfFromChannel(state, channelId)
+  },
+
+  ['@chat/updateKick'](state, action) {
+    const { targetId, newOwnerId, time } = action.payload
+    const { channelId, windowFocused } = action.meta
+
+    removeUserFromChannel(
+      state,
+      channelId,
+      targetId,
+      time,
+      { windowFocused },
+      newOwnerId,
+      ChannelModerationAction.Kick,
+    )
+  },
+
+  ['@chat/updateKickSelf'](state, action) {
+    const { channelId } = action.meta
+
+    removeSelfFromChannel(state, channelId)
+  },
+
+  ['@chat/updateBan'](state, action) {
+    const { targetId, newOwnerId, time } = action.payload
+    const { channelId, windowFocused } = action.meta
+
+    removeUserFromChannel(
+      state,
+      channelId,
+      targetId,
+      time,
+      { windowFocused },
+      newOwnerId,
+      ChannelModerationAction.Ban,
+    )
+  },
+
+  ['@chat/updateBanSelf'](state, action) {
+    const { channelId } = action.meta
+
+    removeSelfFromChannel(state, channelId)
+  },
+
+  ['@chat/channelRemoved'](state, action) {
+    const { channelId } = action.meta
+
+    removeSelfFromChannel(state, channelId)
+  },
+
+  ['@chat/ownerChanged'](state, action) {
+    const { newOwnerId, time } = action.payload
+    const { channelId, windowFocused } = action.meta
+
+    setChannelOwner(state, channelId, newOwnerId, time, { windowFocused })
+  },
+
+  ['@chat/updateMessage'](state, action) {
+    const { message: newMessage, channelMentions } = action.payload
+    const { channelId, isSelfMessage, mentionsSelf, windowFocused } = action.meta
+
+    // A message the user sent themselves is never a live arrival: having just spoken they're caught
+    // up, which `recordSelfMessage` records in place of an arrival's unread bookkeeping.
+    addLiveServerMessage(
+      state,
+      channelId,
+      newMessage,
+      isSelfMessage ? undefined : { windowFocused, time: newMessage.time },
+    )
+    if (isSelfMessage && state.idToMessages.has(channelId)) {
+      recordSelfMessage(state, channelId, newMessage.time)
+    }
+
+    updateChannelInfos(state, channelMentions)
+
+    if (mentionsSelf && !isSelfMessage) {
+      const existing = state.idToLatestMentionTime.get(channelId)
+      if (existing === undefined || newMessage.time > existing) {
+        state.idToLatestMentionTime.set(channelId, newMessage.time)
+      }
+    }
+  },
+
+  // A message this client puts in a channel itself: the answer to a command run there, or a whisper
+  // echoed into it. It goes in with no arrival, so neither the read position nor the unread flag
+  // moves for it — nothing the server knows about has happened, and a whisper shown in a channel is
+  // not that channel being read.
+  ['@messaging/appendLocalMessage'](state, action) {
+    const { target, message } = action.payload
+    if (target.surface !== 'channel') {
+      return
+    }
+
+    const channelMessages = state.idToMessages.get(target.channelId)
+    if (!channelMessages) {
+      return
+    }
+
+    if (channelMessages.hasNewer) {
+      // The loaded window sits behind the present, and the message was produced now, so it belongs
+      // past the gap at the window's far end. Carrying it holds it until the window is back at the
+      // present, which is the only place it can be shown.
+      carryClientMessage(channelMessages, castDraft(message))
+      return
+    }
+
+    updateMessages(state, target.channelId, undefined, m => {
+      m.push(castDraft(message))
+      return m
+    })
+  },
+
+  ['@chat/updateUserActive'](state, action) {
+    const { userId } = action.payload
+    const { channelId } = action.meta
+
+    const channelUsers = state.idToUsers.get(channelId)
+    if (!channelUsers) {
+      return
+    }
+
+    channelUsers.active.add(userId)
+    channelUsers.offline.delete(userId)
+  },
+
+  ['@chat/updateUserOffline'](state, action) {
+    const { userId } = action.payload
+    const { channelId } = action.meta
+
+    const channelUsers = state.idToUsers.get(channelId)
+    if (!channelUsers) {
+      return
+    }
+
+    channelUsers.offline.add(userId)
+    channelUsers.active.delete(userId)
+  },
+
+  ['@chat/loadMessageHistoryBegin'](state, action) {
+    const { channelId } = action.payload
+
+    const channelMessages = state.idToMessages.get(channelId)
+    if (!channelMessages) {
+      return
+    }
+
+    channelMessages.loadingHistory = true
+    channelMessages.historyError = undefined
+  },
+
+  ['@chat/loadMessageHistory'](state, action) {
+    const { channelId, windowGen } = action.meta
+
+    const channelMessages = state.idToMessages.get(channelId)
+    if (!channelMessages || channelMessages.windowGen !== windowGen) {
+      return
+    }
+
+    channelMessages.loadingHistory = false
+
+    if (action.error) {
+      channelMessages.historyError = { kind: 'history' }
+      return
+    }
+
+    // The edge just settled successfully, so any error a request that failed in the meantime
+    // recorded against it (one issued before this one, landing after it began) is stale.
+    channelMessages.historyError = undefined
+
+    // Even though the payload here is `ServerChatMessage`, we expand its type so it can be
+    // concatenated with the existing messages which could also contain client chat messages.
+    const newMessages = action.payload.messages as ChatMessage[]
+
+    channelMessages.hasHistory = action.payload.hasMoreBefore
+
+    updateMessages(state, channelId, undefined, messages =>
+      dedupeAgainst(newMessages, messages).concat(messages),
+    )
+    // The older edge just moved (or, for a window left holding only carried messages by a prior
+    // drop, was established for the first time), so re-check whether it now reaches any of them.
+    mergeCarriedMessages(channelMessages)
+    updateChannelInfos(state, action.payload.channelMentions)
+    updateDeletedChannels(state, action.payload.deletedChannels)
+  },
+
+  ['@chat/loadNewerMessagesBegin'](state, action) {
+    const { channelId } = action.payload
+
+    const channelMessages = state.idToMessages.get(channelId)
+    if (!channelMessages) {
+      return
+    }
+
+    channelMessages.loadingNewer = true
+    channelMessages.newerError = false
+  },
+
+  ['@chat/loadNewerMessages'](state, action) {
+    const { channelId, windowGen } = action.meta
+
+    const channelMessages = state.idToMessages.get(channelId)
+    if (!channelMessages || channelMessages.windowGen !== windowGen) {
+      return
+    }
+
+    channelMessages.loadingNewer = false
+
+    if (action.error) {
+      channelMessages.newerError = true
+      return
+    }
+
+    // The edge just settled successfully, so any error a request that failed in the meantime
+    // recorded against it (one issued before this one, landing after it began) is stale.
+    channelMessages.newerError = false
+
+    const newMessages = action.payload.messages as ChatMessage[]
+
+    updateMessages(state, channelId, undefined, messages =>
+      messages.concat(dedupeAgainst(newMessages, messages)),
+    )
+    updateChannelInfos(state, action.payload.channelMentions)
+    updateDeletedChannels(state, action.payload.deletedChannels)
+
+    // Rejoining the present takes both the server saying nothing is newer and the window having
+    // reached everything that arrived live while it was detached. A message sent between the server
+    // running this page's query and this response landing leaves the window one page short, so
+    // `hasNewer` stays set and the list's next-edge sentinel asks again until it converges. The
+    // exception is a request issued when this client already knew of the messages it's waiting on:
+    // live messages are only announced after they're stored, so such a request's query ran late
+    // enough to see them, and them being absent from the response means they've since been deleted.
+    // Attaching then (rather than holding out for a time no remaining message will ever reach)
+    // keeps a deletion from turning the sentinel's retries into an endless loop.
+    if (!action.payload.hasMoreAfter) {
+      const newestLoadedTime = newestServerOriginTime(channelMessages.messages)
+      const { detachedNewestTime } = channelMessages
+      if (
+        detachedNewestTime === undefined ||
+        (newestLoadedTime !== undefined && newestLoadedTime >= detachedNewestTime) ||
+        detachedNewestTime <= action.meta.knownNewestTime
+      ) {
+        channelMessages.hasNewer = false
+        channelMessages.detachedNewestTime = undefined
+      }
+    }
+
+    // The newer edge just moved, and reattaching extends coverage all the way to the present, so
+    // re-check whether the window now reaches any carried message.
+    mergeCarriedMessages(channelMessages)
+  },
+
+  ['@chat/loadMessagesAroundBegin'](state, action) {
+    const { channelId } = action.payload
+
+    const channelMessages = state.idToMessages.get(channelId)
+    if (!channelMessages) {
+      return
+    }
+
+    // The whole window is about to be replaced, so there's no one edge the wait belongs to; the
+    // older edge's affordance stands in for both.
+    channelMessages.loadingHistory = true
+    channelMessages.historyError = undefined
+  },
+
+  ['@chat/loadMessagesAround'](state, action) {
+    const { channelId, windowGen } = action.meta
+
+    const channelMessages = state.idToMessages.get(channelId)
+    if (!channelMessages || channelMessages.windowGen !== windowGen) {
+      return
+    }
+
+    channelMessages.loadingHistory = false
+    channelMessages.loadingNewer = false
+
+    if (action.error) {
+      channelMessages.historyError = { kind: 'around', aroundTime: action.meta.aroundTime }
+      return
+    }
+
+    // The window below is replaced wholesale, so the newer edge's error belongs to messages that
+    // are no longer loaded, and an older-edge error recorded by an earlier replacement request
+    // that failed after this one began is stale too.
+    channelMessages.newerError = false
+    channelMessages.historyError = undefined
+
+    // Everything this client knows the present ran at least as far as: the newest message it had
+    // loaded (live messages keep appending to an attached window while the request is in flight)
+    // and the newest it observed while detached. The replacement window has caught up to the
+    // present only if it reaches this far.
+    const knownNewest = Math.max(
+      newestServerOriginTime(channelMessages.messages) ?? -Infinity,
+      channelMessages.detachedNewestTime ?? -Infinity,
+    )
+
+    // The fetched range doesn't have to touch what was loaded, so there may be no seam to splice
+    // them together at and the window is replaced outright. A client-only message can't be
+    // refetched at the new range even if it belongs there, so it's carried instead of discarded;
+    // `mergeCarriedMessages` below gives it back a home if the replacement window covers it.
+    carryClientMessages(channelMessages)
+    channelMessages.messages = action.payload.messages as ChatMessage[]
+    channelMessages.hasHistory = action.payload.hasMoreBefore
+    channelMessages.windowGen += 1
+
+    if (action.payload.hasMoreAfter) {
+      channelMessages.hasNewer = true
+      channelMessages.detachedNewestTime = knownNewest === -Infinity ? undefined : knownNewest
+    } else {
+      // The server saw nothing newer than the replacement window, but a message that arrived
+      // between its query running and this response landing exists only past the window's newer
+      // edge, so the window must stay detached and page forward to it. A message this client
+      // already knew of when the request was issued is the exception: the query ran late enough to
+      // have seen it, so its absence means it's been deleted (see the matching reasoning where
+      // newer pages land).
+      const newestLoadedTime = newestServerOriginTime(channelMessages.messages) ?? -Infinity
+      const knownNewestAtDispatch = action.meta.knownNewestTime ?? -Infinity
+      if (newestLoadedTime < knownNewest && knownNewest > knownNewestAtDispatch) {
+        channelMessages.hasNewer = true
+        channelMessages.detachedNewestTime = knownNewest
+      } else {
+        channelMessages.hasNewer = false
+        channelMessages.detachedNewestTime = undefined
+      }
+    }
+
+    // The window's coverage was just established from scratch, so check it against everything
+    // still carried rather than just what changed.
+    mergeCarriedMessages(channelMessages)
+
+    updateChannelInfos(state, action.payload.channelMentions)
+    updateDeletedChannels(state, action.payload.deletedChannels)
+  },
+
+  ['@chat/resetMessageWindow'](state, action) {
+    const { channelId } = action.payload
+
+    const channelMessages = state.idToMessages.get(channelId)
+    if (!channelMessages) {
+      return
+    }
+
+    dropMessageWindow(channelMessages)
+  },
+
+  ['@chat/updateMessageDeleted'](state, action) {
+    const { channelId } = action.meta
+    const { messageId } = action.payload
+
+    updateMessages(state, channelId, undefined, messages =>
+      messages.filter(m => m.id !== messageId),
+    )
+  },
+
+  ['@chat/retrieveUserListBegin'](state, action) {
+    const { channelId } = action.payload
+
+    const channelUsers = state.idToUsers.get(channelId)
+    if (!channelUsers) {
+      return
+    }
+
+    channelUsers.hasLoadedUserList = true
+    channelUsers.loadingUserList = true
+    channelUsers.userListError = false
+  },
+
+  ['@chat/retrieveUserList'](state, action) {
+    if (action.error) {
+      // `retrieveUserListBegin` marks the list as loaded when the request starts, and the action
+      // creator skips the fetch while either flag is set, so a failed request clears both: the
+      // next channel activation asks for the list again.
+      const channelUsers = state.idToUsers.get(action.meta.channelId)
+      if (channelUsers) {
+        channelUsers.loadingUserList = false
+        channelUsers.hasLoadedUserList = false
+        channelUsers.userListError = true
+      }
+      return
+    }
+
+    const { channelId } = action.meta
+    const userList = action.payload
+
+    const channelUsers = state.idToUsers.get(channelId)
+    if (!channelUsers) {
+      return
+    }
+
+    const offlineArray = userList.filter(u => !channelUsers.active.has(u.id))
+
+    channelUsers.loadingUserList = false
+    channelUsers.offline = new Set(offlineArray.map(u => u.id))
+  },
+
+  ['@chat/getChatUserProfile'](state, action) {
+    const { userId, channelId, profile } = action.payload
+
+    const channelUserProfiles = state.idToUserProfiles.get(channelId)
+    if (!channelUserProfiles) {
+      return
+    }
+
+    if (profile) {
+      channelUserProfiles.set(userId, profile)
+    }
+  },
+
+  ['@chat/getChannelInfo'](state, action) {
+    const { channelInfo, detailedChannelInfo, joinedChannelInfo } = action.payload
+
+    updateChannelInfos(
+      state,
+      [channelInfo],
+      detailedChannelInfo ? [detailedChannelInfo] : undefined,
+      joinedChannelInfo ? [joinedChannelInfo] : undefined,
+    )
+  },
+
+  ['@chat/getBatchChannelInfo'](state, action) {
+    if (action.error) {
+      return
+    }
+
+    const {
+      channelInfos,
+      detailedChannelInfos,
+      joinedChannelInfos,
+      deletedChannels,
+      privateChannels,
+    } = action.payload
+
+    updateChannelInfos(state, channelInfos, detailedChannelInfos, joinedChannelInfos)
+    updateDeletedChannels(state, deletedChannels)
+    updatePrivateChannels(state, privateChannels)
+  },
+
+  ['@chat/searchChannels'](state, action) {
+    const { channelInfos, detailedChannelInfos, joinedChannelInfos } = action.payload
+
+    updateChannelInfos(state, channelInfos, detailedChannelInfos, joinedChannelInfos)
+  },
+
+  ['@chat/activateChannel'](state, action) {
+    const { channelId } = action.payload
+
+    // Whether the view is opening at the newest messages. The view reports where its viewport
+    // settles (`updateChannelAtBottom`) ahead of this dispatch, so the current flag reflects this
+    // activation's viewport; a view still on its way back to a saved reading position hasn't
+    // reported yet and counts as away from the bottom, which is where it's headed.
+    const atBottom = state.atBottomChannels.has(channelId)
+
+    // Freeze the unread divider at the read position, so it marks where the user left off instead
+    // of where the read position ends up after the eager mark-read opening at the newest messages
+    // triggers. Activation itself never lowers the unread flag: the flag follows the read position,
+    // and `@chat/updateLastReadTime` lowers it once the view's read report covers every known
+    // message.
+    if (
+      state.unreadChannels.has(channelId) &&
+      !state.idToUnreadLine.has(channelId) &&
+      state.idToLastReadTime.has(channelId)
+    ) {
+      state.idToUnreadLine.set(
+        channelId,
+        placeUnreadLine(state.idToLastReadTime.get(channelId)!, atBottom),
+      )
+    }
+
+    // A divider the read position has already moved past outlives that only for as long as the
+    // view keeps returning to where the user stopped reading; opening at the newest messages means
+    // they're caught up and the divider has served its purpose.
+    if (atBottom) {
+      const line = state.idToUnreadLine.get(channelId)
+      const lastReadTime = state.idToLastReadTime.get(channelId)
+      if (line !== undefined && lastReadTime !== undefined && lastReadTime > line.time) {
+        state.idToUnreadLine.delete(channelId)
+      }
+    }
+
+    state.activatedChannels.add(channelId)
+  },
+
+  ['@chat/deactivateChannel'](state, action) {
+    const { channelId } = action.payload
+
+    const channelMessages = state.idToMessages.get(channelId)
+
+    // The unread divider is only consumed once the read position has actually moved past it *and*
+    // the user was looking at the newest messages when they left. A deactivation where they never
+    // read anything new (including the mount/cleanup/remount cycle React's StrictMode runs in
+    // development) leaves the still-unread divider in place, and so does one from the middle of the
+    // backlog, where the read position running ahead is an artifact of having passed the bottom on
+    // the way in rather than of having caught up. The bottom of a detached window is only the end
+    // of what's loaded rather than the newest message, so leaving from there is such a
+    // mid-backlog leave no matter what the at-bottom flag says.
+    const line = state.idToUnreadLine.get(channelId)
+    const lastReadTime = state.idToLastReadTime.get(channelId)
+    if (
+      state.atBottomChannels.has(channelId) &&
+      !channelMessages?.hasNewer &&
+      line !== undefined &&
+      lastReadTime !== undefined &&
+      lastReadTime > line.time
+    ) {
+      state.idToUnreadLine.delete(channelId)
+    }
+
+    state.activatedChannels.delete(channelId)
+    state.atBottomChannels.delete(channelId)
+
+    if (!channelMessages) {
+      return
+    }
+
+    if (channelMessages.hasNewer) {
+      // Keeping a window that sits mid-history would put the user back where they were reading with
+      // no indication that the channel has run on past it, so a detached window is dropped whole
+      // and the next visit starts from the present like any other fresh open.
+      dropMessageWindow(channelMessages)
+    } else {
+      const hasHistory = channelMessages.messages.length > INACTIVE_CHANNEL_MAX_HISTORY
+
+      if (channelMessages.loadingHistory || channelMessages.loadingNewer) {
+        // A page in flight was fetched against the window's edges, which the trim below moves;
+        // applying it afterwards would splice it in ahead of a gap in the middle of the history.
+        // Advancing the generation makes it be discarded when it lands, which costs nothing with
+        // the view gone. Lowering the flags then has to happen here too, since the discarded page
+        // no longer lowers them itself and a request that never settles never would.
+        channelMessages.windowGen += 1
+      }
+      channelMessages.loadingHistory = false
+      channelMessages.loadingNewer = false
+      // An error row is only worth showing to someone looking at the channel, and the next visit
+      // deserves a fresh attempt rather than the last visit's failure.
+      channelMessages.historyError = undefined
+      channelMessages.newerError = false
+
+      channelMessages.messages = channelMessages.messages.slice(-INACTIVE_CHANNEL_MAX_HISTORY)
+      channelMessages.hasHistory = channelMessages.hasHistory || hasHistory
+    }
+  },
+
+  // This arrives both from this session's own optimistic mark-read reports (dispatched only while
+  // the channel is activated) and from the socket handler relaying a mark-read made in one of the
+  // user's other sessions (which can arrive for a channel this session isn't currently viewing).
+  // The unread flag is re-evaluated either way: an activated channel carries the flag whenever a
+  // message arrived that wasn't read on arrival — the view scrolled up, its window detached from
+  // the present, or the app window unfocused — and this is what lowers it once the read position
+  // covers every message known to exist. The frozen divider goes as soon as the position passes it
+  // for a channel that isn't activated, since nobody is reading through it there. For an activated
+  // one it goes only once the user has looked at the divider, been away from the bottom, and come
+  // back to the bottom with the position past it, so it holds still in front of them while they
+  // read through it. Re-evaluating that here, and not only where the view reports its position, is
+  // what retires a divider whose consuming return to the bottom happened before the read report
+  // that finally moves the position past it. An explicit mark-read carries `dismissUnreadLine`,
+  // which drops the divider whether or not the channel is activated, because the user asked for the
+  // unread state to go rather than merely scrolling past it.
+  ['@chat/updateLastReadTime'](state, action) {
+    const { channelId, lastReadTime, dismissUnreadLine } = action.payload
+
+    const effective = advanceReadPosition(state, channelId, lastReadTime)
+
+    if (dismissUnreadLine) {
+      state.idToUnreadLine.delete(channelId)
+      return
+    }
+
+    const line = state.idToUnreadLine.get(channelId)
+    if (line === undefined) {
+      return
+    }
+
+    if (!state.activatedChannels.has(channelId)) {
+      if (effective > line.time) {
+        state.idToUnreadLine.delete(channelId)
+      }
+    } else if (isUnreadLineSpent(line, isAtPresentBottom(state, channelId), effective)) {
+      state.idToUnreadLine.delete(channelId)
+    }
+  },
+
+  ['@chat/updateChannelAtBottom'](state, action) {
+    const { channelId, atBottom } = action.payload
+
+    const wasAtBottom = state.atBottomChannels.has(channelId)
+    if (atBottom) {
+      state.atBottomChannels.add(channelId)
+    } else {
+      state.atBottomChannels.delete(channelId)
+    }
+
+    const line = state.idToUnreadLine.get(channelId)
+
+    if (!atBottom && line !== undefined) {
+      line.leftBottom = true
+    }
+
+    if (atBottom && !wasAtBottom && line !== undefined) {
+      // Coming back to the bottom is what retires a divider the user has already laid eyes on: they
+      // went and looked at where they left off, and have now caught up. A view that arrives at the
+      // bottom without ever having reported leaving it — a channel opened there, or the
+      // mount/cleanup/remount cycle React's StrictMode runs in development — has no such trip
+      // behind it, so its divider stays put even though the read report on arrival immediately
+      // moves the position past it.
+      if (
+        isUnreadLineSpent(
+          line,
+          isAtPresentBottom(state, channelId),
+          state.idToLastReadTime.get(channelId),
+        )
+      ) {
+        state.idToUnreadLine.delete(channelId)
+      }
+    }
+
+    if (atBottom && !wasAtBottom) {
+      // The user returned to the bottom after reading scrollback that accumulated past the cap;
+      // drop it now, where the removal is invisible. For a detached window the bottom is only the
+      // end of what's loaded rather than the newest message, and the user is still paging through
+      // it, so nothing is dropped there. An older page in flight was fetched against the window's
+      // current oldest message, so trimming past it would leave that page splicing in ahead of a
+      // gap; the trim waits for the page instead, since the list is on screen and discarding the
+      // page by advancing the generation would read as the window being replaced under the user.
+      const channelMessages = state.idToMessages.get(channelId)
+      if (channelMessages && !channelMessages.hasNewer && !channelMessages.loadingHistory) {
+        const hasHistory = channelMessages.messages.length > INACTIVE_CHANNEL_MAX_HISTORY
+
+        channelMessages.messages = channelMessages.messages.slice(-INACTIVE_CHANNEL_MAX_HISTORY)
+        channelMessages.hasHistory = channelMessages.hasHistory || hasHistory
+      }
+    }
+  },
+
+  ['@chat/unreadLineSeen'](state, action) {
+    const { channelId, time } = action.payload
+
+    const line = state.idToUnreadLine.get(channelId)
+    // A divider that has since been re-placed at another time is a different divider, and the view
+    // hasn't reported laying eyes on that one.
+    if (line === undefined || line.time !== time) {
+      return
+    }
+
+    line.seen = true
+
+    // A move straight to the bottom from above the divider can land with the divider still on
+    // screen, and the view reports where it ended up before it reports what's in the viewport, so
+    // the return that retires the divider can already be behind it by the time this arrives.
+    if (
+      isUnreadLineSpent(
+        line,
+        isAtPresentBottom(state, channelId),
+        state.idToLastReadTime.get(channelId),
+      )
+    ) {
+      state.idToUnreadLine.delete(channelId)
+    }
+  },
+
+  ['@chat/preferencesChanged'](state, action) {
+    const { channelId } = action.meta
+
+    state.idToSelfPreferences.set(channelId, action.payload.selfPreferences)
+  },
+
+  ['@chat/permissionsChanged'](state, action) {
+    const { channelId } = action.meta
+
+    state.idToSelfPermissions.set(channelId, action.payload.selfPermissions)
+  },
+
+  ['@chat/userProfileChanged'](state, action) {
+    const { channelId } = action.meta
+    const { userId, isModerator } = action.payload
+
+    const channelUserProfiles = state.idToUserProfiles.get(channelId)
+    if (channelUserProfiles) {
+      const existingProfile = channelUserProfiles.get(userId)
+      if (existingProfile) {
+        channelUserProfiles.set(userId, {
+          ...existingProfile,
+          isModerator,
+        })
+      }
+    }
+
+    // Only members who aren't the channel's owner are reported here, an owner's moderation standing
+    // being a consequence of ownership rather than of the permissions this carries.
+    const moderatorIds = state.idToModeratorIds.get(channelId)
+    if (moderatorIds) {
+      if (isModerator) {
+        moderatorIds.add(userId)
+      } else {
+        moderatorIds.delete(userId)
+      }
+    }
+  },
+
+  ['@whispers/updateMessage'](state, action) {
+    updateChannelInfos(state, action.payload.channelMentions)
+  },
+
+  ['@whispers/getConversations'](state, action) {
+    updateChannelInfos(state, action.payload.channelMentions)
+    updateDeletedChannels(state, action.payload.deletedChannels)
+  },
+
+  ['@whispers/loadMessageHistory'](state, action) {
+    if (!action.error) {
+      updateChannelInfos(state, action.payload.channelMentions)
+      updateDeletedChannels(state, action.payload.deletedChannels)
+    }
+  },
+
+  ['@whispers/loadNewerMessages'](state, action) {
+    if (!action.error) {
+      updateChannelInfos(state, action.payload.channelMentions)
+      updateDeletedChannels(state, action.payload.deletedChannels)
+    }
+  },
+
+  ['@whispers/loadMessagesAround'](state, action) {
+    if (!action.error) {
+      updateChannelInfos(state, action.payload.channelMentions)
+      updateDeletedChannels(state, action.payload.deletedChannels)
+    }
+  },
+
+  ['@lobbies/updateChatMessage'](state, action) {
+    updateChannelInfos(state, action.payload.channelMentions)
+  },
+
+  ['@messaging/loadMentions'](state, action) {
+    const { channelMentions } = action.payload
+    updateChannelInfos(state, channelMentions)
+  },
+
+  ['@network/connect']() {
+    return DEFAULT_CHAT_STATE
+  },
+})

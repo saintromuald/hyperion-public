@@ -1,0 +1,441 @@
+import {
+  EncodedMatchupString,
+  GameDurationFilter,
+  GameFormat,
+  GameSortOption,
+} from '../games/game-filters'
+import { GameRecordJson, GameReplayInfo } from '../games/games'
+import { TranslationLanguage } from '../i18n'
+import { Jsonify } from '../json'
+import { LadderPlayer } from '../ladder/ladder'
+import { MapInfoJson } from '../maps'
+import { MatchmakingSeasonJson, MatchmakingType, SeasonId } from '../matchmaking'
+import { SbPolicyType } from '../policies/policy-type'
+import type { SbPermissions } from '../typeshare'
+import { RestrictionKind, RestrictionReason } from './restrictions'
+import { SbUser, SelfUserJson } from './sb-user'
+import { SbUserId } from './sb-user-id'
+import { UserStats } from './user-stats'
+
+// NOTE(tec27): If you change this, make sure to update the Rust version as well.
+/**
+ * Characters used in random verification codes sent through email. These were chosen because they
+ * are not easily confused for other characters, removing vowels to avoid spelling anything.
+ */
+export const RANDOM_EMAIL_CODE_CHARACTERS = 'BCDFGHJKLMNPQRTWXY3469'
+/**
+ * The pattern of codes sent for verification through email (such as for) email verification or
+ * password reset.
+ */
+export const RANDOM_EMAIL_CODE_PATTERN = new RegExp(
+  `^[${RANDOM_EMAIL_CODE_CHARACTERS}]{5}-[${RANDOM_EMAIL_CODE_CHARACTERS}]{5}$`,
+)
+
+/**
+ * Detailed information about a user, such as their ladder ranking, win record, etc.
+ */
+export interface UserProfile {
+  userId: SbUserId
+  ladder: Partial<Record<MatchmakingType, LadderPlayer>>
+  seasonId: SeasonId
+  userStats: UserStats
+}
+
+export type UserProfileJson = Jsonify<UserProfile>
+
+export function toUserProfileJson(userProfile: UserProfile): UserProfileJson {
+  return {
+    userId: userProfile.userId,
+    ladder: userProfile.ladder,
+    seasonId: userProfile.seasonId,
+    userStats: userProfile.userStats,
+  }
+}
+
+export enum UserErrorCode {
+  NotFound = 'notFound',
+  NotAllowedOnSelf = 'notAllowedOnSelf',
+  InvalidCode = 'invalidCode',
+  InvalidCredentials = 'invalidCredentials',
+  AccountBanned = 'accountBanned',
+  SessionExpired = 'sessionExpired',
+  UsernameTakenOrRestricted = 'usernameTaken',
+  MachineBanned = 'machineBanned',
+  TooManyAccounts = 'tooManyAccounts',
+  ClientSetupRequired = 'clientSetupRequired',
+  ClientVerificationFailed = 'clientVerificationFailed',
+  ClientUpdateRequired = 'clientUpdateRequired',
+  InappropriateImage = 'inappropriateImage',
+  AvatarUploadRestricted = 'avatarUploadRestricted',
+}
+
+/** Information returned for /users/:id/profile, intended to be able to fill out a profile page. */
+export interface GetUserProfileResponse {
+  user: SbUser
+  profile: UserProfileJson
+  matchHistory: {
+    games: GameRecordJson[]
+    maps: MapInfoJson[]
+    users: SbUser[]
+    replays: GameReplayInfo[]
+  }
+  seasons: MatchmakingSeasonJson[]
+}
+
+export const GET_MATCH_HISTORY_LIMIT = 40
+
+export interface GetMatchHistoryQueryParams {
+  ranked?: boolean
+  custom?: boolean
+  duration?: GameDurationFilter
+  mapName?: string
+  playerName?: string
+  format?: GameFormat
+  matchup?: EncodedMatchupString
+  sort?: GameSortOption
+  offset?: number
+  /** Inclusive lower bound (unix ms) on the game's start time. */
+  startDate?: number
+  /** Inclusive upper bound (unix ms) on the game's start time. */
+  endDate?: number
+  /** When true, includes games shorter than `MIN_GAME_LENGTH_MS` (hidden by default). */
+  includeShort?: boolean
+}
+
+/**
+ * The response returned when getting the user's match history.
+ */
+export interface GetMatchHistoryResponse {
+  games: GameRecordJson[]
+  maps: MapInfoJson[]
+  users: SbUser[]
+  hasMoreGames: boolean
+  replays: GameReplayInfo[]
+}
+
+export interface GetUserRankingHistoryResponse {
+  history: LadderPlayer[]
+  seasons: MatchmakingSeasonJson[]
+}
+
+export interface GetBatchUserInfoResponse {
+  userInfos: SbUser[]
+}
+
+/** The user that a display name resolves to (`GET /users/by-name/:name`). */
+export interface GetUserByNameResponse {
+  user: SbUser
+}
+
+/** The most users a name search returns. */
+export const SEARCH_USERS_LIMIT = 10
+
+export interface SearchUsersResponse {
+  /** Users whose name starts with the searched text, shortest names first. */
+  users: SbUser[]
+}
+
+export interface AcceptPoliciesRequest {
+  policies: Array<[policyType: SbPolicyType, version: number]>
+}
+
+export interface AcceptPoliciesResponse {
+  user: SelfUserJson
+}
+
+export interface ChangeLanguageRequest {
+  language: TranslationLanguage
+}
+
+export interface ChangeLanguagesResponse {
+  user: SelfUserJson
+}
+
+export interface UpdateCurrentUserAvatarResponse {
+  user: SelfUserJson
+}
+
+export interface AdminGetPermissionsResponse {
+  user: SbUser
+  permissions: SbPermissions
+}
+
+export interface AdminUpdatePermissionsRequest {
+  permissions: SbPermissions
+}
+
+/** What caused a ban. Bans of linked accounts keep the source of the ban that caused them. */
+export enum BanSource {
+  Admin = 'admin',
+  BanEvasion = 'banEvasion',
+  ClientIntegrity = 'clientIntegrity',
+  Automated = 'automated',
+}
+
+export const ALL_BAN_SOURCES: ReadonlyArray<BanSource> = Object.values(BanSource)
+
+export function banSourceToLabel(source: BanSource): string {
+  switch (source) {
+    case BanSource.Admin:
+      return 'Admin'
+    case BanSource.BanEvasion:
+      return 'Ban evasion'
+    case BanSource.ClientIntegrity:
+      return 'Client integrity'
+    case BanSource.Automated:
+      return 'Automated'
+    default:
+      return source satisfies never
+  }
+}
+
+export interface BanHistoryEntry {
+  id: string
+  userId: SbUserId
+  bannedBy?: SbUserId
+  startTime: Date
+  endTime: Date
+  reason?: string
+  source: BanSource
+  cascadedFrom?: SbUserId
+  gameId?: string
+  unbannedBy?: SbUserId
+  unbannedAt?: Date
+  unbanReason?: string
+}
+
+export type BanHistoryEntryJson = Jsonify<BanHistoryEntry>
+
+export function toBanHistoryEntryJson(entry: BanHistoryEntry) {
+  return {
+    id: entry.id,
+    userId: entry.userId,
+    bannedBy: entry.bannedBy,
+    startTime: Number(entry.startTime),
+    endTime: Number(entry.endTime),
+    reason: entry.reason,
+    source: entry.source,
+    cascadedFrom: entry.cascadedFrom,
+    gameId: entry.gameId,
+    unbannedBy: entry.unbannedBy,
+    unbannedAt: entry.unbannedAt ? Number(entry.unbannedAt) : undefined,
+    unbanReason: entry.unbanReason,
+  }
+}
+
+export interface AdminGetBansResponse {
+  forUser: SbUserId
+  bans: BanHistoryEntryJson[]
+  users: SbUser[]
+}
+
+export interface AdminBanUserRequest {
+  endTime: number
+  reason?: string
+}
+
+export interface AdminBanUserResponse {
+  ban: BanHistoryEntryJson
+  users: SbUser[]
+}
+
+export interface AdminUnbanUserRequest {
+  /** Admin-only note about why the ban was lifted (never shown to the user). */
+  reason?: string
+}
+
+export interface AdminUnbanUserResponse {
+  /** The target user's bans that were lifted (empty if they had no active ban). */
+  bans: BanHistoryEntryJson[]
+  /**
+   * Every user whose ban was lifted by this action: the target plus any accounts connected to it
+   * by shared identifiers.
+   */
+  unbannedUsers: SbUserId[]
+  /** Number of machine identifier bans that were expired. */
+  liftedIdentifierBans: number
+  users: SbUser[]
+}
+
+export interface UserRestrictionHistoryEntry {
+  id: string
+  userId: SbUserId
+  kind: RestrictionKind
+  restrictedBy?: SbUserId
+  startTime: Date
+  endTime: Date
+  reason?: RestrictionReason
+  adminNotes?: string
+  /** The admin who lifted this restriction early, if it was lifted by an admin. */
+  liftedBy?: SbUserId
+  /** When this restriction was lifted early. `endTime` is moved to this time on a lift. */
+  liftedAt?: Date
+  /** Admin-only note about why the restriction was lifted (never shown to the user). */
+  liftReason?: string
+}
+
+export type UserRestrictionHistoryJson = Jsonify<UserRestrictionHistoryEntry>
+
+export function toUserRestrictionHistoryJson(
+  entry: UserRestrictionHistoryEntry,
+): UserRestrictionHistoryJson {
+  return {
+    id: entry.id,
+    userId: entry.userId,
+    kind: entry.kind,
+    restrictedBy: entry.restrictedBy,
+    startTime: Number(entry.startTime),
+    endTime: Number(entry.endTime),
+    reason: entry.reason,
+    adminNotes: entry.adminNotes,
+    liftedBy: entry.liftedBy,
+    liftedAt: entry.liftedAt !== undefined ? Number(entry.liftedAt) : undefined,
+    liftReason: entry.liftReason,
+  }
+}
+
+export interface AdminGetRestrictionsResponse {
+  forUser: SbUserId
+  restrictions: UserRestrictionHistoryJson[]
+  users: SbUser[]
+}
+
+export interface AdminApplyRestrictionRequest {
+  kind: RestrictionKind
+  endTime: number
+  reason?: RestrictionReason
+  adminNotes?: string
+}
+
+export interface AdminApplyRestrictionResponse {
+  restriction: UserRestrictionHistoryJson
+  users: SbUser[]
+}
+
+export interface AdminLiftRestrictionRequest {
+  kind: RestrictionKind
+  /** Admin-only note about why the restriction was lifted (never shown to the user). */
+  reason?: string
+}
+
+export interface AdminLiftRestrictionResponse {
+  /** The target user's restrictions that were lifted (empty if none of that kind were active). */
+  restrictions: UserRestrictionHistoryJson[]
+  users: SbUser[]
+}
+
+export interface UserIpInfo {
+  userId: SbUserId
+  ipAddress: string
+  firstUsed: Date
+  lastUsed: Date
+  timesSeen: number
+}
+
+export type UserIpInfoJson = Jsonify<UserIpInfo>
+
+export function toUserIpInfoJson(info: UserIpInfo): UserIpInfoJson {
+  return {
+    userId: info.userId,
+    ipAddress: info.ipAddress,
+    firstUsed: Number(info.firstUsed),
+    lastUsed: Number(info.lastUsed),
+    timesSeen: info.timesSeen,
+  }
+}
+
+export interface AdminGetUserIpsResponse {
+  forUser: SbUserId
+  ips: UserIpInfoJson[]
+  relatedUsers: Array<[ip: string, infos: Array<UserIpInfoJson>]>
+  users: SbUser[]
+}
+
+export const LINKED_ACCOUNTS_PAGE_SIZE = 50
+
+export interface AdminGetLinkedAccountsResponse {
+  forUser: SbUserId
+  matches: Array<{
+    userId: SbUserId
+    matchingIdentifierTypes: number[]
+    /** Usage dates on the related account for identifiers also held by the requested account. */
+    firstUsed: number
+    lastUsed: number
+  }>
+  users: SbUser[]
+  hasMore: boolean
+}
+
+/**
+ * The response returned when an admin removes another user's avatar. Deliberately returns a
+ * `SbUser` (not a `SelfUser`/`SelfUserJson`) since the target user is not the requester and
+ * `SelfUser` includes private fields such as their email.
+ */
+export interface AdminRemoveUserAvatarResponse {
+  user: SbUser
+}
+
+export interface AdminSetStaffBadgeRequest {
+  staffBadge: boolean
+}
+
+/**
+ * The response returned when an admin changes another user's staff badge. Deliberately returns a
+ * `SbUser` (not a `SelfUser`/`SelfUserJson`) since the target user is not the requester and
+ * `SelfUser` includes private fields such as their email.
+ */
+export interface AdminSetStaffBadgeResponse {
+  user: SbUser
+}
+
+export interface EmailChangedEvent {
+  action: 'emailChanged'
+  userId: SbUserId
+  email: string
+}
+
+export interface EmailVerifiedEvent {
+  action: 'emailVerified'
+  userId: SbUserId
+}
+
+export interface PermissionsChangedEvent {
+  action: 'permissionsChanged'
+  userId: SbUserId
+  permissions: SbPermissions
+}
+
+/**
+ * A user's display name changed, either because they changed it themselves or because an admin
+ * forced a change.
+ */
+export interface DisplayNameChangedEvent {
+  action: 'displayNameChanged'
+  userId: SbUserId
+  /** The user's new display name. */
+  name: string
+}
+
+export type AuthEvent =
+  | DisplayNameChangedEvent
+  | EmailChangedEvent
+  | EmailVerifiedEvent
+  | PermissionsChangedEvent
+
+export interface UsernameAvailableResponse {
+  available: boolean
+}
+
+export interface RecoverUsernameRequest {
+  email: string
+}
+
+export interface RequestPasswordResetRequest {
+  username: string
+  email: string
+}
+
+export interface ResetPasswordRequest {
+  code: string
+  password: string
+}

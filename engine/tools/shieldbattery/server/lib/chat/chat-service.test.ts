@@ -1,0 +1,5762 @@
+import { NydusServer } from 'nydus'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import createDeferred from '../../../common/async/deferred'
+import {
+  BasicChannelInfo,
+  ChannelBanEntry,
+  ChannelModerationAction,
+  ChannelNotificationLevel,
+  ChannelPermissions,
+  ChannelPreferences,
+  ChatServiceErrorCode,
+  DetailedChannelInfo,
+  GetChannelHistoryServerResponse,
+  JoinedChannelInfo,
+  makeSbChannelId,
+  SbChannelId,
+  ServerChatMessageType,
+  toChannelBanEntryJson,
+  toUserChannelEntryJson,
+  UserChannelEntry,
+} from '../../../common/chat'
+import { NotificationType } from '../../../common/notifications'
+import { Patch } from '../../../common/patch'
+import { encodePrettyId } from '../../../common/pretty-id'
+import { RolledOutcome } from '../../../common/rolled-outcomes'
+import { asMockedFunction } from '../../../common/testing/mocks'
+import {
+  AvailabilityInfo,
+  DEFAULT_AVAILABILITY_INFO,
+  UserAvailability,
+} from '../../../common/users/availability'
+import { SbUser } from '../../../common/users/sb-user'
+import { makeSbUserId, SbUserId } from '../../../common/users/sb-user-id'
+import { DbClient } from '../db'
+import { UNIQUE_VIOLATION } from '../db/pg-error-codes'
+import transact from '../db/transaction'
+import { ImageService } from '../images/image-service'
+import { rollOutcome } from '../messaging/roll-outcome'
+import NotificationService from '../notifications/notification-service'
+import { createFakeNotificationService } from '../notifications/testing/notification-service'
+import { AvailabilityService } from '../users/availability-service'
+import { MIN_IDENTIFIER_MATCHES } from '../users/client-ids'
+import { RestrictionService } from '../users/restriction-service'
+import { FakeAvailabilityService } from '../users/testing/availability-service'
+import { RequestSessionLookup } from '../websockets/session-lookup'
+import { UserSocketsManager } from '../websockets/socket-groups'
+import {
+  clearTestLogs,
+  createFakeNydusServer,
+  InspectableNydusClient,
+  NydusConnector,
+} from '../websockets/testing/websockets'
+import { TypedPublisher } from '../websockets/typed-publisher'
+import {
+  addMessageToChannel,
+  addUserToChannel,
+  banAllIdentifiersFromChannel,
+  banUserFromChannel,
+  ChatMessage,
+  countBannedIdentifiersForChannel,
+  createChannel,
+  deleteChannel,
+  deleteChannelMessage,
+  findChannelByName,
+  findChannelsByName,
+  FullChannelInfo,
+  getChannelBans,
+  getChannelInfo,
+  getChannelInfos,
+  getChannelMessageAuthor,
+  getChannelMessageSentTime,
+  getChannelsForUser,
+  getMessagesForChannel,
+  getModeratorIdsForChannels,
+  getUnreadChannelInfo,
+  getUserChannelEntriesForChannel,
+  getUserChannelEntriesForUser,
+  getUserChannelEntryForUser,
+  getUsersForChannel,
+  isUserBannedFromChannel,
+  JoinChannelData,
+  removeAllUsersFromChannel,
+  removeBannedIdentifiersFromChannel,
+  removeUserFromChannel,
+  searchChannels,
+  TextMessageData,
+  toBasicChannelInfo,
+  toDetailedChannelInfo,
+  toJoinedChannelInfo,
+  transferChannelOwnership,
+  unbanUserFromChannel,
+  updateChannel,
+  updateChannelOrder,
+  updateLastReadTime,
+  updateUserPermissions,
+  updateUserPreferences,
+} from './chat-models'
+import ChatService, { getChannelPath, getChannelUserPath, getChatSelfPath } from './chat-service'
+import {
+  createInviteLink,
+  deleteInviteLink,
+  deleteInviteLinksCreatedBy,
+  deleteInviteLinksForChannel,
+  deleteMemberInviteLinks,
+  deleteUnusableInviteLinks,
+  findNewestUsableInviteLink,
+  getInviteLink,
+  incrementInviteLinkUses,
+  InviteLinkRecord,
+  listUsableInviteLinks,
+} from './invite-link-models'
+
+/** `isServerModerator` value for a user without any server-wide permissions. */
+const REGULAR_USER = false
+/** `isServerModerator` value for a holder of the server-wide `moderateChatChannels` permission. */
+const SERVER_MODERATOR = true
+
+vi.mock('../../../common/flags', () => ({
+  __esModule: true,
+  CAN_LEAVE_SHIELDBATTERY_CHANNEL: false,
+}))
+
+// NOTE(2Pac): We don't bother mocking this since all the DB methods are mocked already and we're
+// not doing anything special with this in chat service except pass it as an argument to the model
+// methods.
+const dbClient = {} as DbClient
+
+vi.mock('../db/transaction', () => ({
+  default: vi.fn(async next => {
+    return await next(dbClient)
+  }),
+}))
+
+const AWAY_AVAILABILITY: AvailabilityInfo = {
+  availability: UserAvailability.Away,
+}
+
+vi.mock('../messaging/roll-outcome', () => ({ rollOutcome: vi.fn() }))
+vi.mock('../models/permissions')
+vi.mock('../users/user-identifiers')
+
+const mockRestrictionService = {
+  isRestricted: vi.fn().mockResolvedValue(false),
+} as any as RestrictionService
+
+const { user1, user2 } = vi.hoisted(() => ({
+  user1: { id: 1 as SbUserId, name: 'USER_NAME_1', created: 1577836800000 } as SbUser,
+  user2: { id: 2 as SbUserId, name: 'USER_NAME_2', created: 1577836800000 } as SbUser,
+}))
+
+vi.mock('../users/user-model', () => {
+  const USERS_BY_ID: ReadonlyMap<SbUserId, SbUser> = new Map([user1, user2].map(u => [u.id, u]))
+  const USERS_BY_NAME: ReadonlyMap<string, SbUser> = new Map(
+    [user1, user2].map(u => [u.name.toLowerCase(), u]),
+  )
+
+  return {
+    findUserById: vi.fn().mockImplementation(async (id: SbUserId) => USERS_BY_ID.get(id)),
+    findUsersById: vi.fn().mockImplementation(async (ids: ReadonlyArray<SbUserId>) => {
+      return ids.map(id => USERS_BY_ID.get(id)).filter(u => !!u)
+    }),
+    findUsersByName: vi.fn().mockImplementation(async (names: ReadonlyArray<string>) => {
+      return names.map(name => USERS_BY_NAME.get(name.toLowerCase())).filter(u => !!u)
+    }),
+  }
+})
+
+vi.mock('./chat-models', async () => {
+  const originalModule = await vi.importActual<typeof import('./chat-models')>('./chat-models')
+  return {
+    getChannelsForUser: vi.fn().mockResolvedValue([]),
+    getUnreadChannelInfo: vi.fn().mockResolvedValue([]),
+    updateLastReadTime: vi.fn(),
+    getUsersForChannel: vi.fn().mockResolvedValue([]),
+    getUserChannelEntryForUser: vi.fn(),
+    getUserChannelEntriesForUser: vi.fn().mockResolvedValue([]),
+    getUserChannelEntriesForChannel: vi.fn().mockResolvedValue([]),
+    createChannel: vi.fn(),
+    updateChannel: vi.fn(),
+    transferChannelOwnership: vi.fn(),
+    addUserToChannel: vi.fn(),
+    addMessageToChannel: vi.fn(),
+    getMessagesForChannel: vi
+      .fn()
+      .mockResolvedValue({ messages: [], hasMoreBefore: false, hasMoreAfter: false }),
+    getChannelMessageAuthor: vi.fn(),
+    getChannelMessageSentTime: vi.fn(),
+    deleteChannelMessage: vi.fn(),
+    removeUserFromChannel: vi.fn(),
+    removeAllUsersFromChannel: vi.fn().mockResolvedValue([]),
+    deleteChannel: vi.fn(),
+    updateUserPreferences: vi.fn(),
+    updateChannelOrder: vi.fn(),
+    updateUserPermissions: vi.fn(),
+    countBannedIdentifiersForChannel: vi.fn(),
+    banUserFromChannel: vi.fn(),
+    banAllIdentifiersFromChannel: vi.fn(),
+    isUserBannedFromChannel: vi.fn(),
+    getChannelBans: vi.fn().mockResolvedValue([]),
+    unbanUserFromChannel: vi.fn(),
+    removeBannedIdentifiersFromChannel: vi.fn(),
+    getChannelInfo: vi.fn(),
+    getChannelInfos: vi.fn().mockResolvedValue([]),
+    getModeratorIdsForChannels: vi.fn().mockResolvedValue(new Map()),
+    findChannelByName: vi.fn(),
+    findChannelsByName: vi.fn().mockResolvedValue([]),
+    searchChannels: vi.fn().mockResolvedValue([]),
+    toBasicChannelInfo: originalModule.toBasicChannelInfo,
+    toDetailedChannelInfo: originalModule.toDetailedChannelInfo,
+    toJoinedChannelInfo: originalModule.toJoinedChannelInfo,
+  }
+})
+
+vi.mock('./invite-link-models', () => ({
+  createInviteLink: vi.fn(),
+  deleteInviteLink: vi.fn(),
+  deleteInviteLinksCreatedBy: vi.fn(),
+  deleteInviteLinksForChannel: vi.fn(),
+  deleteMemberInviteLinks: vi.fn(),
+  deleteUnusableInviteLinks: vi.fn(),
+  findNewestUsableInviteLink: vi.fn(),
+  getInviteLink: vi.fn(),
+  incrementInviteLinkUses: vi.fn(),
+  listUsableInviteLinks: vi.fn(),
+}))
+
+type FakeDbJoinChannelMessage = ChatMessage & { data: JoinChannelData }
+type FakeDbTextChannelMessage = ChatMessage & { data: TextMessageData }
+
+/**
+ * A helper method that returns a JSON version of the "JoinChannel" database message.
+ */
+function toJoinChannelMessageJson(dbMessage: FakeDbJoinChannelMessage) {
+  return {
+    id: dbMessage.msgId,
+    type: dbMessage.data.type,
+    channelId: dbMessage.channelId,
+    userId: dbMessage.userId,
+    time: Number(dbMessage.sent),
+  }
+}
+/**
+ * A helper method that returns a JSON version of the "Text" database message.
+ */
+function toTextMessageJson(dbMessage: FakeDbTextChannelMessage) {
+  return {
+    id: dbMessage.msgId,
+    type: dbMessage.data.type,
+    channelId: dbMessage.channelId,
+    from: dbMessage.userId,
+    time: Number(dbMessage.sent),
+    text: dbMessage.data.text,
+    ...(dbMessage.data.emote ? { emote: true } : {}),
+    ...(dbMessage.data.outcome ? { outcome: dbMessage.data.outcome } : {}),
+  }
+}
+
+describe('chat/chat-service', () => {
+  let nydus: NydusServer
+  let chatService: ChatService
+  let connector: NydusConnector
+  let notificationService: NotificationService
+  let availabilityService: FakeAvailabilityService
+
+  const shieldBatteryBasicInfo: BasicChannelInfo = {
+    id: makeSbChannelId(1),
+    name: 'ShieldBattery',
+    private: false,
+    official: true,
+    closed: false,
+  }
+  const shieldBatteryDetailedInfo: DetailedChannelInfo = {
+    id: makeSbChannelId(1),
+    description: 'SHIELDBATTERY_DESCRIPTION',
+    userCount: 5,
+  }
+  const shieldBatteryJoinedInfo: JoinedChannelInfo = {
+    id: makeSbChannelId(1),
+    ownerId: undefined,
+    topic: 'SHIELDBATTERY_TOPIC',
+    membersCanInvite: false,
+  }
+  const shieldBatteryChannel: FullChannelInfo = {
+    ...shieldBatteryBasicInfo,
+    ...shieldBatteryDetailedInfo,
+    ...shieldBatteryJoinedInfo,
+  }
+  const testBasicInfo: BasicChannelInfo = {
+    id: makeSbChannelId(2),
+    name: 'test',
+    private: false,
+    official: false,
+    closed: false,
+  }
+  const testDetailedInfo: DetailedChannelInfo = {
+    id: makeSbChannelId(2),
+    description: 'TEST_DESCRIPTION',
+    userCount: 2,
+  }
+  const testJoinedInfo: JoinedChannelInfo = {
+    id: makeSbChannelId(2),
+    ownerId: undefined,
+    topic: 'TEST_TOPIC',
+    membersCanInvite: false,
+  }
+  const testChannel: FullChannelInfo = {
+    ...testBasicInfo,
+    ...testDetailedInfo,
+    ...testJoinedInfo,
+  }
+
+  const channelPreferences: ChannelPreferences = {
+    hideBanner: false,
+    notificationLevel: ChannelNotificationLevel.Mentions,
+    muted: false,
+  }
+  const channelPermissions: ChannelPermissions = {
+    kick: false,
+    ban: false,
+    editPermissions: false,
+  }
+  const user1ShieldBatteryChannelEntry: UserChannelEntry = {
+    userId: user1.id,
+    channelId: shieldBatteryChannel.id,
+    joinDate: new Date('2023-03-11T00:00:00.000Z'),
+    channelPreferences,
+    channelPermissions,
+  }
+  const user1TestChannelEntry: UserChannelEntry = {
+    userId: user1.id,
+    channelId: testChannel.id,
+    joinDate: new Date('2023-03-12T00:00:00.000Z'),
+    channelPreferences,
+    channelPermissions,
+  }
+  const user2ShieldBatteryChannelEntry: UserChannelEntry = {
+    userId: user2.id,
+    channelId: shieldBatteryChannel.id,
+    joinDate: new Date('2023-03-11T00:00:00.000Z'),
+    channelPreferences,
+    channelPermissions,
+  }
+  const user2TestChannelEntry: UserChannelEntry = {
+    userId: user2.id,
+    channelId: testChannel.id,
+    joinDate: new Date('2023-03-12T00:00:00.000Z'),
+    channelPreferences,
+    channelPermissions,
+  }
+
+  const joinUser1ShieldBatteryChannelMessage: FakeDbJoinChannelMessage = {
+    msgId: 'MESSAGE_ID',
+    userId: user1.id,
+    channelId: shieldBatteryChannel.id,
+    sent: new Date('2023-03-11T00:00:00.000Z'),
+    data: {
+      type: ServerChatMessageType.JoinChannel,
+    },
+  }
+  const joinUser1TestChannelMessage: FakeDbJoinChannelMessage = {
+    msgId: 'MESSAGE_ID',
+    userId: user1.id,
+    channelId: testChannel.id,
+    sent: new Date('2023-03-11T00:00:00.000Z'),
+    data: {
+      type: ServerChatMessageType.JoinChannel,
+    },
+  }
+  const joinUser2ShieldBatteryChannelMessage: FakeDbJoinChannelMessage = {
+    msgId: 'MESSAGE_ID',
+    userId: user2.id,
+    channelId: shieldBatteryChannel.id,
+    sent: new Date('2023-03-11T00:00:00.000Z'),
+    data: {
+      type: ServerChatMessageType.JoinChannel,
+    },
+  }
+  const joinUser2TestChannelMessage: FakeDbJoinChannelMessage = {
+    msgId: 'MESSAGE_ID',
+    userId: user2.id,
+    channelId: testChannel.id,
+    sent: new Date('2023-03-11T00:00:00.000Z'),
+    data: {
+      type: ServerChatMessageType.JoinChannel,
+    },
+  }
+
+  /**
+   * A helper method that mocks everything correctly to "join" a user to a channel.
+   */
+  async function joinUserToChannel(
+    user: SbUser,
+    channel: FullChannelInfo,
+    userChannelEntry: UserChannelEntry,
+    channelMessage: ChatMessage,
+  ) {
+    asMockedFunction(findChannelByName).mockResolvedValue(undefined)
+    asMockedFunction(createChannel).mockResolvedValue(channel)
+    asMockedFunction(addMessageToChannel).mockResolvedValue(channelMessage)
+    asMockedFunction(getChannelInfo).mockResolvedValue(channel)
+
+    let isUserInChannel = false
+    asMockedFunction(getUserChannelEntryForUser).mockImplementation(
+      async (userId: SbUserId, channelId: SbChannelId) => {
+        if (!isUserInChannel) {
+          return null
+        }
+        return userChannelEntry
+      },
+    )
+    asMockedFunction(getUserChannelEntriesForUser).mockImplementation(
+      async (userId: SbUserId, channelIds: SbChannelId[]) => {
+        if (!isUserInChannel) {
+          return []
+        }
+        return [userChannelEntry]
+      },
+    )
+
+    asMockedFunction(addUserToChannel).mockImplementation(
+      async (userId: SbUserId, channelId: SbChannelId) => {
+        isUserInChannel = true
+
+        return userChannelEntry
+      },
+    )
+
+    await chatService.joinChannel(testChannel.name, user.id, false)
+  }
+
+  /**
+   * Mocks `getUserChannelEntryForUser` to return the given entry for each specified user within
+   * `channel`, and `null` for any other user or channel.
+   */
+  function mockChannelEntries(
+    channel: FullChannelInfo,
+    ...entries: Array<[SbUserId, UserChannelEntry]>
+  ) {
+    const entriesByUser = new Map(entries)
+    asMockedFunction(getUserChannelEntryForUser).mockImplementation(
+      async (userId: SbUserId, channelId: SbChannelId) =>
+        channelId === channel.id ? (entriesByUser.get(userId) ?? null) : null,
+    )
+  }
+
+  let textMessage: FakeDbTextChannelMessage
+  const addMessageToChannelMock = asMockedFunction(addMessageToChannel)
+
+  /**
+   * A helper method that mocks everything needed to send a message to a channel.
+   */
+  function mockTextMessage(
+    user: SbUser,
+    channel: FullChannelInfo,
+    processedMessageString: string,
+    userMentions: SbUser[],
+    channelMentions: FullChannelInfo[],
+    emote?: boolean,
+    outcome?: RolledOutcome,
+  ) {
+    textMessage = {
+      msgId: 'MESSAGE_ID',
+      userId: user.id,
+      channelId: channel.id,
+      sent: new Date('2023-03-11T00:00:00.000Z'),
+      data: {
+        type: ServerChatMessageType.TextMessage,
+        text: processedMessageString,
+        mentions: userMentions.length > 0 ? userMentions.map(m => m.id) : undefined,
+        channelMentions: channelMentions.length > 0 ? channelMentions.map(c => c.id) : undefined,
+        ...(emote ? { emote: true } : {}),
+        ...(outcome ? { outcome } : {}),
+      },
+    }
+    // NOTE(2Pac): The `joinUserToChannel` call already mocks the return value of this function,
+    // so we use the `mockResolvedValueOnce` method to bump the return value to the top of the
+    // call stack.
+    addMessageToChannelMock.mockResolvedValueOnce(textMessage)
+    asMockedFunction(findChannelsByName).mockResolvedValue(channelMentions)
+  }
+
+  /**
+   * A helper method which sends a chat message from a `user` to a `channel`, and expects the
+   * `client` has not received it. This is used as a test to make sure the users not in a channel
+   * don't receive messages for that channel.
+   */
+  async function expectMessageWasNotReceived(
+    user: SbUser,
+    channel: FullChannelInfo,
+    client: InspectableNydusClient,
+  ) {
+    mockTextMessage(user, channel, 'Hello World!', [], [])
+
+    await chatService.sendChatMessage(channel.id, user.id, textMessage.data.text)
+
+    expect(client.publish).not.toHaveBeenCalledWith(getChannelPath(channel.id), {
+      action: 'message2',
+      message: toTextMessageJson(textMessage),
+      user,
+      mentions: [],
+    })
+  }
+
+  const USER1_CLIENT_ID = 'USER1_CLIENT_ID'
+  const USER2_CLIENT_ID = 'USER2_CLIENT_ID'
+
+  let client1: InspectableNydusClient
+  let client2: InspectableNydusClient
+
+  /** The server clock every test runs at, which stamps the times of the events it publishes. */
+  const SERVER_NOW = new Date('2026-10-01T12:00:00.000Z')
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(SERVER_NOW)
+    nydus = createFakeNydusServer()
+    const sessionLookup = new RequestSessionLookup()
+    const userSocketsManager = new UserSocketsManager(nydus, sessionLookup, async () => {})
+    const publisher = new TypedPublisher(nydus)
+    const imageService = new ImageService()
+    notificationService = createFakeNotificationService()
+    availabilityService = new FakeAvailabilityService()
+
+    chatService = new ChatService(
+      publisher,
+      userSocketsManager,
+      imageService,
+      mockRestrictionService,
+      notificationService,
+      availabilityService as any as AvailabilityService,
+    )
+    connector = new NydusConnector(nydus, sessionLookup)
+
+    client1 = connector.connectClient(user1, USER1_CLIENT_ID)
+    client2 = connector.connectClient(user2, USER2_CLIENT_ID)
+
+    vi.clearAllMocks()
+    clearTestLogs(nydus)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  describe('handleNewUser', () => {
+    test('subscribes user to their joined channels', async () => {
+      const user3: SbUser = { id: 3 as SbUserId, name: 'USER_NAME_3', created: 1577836800000 }
+      const user3ShieldBatteryChannelEntry = { ...user1ShieldBatteryChannelEntry, userId: user3.id }
+      const user3TestChannelEntry = { ...user1TestChannelEntry, userId: user3.id }
+
+      asMockedFunction(getChannelsForUser).mockResolvedValue([
+        user3ShieldBatteryChannelEntry,
+        user3TestChannelEntry,
+      ])
+
+      const client3 = connector.connectClient(user3, 'USER3_CLIENT_ID')
+
+      // TODO(2Pac): Add something to FakeNydusServer to resolve when all current subscription
+      // promises are complete?
+      await new Promise(resolve => setTimeout(resolve, 20))
+
+      // NOTE(2Pac): This method is used every time a user connects (so basically before each
+      // test), so we restore the mocked return value to what it is by default, so it doesn't
+      // impact the tests that run after this one.
+      asMockedFunction(getChannelsForUser).mockResolvedValue([])
+
+      expect(nydus.subscribeClient).toHaveBeenCalledWith(
+        client3,
+        getChannelPath(shieldBatteryChannel.id),
+        {
+          action: 'initActiveUsers',
+          activeUserIds: [user3.id],
+          availabilities: [],
+        },
+      )
+      expect(nydus.subscribeClient).toHaveBeenCalledWith(client3, getChannelPath(testChannel.id), {
+        action: 'initActiveUsers',
+        activeUserIds: [user3.id],
+        availabilities: [],
+      })
+      expect(nydus.subscribeClient).toHaveBeenCalledWith(
+        client3,
+        getChannelUserPath(shieldBatteryChannel.id, user3.id),
+        undefined,
+      )
+      expect(nydus.subscribeClient).toHaveBeenCalledWith(
+        client3,
+        getChannelUserPath(testChannel.id, user3.id),
+        undefined,
+      )
+      expect(nydus.subscribeClient).toHaveBeenCalledWith(
+        client3,
+        getChatSelfPath(user3.id),
+        undefined,
+      )
+    })
+
+    test("announces a connecting user's non-default availability and lists it for others", async () => {
+      const user3: SbUser = { id: 3 as SbUserId, name: 'USER_NAME_3', created: 1577836800000 }
+      asMockedFunction(getChannelsForUser).mockResolvedValue([
+        { ...user1TestChannelEntry, userId: user3.id },
+      ])
+      availabilityService.get.mockImplementation(userId =>
+        userId === user3.id ? AWAY_AVAILABILITY : undefined,
+      )
+
+      const client3 = connector.connectClient(user3, 'USER3_CLIENT_ID')
+      await new Promise(resolve => setTimeout(resolve, 20))
+      asMockedFunction(getChannelsForUser).mockResolvedValue([])
+
+      expect(nydus.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+        action: 'userActive2',
+        userId: user3.id,
+        availability: AWAY_AVAILABILITY,
+      })
+      expect(nydus.subscribeClient).toHaveBeenCalledWith(client3, getChannelPath(testChannel.id), {
+        action: 'initActiveUsers',
+        activeUserIds: [user3.id],
+        availabilities: [{ userId: user3.id, ...AWAY_AVAILABILITY }],
+      })
+    })
+  })
+
+  describe('availability changes', () => {
+    async function connectUser3ToTestChannel() {
+      const user3: SbUser = { id: 3 as SbUserId, name: 'USER_NAME_3', created: 1577836800000 }
+      asMockedFunction(getChannelsForUser).mockResolvedValue([
+        { ...user1TestChannelEntry, userId: user3.id },
+      ])
+      connector.connectClient(user3, 'USER3_CLIENT_ID')
+      await new Promise(resolve => setTimeout(resolve, 20))
+      asMockedFunction(getChannelsForUser).mockResolvedValue([])
+      vi.mocked(nydus.publish).mockClear()
+      return user3
+    }
+
+    test("publishes a change to the user's channels", async () => {
+      const user3 = await connectUser3ToTestChannel()
+
+      availabilityService.emit('change', user3.id, AWAY_AVAILABILITY, DEFAULT_AVAILABILITY_INFO)
+
+      expect(nydus.publish).toHaveBeenCalledExactlyOnceWith(getChannelPath(testChannel.id), {
+        action: 'userAvailability',
+        userId: user3.id,
+        availability: AWAY_AVAILABILITY,
+      })
+    })
+
+    test('publishes nothing when a user comes online with the default', async () => {
+      const user3 = await connectUser3ToTestChannel()
+
+      availabilityService.emit('change', user3.id, DEFAULT_AVAILABILITY_INFO, undefined)
+
+      expect(nydus.publish).not.toHaveBeenCalled()
+    })
+
+    test('publishes a change back to the default', async () => {
+      const user3 = await connectUser3ToTestChannel()
+
+      availabilityService.emit('change', user3.id, DEFAULT_AVAILABILITY_INFO, AWAY_AVAILABILITY)
+
+      expect(nydus.publish).toHaveBeenCalledExactlyOnceWith(getChannelPath(testChannel.id), {
+        action: 'userAvailability',
+        userId: user3.id,
+        availability: DEFAULT_AVAILABILITY_INFO,
+      })
+    })
+  })
+
+  describe('updateChannelOrder', () => {
+    test("publishes the stored order to the user's sessions", async () => {
+      asMockedFunction(updateChannelOrder).mockResolvedValue([
+        testChannel.id,
+        shieldBatteryChannel.id,
+      ])
+
+      await chatService.updateChannelOrder(user1.id, [testChannel.id])
+
+      expect(updateChannelOrder).toHaveBeenCalledWith(user1.id, [testChannel.id])
+      expect(nydus.publish).toHaveBeenCalledWith(getChatSelfPath(user1.id), {
+        action: 'channelOrderChanged',
+        channelIds: [testChannel.id, shieldBatteryChannel.id],
+      })
+    })
+  })
+
+  describe('getJoinedChannels', () => {
+    test('returns joined channels for the user', async () => {
+      await joinUserToChannel(
+        user1,
+        shieldBatteryChannel,
+        user1ShieldBatteryChannelEntry,
+        joinUser1ShieldBatteryChannelMessage,
+      )
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelsForUser).mockResolvedValue([
+        user1ShieldBatteryChannelEntry,
+        user1TestChannelEntry,
+      ])
+      asMockedFunction(getChannelInfos).mockResolvedValue([shieldBatteryChannel, testChannel])
+
+      const result = await chatService.getJoinedChannels(user1.id)
+
+      // NOTE(2Pac): This method is used every time a user connects (so basically before each
+      // test), so we restore the mocked return value to what it is by default, so it doesn't
+      // impact the tests that run after this one.
+      asMockedFunction(getChannelsForUser).mockResolvedValue([])
+
+      expect(result).toEqual([
+        {
+          channelInfo: shieldBatteryBasicInfo,
+          detailedChannelInfo: shieldBatteryDetailedInfo,
+          joinedChannelInfo: shieldBatteryJoinedInfo,
+          selfPreferences: channelPreferences,
+          selfPermissions: channelPermissions,
+          moderatorIds: [],
+          latestUnreadTime: undefined,
+          lastReadTime: user1ShieldBatteryChannelEntry.joinDate.getTime() - 1,
+          time: SERVER_NOW.getTime(),
+        },
+        {
+          channelInfo: testBasicInfo,
+          detailedChannelInfo: testDetailedInfo,
+          joinedChannelInfo: testJoinedInfo,
+          selfPreferences: channelPreferences,
+          selfPermissions: channelPermissions,
+          moderatorIds: [],
+          latestUnreadTime: undefined,
+          lastReadTime: user1TestChannelEntry.joinDate.getTime() - 1,
+          time: SERVER_NOW.getTime(),
+        },
+      ])
+    })
+
+    test("lists each channel's moderators", async () => {
+      await joinUserToChannel(
+        user1,
+        shieldBatteryChannel,
+        user1ShieldBatteryChannelEntry,
+        joinUser1ShieldBatteryChannelMessage,
+      )
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelsForUser).mockResolvedValue([
+        user1ShieldBatteryChannelEntry,
+        user1TestChannelEntry,
+      ])
+      asMockedFunction(getChannelInfos).mockResolvedValue([shieldBatteryChannel, testChannel])
+      asMockedFunction(getModeratorIdsForChannels).mockResolvedValue(
+        new Map([[testChannel.id, [user2.id]]]),
+      )
+
+      const result = await chatService.getJoinedChannels(user1.id)
+
+      asMockedFunction(getChannelsForUser).mockResolvedValue([])
+      asMockedFunction(getModeratorIdsForChannels).mockResolvedValue(new Map())
+
+      expect(result.map(c => [c.channelInfo.id, c.moderatorIds])).toEqual([
+        [shieldBatteryChannel.id, []],
+        [testChannel.id, [user2.id]],
+      ])
+    })
+
+    test("reports how far a channel's unread messages run", async () => {
+      await joinUserToChannel(
+        user1,
+        shieldBatteryChannel,
+        user1ShieldBatteryChannelEntry,
+        joinUser1ShieldBatteryChannelMessage,
+      )
+
+      asMockedFunction(getChannelsForUser).mockResolvedValue([user1ShieldBatteryChannelEntry])
+      asMockedFunction(getChannelInfos).mockResolvedValue([shieldBatteryChannel])
+      const latestUnreadTime = new Date(1577836800000)
+
+      asMockedFunction(getUnreadChannelInfo).mockResolvedValue([
+        { channelId: shieldBatteryChannel.id, latestUnreadTime, latestMentionTime: undefined },
+      ])
+
+      const result = await chatService.getJoinedChannels(user1.id)
+
+      asMockedFunction(getChannelsForUser).mockResolvedValue([])
+      asMockedFunction(getUnreadChannelInfo).mockResolvedValue([])
+
+      expect(result).toEqual([
+        {
+          channelInfo: shieldBatteryBasicInfo,
+          detailedChannelInfo: shieldBatteryDetailedInfo,
+          joinedChannelInfo: shieldBatteryJoinedInfo,
+          selfPreferences: channelPreferences,
+          selfPermissions: channelPermissions,
+          moderatorIds: [],
+          latestUnreadTime: latestUnreadTime.getTime(),
+          lastReadTime: user1ShieldBatteryChannelEntry.joinDate.getTime() - 1,
+          time: SERVER_NOW.getTime(),
+        },
+      ])
+    })
+
+    test('marks a channel with an unread mention', async () => {
+      await joinUserToChannel(
+        user1,
+        shieldBatteryChannel,
+        user1ShieldBatteryChannelEntry,
+        joinUser1ShieldBatteryChannelMessage,
+      )
+
+      const latestUnreadTime = new Date(1577836800000)
+      const latestMentionTime = new Date(1577836800000)
+
+      asMockedFunction(getChannelsForUser).mockResolvedValue([user1ShieldBatteryChannelEntry])
+      asMockedFunction(getChannelInfos).mockResolvedValue([shieldBatteryChannel])
+      asMockedFunction(getUnreadChannelInfo).mockResolvedValue([
+        { channelId: shieldBatteryChannel.id, latestUnreadTime, latestMentionTime },
+      ])
+
+      const result = await chatService.getJoinedChannels(user1.id)
+
+      asMockedFunction(getChannelsForUser).mockResolvedValue([])
+      asMockedFunction(getUnreadChannelInfo).mockResolvedValue([])
+
+      expect(result).toEqual([
+        {
+          channelInfo: shieldBatteryBasicInfo,
+          detailedChannelInfo: shieldBatteryDetailedInfo,
+          joinedChannelInfo: shieldBatteryJoinedInfo,
+          selfPreferences: channelPreferences,
+          selfPermissions: channelPermissions,
+          moderatorIds: [],
+          latestUnreadTime: latestUnreadTime.getTime(),
+          lastReadTime: user1ShieldBatteryChannelEntry.joinDate.getTime() - 1,
+          time: SERVER_NOW.getTime(),
+          latestMentionTime: latestMentionTime.getTime(),
+        },
+      ])
+    })
+
+    test('uses the recorded read position when one exists, without falling back to join date', async () => {
+      await joinUserToChannel(
+        user1,
+        shieldBatteryChannel,
+        user1ShieldBatteryChannelEntry,
+        joinUser1ShieldBatteryChannelMessage,
+      )
+
+      const lastReadTime = new Date('2023-03-15T00:00:00.000Z')
+
+      asMockedFunction(getChannelsForUser).mockResolvedValue([
+        { ...user1ShieldBatteryChannelEntry, lastReadTime },
+      ])
+      asMockedFunction(getChannelInfos).mockResolvedValue([shieldBatteryChannel])
+
+      const result = await chatService.getJoinedChannels(user1.id)
+
+      asMockedFunction(getChannelsForUser).mockResolvedValue([])
+
+      expect(result).toEqual([
+        {
+          channelInfo: shieldBatteryBasicInfo,
+          detailedChannelInfo: shieldBatteryDetailedInfo,
+          joinedChannelInfo: shieldBatteryJoinedInfo,
+          selfPreferences: channelPreferences,
+          selfPermissions: channelPermissions,
+          moderatorIds: [],
+          latestUnreadTime: undefined,
+          lastReadTime: lastReadTime.getTime(),
+          time: SERVER_NOW.getTime(),
+        },
+      ])
+    })
+  })
+
+  describe('joinInitialChannel', () => {
+    const addUserToChannelMock = asMockedFunction(addUserToChannel)
+    const addMessageToChannelMock = asMockedFunction(addMessageToChannel)
+
+    test("should throw if user doesn't exist", async () => {
+      await expect(
+        chatService.joinInitialChannel(
+          makeSbUserId(Number.MAX_SAFE_INTEGER),
+          dbClient,
+          Promise.resolve(),
+        ),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: User doesn't exist]`)
+    })
+
+    test("should throw if channel doesn't exist", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+      await expect(
+        chatService.joinInitialChannel(user1.id, dbClient, Promise.resolve()),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Channel not found]`)
+    })
+
+    test('works when user exists', async () => {
+      // NOTE(2Pac): We pre-join user2 to the channel so we can check it sees correct websocket
+      // messages from user1 joining initially.
+      await joinUserToChannel(
+        user2,
+        shieldBatteryChannel,
+        user2ShieldBatteryChannelEntry,
+        joinUser2ShieldBatteryChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue(shieldBatteryChannel)
+      addUserToChannelMock.mockResolvedValue(user1ShieldBatteryChannelEntry)
+      addMessageToChannelMock.mockResolvedValue(joinUser1ShieldBatteryChannelMessage)
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1ShieldBatteryChannelEntry)
+
+      const transactionPromise = createDeferred<void>()
+
+      await chatService.joinInitialChannel(user1.id, dbClient, transactionPromise)
+
+      expect(addUserToChannelMock).toHaveBeenCalledWith(user1.id, shieldBatteryChannel.id, dbClient)
+      expect(addMessageToChannelMock).toHaveBeenCalledWith(
+        user1.id,
+        shieldBatteryChannel.id,
+        { type: ServerChatMessageType.JoinChannel },
+        dbClient,
+      )
+
+      vi.clearAllMocks()
+
+      transactionPromise.resolve()
+      await Promise.resolve()
+
+      expect(client2.publish).toHaveBeenCalledWith(getChannelPath(shieldBatteryChannel.id), {
+        action: 'join2',
+        user: user1,
+        message: toJoinChannelMessageJson(joinUser1ShieldBatteryChannelMessage),
+      })
+      // TODO(2Pac): Add something to FakeNydusServer to resolve when all current subscription
+      // promises are complete?
+      await new Promise(resolve => setTimeout(resolve, 20))
+      expect(nydus.subscribeClient).toHaveBeenCalledWith(
+        client1,
+        getChannelPath(shieldBatteryChannel.id),
+        {
+          action: 'initActiveUsers',
+          activeUserIds: [user2.id, user1.id],
+          availabilities: [],
+        },
+      )
+      expect(nydus.subscribeClient).toHaveBeenCalledWith(
+        client1,
+        getChannelUserPath(shieldBatteryChannel.id, user1.id),
+        undefined,
+      )
+      expect(client1.publish).toHaveBeenCalledWith(
+        getChannelUserPath(shieldBatteryChannel.id, user1.id),
+        {
+          action: 'init3',
+          channelInfo: shieldBatteryBasicInfo,
+          detailedChannelInfo: shieldBatteryDetailedInfo,
+          joinedChannelInfo: shieldBatteryJoinedInfo,
+          selfPreferences: channelPreferences,
+          selfPermissions: channelPermissions,
+          moderatorIds: [],
+          lastReadTime: user1ShieldBatteryChannelEntry.joinDate.getTime() - 1,
+          time: joinUser1ShieldBatteryChannelMessage.sent.getTime(),
+        },
+      )
+    })
+  })
+
+  describe('joinChannel', () => {
+    const addUserToChannelMock = asMockedFunction(addUserToChannel)
+    const addMessageToChannelMock = asMockedFunction(addMessageToChannel)
+    const createChannelMock = asMockedFunction(createChannel)
+
+    beforeEach(async () => {
+      asMockedFunction(findChannelByName).mockResolvedValue(shieldBatteryChannel)
+      asMockedFunction(getChannelInfo).mockResolvedValue(shieldBatteryChannel)
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+      asMockedFunction(isUserBannedFromChannel).mockResolvedValue(false)
+      asMockedFunction(countBannedIdentifiersForChannel).mockResolvedValue(0)
+    })
+
+    test("should throw if user doesn't exist", async () => {
+      await expect(
+        chatService.joinChannel(
+          shieldBatteryChannel.name,
+          makeSbUserId(Number.MAX_SAFE_INTEGER),
+          false,
+        ),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: User doesn't exist]`)
+    })
+
+    test("should throw if can't join anymore channels", async () => {
+      addUserToChannelMock.mockResolvedValue(undefined)
+
+      await expect(
+        chatService.joinChannel(shieldBatteryChannel.name, user1.id, false),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Maximum joined channels reached]`)
+    })
+
+    test("should throw if can't own anymore channels", async () => {
+      asMockedFunction(findChannelByName).mockResolvedValue(undefined)
+      createChannelMock.mockResolvedValue(undefined)
+
+      await expect(
+        chatService.joinChannel(shieldBatteryChannel.name, user1.id, false),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Maximum owned channels reached]`)
+    })
+
+    test("should roll back a created channel if the creator can't join anymore channels", async () => {
+      asMockedFunction(findChannelByName).mockResolvedValue(undefined)
+      createChannelMock.mockResolvedValue(testChannel)
+      addUserToChannelMock.mockResolvedValue(undefined)
+
+      await expect(
+        chatService.joinChannel(testChannel.name, user1.id, false),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Maximum joined channels reached]`)
+
+      // The error must reject the transaction itself (which rolls back the channel creation) —
+      // resolving it and throwing afterwards would commit a zero-member channel owned by a user
+      // who never joined it.
+      const transactionResult = asMockedFunction(transact).mock.results.at(-1)!.value
+      await expect(transactionResult).rejects.toThrow('Maximum joined channels reached')
+    })
+
+    test('should throw if user is banned', async () => {
+      asMockedFunction(isUserBannedFromChannel).mockResolvedValue(true)
+
+      await expect(
+        chatService.joinChannel(shieldBatteryChannel.name, user1.id, false),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: User is banned]`)
+    })
+
+    test('should throw if smurf account is banned', async () => {
+      asMockedFunction(countBannedIdentifiersForChannel).mockResolvedValue(
+        MIN_IDENTIFIER_MATCHES + 1,
+      )
+
+      await expect(
+        chatService.joinChannel(shieldBatteryChannel.name, user1.id, false),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: User is banned]`)
+      expect(deleteInviteLinksCreatedBy).toHaveBeenCalledWith(
+        { channelId: shieldBatteryChannel.id, userId: user1.id },
+        dbClient,
+      )
+    })
+
+    test('works when channel already exists', async () => {
+      // NOTE(2Pac): We pre-join user2 to the channel so we can check it sees correct websocket
+      // messages from user1 joining.
+      await joinUserToChannel(
+        user2,
+        shieldBatteryChannel,
+        user2ShieldBatteryChannelEntry,
+        joinUser2ShieldBatteryChannelMessage,
+      )
+
+      asMockedFunction(findChannelByName).mockResolvedValue(shieldBatteryChannel)
+      let isUserInChannel = false
+      asMockedFunction(getUserChannelEntryForUser).mockImplementation(
+        async (userId: SbUserId, channelId: SbChannelId) => {
+          if (!isUserInChannel) {
+            return null
+          }
+          return user1ShieldBatteryChannelEntry
+        },
+      )
+      addUserToChannelMock.mockImplementation(async (userId: SbUserId, channelId: SbChannelId) => {
+        isUserInChannel = true
+        return user1ShieldBatteryChannelEntry
+      })
+      addMessageToChannelMock.mockResolvedValue(joinUser1ShieldBatteryChannelMessage)
+      asMockedFunction(getChannelInfo).mockResolvedValue(shieldBatteryChannel)
+
+      await chatService.joinChannel(shieldBatteryChannel.name, user1.id, false)
+
+      expect(addUserToChannelMock).toHaveBeenCalledWith(
+        user1.id,
+        shieldBatteryChannel.id,
+        dbClient,
+        undefined,
+      )
+      expect(addMessageToChannelMock).toHaveBeenCalledWith(
+        user1.id,
+        shieldBatteryChannel.id,
+        { type: ServerChatMessageType.JoinChannel },
+        dbClient,
+      )
+      expect(client2.publish).toHaveBeenCalledWith(getChannelPath(shieldBatteryChannel.id), {
+        action: 'join2',
+        user: user1,
+        message: toJoinChannelMessageJson(joinUser1ShieldBatteryChannelMessage),
+      })
+      // TODO(2Pac): Add something to FakeNydusServer to resolve when all current subscription
+      // promises are complete?
+      await new Promise(resolve => setTimeout(resolve, 20))
+      expect(nydus.subscribeClient).toHaveBeenCalledWith(
+        client1,
+        getChannelPath(shieldBatteryChannel.id),
+        {
+          action: 'initActiveUsers',
+          activeUserIds: [user2.id, user1.id],
+          availabilities: [],
+        },
+      )
+      expect(nydus.subscribeClient).toHaveBeenCalledWith(
+        client1,
+        getChannelUserPath(shieldBatteryChannel.id, user1.id),
+        undefined,
+      )
+      expect(client1.publish).toHaveBeenCalledWith(
+        getChannelUserPath(shieldBatteryChannel.id, user1.id),
+        {
+          action: 'init3',
+          channelInfo: shieldBatteryBasicInfo,
+          detailedChannelInfo: shieldBatteryDetailedInfo,
+          joinedChannelInfo: shieldBatteryJoinedInfo,
+          selfPreferences: channelPreferences,
+          selfPermissions: channelPermissions,
+          moderatorIds: [],
+          lastReadTime: user1ShieldBatteryChannelEntry.joinDate.getTime() - 1,
+          time: joinUser1ShieldBatteryChannelMessage.sent.getTime(),
+        },
+      )
+    })
+
+    test('creates the channel if it was deleted between the lookup and the join', async () => {
+      asMockedFunction(findChannelByName)
+        .mockResolvedValueOnce(testChannel)
+        .mockResolvedValueOnce(undefined)
+      asMockedFunction(getChannelInfo)
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValue(testChannel)
+      createChannelMock.mockResolvedValue(testChannel)
+      addUserToChannelMock.mockResolvedValue(user1TestChannelEntry)
+      addMessageToChannelMock.mockResolvedValue(joinUser1TestChannelMessage)
+      asMockedFunction(getUserChannelEntryForUser)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue(user1TestChannelEntry)
+
+      await chatService.joinChannel(testChannel.name, user1.id, false)
+
+      expect(createChannelMock).toHaveBeenCalledWith(
+        { ownerId: user1.id, name: testChannel.name },
+        dbClient,
+      )
+      expect(addUserToChannelMock).toHaveBeenCalledWith(user1.id, testChannel.id, dbClient)
+    })
+
+    test("creates a new channel when it doesn't exist", async () => {
+      asMockedFunction(findChannelByName).mockResolvedValue(undefined)
+      createChannelMock.mockResolvedValue(testChannel)
+      addUserToChannelMock.mockResolvedValue(user1TestChannelEntry)
+      addMessageToChannelMock.mockResolvedValue(joinUser1TestChannelMessage)
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+
+      await chatService.joinChannel(testChannel.name, user1.id, false)
+
+      expect(createChannelMock).toHaveBeenCalledWith(
+        { ownerId: user1.id, name: testChannel.name },
+        dbClient,
+      )
+      expect(addUserToChannelMock).toHaveBeenCalledWith(user1.id, testChannel.id, dbClient)
+      expect(addMessageToChannelMock).toHaveBeenCalledWith(
+        user1.id,
+        testChannel.id,
+        { type: ServerChatMessageType.JoinChannel },
+        dbClient,
+      )
+
+      // NOTE(2Pac): Since there are no users in this channel, we don't bother checking to see if
+      // the publish message was sent/received.
+
+      // TODO(2Pac): Add something to FakeNydusServer to resolve when all current subscription
+      // promises are complete?
+      await new Promise(resolve => setTimeout(resolve, 20))
+
+      expect(nydus.subscribeClient).toHaveBeenCalledWith(client1, getChannelPath(testChannel.id), {
+        action: 'initActiveUsers',
+        activeUserIds: [user1.id],
+        availabilities: [],
+      })
+      expect(nydus.subscribeClient).toHaveBeenCalledWith(
+        client1,
+        getChannelUserPath(testChannel.id, user1.id),
+        undefined,
+      )
+      expect(client1.publish).toHaveBeenCalledWith(getChannelUserPath(testChannel.id, user1.id), {
+        action: 'init3',
+        channelInfo: testBasicInfo,
+        detailedChannelInfo: testDetailedInfo,
+        joinedChannelInfo: testJoinedInfo,
+        lastReadTime: user1TestChannelEntry.joinDate.getTime() - 1,
+        time: joinUser1TestChannelMessage.sent.getTime(),
+        selfPreferences: channelPreferences,
+        selfPermissions: channelPermissions,
+        moderatorIds: [],
+      })
+    })
+
+    test('should throw if user is chat restricted when creating new channel', async () => {
+      // Set up for creating a new channel (channel doesn't exist)
+      asMockedFunction(findChannelByName).mockResolvedValue(undefined)
+      asMockedFunction(mockRestrictionService.isRestricted).mockResolvedValueOnce(true)
+
+      await expect(
+        chatService.joinChannel('new-channel', user1.id, false),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: User is chat restricted]`)
+
+      // Should not attempt to create the channel
+      expect(createChannelMock).not.toHaveBeenCalled()
+    })
+
+    test('should throw if the channel is private and the user is not a member', async () => {
+      asMockedFunction(findChannelByName).mockResolvedValue({ ...testChannel, private: true })
+      asMockedFunction(getChannelInfo).mockResolvedValue({ ...testChannel, private: true })
+
+      await expect(
+        chatService.joinChannel(testChannel.name, user1.id, false),
+      ).rejects.toMatchObject({ code: ChatServiceErrorCode.ChannelPrivate })
+
+      expect(countBannedIdentifiersForChannel).not.toHaveBeenCalled()
+      expect(addUserToChannelMock).not.toHaveBeenCalled()
+      expect(createChannelMock).not.toHaveBeenCalled()
+    })
+
+    test('lets a member of a private channel rejoin it', async () => {
+      const privateChannel = { ...testChannel, private: true }
+      asMockedFunction(findChannelByName).mockResolvedValue(privateChannel)
+      asMockedFunction(getChannelInfo).mockResolvedValue(privateChannel)
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+
+      const result = await chatService.joinChannel(testChannel.name, user1.id, false)
+
+      expect(result.channelInfo.id).toBe(testChannel.id)
+      expect(addUserToChannelMock).not.toHaveBeenCalled()
+    })
+
+    test('lets a server moderator join a private channel', async () => {
+      const privateChannel = { ...testChannel, private: true }
+      asMockedFunction(findChannelByName).mockResolvedValue(privateChannel)
+      addUserToChannelMock.mockResolvedValue(user1TestChannelEntry)
+      addMessageToChannelMock.mockResolvedValue(joinUser1TestChannelMessage)
+      asMockedFunction(getChannelInfo).mockResolvedValue(privateChannel)
+      asMockedFunction(updateChannel).mockResolvedValue({ ...privateChannel, ownerId: user1.id })
+
+      await chatService.joinChannel(testChannel.name, user1.id, true)
+
+      expect(addUserToChannelMock).toHaveBeenCalledWith(
+        user1.id,
+        testChannel.id,
+        dbClient,
+        undefined,
+      )
+    })
+
+    test('checks the channel under a lock, so it reflects a close that just happened', async () => {
+      asMockedFunction(findChannelByName).mockResolvedValue(testChannel)
+      asMockedFunction(getChannelInfo).mockResolvedValue({ ...testChannel, closed: true })
+
+      await expect(
+        chatService.joinChannel(testChannel.name, user1.id, false),
+      ).rejects.toMatchObject({ code: ChatServiceErrorCode.ChannelClosed })
+
+      expect(getChannelInfo).toHaveBeenCalledWith(testChannel.id, dbClient, { forUpdate: true })
+      expect(addUserToChannelMock).not.toHaveBeenCalled()
+      expect(createChannelMock).not.toHaveBeenCalled()
+    })
+
+    test("doesn't let even a server moderator join a closed channel", async () => {
+      const closedChannel = { ...testChannel, closed: true }
+      asMockedFunction(findChannelByName).mockResolvedValue(closedChannel)
+      asMockedFunction(getChannelInfo).mockResolvedValue(closedChannel)
+
+      await expect(chatService.joinChannel(testChannel.name, user1.id, true)).rejects.toMatchObject(
+        { code: ChatServiceErrorCode.ChannelClosed },
+      )
+
+      expect(addUserToChannelMock).not.toHaveBeenCalled()
+    })
+
+    test('hands an ownerless non-official channel to the user who joins it', async () => {
+      const ownedChannel = { ...testChannel, ownerId: user1.id }
+      asMockedFunction(findChannelByName).mockResolvedValue(testChannel)
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+      asMockedFunction(updateChannel).mockResolvedValue(ownedChannel)
+      addUserToChannelMock.mockResolvedValue(user1TestChannelEntry)
+      addMessageToChannelMock.mockResolvedValue(joinUser1TestChannelMessage)
+
+      const result = await chatService.joinChannel(testChannel.name, user1.id, false)
+
+      expect(updateChannel).toHaveBeenCalledWith(testChannel.id, { ownerId: user1.id }, dbClient)
+      expect(result.joinedChannelInfo.ownerId).toBe(user1.id)
+    })
+
+    test("doesn't hand an official channel to the user who joins it", async () => {
+      addUserToChannelMock.mockResolvedValue(user1ShieldBatteryChannelEntry)
+      addMessageToChannelMock.mockResolvedValue(joinUser1ShieldBatteryChannelMessage)
+
+      await chatService.joinChannel(shieldBatteryChannel.name, user1.id, false)
+
+      expect(updateChannel).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('createChannel', () => {
+    const addUserToChannelMock = asMockedFunction(addUserToChannel)
+    const addMessageToChannelMock = asMockedFunction(addMessageToChannel)
+    const createChannelMock = asMockedFunction(createChannel)
+
+    beforeEach(() => {
+      asMockedFunction(findChannelByName).mockResolvedValue(undefined)
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+      addUserToChannelMock.mockResolvedValue(user1TestChannelEntry)
+      addMessageToChannelMock.mockResolvedValue(joinUser1TestChannelMessage)
+    })
+
+    test('creates the channel with its settings and joins the creator to it', async () => {
+      const privateChannel = {
+        ...testChannel,
+        ownerId: user1.id,
+        private: true,
+        membersCanInvite: true,
+        description: 'DESCRIPTION',
+        topic: 'TOPIC',
+      }
+      createChannelMock.mockResolvedValue(privateChannel)
+
+      const result = await chatService.createChannel({
+        userId: user1.id,
+        settings: {
+          name: testChannel.name,
+          description: 'DESCRIPTION',
+          topic: 'TOPIC',
+          private: true,
+          membersCanInvite: true,
+        },
+      })
+
+      expect(createChannelMock).toHaveBeenCalledWith(
+        {
+          ownerId: user1.id,
+          name: testChannel.name,
+          description: 'DESCRIPTION',
+          topic: 'TOPIC',
+          bannerPath: undefined,
+          badgePath: undefined,
+          private: true,
+          membersCanInvite: true,
+        },
+        dbClient,
+      )
+      expect(addUserToChannelMock).toHaveBeenCalledWith(user1.id, testChannel.id, dbClient)
+      expect(addMessageToChannelMock).toHaveBeenCalledWith(
+        user1.id,
+        testChannel.id,
+        { type: ServerChatMessageType.JoinChannel },
+        dbClient,
+      )
+      expect(result.channelInfo).toEqual({ ...testBasicInfo, private: true })
+      expect(result.joinedChannelInfo).toMatchObject({
+        ownerId: user1.id,
+        topic: 'TOPIC',
+        membersCanInvite: true,
+      })
+    })
+
+    test('ignores empty text and member invites for a public channel', async () => {
+      createChannelMock.mockResolvedValue(testChannel)
+
+      await chatService.createChannel({
+        userId: user1.id,
+        settings: { name: testChannel.name, description: '', topic: '', membersCanInvite: true },
+      })
+
+      expect(createChannelMock).toHaveBeenCalledWith(
+        {
+          ownerId: user1.id,
+          name: testChannel.name,
+          description: undefined,
+          topic: undefined,
+          bannerPath: undefined,
+          badgePath: undefined,
+          private: undefined,
+          membersCanInvite: undefined,
+        },
+        dbClient,
+      )
+    })
+
+    test('refuses a name that is already taken instead of joining that channel', async () => {
+      asMockedFunction(findChannelByName).mockResolvedValue(testChannel)
+
+      await expect(
+        chatService.createChannel({ userId: user1.id, settings: { name: testChannel.name } }),
+      ).rejects.toMatchObject({ code: ChatServiceErrorCode.ChannelNameTaken })
+
+      expect(createChannelMock).not.toHaveBeenCalled()
+      expect(addUserToChannelMock).not.toHaveBeenCalled()
+    })
+
+    test('refuses a name that gets taken while the channel is being created', async () => {
+      createChannelMock.mockRejectedValue(
+        Object.assign(new Error('duplicate'), { code: UNIQUE_VIOLATION }),
+      )
+
+      await expect(
+        chatService.createChannel({ userId: user1.id, settings: { name: testChannel.name } }),
+      ).rejects.toMatchObject({ code: ChatServiceErrorCode.ChannelNameTaken })
+
+      expect(addUserToChannelMock).not.toHaveBeenCalled()
+    })
+
+    test('refuses chat restricted users', async () => {
+      asMockedFunction(mockRestrictionService.isRestricted).mockResolvedValueOnce(true)
+
+      await expect(
+        chatService.createChannel({ userId: user1.id, settings: { name: testChannel.name } }),
+      ).rejects.toMatchObject({ code: ChatServiceErrorCode.UserChatRestricted })
+
+      expect(createChannelMock).not.toHaveBeenCalled()
+    })
+
+    test("refuses when the user can't own any more channels", async () => {
+      createChannelMock.mockResolvedValue(undefined)
+
+      await expect(
+        chatService.createChannel({ userId: user1.id, settings: { name: testChannel.name } }),
+      ).rejects.toMatchObject({ code: ChatServiceErrorCode.MaximumOwnedChannels })
+    })
+
+    test("rolls the channel back when the creator can't join any more channels", async () => {
+      createChannelMock.mockResolvedValue(testChannel)
+      addUserToChannelMock.mockResolvedValue(undefined)
+
+      await expect(
+        chatService.createChannel({ userId: user1.id, settings: { name: testChannel.name } }),
+      ).rejects.toMatchObject({ code: ChatServiceErrorCode.MaximumJoinedChannels })
+
+      const transactionResult = asMockedFunction(transact).mock.results.at(-1)!.value
+      await expect(transactionResult).rejects.toThrow('Maximum joined channels reached')
+    })
+  })
+
+  describe('admin channel tools', () => {
+    const removeAllUsersFromChannelMock = asMockedFunction(removeAllUsersFromChannel)
+    const updateChannelMock = asMockedFunction(updateChannel)
+
+    beforeEach(async () => {
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+      await joinUserToChannel(
+        user2,
+        testChannel,
+        user2TestChannelEntry,
+        joinUser2TestChannelMessage,
+      )
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+      removeAllUsersFromChannelMock.mockResolvedValue([user1.id, user2.id])
+    })
+
+    test('renames a channel and tells its members', async () => {
+      const renamedChannel = { ...testChannel, name: 'renamed' }
+      updateChannelMock.mockResolvedValue(renamedChannel)
+
+      const result = await chatService.renameChannel(testChannel.id, 'renamed')
+
+      expect(updateChannelMock).toHaveBeenCalledWith(testChannel.id, { name: 'renamed' })
+      expect(result.channelInfo.name).toBe('renamed')
+      expect(client1.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+        action: 'edit',
+        channelInfo: toBasicChannelInfo(renamedChannel),
+        detailedChannelInfo: toDetailedChannelInfo(renamedChannel),
+        joinedChannelInfo: toJoinedChannelInfo(renamedChannel),
+      })
+    })
+
+    test('refuses a name another channel already has', async () => {
+      updateChannelMock.mockRejectedValue(
+        Object.assign(new Error('duplicate'), { code: UNIQUE_VIOLATION }),
+      )
+
+      await expect(chatService.renameChannel(testChannel.id, 'taken')).rejects.toMatchObject({
+        code: ChatServiceErrorCode.ChannelNameTaken,
+      })
+    })
+
+    test("refuses to rename a channel that doesn't exist", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+      await expect(chatService.renameChannel(testChannel.id, 'renamed')).rejects.toMatchObject({
+        code: ChatServiceErrorCode.ChannelNotFound,
+      })
+      expect(updateChannelMock).not.toHaveBeenCalled()
+    })
+
+    test('closes a channel, removing its members and owner', async () => {
+      const closedChannel = { ...testChannel, closed: true, ownerId: undefined, userCount: 0 }
+      updateChannelMock.mockResolvedValue(closedChannel)
+
+      const result = await chatService.closeChannel(testChannel.id)
+
+      expect(deleteInviteLinksForChannel).toHaveBeenCalledWith(testChannel.id, dbClient)
+      expect(getChannelInfo).toHaveBeenCalledWith(testChannel.id, dbClient, { forUpdate: true })
+      expect(removeAllUsersFromChannelMock).toHaveBeenCalledWith(testChannel.id, dbClient)
+      expect(updateChannelMock).toHaveBeenCalledWith(
+        testChannel.id,
+        { closed: true, ownerId: null },
+        dbClient,
+      )
+      expect(result.channelInfo.closed).toBe(true)
+
+      expect(client1.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+        action: 'channelRemoved',
+      })
+      expect(client1.unsubscribe).toHaveBeenCalledWith(getChannelPath(testChannel.id))
+      expect(client2.unsubscribe).toHaveBeenCalledWith(getChannelPath(testChannel.id))
+      expect(client1.unsubscribe).toHaveBeenCalledWith(getChannelUserPath(testChannel.id, user1.id))
+      expect(notificationService.addNotificationForUsers).toHaveBeenCalledWith({
+        userIds: [user1.id, user2.id],
+        data: {
+          type: NotificationType.ChannelClosed,
+          channelId: testChannel.id,
+          channelName: testChannel.name,
+        },
+      })
+    })
+
+    test('leaves an already closed channel as it is', async () => {
+      const closedChannel = { ...testChannel, closed: true }
+      asMockedFunction(getChannelInfo).mockResolvedValue(closedChannel)
+
+      const result = await chatService.closeChannel(testChannel.id)
+
+      expect(removeAllUsersFromChannelMock).not.toHaveBeenCalled()
+      expect(updateChannelMock).not.toHaveBeenCalled()
+      expect(result.channelInfo.closed).toBe(true)
+    })
+
+    test('refuses to close or delete the channel new users join', async () => {
+      await expect(chatService.closeChannel(shieldBatteryChannel.id)).rejects.toMatchObject({
+        code: ChatServiceErrorCode.CannotRemoveInitialChannel,
+      })
+      await expect(chatService.deleteChannel(shieldBatteryChannel.id)).rejects.toMatchObject({
+        code: ChatServiceErrorCode.CannotRemoveInitialChannel,
+      })
+
+      expect(removeAllUsersFromChannelMock).not.toHaveBeenCalled()
+      expect(deleteChannel).not.toHaveBeenCalled()
+    })
+
+    test('reopens a closed channel', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({ ...testChannel, closed: true })
+      updateChannelMock.mockResolvedValue(testChannel)
+
+      const result = await chatService.reopenChannel(testChannel.id)
+
+      expect(deleteInviteLinksForChannel).toHaveBeenCalledWith(testChannel.id, dbClient)
+      expect(updateChannelMock).toHaveBeenCalledWith(testChannel.id, { closed: false }, dbClient)
+      expect(result.channelInfo.closed).toBe(false)
+    })
+
+    test('deletes a channel, official or not, removing its members', async () => {
+      const officialChannel = { ...testChannel, official: true }
+      asMockedFunction(getChannelInfo).mockResolvedValue(officialChannel)
+
+      await chatService.deleteChannel(testChannel.id)
+
+      expect(deleteInviteLinksForChannel).toHaveBeenCalledWith(testChannel.id, dbClient)
+      expect(removeAllUsersFromChannelMock).toHaveBeenCalledWith(testChannel.id, dbClient)
+      expect(deleteChannel).toHaveBeenCalledWith(testChannel.id, dbClient)
+      expect(client2.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+        action: 'channelRemoved',
+      })
+      expect(client2.unsubscribe).toHaveBeenCalledWith(getChannelPath(testChannel.id))
+      expect(notificationService.addNotificationForUsers).toHaveBeenCalledWith({
+        userIds: [user1.id, user2.id],
+        data: {
+          type: NotificationType.ChannelDeleted,
+          channelId: testChannel.id,
+          channelName: testChannel.name,
+        },
+      })
+    })
+
+    test("refuses to delete a channel that doesn't exist", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+      await expect(chatService.deleteChannel(testChannel.id)).rejects.toMatchObject({
+        code: ChatServiceErrorCode.ChannelNotFound,
+      })
+      expect(deleteChannel).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('invite links', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000
+    const LINK_ID = '5eed0000-0000-4000-8000-000000000001'
+    const TOKEN = encodePrettyId(LINK_ID)
+
+    const privateChannel: FullChannelInfo = {
+      ...testChannel,
+      private: true,
+      ownerId: user2.id,
+      membersCanInvite: true,
+    }
+
+    function makeLink(overrides: Partial<InviteLinkRecord> = {}): InviteLinkRecord {
+      return {
+        id: LINK_ID,
+        channelId: privateChannel.id,
+        createdBy: user2.id,
+        createdAt: new Date(Date.now() - DAY_MS),
+        expiresAt: new Date(Date.now() + 6 * DAY_MS),
+        maxUses: undefined,
+        uses: 0,
+        ...overrides,
+      }
+    }
+
+    describe('getOwnInviteLink', () => {
+      const NOW = new Date('2026-09-28T12:00:00.000Z')
+
+      beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.setSystemTime(NOW)
+        asMockedFunction(getChannelInfo).mockResolvedValue(privateChannel)
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+        asMockedFunction(findNewestUsableInviteLink).mockResolvedValue(undefined)
+      })
+
+      afterEach(() => {
+        vi.useRealTimers()
+      })
+
+      test("returns the user's newest link that still works", async () => {
+        const existing = makeLink({ createdBy: user1.id, uses: 3, maxUses: 5 })
+        asMockedFunction(findNewestUsableInviteLink).mockResolvedValue(existing)
+
+        const result = await chatService.getOwnInviteLink(testChannel.id, user1.id, REGULAR_USER)
+
+        expect(findNewestUsableInviteLink).toHaveBeenCalledWith({
+          channelId: testChannel.id,
+          createdBy: user1.id,
+          now: NOW,
+        })
+        expect(result.inviteLink).toEqual({
+          token: TOKEN,
+          channelId: testChannel.id,
+          createdBy: user1.id,
+          createdAt: existing.createdAt.getTime(),
+          expiresAt: existing.expiresAt!.getTime(),
+          maxUses: 5,
+          uses: 3,
+        })
+      })
+
+      test('returns no link, without creating one, when the user has none', async () => {
+        const result = await chatService.getOwnInviteLink(testChannel.id, user1.id, REGULAR_USER)
+
+        expect(result.inviteLink).toBeUndefined()
+        expect(createInviteLink).not.toHaveBeenCalled()
+      })
+
+      test('should throw for a non-member who is not a server moderator', async () => {
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+        await expect(
+          chatService.getOwnInviteLink(testChannel.id, user1.id, REGULAR_USER),
+        ).rejects.toMatchObject({ code: ChatServiceErrorCode.NotInChannel })
+        expect(findNewestUsableInviteLink).not.toHaveBeenCalled()
+      })
+
+      test('should throw for a member when only the owner may invite', async () => {
+        asMockedFunction(getChannelInfo).mockResolvedValue({
+          ...privateChannel,
+          membersCanInvite: false,
+        })
+
+        await expect(
+          chatService.getOwnInviteLink(testChannel.id, user1.id, REGULAR_USER),
+        ).rejects.toMatchObject({ code: ChatServiceErrorCode.NotEnoughPermissions })
+        expect(findNewestUsableInviteLink).not.toHaveBeenCalled()
+      })
+
+      test('should throw for a public channel', async () => {
+        asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+
+        await expect(
+          chatService.getOwnInviteLink(testChannel.id, user1.id, REGULAR_USER),
+        ).rejects.toMatchObject({ code: ChatServiceErrorCode.ChannelNotPrivate })
+      })
+    })
+
+    describe('createChannelInviteLink', () => {
+      const NOW = new Date('2026-09-28T12:00:00.000Z')
+      const DEFAULT_SETTINGS = { expiresInSeconds: 7 * 24 * 60 * 60, maxUses: null }
+
+      beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'] })
+        vi.setSystemTime(NOW)
+        asMockedFunction(getChannelInfo).mockResolvedValue(privateChannel)
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+        asMockedFunction(createInviteLink).mockImplementation(async args => ({
+          id: LINK_ID,
+          channelId: args.channelId,
+          createdBy: args.createdBy,
+          createdAt: args.createdAt,
+          expiresAt: args.expiresAt,
+          maxUses: args.maxUses,
+          uses: 0,
+        }))
+      })
+
+      afterEach(() => {
+        vi.useRealTimers()
+      })
+
+      test("should throw if channel doesn't exist", async () => {
+        asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+        await expect(
+          chatService.createChannelInviteLink(
+            testChannel.id,
+            user1.id,
+            REGULAR_USER,
+            DEFAULT_SETTINGS,
+          ),
+        ).rejects.toMatchObject({ code: ChatServiceErrorCode.ChannelNotFound })
+      })
+
+      test('should throw for a non-member who is not a server moderator', async () => {
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+        await expect(
+          chatService.createChannelInviteLink(
+            testChannel.id,
+            user1.id,
+            REGULAR_USER,
+            DEFAULT_SETTINGS,
+          ),
+        ).rejects.toMatchObject({ code: ChatServiceErrorCode.NotInChannel })
+        expect(createInviteLink).not.toHaveBeenCalled()
+      })
+
+      test('should throw for a member when only the owner may invite', async () => {
+        asMockedFunction(getChannelInfo).mockResolvedValue({
+          ...privateChannel,
+          membersCanInvite: false,
+        })
+
+        await expect(
+          chatService.createChannelInviteLink(testChannel.id, user1.id, REGULAR_USER, {
+            expiresInSeconds: null,
+            maxUses: 1,
+          }),
+        ).rejects.toMatchObject({ code: ChatServiceErrorCode.NotEnoughPermissions })
+        expect(createInviteLink).not.toHaveBeenCalled()
+      })
+
+      test('lets the owner create a link when only the owner may invite', async () => {
+        asMockedFunction(getChannelInfo).mockResolvedValue({
+          ...privateChannel,
+          ownerId: user1.id,
+          membersCanInvite: false,
+        })
+
+        const result = await chatService.createChannelInviteLink(
+          testChannel.id,
+          user1.id,
+          REGULAR_USER,
+          DEFAULT_SETTINGS,
+        )
+
+        expect(result.inviteLink.token).toBe(TOKEN)
+      })
+
+      test('lets a server moderator create a link when only the owner may invite', async () => {
+        asMockedFunction(getChannelInfo).mockResolvedValue({
+          ...privateChannel,
+          membersCanInvite: false,
+        })
+
+        const result = await chatService.createChannelInviteLink(
+          testChannel.id,
+          user1.id,
+          SERVER_MODERATOR,
+          DEFAULT_SETTINGS,
+        )
+
+        expect(result.inviteLink.token).toBe(TOKEN)
+      })
+
+      test('should throw for a public channel', async () => {
+        asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+
+        await expect(
+          chatService.createChannelInviteLink(
+            testChannel.id,
+            user1.id,
+            REGULAR_USER,
+            DEFAULT_SETTINGS,
+          ),
+        ).rejects.toMatchObject({ code: ChatServiceErrorCode.ChannelNotPrivate })
+        expect(createInviteLink).not.toHaveBeenCalled()
+      })
+
+      test('creates a link with the given expiry and use limit', async () => {
+        const result = await chatService.createChannelInviteLink(
+          testChannel.id,
+          user1.id,
+          REGULAR_USER,
+          { expiresInSeconds: 30 * 60, maxUses: 5 },
+        )
+
+        expect(createInviteLink).toHaveBeenCalledWith({
+          channelId: testChannel.id,
+          createdBy: user1.id,
+          createdAt: NOW,
+          expiresAt: new Date(NOW.getTime() + 30 * 60 * 1000),
+          maxUses: 5,
+          asServerModerator: false,
+        })
+        expect(result.inviteLink.token).toBe(TOKEN)
+        expect(result.inviteLink.expiresAt).toBe(NOW.getTime() + 30 * 60 * 1000)
+        expect(result.inviteLink.maxUses).toBe(5)
+      })
+
+      test('creates a link that never expires and has no use limit when asked to', async () => {
+        const result = await chatService.createChannelInviteLink(
+          testChannel.id,
+          user1.id,
+          REGULAR_USER,
+          { expiresInSeconds: null, maxUses: null },
+        )
+
+        expect(createInviteLink).toHaveBeenCalledWith(
+          expect.objectContaining({ expiresAt: undefined, maxUses: undefined }),
+        )
+        expect(result.inviteLink.expiresAt).toBeUndefined()
+        expect(result.inviteLink.maxUses).toBeUndefined()
+      })
+
+      test('lets a server moderator who is not a member create a link', async () => {
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+        await chatService.createChannelInviteLink(
+          testChannel.id,
+          user1.id,
+          SERVER_MODERATOR,
+          DEFAULT_SETTINGS,
+        )
+
+        expect(createInviteLink).toHaveBeenCalledWith(
+          expect.objectContaining({ asServerModerator: true }),
+        )
+      })
+
+      test('should throw if the channel was made public while the link was being created', async () => {
+        asMockedFunction(getChannelInfo)
+          .mockResolvedValueOnce(privateChannel)
+          .mockResolvedValueOnce(testChannel)
+        asMockedFunction(createInviteLink).mockResolvedValue(undefined)
+
+        await expect(
+          chatService.createChannelInviteLink(
+            testChannel.id,
+            user1.id,
+            REGULAR_USER,
+            DEFAULT_SETTINGS,
+          ),
+        ).rejects.toMatchObject({ code: ChatServiceErrorCode.ChannelNotPrivate })
+      })
+    })
+
+    describe('getInviteLinkInfo', () => {
+      beforeEach(() => {
+        asMockedFunction(getInviteLink).mockResolvedValue(makeLink())
+        asMockedFunction(getChannelInfo).mockResolvedValue(privateChannel)
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+      })
+
+      test('returns the channel a valid link leads into to a non-member', async () => {
+        const link = makeLink()
+        asMockedFunction(getInviteLink).mockResolvedValue(link)
+
+        const result = await chatService.getInviteLinkInfo(TOKEN, user1.id)
+
+        expect(getInviteLink).toHaveBeenCalledWith(LINK_ID)
+        expect(result).toEqual({
+          channelInfo: toBasicChannelInfo(privateChannel),
+          detailedChannelInfo: toDetailedChannelInfo(privateChannel),
+          expiresAt: link.expiresAt!.getTime(),
+          isMember: false,
+        })
+      })
+
+      test('tells a member they are already in the channel', async () => {
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+
+        const result = await chatService.getInviteLinkInfo(TOKEN, user1.id)
+
+        expect(result.isMember).toBe(true)
+      })
+
+      test('accepts a link that never expires and has uses left', async () => {
+        asMockedFunction(getInviteLink).mockResolvedValue(
+          makeLink({ expiresAt: undefined, maxUses: 5, uses: 4 }),
+        )
+
+        const result = await chatService.getInviteLinkInfo(TOKEN, user1.id)
+
+        expect(result.expiresAt).toBeUndefined()
+      })
+
+      test.each([
+        ['nonexistent', () => asMockedFunction(getInviteLink).mockResolvedValue(undefined)],
+        [
+          'expired',
+          () =>
+            asMockedFunction(getInviteLink).mockResolvedValue(
+              makeLink({ expiresAt: new Date(Date.now() - 1000) }),
+            ),
+        ],
+        [
+          'used up',
+          () =>
+            asMockedFunction(getInviteLink).mockResolvedValue(makeLink({ maxUses: 2, uses: 2 })),
+        ],
+        [
+          'for a public channel',
+          () => asMockedFunction(getChannelInfo).mockResolvedValue(testChannel),
+        ],
+        [
+          'for a deleted channel',
+          () => asMockedFunction(getChannelInfo).mockResolvedValue(undefined),
+        ],
+      ])('rejects a link that is %s as invalid', async (_, setUp) => {
+        setUp()
+
+        await expect(chatService.getInviteLinkInfo(TOKEN, user1.id)).rejects.toMatchObject({
+          code: ChatServiceErrorCode.InviteLinkInvalid,
+        })
+      })
+
+      test('rejects a malformed token as invalid without looking it up', async () => {
+        await expect(chatService.getInviteLinkInfo('not-a-token', user1.id)).rejects.toMatchObject({
+          code: ChatServiceErrorCode.InviteLinkInvalid,
+        })
+        expect(getInviteLink).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('joinChannelWithInviteLink', () => {
+      const addUserToChannelMock = asMockedFunction(addUserToChannel)
+      let isUserInChannel: boolean
+
+      beforeEach(() => {
+        isUserInChannel = false
+        asMockedFunction(getInviteLink).mockResolvedValue(makeLink())
+        asMockedFunction(getChannelInfo).mockResolvedValue(privateChannel)
+        asMockedFunction(getUserChannelEntryForUser).mockImplementation(async () =>
+          isUserInChannel ? user1TestChannelEntry : null,
+        )
+        asMockedFunction(isUserBannedFromChannel).mockResolvedValue(false)
+        asMockedFunction(countBannedIdentifiersForChannel).mockResolvedValue(0)
+        addUserToChannelMock.mockImplementation(async () => {
+          isUserInChannel = true
+          return user1TestChannelEntry
+        })
+        asMockedFunction(addMessageToChannel).mockResolvedValue(joinUser1TestChannelMessage)
+      })
+
+      test('joins the channel, records the inviter and consumes one use', async () => {
+        const result = await chatService.joinChannelWithInviteLink(TOKEN, user1.id)
+
+        expect(getInviteLink).toHaveBeenCalledWith(LINK_ID, { forUpdate: true }, dbClient)
+        expect(addUserToChannelMock).toHaveBeenCalledWith(
+          user1.id,
+          privateChannel.id,
+          dbClient,
+          user2.id,
+        )
+        expect(addMessageToChannel).toHaveBeenCalledWith(
+          user1.id,
+          privateChannel.id,
+          { type: ServerChatMessageType.JoinChannel },
+          dbClient,
+        )
+        expect(incrementInviteLinkUses).toHaveBeenCalledWith(LINK_ID, dbClient)
+        expect(result.channelInfo).toEqual(toBasicChannelInfo(privateChannel))
+
+        await new Promise(resolve => setTimeout(resolve, 20))
+        expect(client1.publish).toHaveBeenCalledWith(
+          getChannelUserPath(privateChannel.id, user1.id),
+          expect.objectContaining({ action: 'init3' }),
+        )
+      })
+
+      test('succeeds for an existing member without consuming a use', async () => {
+        isUserInChannel = true
+
+        const result = await chatService.joinChannelWithInviteLink(TOKEN, user1.id)
+
+        expect(result.channelInfo.id).toBe(privateChannel.id)
+        expect(addUserToChannelMock).not.toHaveBeenCalled()
+        expect(incrementInviteLinkUses).not.toHaveBeenCalled()
+      })
+
+      test('refuses a banned user without consuming a use', async () => {
+        asMockedFunction(isUserBannedFromChannel).mockResolvedValue(true)
+
+        await expect(chatService.joinChannelWithInviteLink(TOKEN, user1.id)).rejects.toMatchObject({
+          code: ChatServiceErrorCode.UserBanned,
+        })
+        expect(addUserToChannelMock).not.toHaveBeenCalled()
+        expect(incrementInviteLinkUses).not.toHaveBeenCalled()
+      })
+
+      test('refuses a user caught by the automated identifier ban without consuming a use', async () => {
+        asMockedFunction(countBannedIdentifiersForChannel).mockResolvedValue(
+          MIN_IDENTIFIER_MATCHES + 1,
+        )
+
+        await expect(chatService.joinChannelWithInviteLink(TOKEN, user1.id)).rejects.toMatchObject({
+          code: ChatServiceErrorCode.UserBanned,
+        })
+        expect(banUserFromChannel).toHaveBeenCalled()
+        expect(incrementInviteLinkUses).not.toHaveBeenCalled()
+      })
+
+      test('refuses a user at the joined channel cap without consuming a use', async () => {
+        addUserToChannelMock.mockResolvedValue(undefined)
+
+        await expect(chatService.joinChannelWithInviteLink(TOKEN, user1.id)).rejects.toMatchObject({
+          code: ChatServiceErrorCode.MaximumJoinedChannels,
+        })
+        expect(incrementInviteLinkUses).not.toHaveBeenCalled()
+      })
+
+      test.each([
+        ['nonexistent', () => asMockedFunction(getInviteLink).mockResolvedValue(undefined)],
+        [
+          'expired',
+          () =>
+            asMockedFunction(getInviteLink).mockResolvedValue(
+              makeLink({ expiresAt: new Date(Date.now() - 1000) }),
+            ),
+        ],
+        [
+          'used up',
+          () =>
+            asMockedFunction(getInviteLink).mockResolvedValue(makeLink({ maxUses: 1, uses: 1 })),
+        ],
+        [
+          'for a public channel',
+          () => asMockedFunction(getChannelInfo).mockResolvedValue(testChannel),
+        ],
+      ])('refuses a link that is %s and changes nothing', async (_, setUp) => {
+        setUp()
+
+        await expect(chatService.joinChannelWithInviteLink(TOKEN, user1.id)).rejects.toMatchObject({
+          code: ChatServiceErrorCode.InviteLinkInvalid,
+        })
+        expect(addUserToChannelMock).not.toHaveBeenCalled()
+        expect(incrementInviteLinkUses).not.toHaveBeenCalled()
+      })
+    })
+
+    const editPermissionsHolderEntry: UserChannelEntry = {
+      ...user1TestChannelEntry,
+      channelPermissions: { kick: true, ban: true, editPermissions: true },
+    }
+
+    describe('listInviteLinks', () => {
+      const listArgs = {
+        channelId: privateChannel.id,
+        limit: 2,
+        offset: 0,
+        searchStr: 'searchStr',
+      }
+
+      beforeEach(() => {
+        asMockedFunction(getChannelInfo).mockResolvedValue(privateChannel)
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+        asMockedFunction(listUsableInviteLinks).mockResolvedValue([
+          makeLink({ createdBy: user1.id, maxUses: 10, uses: 3 }),
+        ])
+      })
+
+      test("should throw if channel doesn't exist", async () => {
+        asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+        await expect(
+          chatService.listInviteLinks({
+            ...listArgs,
+            userId: user2.id,
+            isServerModerator: REGULAR_USER,
+          }),
+        ).rejects.toMatchObject({ code: ChatServiceErrorCode.ChannelNotFound })
+      })
+
+      test.each([
+        ['a member', () => {}],
+        [
+          'an editPermissions holder',
+          () =>
+            asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(
+              editPermissionsHolderEntry,
+            ),
+        ],
+        [
+          'a non-member',
+          () => asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null),
+        ],
+      ])('refuses %s', async (_, setUp) => {
+        setUp()
+
+        await expect(
+          chatService.listInviteLinks({
+            ...listArgs,
+            userId: user1.id,
+            isServerModerator: REGULAR_USER,
+          }),
+        ).rejects.toMatchObject({ code: ChatServiceErrorCode.NotEnoughPermissions })
+        expect(deleteUnusableInviteLinks).not.toHaveBeenCalled()
+        expect(listUsableInviteLinks).not.toHaveBeenCalled()
+      })
+
+      test.each([
+        ['the owner', user2.id, REGULAR_USER],
+        ['a server moderator', user1.id, SERVER_MODERATOR],
+      ])(
+        'lists the working links for %s after deleting the ones that stopped working',
+        async (_, userId, isServerModerator) => {
+          const result = await chatService.listInviteLinks({
+            ...listArgs,
+            userId,
+            isServerModerator,
+          })
+
+          expect(deleteUnusableInviteLinks).toHaveBeenCalledWith({
+            channelId: privateChannel.id,
+            now: expect.any(Date),
+          })
+          expect(listUsableInviteLinks).toHaveBeenCalledWith({
+            channelId: privateChannel.id,
+            now: expect.any(Date),
+            searchStr: 'searchStr',
+            limit: 2,
+            offset: 0,
+          })
+          expect(
+            asMockedFunction(deleteUnusableInviteLinks).mock.invocationCallOrder[0],
+          ).toBeLessThan(asMockedFunction(listUsableInviteLinks).mock.invocationCallOrder[0])
+          expect(result).toEqual({
+            channelId: privateChannel.id,
+            inviteLinks: [
+              expect.objectContaining({ token: TOKEN, createdBy: user1.id, uses: 3, maxUses: 10 }),
+            ],
+            hasMoreInviteLinks: false,
+            users: [user1],
+          })
+        },
+      )
+
+      test('reports more links when a full page comes back', async () => {
+        asMockedFunction(listUsableInviteLinks).mockResolvedValue([makeLink(), makeLink()])
+
+        const result = await chatService.listInviteLinks({
+          ...listArgs,
+          userId: user2.id,
+          isServerModerator: REGULAR_USER,
+        })
+
+        expect(result.hasMoreInviteLinks).toBe(true)
+      })
+    })
+
+    describe('revokeInviteLink', () => {
+      beforeEach(() => {
+        asMockedFunction(getChannelInfo).mockResolvedValue(privateChannel)
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+        asMockedFunction(deleteInviteLink).mockResolvedValue(true)
+      })
+
+      test.each([
+        ['a member', () => {}],
+        [
+          'an editPermissions holder',
+          () =>
+            asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(
+              editPermissionsHolderEntry,
+            ),
+        ],
+      ])('refuses %s', async (_, setUp) => {
+        setUp()
+
+        await expect(
+          chatService.revokeInviteLink({
+            channelId: privateChannel.id,
+            token: TOKEN,
+            userId: user1.id,
+            isServerModerator: REGULAR_USER,
+          }),
+        ).rejects.toMatchObject({ code: ChatServiceErrorCode.NotEnoughPermissions })
+        expect(deleteInviteLink).not.toHaveBeenCalled()
+      })
+
+      test.each([
+        ['the owner', user2.id, REGULAR_USER],
+        ['a server moderator', user1.id, SERVER_MODERATOR],
+      ])(
+        'lets %s revoke a link, which then resolves as invalid',
+        async (_, userId, isServerModerator) => {
+          await chatService.revokeInviteLink({
+            channelId: privateChannel.id,
+            token: TOKEN,
+            userId,
+            isServerModerator,
+          })
+
+          expect(deleteInviteLink).toHaveBeenCalledWith({
+            channelId: privateChannel.id,
+            id: LINK_ID,
+          })
+
+          asMockedFunction(getInviteLink).mockResolvedValue(undefined)
+          await expect(chatService.getInviteLinkInfo(TOKEN, user1.id)).rejects.toMatchObject({
+            code: ChatServiceErrorCode.InviteLinkInvalid,
+          })
+        },
+      )
+
+      test("refuses a link that doesn't exist in the channel", async () => {
+        asMockedFunction(deleteInviteLink).mockResolvedValue(false)
+
+        await expect(
+          chatService.revokeInviteLink({
+            channelId: privateChannel.id,
+            token: TOKEN,
+            userId: user2.id,
+            isServerModerator: REGULAR_USER,
+          }),
+        ).rejects.toMatchObject({ code: ChatServiceErrorCode.InviteLinkInvalid })
+      })
+
+      test('refuses a malformed token without touching the database', async () => {
+        await expect(
+          chatService.revokeInviteLink({
+            channelId: privateChannel.id,
+            token: 'not-a-token',
+            userId: user2.id,
+            isServerModerator: REGULAR_USER,
+          }),
+        ).rejects.toMatchObject({ code: ChatServiceErrorCode.InviteLinkInvalid })
+        expect(deleteInviteLink).not.toHaveBeenCalled()
+      })
+    })
+  })
+
+  describe('editChannel', () => {
+    test("should throw if channel doesn't exist", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+      await expect(
+        chatService.editChannel({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isServerModerator: REGULAR_USER,
+          updates: {},
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Channel not found]`)
+    })
+
+    test('should throw if not a channel owner or a server moderator', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+
+      await expect(
+        chatService.editChannel({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isServerModerator: REGULAR_USER,
+          updates: {},
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: Only channel owner and admins can edit the channel]`,
+      )
+    })
+
+    test('works when a server moderator who does not own the channel', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+
+      const updates = {
+        description: 'NEW_DESCRIPTION',
+      }
+      asMockedFunction(updateChannel).mockResolvedValue({
+        ...testChannel,
+        ...updates,
+      })
+
+      const result = await chatService.editChannel({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: SERVER_MODERATOR,
+        updates,
+      })
+
+      expect(result).toEqual({
+        channelInfo: testBasicInfo,
+        detailedChannelInfo: {
+          ...testDetailedInfo,
+          description: updates.description,
+        },
+        joinedChannelInfo: testJoinedInfo,
+      })
+    })
+
+    test('works when updating description', async () => {
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        ownerId: user1.id,
+      })
+
+      const updates = {
+        description: 'NEW_DESCRIPTION',
+      }
+      asMockedFunction(updateChannel).mockResolvedValue({
+        ...testChannel,
+        ...updates,
+      })
+
+      const result = await chatService.editChannel({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: REGULAR_USER,
+        updates,
+      })
+
+      const channelInfo = {
+        channelInfo: testBasicInfo,
+        detailedChannelInfo: {
+          ...testDetailedInfo,
+          description: updates.description,
+        },
+        joinedChannelInfo: testJoinedInfo,
+      }
+
+      expect(client1.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+        action: 'edit',
+        ...channelInfo,
+      })
+      expect(result).toEqual(channelInfo)
+    })
+
+    test('lets the owner make the channel private and publishes the change', async () => {
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue({ ...testChannel, ownerId: user1.id })
+      asMockedFunction(updateChannel).mockResolvedValue({ ...testChannel, private: true })
+
+      const result = await chatService.editChannel({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: REGULAR_USER,
+        updates: { private: true },
+      })
+
+      expect(updateChannel).toHaveBeenCalledWith(testChannel.id, { private: true })
+      expect(client1.publish).toHaveBeenCalledWith(
+        getChannelPath(testChannel.id),
+        expect.objectContaining({
+          action: 'edit',
+          channelInfo: { ...testBasicInfo, private: true },
+        }),
+      )
+      expect(result.channelInfo.private).toBe(true)
+    })
+
+    test('lets the owner make a private channel public', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        private: true,
+        ownerId: user1.id,
+      })
+      asMockedFunction(updateChannel).mockResolvedValue({ ...testChannel, private: false })
+
+      const result = await chatService.editChannel({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: REGULAR_USER,
+        updates: { private: false },
+      })
+
+      expect(updateChannel).toHaveBeenCalledWith(testChannel.id, { private: false }, dbClient)
+      expect(deleteInviteLinksForChannel).toHaveBeenCalledWith(testChannel.id, dbClient)
+      expect(result.channelInfo.private).toBe(false)
+    })
+
+    test('keeps the invite links of a channel that stays private', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        private: true,
+        ownerId: user1.id,
+      })
+      asMockedFunction(updateChannel).mockResolvedValue({ ...testChannel, private: true })
+
+      await chatService.editChannel({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: REGULAR_USER,
+        updates: { topic: 'new topic' },
+      })
+
+      expect(deleteInviteLinksForChannel).not.toHaveBeenCalled()
+    })
+
+    test("deletes members' invite links when the owner stops members inviting", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        private: true,
+        ownerId: user1.id,
+        membersCanInvite: true,
+      })
+      asMockedFunction(updateChannel).mockResolvedValue({
+        ...testChannel,
+        private: true,
+        ownerId: user1.id,
+        membersCanInvite: false,
+      })
+
+      const result = await chatService.editChannel({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: REGULAR_USER,
+        updates: { membersCanInvite: false },
+      })
+
+      expect(updateChannel).toHaveBeenCalledWith(
+        testChannel.id,
+        { membersCanInvite: false },
+        dbClient,
+      )
+      expect(deleteMemberInviteLinks).toHaveBeenCalledWith(
+        { channelId: testChannel.id, ownerId: user1.id },
+        dbClient,
+      )
+      expect(deleteInviteLinksForChannel).not.toHaveBeenCalled()
+      expect(result.joinedChannelInfo.membersCanInvite).toBe(false)
+    })
+
+    test("keeps members' invite links when the owner lets members invite", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        private: true,
+        ownerId: user1.id,
+      })
+      asMockedFunction(updateChannel).mockResolvedValue({
+        ...testChannel,
+        private: true,
+        ownerId: user1.id,
+        membersCanInvite: true,
+      })
+
+      const result = await chatService.editChannel({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: REGULAR_USER,
+        updates: { membersCanInvite: true },
+      })
+
+      expect(deleteMemberInviteLinks).not.toHaveBeenCalled()
+      expect(result.joinedChannelInfo.membersCanInvite).toBe(true)
+    })
+
+    test("doesn't let anyone else change who may invite", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({ ...testChannel, private: true })
+
+      await expect(
+        chatService.editChannel({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isServerModerator: REGULAR_USER,
+          updates: { membersCanInvite: true },
+        }),
+      ).rejects.toMatchObject({ code: ChatServiceErrorCode.CannotEditChannel })
+      expect(updateChannel).not.toHaveBeenCalled()
+    })
+
+    test('lets a server moderator make the channel private', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+      asMockedFunction(updateChannel).mockResolvedValue({ ...testChannel, private: true })
+
+      const result = await chatService.editChannel({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: SERVER_MODERATOR,
+        updates: { private: true },
+      })
+
+      expect(result.channelInfo.private).toBe(true)
+    })
+
+    test("doesn't let anyone else make the channel private", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+
+      await expect(
+        chatService.editChannel({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isServerModerator: REGULAR_USER,
+          updates: { private: true },
+        }),
+      ).rejects.toMatchObject({ code: ChatServiceErrorCode.CannotEditChannel })
+      expect(updateChannel).not.toHaveBeenCalled()
+    })
+
+    test("doesn't let an official channel be made private", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(shieldBatteryChannel)
+
+      await expect(
+        chatService.editChannel({
+          channelId: shieldBatteryChannel.id,
+          userId: user1.id,
+          isServerModerator: SERVER_MODERATOR,
+          updates: { private: true },
+        }),
+      ).rejects.toMatchObject({ code: ChatServiceErrorCode.CannotEditChannel })
+      expect(updateChannel).not.toHaveBeenCalled()
+    })
+
+    test('accepts making an official channel public', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(shieldBatteryChannel)
+      asMockedFunction(updateChannel).mockResolvedValue(shieldBatteryChannel)
+
+      const result = await chatService.editChannel({
+        channelId: shieldBatteryChannel.id,
+        userId: user1.id,
+        isServerModerator: SERVER_MODERATOR,
+        updates: { private: false },
+      })
+
+      expect(result.channelInfo.private).toBe(false)
+    })
+
+    test('works when updating topic', async () => {
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        ownerId: user1.id,
+      })
+
+      const updates = {
+        topic: 'NEW_TOPIC',
+      }
+      asMockedFunction(updateChannel).mockResolvedValue({
+        ...testChannel,
+        ...updates,
+      })
+
+      const result = await chatService.editChannel({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: REGULAR_USER,
+        updates,
+      })
+
+      const channelInfo = {
+        channelInfo: testBasicInfo,
+        detailedChannelInfo: testDetailedInfo,
+        joinedChannelInfo: {
+          ...testJoinedInfo,
+          topic: updates.topic,
+        },
+      }
+
+      expect(client1.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+        action: 'edit',
+        ...channelInfo,
+      })
+      expect(result).toEqual(channelInfo)
+    })
+  })
+
+  describe('leaveChannel', () => {
+    const removeUserFromChannelMock = asMockedFunction(removeUserFromChannel)
+
+    beforeEach(async () => {
+      removeUserFromChannelMock.mockResolvedValue({ userWasRemoved: true, newOwnerId: undefined })
+    })
+
+    test('should throw if not in channel', async () => {
+      await expect(
+        chatService.leaveChannel(testChannel.id, user1.id),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Must be in channel to leave it]`)
+    })
+
+    test('works when in channel', async () => {
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+      await joinUserToChannel(
+        user2,
+        testChannel,
+        user2TestChannelEntry,
+        joinUser2TestChannelMessage,
+      )
+
+      await chatService.leaveChannel(testChannel.id, user1.id)
+
+      expect(removeUserFromChannelMock).toHaveBeenCalledWith(user1.id, testChannel.id)
+      expect(deleteInviteLinksCreatedBy).toHaveBeenCalledWith({
+        channelId: testChannel.id,
+        userId: user1.id,
+      })
+      expect(client2.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+        action: 'leave2',
+        userId: user1.id,
+        newOwnerId: undefined,
+        time: SERVER_NOW.getTime(),
+      })
+
+      await expectMessageWasNotReceived(user2, testChannel, client1)
+      expect(client1.unsubscribe).toHaveBeenCalledWith(getChannelUserPath(testChannel.id, user1.id))
+    })
+
+    // NOTE(2Pac): This test covers a rare bug that happened once when the user tried to leave a
+    // channel that didn't exist in state anymore.
+    test("works when trying to leave channel that doesn't exist", async () => {
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+
+      let mockCalled = false
+      removeUserFromChannelMock.mockImplementation(async () => {
+        if (mockCalled) {
+          return { userWasRemoved: true, newOwnerId: undefined }
+        }
+
+        mockCalled = true
+        await chatService.leaveChannel(testChannel.id, user1.id)
+
+        return { userWasRemoved: true, newOwnerId: undefined }
+      })
+
+      await chatService.leaveChannel(testChannel.id, user1.id)
+
+      expect(client1.unsubscribe).toHaveBeenCalledWith(getChannelUserPath(testChannel.id, user1.id))
+    })
+
+    test("doesn't publish a leave event when the user was already removed", async () => {
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+      await joinUserToChannel(
+        user2,
+        testChannel,
+        user2TestChannelEntry,
+        joinUser2TestChannelMessage,
+      )
+
+      removeUserFromChannelMock.mockResolvedValue({ userWasRemoved: false, newOwnerId: undefined })
+
+      await chatService.leaveChannel(testChannel.id, user1.id)
+
+      expect(removeUserFromChannelMock).toHaveBeenCalledWith(user1.id, testChannel.id)
+      expect(client2.publish).not.toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+        action: 'leave2',
+        userId: user1.id,
+        newOwnerId: undefined,
+      })
+
+      expect(client1.unsubscribe).toHaveBeenCalledWith(getChannelUserPath(testChannel.id, user1.id))
+    })
+  })
+
+  describe('moderateUser', () => {
+    const removeUserFromChannelMock = asMockedFunction(removeUserFromChannel)
+
+    beforeEach(async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+      removeUserFromChannelMock.mockResolvedValue({ userWasRemoved: true, newOwnerId: undefined })
+    })
+
+    test("should throw if channel doesn't exist", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+      await expect(
+        chatService.moderateUser(
+          testChannel.id,
+          user1.id,
+          user2.id,
+          ChannelModerationAction.Kick,
+          REGULAR_USER,
+        ),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Channel not found]`)
+    })
+
+    test('should throw if not in channel', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+      await expect(
+        chatService.moderateUser(
+          testChannel.id,
+          user1.id,
+          user2.id,
+          ChannelModerationAction.Kick,
+          REGULAR_USER,
+        ),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Must be in channel to moderate users]`)
+    })
+
+    test('should throw if target user not in channel', async () => {
+      mockChannelEntries(testChannel, [user1.id, user1TestChannelEntry])
+
+      await expect(
+        chatService.moderateUser(
+          testChannel.id,
+          user1.id,
+          user2.id,
+          ChannelModerationAction.Kick,
+          REGULAR_USER,
+        ),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: User must be in channel to moderate them]`,
+      )
+    })
+
+    test('should throw if moderating yourself', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+
+      await expect(
+        chatService.moderateUser(
+          testChannel.id,
+          user1.id,
+          user1.id,
+          ChannelModerationAction.Kick,
+          REGULAR_USER,
+        ),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Can't moderate yourself]`)
+    })
+
+    describe('when moderating channel', () => {
+      const expectItWorks = async () => {
+        expect(removeUserFromChannelMock).toHaveBeenCalledWith(user2.id, testChannel.id)
+        expect(deleteInviteLinksCreatedBy).toHaveBeenCalledWith({
+          channelId: testChannel.id,
+          userId: user2.id,
+        })
+        expect(client1.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+          action: ChannelModerationAction.Kick,
+          targetId: user2.id,
+          channelName: testChannel.name,
+          newOwnerId: undefined,
+          time: SERVER_NOW.getTime(),
+        })
+
+        await expectMessageWasNotReceived(user1, testChannel, client2)
+        expect(client2.unsubscribe).toHaveBeenCalledWith(
+          getChannelUserPath(testChannel.id, user2.id),
+        )
+
+        expect(notificationService.addNotification).toHaveBeenCalledWith({
+          userId: user2.id,
+          data: {
+            type: NotificationType.ChannelKick,
+            channelId: testChannel.id,
+            channelName: testChannel.name,
+          },
+        })
+      }
+
+      beforeEach(async () => {
+        await joinUserToChannel(
+          user1,
+          testChannel,
+          user1TestChannelEntry,
+          joinUser1TestChannelMessage,
+        )
+        await joinUserToChannel(
+          user2,
+          testChannel,
+          user2TestChannelEntry,
+          joinUser2TestChannelMessage,
+        )
+      })
+
+      test('should throw if not enough permissions to moderate channel owners', async () => {
+        asMockedFunction(getChannelInfo).mockResolvedValue({
+          ...testChannel,
+          topic: 'CHANNEL_TOPIC',
+          ownerId: user2.id,
+        })
+        mockChannelEntries(
+          testChannel,
+          [user1.id, user1TestChannelEntry],
+          [user2.id, user2TestChannelEntry],
+        )
+
+        await expect(
+          chatService.moderateUser(
+            testChannel.id,
+            user1.id,
+            user2.id,
+            ChannelModerationAction.Kick,
+            REGULAR_USER,
+          ),
+        ).rejects.toThrowErrorMatchingInlineSnapshot(
+          `[Error: Only server moderators can moderate channel owners]`,
+        )
+      })
+
+      test('should throw if not enough permissions to moderate channel moderators', async () => {
+        mockChannelEntries(
+          testChannel,
+          [user1.id, user1TestChannelEntry],
+          [
+            user2.id,
+            {
+              ...user2TestChannelEntry,
+              channelPermissions: { ...channelPermissions, editPermissions: true },
+            },
+          ],
+        )
+
+        await expect(
+          chatService.moderateUser(
+            testChannel.id,
+            user1.id,
+            user2.id,
+            ChannelModerationAction.Kick,
+            REGULAR_USER,
+          ),
+        ).rejects.toThrowErrorMatchingInlineSnapshot(
+          `[Error: Only server moderators and channel owners can moderate channel moderators]`,
+        )
+      })
+
+      test('should throw if not enough permissions to moderate the user', async () => {
+        mockChannelEntries(
+          testChannel,
+          [user1.id, user1TestChannelEntry],
+          [user2.id, user2TestChannelEntry],
+        )
+
+        await expect(
+          chatService.moderateUser(
+            testChannel.id,
+            user1.id,
+            user2.id,
+            ChannelModerationAction.Kick,
+            REGULAR_USER,
+          ),
+        ).rejects.toThrowErrorMatchingInlineSnapshot(
+          `[Error: Not enough permissions to moderate the user]`,
+        )
+
+        expect(notificationService.addNotification).not.toHaveBeenCalled()
+      })
+
+      describe('when a server moderator', () => {
+        test('works when target is channel owner', async () => {
+          asMockedFunction(getChannelInfo).mockResolvedValue({
+            ...testChannel,
+            topic: 'CHANNEL_TOPIC',
+            ownerId: user2.id,
+          })
+          mockChannelEntries(
+            testChannel,
+            [user1.id, user1TestChannelEntry],
+            [user2.id, user2TestChannelEntry],
+          )
+
+          await chatService.moderateUser(
+            testChannel.id,
+            user1.id,
+            user2.id,
+            ChannelModerationAction.Kick,
+            SERVER_MODERATOR,
+          )
+
+          await expectItWorks()
+        })
+
+        test('works when target is channel moderator', async () => {
+          mockChannelEntries(
+            testChannel,
+            [user1.id, user1TestChannelEntry],
+            [
+              user2.id,
+              {
+                ...user2TestChannelEntry,
+                channelPermissions: { ...channelPermissions, editPermissions: true },
+              },
+            ],
+          )
+
+          await chatService.moderateUser(
+            testChannel.id,
+            user1.id,
+            user2.id,
+            ChannelModerationAction.Kick,
+            SERVER_MODERATOR,
+          )
+
+          await expectItWorks()
+        })
+
+        test('works when target is regular user', async () => {
+          mockChannelEntries(
+            testChannel,
+            [user1.id, user1TestChannelEntry],
+            [user2.id, user2TestChannelEntry],
+          )
+
+          await chatService.moderateUser(
+            testChannel.id,
+            user1.id,
+            user2.id,
+            ChannelModerationAction.Kick,
+            SERVER_MODERATOR,
+          )
+
+          await expectItWorks()
+        })
+
+        test('works when not in channel', async () => {
+          mockChannelEntries(testChannel, [user2.id, user2TestChannelEntry])
+
+          await chatService.moderateUser(
+            testChannel.id,
+            user1.id,
+            user2.id,
+            ChannelModerationAction.Kick,
+            SERVER_MODERATOR,
+          )
+
+          await expectItWorks()
+        })
+
+        test('should throw if target user not in channel', async () => {
+          mockChannelEntries(testChannel, [user1.id, user1TestChannelEntry])
+
+          await expect(
+            chatService.moderateUser(
+              testChannel.id,
+              user1.id,
+              user2.id,
+              ChannelModerationAction.Kick,
+              SERVER_MODERATOR,
+            ),
+          ).rejects.toThrowErrorMatchingInlineSnapshot(
+            `[Error: User must be in channel to moderate them]`,
+          )
+        })
+      })
+
+      describe('when user is channel owner', () => {
+        beforeEach(() => {
+          asMockedFunction(getChannelInfo).mockResolvedValue({
+            ...testChannel,
+            topic: 'CHANNEL_TOPIC',
+            ownerId: user1.id,
+          })
+        })
+
+        test('works when target is channel moderator', async () => {
+          mockChannelEntries(
+            testChannel,
+            [user1.id, user1TestChannelEntry],
+            [
+              user2.id,
+              {
+                ...user2TestChannelEntry,
+                channelPermissions: { ...channelPermissions, editPermissions: true },
+              },
+            ],
+          )
+
+          await chatService.moderateUser(
+            testChannel.id,
+            user1.id,
+            user2.id,
+            ChannelModerationAction.Kick,
+            REGULAR_USER,
+          )
+
+          await expectItWorks()
+        })
+
+        test('works when target is regular user', async () => {
+          mockChannelEntries(
+            testChannel,
+            [user1.id, user1TestChannelEntry],
+            [user2.id, user2TestChannelEntry],
+          )
+
+          await chatService.moderateUser(
+            testChannel.id,
+            user1.id,
+            user2.id,
+            ChannelModerationAction.Kick,
+            REGULAR_USER,
+          )
+
+          await expectItWorks()
+        })
+      })
+
+      describe('when user is channel moderator', () => {
+        beforeEach(() => {
+          mockChannelEntries(
+            testChannel,
+            [
+              user1.id,
+              {
+                ...user1TestChannelEntry,
+                channelPermissions: { ...channelPermissions, editPermissions: true },
+              },
+            ],
+            [user2.id, user2TestChannelEntry],
+          )
+        })
+
+        test('works when target is regular user', async () => {
+          await chatService.moderateUser(
+            testChannel.id,
+            user1.id,
+            user2.id,
+            ChannelModerationAction.Kick,
+            REGULAR_USER,
+          )
+
+          await expectItWorks()
+        })
+      })
+
+      test('should ban user if moderation action is "Ban"', async () => {
+        const banUserFromChannelMock = asMockedFunction(banUserFromChannel)
+        const banAllIdentifiersFromChannelMock = asMockedFunction(banAllIdentifiersFromChannel)
+
+        mockChannelEntries(
+          testChannel,
+          [user1.id, user1TestChannelEntry],
+          [user2.id, user2TestChannelEntry],
+        )
+
+        await chatService.moderateUser(
+          testChannel.id,
+          user1.id,
+          user2.id,
+          ChannelModerationAction.Ban,
+          SERVER_MODERATOR,
+          'MODERATION_REASON',
+        )
+
+        expect(banUserFromChannelMock).toHaveBeenCalledWith(
+          {
+            channelId: testChannel.id,
+            moderatorId: user1.id,
+            targetId: user2.id,
+            reason: 'MODERATION_REASON',
+          },
+          dbClient,
+        )
+        expect(banAllIdentifiersFromChannelMock).toHaveBeenCalledWith(
+          {
+            channelId: testChannel.id,
+            targetId: user2.id,
+          },
+          dbClient,
+        )
+        expect(deleteInviteLinksCreatedBy).toHaveBeenCalledWith({
+          channelId: testChannel.id,
+          userId: user2.id,
+        })
+        expect(notificationService.addNotification).toHaveBeenCalledWith({
+          userId: user2.id,
+          data: {
+            type: NotificationType.ChannelBan,
+            channelId: testChannel.id,
+            channelName: testChannel.name,
+          },
+        })
+      })
+    })
+  })
+
+  describe('transferOwnership', () => {
+    const transferChannelOwnershipMock = asMockedFunction(transferChannelOwnership)
+
+    beforeEach(async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({ ...testChannel, ownerId: user1.id })
+      transferChannelOwnershipMock.mockResolvedValue(true)
+    })
+
+    test("deletes the previous owner's invite links when only the owner may invite", async () => {
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      await chatService.transferOwnership(testChannel.id, user1.id, user2.id, REGULAR_USER)
+
+      expect(deleteMemberInviteLinks).toHaveBeenCalledWith({
+        channelId: testChannel.id,
+        ownerId: user2.id,
+      })
+    })
+
+    test('keeps invite links when members may invite', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        ownerId: user1.id,
+        membersCanInvite: true,
+      })
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      await chatService.transferOwnership(testChannel.id, user1.id, user2.id, REGULAR_USER)
+
+      expect(deleteMemberInviteLinks).not.toHaveBeenCalled()
+    })
+
+    test("should throw if channel doesn't exist", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+      await expect(
+        chatService.transferOwnership(testChannel.id, user1.id, user2.id, REGULAR_USER),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Channel not found]`)
+    })
+
+    test('should throw if channel is official, even for a server moderator', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(shieldBatteryChannel)
+      // The target is a member, so the rejection can only come from the channel being official.
+      mockChannelEntries(shieldBatteryChannel, [user2.id, user2ShieldBatteryChannelEntry])
+
+      // A regular user is turned away by the authority check, which runs before the official one
+      // (official channels have no owner to match).
+      await expect(
+        chatService.transferOwnership(shieldBatteryChannel.id, user1.id, user2.id, REGULAR_USER),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: Only the channel owner can transfer the ownership]`,
+      )
+
+      await expect(
+        chatService.transferOwnership(
+          shieldBatteryChannel.id,
+          user1.id,
+          user2.id,
+          SERVER_MODERATOR,
+        ),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Official channels can't have an owner]`)
+    })
+
+    test('should throw if target user not in channel', async () => {
+      mockChannelEntries(testChannel, [user1.id, user1TestChannelEntry])
+
+      await expect(
+        chatService.transferOwnership(testChannel.id, user1.id, user2.id, REGULAR_USER),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: User must be in channel to transfer the ownership to them]`,
+      )
+    })
+
+    test('should throw if target user is already the owner', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({ ...testChannel, ownerId: user2.id })
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      // Both callers that hold the authority to get this far: a server moderator, and the owner
+      // transferring to themselves.
+
+      await expect(
+        chatService.transferOwnership(testChannel.id, user1.id, user2.id, SERVER_MODERATOR),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: User is already the channel owner]`)
+
+      await expect(
+        chatService.transferOwnership(testChannel.id, user2.id, user2.id, REGULAR_USER),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: User is already the channel owner]`)
+    })
+
+    test('should throw if not the channel owner or a server moderator', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        ownerId: makeSbUserId(3),
+      })
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      await expect(
+        chatService.transferOwnership(testChannel.id, user1.id, user2.id, REGULAR_USER),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: Only the channel owner can transfer the ownership]`,
+      )
+    })
+
+    test('works when channel owner', async () => {
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+      await joinUserToChannel(
+        user2,
+        testChannel,
+        user2TestChannelEntry,
+        joinUser2TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue({ ...testChannel, ownerId: user1.id })
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      await chatService.transferOwnership(testChannel.id, user1.id, user2.id, REGULAR_USER)
+
+      expect(transferChannelOwnershipMock).toHaveBeenCalledWith(testChannel.id, user2.id)
+      expect(client1.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+        action: 'ownerChanged',
+        newOwnerId: user2.id,
+        time: SERVER_NOW.getTime(),
+      })
+    })
+
+    test('works when a server moderator, bypassing the ownership and membership checks', async () => {
+      await joinUserToChannel(
+        user2,
+        testChannel,
+        user2TestChannelEntry,
+        joinUser2TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        ownerId: makeSbUserId(3),
+      })
+      mockChannelEntries(testChannel, [user2.id, user2TestChannelEntry])
+
+      await chatService.transferOwnership(testChannel.id, user1.id, user2.id, SERVER_MODERATOR)
+
+      expect(transferChannelOwnershipMock).toHaveBeenCalledWith(testChannel.id, user2.id)
+      expect(client2.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+        action: 'ownerChanged',
+        newOwnerId: user2.id,
+        time: SERVER_NOW.getTime(),
+      })
+    })
+
+    test('should throw if the target leaves the channel while the transfer is in flight', async () => {
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [user2.id, user2TestChannelEntry],
+      )
+      transferChannelOwnershipMock.mockResolvedValue(false)
+
+      await expect(
+        chatService.transferOwnership(testChannel.id, user1.id, user2.id, REGULAR_USER),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: User must be in channel to transfer the ownership to them]`,
+      )
+      expect(client1.publish).not.toHaveBeenCalledWith(
+        getChannelPath(testChannel.id),
+        expect.objectContaining({ action: 'ownerChanged' }),
+      )
+    })
+  })
+
+  describe('sendChatMessage', () => {
+    test('should throw if not in channel', async () => {
+      await expect(
+        chatService.sendChatMessage(testChannel.id, user1.id, 'Hello World!'),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: Must be in a channel to send a message to it]`,
+      )
+    })
+
+    describe('when in channel', () => {
+      const expectItWorks = (
+        processedMessageString: string,
+        userMentions: SbUser[],
+        channelMentions: FullChannelInfo[],
+      ) => {
+        expect(addMessageToChannelMock).toHaveBeenCalledWith(user1.id, testChannel.id, {
+          type: textMessage.data.type,
+          text: processedMessageString,
+          mentions: userMentions.length > 0 ? userMentions.map(m => m.id) : undefined,
+          channelMentions: channelMentions.length > 0 ? channelMentions.map(c => c.id) : undefined,
+        })
+        expect(client2.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+          action: 'message2',
+          message: toTextMessageJson(textMessage),
+          user: user1,
+          mentions: userMentions,
+          channelMentions: channelMentions.map(c => toBasicChannelInfo(c)),
+        })
+      }
+
+      beforeEach(async () => {
+        await joinUserToChannel(
+          user1,
+          testChannel,
+          user1TestChannelEntry,
+          joinUser1TestChannelMessage,
+        )
+        await joinUserToChannel(
+          user2,
+          testChannel,
+          user2TestChannelEntry,
+          joinUser2TestChannelMessage,
+        )
+      })
+
+      test('works for regular text messages', async () => {
+        const messageString = 'Hello World!'
+        mockTextMessage(user1, testChannel, messageString, [], [])
+
+        await chatService.sendChatMessage(testChannel.id, user1.id, messageString)
+
+        expectItWorks(messageString, [], [])
+      })
+
+      test('works when there are user mentions in a message', async () => {
+        const messageString = `Hello @${user1.name}, @${user2.name}, and @unknown.`
+        const processedText = `Hello <@${user1.id}>, <@${user2.id}>, and @unknown.`
+        const userMentions = [user1, user2]
+        mockTextMessage(user1, testChannel, processedText, userMentions, [])
+
+        await chatService.sendChatMessage(testChannel.id, user1.id, messageString)
+
+        expectItWorks(processedText, userMentions, [])
+      })
+
+      test('works when there are channel mentions in a message', async () => {
+        const messageString = `#${shieldBatteryChannel.name} #${testChannel.name} and #unknown.`
+        const processedText = `<#${shieldBatteryChannel.id}> <#${testChannel.id}> and #unknown.`
+        const channelMentions = [shieldBatteryChannel, testChannel]
+        mockTextMessage(user1, testChannel, processedText, [], channelMentions)
+
+        await chatService.sendChatMessage(testChannel.id, user1.id, messageString)
+
+        expectItWorks(processedText, [], channelMentions)
+      })
+
+      test('stores and publishes an action line with the emote flag', async () => {
+        const messageString = 'waves at everyone'
+        mockTextMessage(user1, testChannel, messageString, [], [], true)
+
+        await chatService.sendChatMessage(testChannel.id, user1.id, messageString, { emote: true })
+
+        expect(addMessageToChannelMock).toHaveBeenCalledWith(user1.id, testChannel.id, {
+          type: textMessage.data.type,
+          text: messageString,
+          mentions: undefined,
+          channelMentions: undefined,
+          emote: true,
+        })
+        expect(client2.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+          action: 'message2',
+          message: expect.objectContaining({ text: messageString, emote: true }),
+          user: user1,
+          mentions: [],
+          channelMentions: [],
+        })
+      })
+
+      test('carries no emote key at all for an ordinary message', async () => {
+        const messageString = 'Hello World!'
+        mockTextMessage(user1, testChannel, messageString, [], [])
+
+        await chatService.sendChatMessage(testChannel.id, user1.id, messageString)
+
+        expect(addMessageToChannelMock.mock.calls[0][2]).not.toHaveProperty('emote')
+        const [, published] = asMockedFunction(client2.publish).mock.calls.find(
+          ([, data]) => data?.action === 'message2',
+        )!
+        expect(published.message).not.toHaveProperty('emote')
+      })
+
+      test('works when there are both user and channel mentions in a message', async () => {
+        const messageString = `Hello @${user1.name}, join #${testChannel.name} please.`
+        const processedText = `Hello <@${user1.id}>, join <#${testChannel.id}> please.`
+        const userMentions = [user1]
+        const channelMentions = [testChannel]
+        mockTextMessage(user1, testChannel, processedText, userMentions, channelMentions)
+
+        await chatService.sendChatMessage(testChannel.id, user1.id, messageString)
+
+        expectItWorks(processedText, userMentions, channelMentions)
+      })
+    })
+
+    test('should throw if user is chat restricted', async () => {
+      // First join the user to the channel so they pass the channel membership check
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+
+      asMockedFunction(mockRestrictionService.isRestricted).mockResolvedValueOnce(true)
+
+      await expect(
+        chatService.sendChatMessage(testChannel.id, user1.id, 'Hello World!'),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: User is chat restricted]`)
+    })
+  })
+
+  describe('sendOutcome', () => {
+    const ROLL: RolledOutcome = { kind: 'roll', max: 6, value: 4 }
+    const rollOutcomeMock = asMockedFunction(rollOutcome)
+
+    /** The message event published to the channel, if there was one. */
+    function publishedMessageEvent(): any {
+      return asMockedFunction(client2.publish).mock.calls.find(
+        ([path, data]) => path === getChannelPath(testChannel.id) && data?.action === 'message2',
+      )?.[1]
+    }
+
+    test('should throw if not in channel', async () => {
+      rollOutcomeMock.mockReturnValue(ROLL)
+
+      await expect(
+        chatService.sendOutcome(testChannel.id, user1.id, { kind: 'roll' }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: Must be in a channel to send a message to it]`,
+      )
+      expect(addMessageToChannelMock).not.toHaveBeenCalled()
+    })
+
+    describe('when in channel', () => {
+      beforeEach(async () => {
+        await joinUserToChannel(
+          user1,
+          testChannel,
+          user1TestChannelEntry,
+          joinUser1TestChannelMessage,
+        )
+        await joinUserToChannel(
+          user2,
+          testChannel,
+          user2TestChannelEntry,
+          joinUser2TestChannelMessage,
+        )
+        rollOutcomeMock.mockReturnValue(ROLL)
+      })
+
+      test('stores and publishes an action line carrying the settled outcome', async () => {
+        mockTextMessage(user1, testChannel, '', [], [], true, ROLL)
+
+        await chatService.sendOutcome(testChannel.id, user1.id, { kind: 'roll', max: 6 })
+
+        expect(rollOutcomeMock).toHaveBeenCalledWith({ kind: 'roll', max: 6 })
+        expect(addMessageToChannelMock).toHaveBeenCalledWith(user1.id, testChannel.id, {
+          type: ServerChatMessageType.TextMessage,
+          text: '',
+          mentions: undefined,
+          channelMentions: undefined,
+          emote: true,
+          outcome: ROLL,
+        })
+        expect(publishedMessageEvent()).toEqual({
+          action: 'message2',
+          message: {
+            id: textMessage.msgId,
+            type: ServerChatMessageType.TextMessage,
+            channelId: testChannel.id,
+            from: user1.id,
+            time: Number(textMessage.sent),
+            text: '',
+            emote: true,
+            outcome: ROLL,
+          },
+          user: user1,
+          mentions: [],
+          channelMentions: [],
+        })
+      })
+
+      test('leaves the text empty for a coin flip', async () => {
+        const flip: RolledOutcome = { kind: 'flip', result: 'heads' }
+        rollOutcomeMock.mockReturnValue(flip)
+        mockTextMessage(user1, testChannel, '', [], [], true, flip)
+
+        await chatService.sendOutcome(testChannel.id, user1.id, { kind: 'flip' })
+
+        expect(addMessageToChannelMock).toHaveBeenCalledWith(user1.id, testChannel.id, {
+          type: ServerChatMessageType.TextMessage,
+          text: '',
+          mentions: undefined,
+          channelMentions: undefined,
+          emote: true,
+          outcome: flip,
+        })
+        expect(publishedMessageEvent().message).toMatchObject({ text: '', outcome: flip })
+      })
+
+      test("carries the 8-ball's question as the text, unprocessed for mentions", async () => {
+        const answer: RolledOutcome = { kind: 'eightBall', answer: 'itIsCertain' }
+        const question = `should @${user2.name} pick the map?`
+        rollOutcomeMock.mockReturnValue(answer)
+        mockTextMessage(user1, testChannel, question, [], [], true, answer)
+
+        await chatService.sendOutcome(testChannel.id, user1.id, { kind: 'eightBall', question })
+
+        expect(addMessageToChannelMock).toHaveBeenCalledWith(user1.id, testChannel.id, {
+          type: ServerChatMessageType.TextMessage,
+          text: question,
+          mentions: undefined,
+          channelMentions: undefined,
+          emote: true,
+          outcome: answer,
+        })
+        expect(publishedMessageEvent()).toMatchObject({ mentions: [], channelMentions: [] })
+      })
+
+      test('should throw if user is chat restricted', async () => {
+        asMockedFunction(mockRestrictionService.isRestricted).mockResolvedValueOnce(true)
+
+        await expect(
+          chatService.sendOutcome(testChannel.id, user1.id, { kind: 'roll' }),
+        ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: User is chat restricted]`)
+        expect(publishedMessageEvent()).toBeUndefined()
+      })
+    })
+  })
+
+  describe('deleteMessage', () => {
+    const messageId = 'MESSAGE_ID'
+    const ownerId = 3 as SbUserId
+    const ownedTestChannel: FullChannelInfo = { ...testChannel, ownerId }
+    const moderatorEntry = (entry: UserChannelEntry, permissions: Partial<ChannelPermissions>) => ({
+      ...entry,
+      channelPermissions: { ...channelPermissions, ...permissions },
+    })
+
+    const textMessageBy = (userId: SbUserId) => ({
+      userId,
+      messageType: ServerChatMessageType.TextMessage,
+    })
+
+    const expectItWorks = () => {
+      expect(deleteChannelMessage).toHaveBeenCalledWith(messageId, testChannel.id)
+      expect(client1.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+        action: 'messageDeleted',
+        messageId,
+      })
+    }
+    const expectNothingDeleted = () => {
+      expect(deleteChannelMessage).not.toHaveBeenCalled()
+      expect(client1.publish).not.toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+        action: 'messageDeleted',
+        messageId,
+      })
+    }
+
+    beforeEach(async () => {
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+      asMockedFunction(getChannelInfo).mockResolvedValue(ownedTestChannel)
+      asMockedFunction(getChannelMessageAuthor).mockResolvedValue(textMessageBy(user2.id))
+    })
+
+    const deleteAs = (isServerModerator: boolean) =>
+      chatService.deleteMessage({
+        channelId: testChannel.id,
+        messageId,
+        userId: user1.id,
+        isServerModerator,
+      })
+
+    test('works for a server moderator without any channel checks', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+      asMockedFunction(getChannelMessageAuthor).mockResolvedValue(textMessageBy(ownerId))
+
+      await deleteAs(SERVER_MODERATOR)
+
+      expectItWorks()
+    })
+
+    test('throws if not in channel', async () => {
+      mockChannelEntries(testChannel, [user2.id, user2TestChannelEntry])
+
+      await expect(deleteAs(REGULAR_USER)).rejects.toMatchObject({
+        code: ChatServiceErrorCode.NotInChannel,
+      })
+      expectNothingDeleted()
+    })
+
+    test('throws for a member without moderation permissions', async () => {
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      await expect(deleteAs(REGULAR_USER)).rejects.toMatchObject({
+        code: ChatServiceErrorCode.NotEnoughPermissions,
+      })
+      expectNothingDeleted()
+    })
+
+    test('works for a member without moderation permissions on their own text message', async () => {
+      asMockedFunction(getChannelMessageAuthor).mockResolvedValue(textMessageBy(user1.id))
+      mockChannelEntries(testChannel, [user1.id, user1TestChannelEntry])
+
+      await deleteAs(REGULAR_USER)
+
+      expectItWorks()
+    })
+
+    test('throws for a member without moderation permissions on their own join message', async () => {
+      asMockedFunction(getChannelMessageAuthor).mockResolvedValue({
+        userId: user1.id,
+        messageType: ServerChatMessageType.JoinChannel,
+      })
+      mockChannelEntries(testChannel, [user1.id, user1TestChannelEntry])
+
+      await expect(deleteAs(REGULAR_USER)).rejects.toMatchObject({
+        code: ChatServiceErrorCode.NotEnoughPermissions,
+      })
+      expectNothingDeleted()
+    })
+
+    test('throws for a former member on their own text message', async () => {
+      asMockedFunction(getChannelMessageAuthor).mockResolvedValue(textMessageBy(user1.id))
+      mockChannelEntries(testChannel, [user2.id, user2TestChannelEntry])
+
+      await expect(deleteAs(REGULAR_USER)).rejects.toMatchObject({
+        code: ChatServiceErrorCode.NotInChannel,
+      })
+      expectNothingDeleted()
+    })
+
+    test("works for the channel owner, even on a moderator's message", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({ ...testChannel, ownerId: user1.id })
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [user2.id, moderatorEntry(user2TestChannelEntry, { editPermissions: true })],
+      )
+
+      await deleteAs(REGULAR_USER)
+
+      expectItWorks()
+    })
+
+    for (const permission of ['kick', 'ban', 'editPermissions'] as const) {
+      test(`works for a moderator holding \`${permission}\``, async () => {
+        mockChannelEntries(
+          testChannel,
+          [user1.id, moderatorEntry(user1TestChannelEntry, { [permission]: true })],
+          [user2.id, user2TestChannelEntry],
+        )
+
+        await deleteAs(REGULAR_USER)
+
+        expectItWorks()
+      })
+    }
+
+    test('works for a moderator on a message from a user who left the channel', async () => {
+      mockChannelEntries(testChannel, [
+        user1.id,
+        moderatorEntry(user1TestChannelEntry, { kick: true }),
+      ])
+
+      await deleteAs(REGULAR_USER)
+
+      expectItWorks()
+    })
+
+    test('works for a moderator on their own message', async () => {
+      asMockedFunction(getChannelMessageAuthor).mockResolvedValue(textMessageBy(user1.id))
+      mockChannelEntries(testChannel, [
+        user1.id,
+        moderatorEntry(user1TestChannelEntry, { kick: true }),
+      ])
+
+      await deleteAs(REGULAR_USER)
+
+      expectItWorks()
+    })
+
+    test("throws for a moderator on the channel owner's message", async () => {
+      asMockedFunction(getChannelMessageAuthor).mockResolvedValue(textMessageBy(ownerId))
+      mockChannelEntries(testChannel, [
+        user1.id,
+        moderatorEntry(user1TestChannelEntry, { editPermissions: true }),
+      ])
+
+      await expect(deleteAs(REGULAR_USER)).rejects.toMatchObject({
+        code: ChatServiceErrorCode.CannotModerateChannelOwner,
+      })
+      expectNothingDeleted()
+    })
+
+    test("throws for a moderator on another moderator's message", async () => {
+      mockChannelEntries(
+        testChannel,
+        [user1.id, moderatorEntry(user1TestChannelEntry, { editPermissions: true })],
+        [user2.id, moderatorEntry(user2TestChannelEntry, { ban: true })],
+      )
+
+      await expect(deleteAs(REGULAR_USER)).rejects.toMatchObject({
+        code: ChatServiceErrorCode.CannotModerateChannelModerator,
+      })
+      expectNothingDeleted()
+    })
+
+    test('throws if the message is not in the channel', async () => {
+      asMockedFunction(getChannelMessageAuthor).mockResolvedValue(undefined)
+      mockChannelEntries(testChannel, [
+        user1.id,
+        moderatorEntry(user1TestChannelEntry, { kick: true }),
+      ])
+
+      await expect(deleteAs(REGULAR_USER)).rejects.toMatchObject({
+        code: ChatServiceErrorCode.MessageNotFound,
+      })
+      expectNothingDeleted()
+    })
+  })
+
+  describe('getChannelInfo', () => {
+    beforeEach(() => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+    })
+
+    test('should throw if channel not found', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+      await expect(
+        chatService.getChannelInfo(testChannel.id, user1.id, REGULAR_USER),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Channel not found]`)
+    })
+
+    test('returns channel info when found', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+
+      const result = await chatService.getChannelInfo(testChannel.id, user1.id, REGULAR_USER)
+
+      expect(result).toEqual({
+        channelInfo: testBasicInfo,
+        detailedChannelInfo: testDetailedInfo,
+        joinedChannelInfo: testJoinedInfo,
+      })
+    })
+
+    describe('when channel is private', () => {
+      test('rejects for a non-member who is not a server moderator', async () => {
+        asMockedFunction(getChannelInfo).mockResolvedValue({ ...testChannel, private: true })
+
+        await expect(
+          chatService.getChannelInfo(testChannel.id, user1.id, REGULAR_USER),
+        ).rejects.toMatchObject({
+          code: ChatServiceErrorCode.ChannelPrivate,
+        })
+      })
+
+      test('returns detailed channel info if user is in channel', async () => {
+        await joinUserToChannel(
+          user1,
+          testChannel,
+          user1TestChannelEntry,
+          joinUser1TestChannelMessage,
+        )
+
+        asMockedFunction(getChannelInfo).mockResolvedValue({ ...testChannel, private: true })
+
+        const result = await chatService.getChannelInfo(testChannel.id, user1.id, REGULAR_USER)
+
+        expect(result).toEqual({
+          channelInfo: {
+            ...testBasicInfo,
+            private: true,
+          },
+          detailedChannelInfo: testDetailedInfo,
+          joinedChannelInfo: testJoinedInfo,
+        })
+      })
+
+      test('returns detailed channel info to a server moderator who is not a member', async () => {
+        asMockedFunction(getChannelInfo).mockResolvedValue({ ...testChannel, private: true })
+
+        const result = await chatService.getChannelInfo(testChannel.id, user1.id, SERVER_MODERATOR)
+
+        expect(result).toEqual({
+          channelInfo: {
+            ...testBasicInfo,
+            private: true,
+          },
+          detailedChannelInfo: testDetailedInfo,
+          joinedChannelInfo: testJoinedInfo,
+        })
+      })
+    })
+  })
+
+  describe('getChannelInfos', () => {
+    beforeEach(() => {
+      asMockedFunction(getUserChannelEntriesForUser).mockResolvedValue([])
+    })
+
+    test('returns no channel infos when no channels are found', async () => {
+      asMockedFunction(getChannelInfos).mockResolvedValue([])
+
+      const result = await chatService.getChannelInfos([], user1.id)
+
+      expect(result).toEqual({
+        channelInfos: [],
+        detailedChannelInfos: [],
+        joinedChannelInfos: [],
+        deletedChannels: [],
+        privateChannels: [],
+      })
+    })
+
+    test('returns channel infos when found', async () => {
+      asMockedFunction(getChannelInfos).mockResolvedValue([shieldBatteryChannel, testChannel])
+
+      const result = await chatService.getChannelInfos(
+        [shieldBatteryChannel.id, testChannel.id],
+        user1.id,
+      )
+
+      expect(result).toEqual({
+        channelInfos: [shieldBatteryBasicInfo, testBasicInfo],
+        detailedChannelInfos: [shieldBatteryDetailedInfo, testDetailedInfo],
+        joinedChannelInfos: [shieldBatteryJoinedInfo, testJoinedInfo],
+        deletedChannels: [],
+        privateChannels: [],
+      })
+    })
+
+    test('returns requested ids that name no existing channel as deleted', async () => {
+      const DELETED_ID = makeSbChannelId(999)
+      asMockedFunction(getChannelInfos).mockResolvedValue([shieldBatteryChannel])
+
+      const result = await chatService.getChannelInfos(
+        [shieldBatteryChannel.id, DELETED_ID],
+        user1.id,
+      )
+
+      expect(result).toEqual({
+        channelInfos: [shieldBatteryBasicInfo],
+        detailedChannelInfos: [shieldBatteryDetailedInfo],
+        joinedChannelInfos: [shieldBatteryJoinedInfo],
+        deletedChannels: [DELETED_ID],
+        privateChannels: [],
+      })
+    })
+
+    describe('when any of the channels is private', () => {
+      beforeEach(() => {
+        asMockedFunction(getChannelInfos).mockResolvedValue([
+          shieldBatteryChannel,
+          { ...testChannel, private: true },
+        ])
+      })
+
+      test("doesn't return channel, detailed, or joined info for private channels the user isn't in", async () => {
+        const result = await chatService.getChannelInfos(
+          [shieldBatteryChannel.id, testChannel.id],
+          user1.id,
+        )
+
+        expect(result).toEqual({
+          channelInfos: [shieldBatteryBasicInfo],
+          detailedChannelInfos: [shieldBatteryDetailedInfo],
+          joinedChannelInfos: [shieldBatteryJoinedInfo],
+          deletedChannels: [],
+          privateChannels: [testChannel.id],
+        })
+      })
+
+      test('returns detailed and joined channel info if user is in a private channel', async () => {
+        await joinUserToChannel(
+          user1,
+          testChannel,
+          user1TestChannelEntry,
+          joinUser1TestChannelMessage,
+        )
+
+        const result = await chatService.getChannelInfos(
+          [shieldBatteryChannel.id, testChannel.id],
+          user1.id,
+        )
+
+        expect(result).toEqual({
+          channelInfos: [shieldBatteryBasicInfo, { ...testBasicInfo, private: true }],
+          detailedChannelInfos: [
+            shieldBatteryDetailedInfo,
+            { ...testDetailedInfo, userCount: testChannel.userCount },
+          ],
+          joinedChannelInfos: [shieldBatteryJoinedInfo, testJoinedInfo],
+          deletedChannels: [],
+          privateChannels: [],
+        })
+      })
+
+      test('returns detailed and joined channel info to a server moderator who is not a member', async () => {
+        const result = await chatService.getChannelInfos(
+          [shieldBatteryChannel.id, testChannel.id],
+          user1.id,
+          SERVER_MODERATOR,
+        )
+
+        expect(result).toEqual({
+          channelInfos: [shieldBatteryBasicInfo, { ...testBasicInfo, private: true }],
+          detailedChannelInfos: [shieldBatteryDetailedInfo, testDetailedInfo],
+          joinedChannelInfos: [shieldBatteryJoinedInfo, testJoinedInfo],
+          deletedChannels: [],
+          privateChannels: [],
+        })
+      })
+    })
+  })
+
+  describe('searchChannels', () => {
+    test('returns no channel infos when no channels are found', async () => {
+      asMockedFunction(searchChannels).mockResolvedValue([])
+
+      const result = await chatService.searchChannels({
+        userId: user1.id,
+        isServerModerator: false,
+        limit: 40,
+        offset: 0,
+      })
+
+      expect(result).toEqual({
+        channelInfos: [],
+        detailedChannelInfos: [],
+        joinedChannelInfos: [],
+        hasMoreChannels: false,
+      })
+    })
+
+    test('returns channel infos when found', async () => {
+      asMockedFunction(searchChannels).mockResolvedValue([shieldBatteryChannel, testChannel])
+
+      const result = await chatService.searchChannels({
+        userId: user1.id,
+        isServerModerator: false,
+        limit: 40,
+        offset: 0,
+      })
+
+      expect(result).toEqual({
+        channelInfos: [shieldBatteryBasicInfo, testBasicInfo],
+        detailedChannelInfos: [shieldBatteryDetailedInfo, testDetailedInfo],
+        joinedChannelInfos: [shieldBatteryJoinedInfo, testJoinedInfo],
+        hasMoreChannels: false,
+      })
+    })
+
+    test('reports more channels when a full page is returned', async () => {
+      asMockedFunction(searchChannels).mockResolvedValue([shieldBatteryChannel, testChannel])
+
+      const result = await chatService.searchChannels({
+        userId: user1.id,
+        isServerModerator: false,
+        limit: 2,
+        offset: 0,
+      })
+
+      expect(result.hasMoreChannels).toBe(true)
+    })
+
+    describe('when any of the channels is private', () => {
+      test('asks the query to exclude private channels the user is not a member of', async () => {
+        asMockedFunction(searchChannels).mockResolvedValue([shieldBatteryChannel])
+
+        await chatService.searchChannels({
+          userId: user1.id,
+          isServerModerator: false,
+          limit: 40,
+          offset: 20,
+          searchStr: 'test',
+        })
+
+        expect(searchChannels).toHaveBeenCalledWith({
+          userId: user1.id,
+          includePrivate: false,
+          limit: 40,
+          offset: 20,
+          searchStr: 'test',
+        })
+      })
+
+      test('asks the query to include every private channel for a server moderator', async () => {
+        asMockedFunction(searchChannels).mockResolvedValue([shieldBatteryChannel])
+
+        await chatService.searchChannels({
+          userId: user1.id,
+          isServerModerator: true,
+          limit: 40,
+          offset: 0,
+        })
+
+        expect(searchChannels).toHaveBeenCalledWith(
+          expect.objectContaining({ userId: user1.id, includePrivate: true }),
+        )
+      })
+
+      test('returns full info for the private channels the query returns', async () => {
+        asMockedFunction(searchChannels).mockResolvedValue([
+          shieldBatteryChannel,
+          { ...testChannel, private: true },
+        ])
+
+        const result = await chatService.searchChannels({
+          userId: user1.id,
+          isServerModerator: false,
+          limit: 40,
+          offset: 0,
+        })
+
+        expect(result).toEqual({
+          channelInfos: [shieldBatteryBasicInfo, { ...testBasicInfo, private: true }],
+          detailedChannelInfos: [shieldBatteryDetailedInfo, testDetailedInfo],
+          joinedChannelInfos: [shieldBatteryJoinedInfo, testJoinedInfo],
+          hasMoreChannels: false,
+        })
+      })
+    })
+  })
+
+  describe('getChannelHistory', () => {
+    const textMessage1: FakeDbTextChannelMessage = {
+      msgId: 'MESSAGE_1_ID',
+      userId: user1.id,
+      channelId: testChannel.id,
+      sent: new Date('2023-03-11T00:00:00.000Z'),
+      data: {
+        type: ServerChatMessageType.TextMessage,
+        text: 'Hello World!',
+      },
+    }
+    const textMessage2: FakeDbTextChannelMessage = {
+      msgId: 'MESSAGE_2_ID',
+      userId: user1.id,
+      channelId: testChannel.id,
+      sent: new Date('2023-03-11T00:00:00.000Z'),
+      data: {
+        type: ServerChatMessageType.TextMessage,
+        text: `Hello <@${user1.id}>, <@${user2.id}>, and @unknown.`,
+        mentions: [user1.id, user2.id],
+      },
+    }
+    const textMessage3: FakeDbTextChannelMessage = {
+      msgId: 'MESSAGE_3_ID',
+      userId: user1.id,
+      channelId: testChannel.id,
+      sent: new Date('2023-03-11T00:00:00.000Z'),
+      data: {
+        type: ServerChatMessageType.TextMessage,
+        text: `Join <#${shieldBatteryChannel.id}> <#${testChannel.id}> and #unknown.`,
+        channelMentions: [shieldBatteryChannel.id, testChannel.id],
+      },
+    }
+    const textMessage4: FakeDbTextChannelMessage = {
+      msgId: 'MESSAGE_4_ID',
+      userId: user1.id,
+      channelId: testChannel.id,
+      sent: new Date('2023-03-11T00:00:00.000Z'),
+      data: {
+        type: ServerChatMessageType.TextMessage,
+        text: `Hello <@${user1.id}>, join <#${testChannel.id}> please.`,
+        mentions: [user1.id],
+        channelMentions: [testChannel.id],
+      },
+    }
+
+    const mockTextMessages = () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+      asMockedFunction(getMessagesForChannel).mockResolvedValue({
+        messages: [
+          joinUser1TestChannelMessage,
+          textMessage1,
+          textMessage2,
+          textMessage3,
+          textMessage4,
+        ],
+        hasMoreBefore: true,
+        hasMoreAfter: false,
+      })
+      asMockedFunction(getChannelInfos).mockResolvedValue([shieldBatteryChannel, testChannel])
+    }
+    const expectItWorks = (result: GetChannelHistoryServerResponse) => {
+      expect(result).toEqual({
+        messages: [
+          toJoinChannelMessageJson(joinUser1TestChannelMessage),
+          toTextMessageJson(textMessage1),
+          toTextMessageJson(textMessage2),
+          toTextMessageJson(textMessage3),
+          toTextMessageJson(textMessage4),
+        ],
+        users: [user1],
+        mentions: [user1, user2],
+        channelMentions: [
+          toBasicChannelInfo(shieldBatteryChannel),
+          toBasicChannelInfo(testChannel),
+        ],
+        deletedChannels: [],
+        hasMoreBefore: true,
+        hasMoreAfter: false,
+      })
+    }
+
+    describe('when an admin', () => {
+      test('works when not in channel', async () => {
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+        mockTextMessages()
+
+        const result = await chatService.getChannelHistory({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isAdmin: true,
+        })
+
+        expectItWorks(result)
+      })
+
+      test('works when in channel', async () => {
+        await joinUserToChannel(
+          user1,
+          testChannel,
+          user1TestChannelEntry,
+          joinUser1TestChannelMessage,
+        )
+
+        mockTextMessages()
+
+        const result = await chatService.getChannelHistory({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isAdmin: true,
+        })
+
+        expectItWorks(result)
+      })
+    })
+
+    describe('when not an admin', () => {
+      test('should throw when not in channel', async () => {
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+        await expect(
+          chatService.getChannelHistory({
+            channelId: testChannel.id,
+            userId: user1.id,
+            isAdmin: false,
+          }),
+        ).rejects.toThrowErrorMatchingInlineSnapshot(
+          `[Error: Must be in a channel to retrieve message history]`,
+        )
+      })
+
+      test('works when in channel', async () => {
+        await joinUserToChannel(
+          user1,
+          testChannel,
+          user1TestChannelEntry,
+          joinUser1TestChannelMessage,
+        )
+
+        mockTextMessages()
+
+        const result = await chatService.getChannelHistory({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isAdmin: false,
+        })
+
+        expectItWorks(result)
+      })
+    })
+
+    test('should include deleted channels if there are any in chat message', async () => {
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+
+      const DELETED_ID = makeSbChannelId(999)
+      const message: FakeDbTextChannelMessage = {
+        msgId: 'MESSAGE_5_ID',
+        userId: user1.id,
+        channelId: testChannel.id,
+        sent: new Date('2023-03-11T00:00:00.000Z'),
+        data: {
+          type: ServerChatMessageType.TextMessage,
+          text: `Join <#${shieldBatteryChannel.id}> <#${testChannel.id}> and <#${DELETED_ID}>.`,
+          channelMentions: [shieldBatteryChannel.id, testChannel.id, DELETED_ID],
+        },
+      }
+
+      asMockedFunction(getMessagesForChannel).mockResolvedValue({
+        messages: [message],
+        hasMoreBefore: false,
+        hasMoreAfter: false,
+      })
+      asMockedFunction(getChannelInfos).mockResolvedValue([shieldBatteryChannel, testChannel])
+
+      const result = await chatService.getChannelHistory({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isAdmin: false,
+      })
+
+      expect(result).toEqual({
+        messages: [toTextMessageJson(message)],
+        users: [user1],
+        mentions: [],
+        channelMentions: [
+          toBasicChannelInfo(shieldBatteryChannel),
+          toBasicChannelInfo(testChannel),
+        ],
+        deletedChannels: [DELETED_ID],
+        hasMoreBefore: false,
+        hasMoreAfter: false,
+      })
+    })
+
+    describe('cursor selection', () => {
+      beforeEach(() => {
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+        asMockedFunction(getMessagesForChannel).mockResolvedValue({
+          messages: [],
+          hasMoreBefore: true,
+          hasMoreAfter: true,
+        })
+        asMockedFunction(getChannelInfos).mockResolvedValue([])
+      })
+
+      test('uses a newest cursor and carries through the flags when no time param is given', async () => {
+        const result = await chatService.getChannelHistory({
+          channelId: testChannel.id,
+          userId: user1.id,
+          limit: 50,
+        })
+
+        expect(getMessagesForChannel).toHaveBeenCalledWith(testChannel.id, 50, { kind: 'newest' })
+        expect(result.hasMoreBefore).toBe(true)
+        expect(result.hasMoreAfter).toBe(true)
+      })
+
+      test('uses a before cursor when beforeTime is greater than -1', async () => {
+        await chatService.getChannelHistory({
+          channelId: testChannel.id,
+          userId: user1.id,
+          limit: 50,
+          beforeTime: 1000,
+        })
+
+        expect(getMessagesForChannel).toHaveBeenCalledWith(testChannel.id, 50, {
+          kind: 'before',
+          date: new Date(1000),
+        })
+      })
+
+      test('uses a newest cursor when beforeTime is -1', async () => {
+        await chatService.getChannelHistory({
+          channelId: testChannel.id,
+          userId: user1.id,
+          limit: 50,
+          beforeTime: -1,
+        })
+
+        expect(getMessagesForChannel).toHaveBeenCalledWith(testChannel.id, 50, { kind: 'newest' })
+      })
+
+      test('uses an after cursor when afterTime is given', async () => {
+        const result = await chatService.getChannelHistory({
+          channelId: testChannel.id,
+          userId: user1.id,
+          limit: 50,
+          afterTime: 2000,
+        })
+
+        expect(getMessagesForChannel).toHaveBeenCalledWith(testChannel.id, 50, {
+          kind: 'after',
+          date: new Date(2000),
+        })
+        expect(result.hasMoreBefore).toBe(true)
+        expect(result.hasMoreAfter).toBe(true)
+      })
+
+      test('uses an around cursor when aroundTime is given', async () => {
+        await chatService.getChannelHistory({
+          channelId: testChannel.id,
+          userId: user1.id,
+          limit: 50,
+          aroundTime: 3000,
+        })
+
+        expect(getMessagesForChannel).toHaveBeenCalledWith(testChannel.id, 50, {
+          kind: 'around',
+          date: new Date(3000),
+        })
+      })
+
+      test('uses an around cursor at the message time when aroundMessageId is given', async () => {
+        const messageId = 'MESSAGE_ID'
+        asMockedFunction(getChannelMessageSentTime).mockResolvedValue(new Date(3000))
+
+        await chatService.getChannelHistory({
+          channelId: testChannel.id,
+          userId: user1.id,
+          limit: 50,
+          aroundMessageId: messageId,
+        })
+
+        expect(getChannelMessageSentTime).toHaveBeenCalledWith(testChannel.id, messageId)
+        expect(getMessagesForChannel).toHaveBeenCalledWith(testChannel.id, 50, {
+          kind: 'around',
+          date: new Date(3000),
+        })
+      })
+
+      test('throws MessageNotFound when aroundMessageId names no message in the channel', async () => {
+        asMockedFunction(getChannelMessageSentTime).mockResolvedValue(undefined)
+
+        await expect(
+          chatService.getChannelHistory({
+            channelId: testChannel.id,
+            userId: user1.id,
+            limit: 50,
+            aroundMessageId: 'MESSAGE_ID',
+          }),
+        ).rejects.toMatchObject({ code: ChatServiceErrorCode.MessageNotFound })
+      })
+    })
+  })
+
+  describe('getChannelUsers', () => {
+    beforeEach(() => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+      asMockedFunction(getUsersForChannel).mockResolvedValue([user1, user2])
+    })
+
+    describe('when an admin', () => {
+      test('works when not in channel', async () => {
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+        const result = await chatService.getChannelUsers({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isAdmin: true,
+        })
+
+        expect(result).toEqual([user1, user2])
+      })
+
+      test('works when in channel', async () => {
+        await joinUserToChannel(
+          user1,
+          testChannel,
+          user1TestChannelEntry,
+          joinUser1TestChannelMessage,
+        )
+
+        const result = await chatService.getChannelUsers({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isAdmin: true,
+        })
+
+        expect(result).toEqual([user1, user2])
+      })
+    })
+
+    describe('when not an admin', () => {
+      test('should throw when not in channel', async () => {
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+        await expect(
+          chatService.getChannelUsers({
+            channelId: testChannel.id,
+            userId: user1.id,
+            isAdmin: false,
+          }),
+        ).rejects.toThrowErrorMatchingInlineSnapshot(
+          `[Error: Must be in a channel to retrieve user list]`,
+        )
+      })
+
+      test('works when in channel', async () => {
+        await joinUserToChannel(
+          user1,
+          testChannel,
+          user1TestChannelEntry,
+          joinUser1TestChannelMessage,
+        )
+
+        const result = await chatService.getChannelUsers({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isAdmin: false,
+        })
+
+        expect(result).toEqual([user1, user2])
+      })
+    })
+  })
+
+  describe('getChatUserProfile', () => {
+    test('should throw when not in channel', async () => {
+      await expect(
+        chatService.getChatUserProfile(testChannel.id, user1.id, user2.id),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: Must be in a channel to retrieve user profile]`,
+      )
+    })
+
+    test('works when target user is not in channel', async () => {
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+      const result = await chatService.getChatUserProfile(testChannel.id, user1.id, user2.id)
+
+      expect(result).toEqual({
+        userId: user2.id,
+        channelId: testChannel.id,
+      })
+    })
+
+    describe('when target user is in channel', () => {
+      beforeEach(async () => {
+        await joinUserToChannel(
+          user1,
+          testChannel,
+          user1TestChannelEntry,
+          joinUser1TestChannelMessage,
+        )
+        await joinUserToChannel(
+          user2,
+          testChannel,
+          user2TestChannelEntry,
+          joinUser2TestChannelMessage,
+        )
+
+        asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user2TestChannelEntry)
+      })
+
+      test("should throw when channel doesn't exist", async () => {
+        asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+        await expect(
+          chatService.getChatUserProfile(testChannel.id, user1.id, user2.id),
+        ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Channel not found]`)
+      })
+
+      test('works when channel exists', async () => {
+        asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+
+        const result = await chatService.getChatUserProfile(testChannel.id, user1.id, user2.id)
+
+        expect(result).toEqual({
+          userId: user2TestChannelEntry.userId,
+          channelId: user2TestChannelEntry.channelId,
+          profile: {
+            userId: user2TestChannelEntry.userId,
+            channelId: user2TestChannelEntry.channelId,
+            joinDate: Number(user2TestChannelEntry.joinDate),
+            isModerator: false,
+          },
+        })
+      })
+    })
+  })
+
+  describe('getUserPermissions', () => {
+    beforeEach(async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+    })
+
+    test("should throw if channel doesn't exist", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+      await expect(
+        chatService.getUserPermissions(testChannel.id, user1.id, user2.id, REGULAR_USER),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Channel not found]`)
+    })
+
+    test('should throw if not in channel', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+      await expect(
+        chatService.getUserPermissions(testChannel.id, user1.id, user2.id, REGULAR_USER),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: Must be in channel to get user's permissions]`,
+      )
+    })
+
+    test('should throw if target user not in channel', async () => {
+      mockChannelEntries(testChannel, [user1.id, user1TestChannelEntry])
+
+      await expect(
+        chatService.getUserPermissions(testChannel.id, user1.id, user2.id, REGULAR_USER),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: User must be in channel to get their permissions]`,
+      )
+    })
+
+    test('should throw if not enough permissions', async () => {
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      await expect(
+        chatService.getUserPermissions(testChannel.id, user1.id, user2.id, REGULAR_USER),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: You don't have enough permissions to get other user's permissions]`,
+      )
+    })
+
+    test('works when channel owner', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        topic: 'CHANNEL_TOPIC',
+        ownerId: user1.id,
+      })
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      const result = await chatService.getUserPermissions(
+        testChannel.id,
+        user1.id,
+        user2.id,
+        REGULAR_USER,
+      )
+
+      expect(result).toEqual({
+        userId: user2TestChannelEntry.userId,
+        channelId: user2TestChannelEntry.channelId,
+        permissions: user2TestChannelEntry.channelPermissions,
+      })
+    })
+
+    test('works when can edit channel permissions', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+      mockChannelEntries(
+        testChannel,
+        [
+          user1.id,
+          {
+            ...user1TestChannelEntry,
+            channelPermissions: { ...channelPermissions, editPermissions: true },
+          },
+        ],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      const result = await chatService.getUserPermissions(
+        testChannel.id,
+        user1.id,
+        user2.id,
+        REGULAR_USER,
+      )
+
+      expect(result).toEqual({
+        userId: user2TestChannelEntry.userId,
+        channelId: user2TestChannelEntry.channelId,
+        permissions: user2TestChannelEntry.channelPermissions,
+      })
+    })
+
+    test('works when a server moderator who is not in the channel', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+      // The caller (user1) is not in the channel.
+      mockChannelEntries(testChannel, [user2.id, user2TestChannelEntry])
+
+      const result = await chatService.getUserPermissions(
+        testChannel.id,
+        user1.id,
+        user2.id,
+        SERVER_MODERATOR,
+      )
+
+      expect(result).toEqual({
+        userId: user2TestChannelEntry.userId,
+        channelId: user2TestChannelEntry.channelId,
+        permissions: user2TestChannelEntry.channelPermissions,
+      })
+    })
+  })
+
+  describe('listUserChannelEntries', () => {
+    const getUserChannelEntriesForChannelMock = asMockedFunction(getUserChannelEntriesForChannel)
+
+    beforeEach(() => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+    })
+
+    test("should throw if channel doesn't exist", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+      await expect(
+        chatService.listUserChannelEntries({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isServerModerator: REGULAR_USER,
+          limit: 40,
+          offset: 0,
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Channel not found]`)
+    })
+
+    test('should throw if not in channel', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+      await expect(
+        chatService.listUserChannelEntries({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isServerModerator: REGULAR_USER,
+          limit: 40,
+          offset: 0,
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: Must be in channel to view user channel entries]`,
+      )
+    })
+
+    test('should throw if not enough permissions', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+
+      await expect(
+        chatService.listUserChannelEntries({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isServerModerator: REGULAR_USER,
+          limit: 40,
+          offset: 0,
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: You don't have enough permissions to view user channel entries]`,
+      )
+    })
+
+    test('works when a server moderator who is not in the channel', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+      getUserChannelEntriesForChannelMock.mockResolvedValue([
+        user1TestChannelEntry,
+        user2TestChannelEntry,
+      ])
+
+      const result = await chatService.listUserChannelEntries({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: SERVER_MODERATOR,
+        limit: 40,
+        offset: 0,
+      })
+
+      expect(getUserChannelEntriesForChannelMock).toHaveBeenCalledWith({
+        channelId: testChannel.id,
+        limit: 40,
+        offset: 0,
+        searchStr: undefined,
+      })
+      expect(result).toEqual({
+        channelId: testChannel.id,
+        userChannelEntries: [
+          toUserChannelEntryJson(user1TestChannelEntry),
+          toUserChannelEntryJson(user2TestChannelEntry),
+        ],
+        hasMoreUsers: false,
+        users: [user1, user2],
+      })
+    })
+
+    test('works when channel owner', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        ownerId: user1.id,
+      })
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+      getUserChannelEntriesForChannelMock.mockResolvedValue([
+        user1TestChannelEntry,
+        user2TestChannelEntry,
+      ])
+
+      const result = await chatService.listUserChannelEntries({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: REGULAR_USER,
+        limit: 40,
+        offset: 0,
+      })
+
+      expect(result).toEqual({
+        channelId: testChannel.id,
+        userChannelEntries: [
+          toUserChannelEntryJson(user1TestChannelEntry),
+          toUserChannelEntryJson(user2TestChannelEntry),
+        ],
+        hasMoreUsers: false,
+        users: [user1, user2],
+      })
+    })
+
+    test('works when can edit channel permissions', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue({
+        ...user1TestChannelEntry,
+        channelPermissions: { ...channelPermissions, editPermissions: true },
+      })
+      getUserChannelEntriesForChannelMock.mockResolvedValue([
+        user1TestChannelEntry,
+        user2TestChannelEntry,
+      ])
+
+      const result = await chatService.listUserChannelEntries({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: REGULAR_USER,
+        limit: 40,
+        offset: 0,
+      })
+
+      expect(result).toEqual({
+        channelId: testChannel.id,
+        userChannelEntries: [
+          toUserChannelEntryJson(user1TestChannelEntry),
+          toUserChannelEntryJson(user2TestChannelEntry),
+        ],
+        hasMoreUsers: false,
+        users: [user1, user2],
+      })
+    })
+
+    test('returns hasMoreUsers true when results equal limit', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+      getUserChannelEntriesForChannelMock.mockResolvedValue([
+        user1TestChannelEntry,
+        user2TestChannelEntry,
+      ])
+
+      const result = await chatService.listUserChannelEntries({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: SERVER_MODERATOR,
+        limit: 2,
+        offset: 0,
+      })
+
+      expect(result.hasMoreUsers).toBe(true)
+    })
+
+    test('passes searchStr to the model function', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+      getUserChannelEntriesForChannelMock.mockResolvedValue([user1TestChannelEntry])
+
+      await chatService.listUserChannelEntries({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: SERVER_MODERATOR,
+        limit: 40,
+        offset: 0,
+        searchStr: 'USER_NAME',
+      })
+
+      expect(getUserChannelEntriesForChannelMock).toHaveBeenCalledWith({
+        channelId: testChannel.id,
+        limit: 40,
+        offset: 0,
+        searchStr: 'USER_NAME',
+      })
+    })
+  })
+
+  describe('listChannelBans', () => {
+    const getChannelBansMock = asMockedFunction(getChannelBans)
+
+    const user2TestChannelBanEntry: ChannelBanEntry = {
+      userId: user2.id,
+      channelId: testChannel.id,
+      banTime: new Date('2023-03-15T00:00:00.000Z'),
+      bannedBy: user1.id,
+      reason: 'BAN_REASON',
+      automated: false,
+    }
+
+    beforeEach(() => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+    })
+
+    test("should throw if channel doesn't exist", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+      await expect(
+        chatService.listChannelBans({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isServerModerator: REGULAR_USER,
+          limit: 40,
+          offset: 0,
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Channel not found]`)
+    })
+
+    test('should throw if not in channel', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+      await expect(
+        chatService.listChannelBans({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isServerModerator: REGULAR_USER,
+          limit: 40,
+          offset: 0,
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: Must be in channel to view channel bans]`,
+      )
+    })
+
+    test('should throw if not enough permissions', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+
+      await expect(
+        chatService.listChannelBans({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isServerModerator: REGULAR_USER,
+          limit: 40,
+          offset: 0,
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: You don't have enough permissions to view channel bans]`,
+      )
+    })
+
+    test('should throw if only holding the kick permission', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue({
+        ...user1TestChannelEntry,
+        channelPermissions: { ...channelPermissions, kick: true },
+      })
+
+      await expect(
+        chatService.listChannelBans({
+          channelId: testChannel.id,
+          userId: user1.id,
+          isServerModerator: REGULAR_USER,
+          limit: 40,
+          offset: 0,
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: You don't have enough permissions to view channel bans]`,
+      )
+    })
+
+    test('works when channel owner', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        ownerId: user1.id,
+      })
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+      getChannelBansMock.mockResolvedValue([user2TestChannelBanEntry])
+
+      const result = await chatService.listChannelBans({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: REGULAR_USER,
+        limit: 40,
+        offset: 0,
+      })
+
+      expect(result).toEqual({
+        channelId: testChannel.id,
+        bans: [toChannelBanEntryJson(user2TestChannelBanEntry)],
+        hasMoreBans: false,
+        users: [user2, user1],
+      })
+    })
+
+    test('works when holding the ban permission', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue({
+        ...user1TestChannelEntry,
+        channelPermissions: { ...channelPermissions, ban: true },
+      })
+      getChannelBansMock.mockResolvedValue([user2TestChannelBanEntry])
+
+      const result = await chatService.listChannelBans({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: REGULAR_USER,
+        limit: 40,
+        offset: 0,
+      })
+
+      expect(getChannelBansMock).toHaveBeenCalledWith({
+        channelId: testChannel.id,
+        limit: 40,
+        offset: 0,
+        searchStr: undefined,
+      })
+      expect(result).toEqual({
+        channelId: testChannel.id,
+        bans: [toChannelBanEntryJson(user2TestChannelBanEntry)],
+        hasMoreBans: false,
+        users: [user2, user1],
+      })
+    })
+
+    test('works when holding the editPermissions permission', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue({
+        ...user1TestChannelEntry,
+        channelPermissions: { ...channelPermissions, editPermissions: true },
+      })
+      getChannelBansMock.mockResolvedValue([])
+
+      const result = await chatService.listChannelBans({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: REGULAR_USER,
+        limit: 40,
+        offset: 0,
+      })
+
+      expect(result).toEqual({
+        channelId: testChannel.id,
+        bans: [],
+        hasMoreBans: false,
+        users: [],
+      })
+    })
+
+    test('works when a server moderator who is not in the channel', async () => {
+      // The caller (user1) is not in the channel.
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+      getChannelBansMock.mockResolvedValue([user2TestChannelBanEntry])
+
+      const result = await chatService.listChannelBans({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: SERVER_MODERATOR,
+        limit: 40,
+        offset: 0,
+      })
+
+      expect(result).toEqual({
+        channelId: testChannel.id,
+        bans: [toChannelBanEntryJson(user2TestChannelBanEntry)],
+        hasMoreBans: false,
+        users: [user2, user1],
+      })
+    })
+
+    test('returns hasMoreBans true when results equal limit', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        ownerId: user1.id,
+      })
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+      getChannelBansMock.mockResolvedValue([user2TestChannelBanEntry])
+
+      const result = await chatService.listChannelBans({
+        channelId: testChannel.id,
+        userId: user1.id,
+        isServerModerator: REGULAR_USER,
+        limit: 1,
+        offset: 0,
+      })
+
+      expect(result.hasMoreBans).toBe(true)
+    })
+  })
+
+  describe('unbanUser', () => {
+    const unbanUserFromChannelMock = asMockedFunction(unbanUserFromChannel)
+    const removeBannedIdentifiersFromChannelMock = asMockedFunction(
+      removeBannedIdentifiersFromChannel,
+    )
+
+    beforeEach(() => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+      unbanUserFromChannelMock.mockResolvedValue(true)
+    })
+
+    test("should throw if channel doesn't exist", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+      await expect(
+        chatService.unbanUser({
+          channelId: testChannel.id,
+          userId: user1.id,
+          targetId: user2.id,
+          isServerModerator: REGULAR_USER,
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Channel not found]`)
+    })
+
+    test('should throw if not in channel', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+      await expect(
+        chatService.unbanUser({
+          channelId: testChannel.id,
+          userId: user1.id,
+          targetId: user2.id,
+          isServerModerator: REGULAR_USER,
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Must be in channel to unban users]`)
+    })
+
+    test('should throw if not enough permissions', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+
+      await expect(
+        chatService.unbanUser({
+          channelId: testChannel.id,
+          userId: user1.id,
+          targetId: user2.id,
+          isServerModerator: REGULAR_USER,
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: You don't have enough permissions to unban users]`,
+      )
+    })
+
+    test('should throw if only holding the kick permission', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue({
+        ...user1TestChannelEntry,
+        channelPermissions: { ...channelPermissions, kick: true },
+      })
+
+      await expect(
+        chatService.unbanUser({
+          channelId: testChannel.id,
+          userId: user1.id,
+          targetId: user2.id,
+          isServerModerator: REGULAR_USER,
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: You don't have enough permissions to unban users]`,
+      )
+    })
+
+    test('should throw TargetNotBanned if the target was not banned', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue({
+        ...user1TestChannelEntry,
+        channelPermissions: { ...channelPermissions, ban: true },
+      })
+      unbanUserFromChannelMock.mockResolvedValue(false)
+
+      await expect(
+        chatService.unbanUser({
+          channelId: testChannel.id,
+          userId: user1.id,
+          targetId: user2.id,
+          isServerModerator: REGULAR_USER,
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: User is not banned]`)
+
+      expect(removeBannedIdentifiersFromChannelMock).not.toHaveBeenCalled()
+      expect(notificationService.addNotification).not.toHaveBeenCalled()
+    })
+
+    test('works when channel owner', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        ownerId: user1.id,
+      })
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+
+      await chatService.unbanUser({
+        channelId: testChannel.id,
+        userId: user1.id,
+        targetId: user2.id,
+        isServerModerator: REGULAR_USER,
+      })
+
+      expect(unbanUserFromChannelMock).toHaveBeenCalledWith(
+        { channelId: testChannel.id, targetId: user2.id },
+        dbClient,
+      )
+      expect(removeBannedIdentifiersFromChannelMock).toHaveBeenCalledWith(
+        { channelId: testChannel.id, targetId: user2.id },
+        dbClient,
+      )
+      expect(notificationService.addNotification).toHaveBeenCalledWith({
+        userId: user2.id,
+        data: {
+          type: NotificationType.ChannelUnban,
+          channelId: testChannel.id,
+          channelName: testChannel.name,
+        },
+      })
+    })
+
+    test('works when holding the ban permission', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue({
+        ...user1TestChannelEntry,
+        channelPermissions: { ...channelPermissions, ban: true },
+      })
+
+      await chatService.unbanUser({
+        channelId: testChannel.id,
+        userId: user1.id,
+        targetId: user2.id,
+        isServerModerator: REGULAR_USER,
+      })
+
+      expect(unbanUserFromChannelMock).toHaveBeenCalledWith(
+        { channelId: testChannel.id, targetId: user2.id },
+        dbClient,
+      )
+      expect(removeBannedIdentifiersFromChannelMock).toHaveBeenCalledWith(
+        { channelId: testChannel.id, targetId: user2.id },
+        dbClient,
+      )
+    })
+
+    test('works when holding the editPermissions permission', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue({
+        ...user1TestChannelEntry,
+        channelPermissions: { ...channelPermissions, editPermissions: true },
+      })
+
+      await chatService.unbanUser({
+        channelId: testChannel.id,
+        userId: user1.id,
+        targetId: user2.id,
+        isServerModerator: REGULAR_USER,
+      })
+
+      expect(unbanUserFromChannelMock).toHaveBeenCalledWith(
+        { channelId: testChannel.id, targetId: user2.id },
+        dbClient,
+      )
+      expect(removeBannedIdentifiersFromChannelMock).toHaveBeenCalledWith(
+        { channelId: testChannel.id, targetId: user2.id },
+        dbClient,
+      )
+    })
+
+    test('works when a server moderator who is not in the channel', async () => {
+      // The caller (user1) is not in the channel.
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+      await chatService.unbanUser({
+        channelId: testChannel.id,
+        userId: user1.id,
+        targetId: user2.id,
+        isServerModerator: SERVER_MODERATOR,
+      })
+
+      expect(unbanUserFromChannelMock).toHaveBeenCalledWith(
+        { channelId: testChannel.id, targetId: user2.id },
+        dbClient,
+      )
+      expect(removeBannedIdentifiersFromChannelMock).toHaveBeenCalledWith(
+        { channelId: testChannel.id, targetId: user2.id },
+        dbClient,
+      )
+    })
+  })
+
+  describe('updateUserPreferences', () => {
+    const updateUserPreferencesMock =
+      asMockedFunction(updateUserPreferences).mockResolvedValue(user1TestChannelEntry)
+
+    beforeEach(async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+    })
+
+    test("should throw if channel doesn't exist", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+      await expect(
+        chatService.updateUserPreferences(testChannel.id, user1.id, channelPreferences),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Channel not found]`)
+    })
+
+    test('should throw if not in channel', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+      await expect(
+        chatService.updateUserPreferences(testChannel.id, user1.id, channelPreferences),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: Must be in channel to update preferences]`,
+      )
+    })
+
+    test('works when updating channel preferences', async () => {
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+
+      await chatService.updateUserPreferences(testChannel.id, user1.id, channelPreferences)
+
+      expect(updateUserPreferencesMock).toHaveBeenCalledWith(
+        testChannel.id,
+        user1.id,
+        channelPreferences,
+      )
+      expect(client1.publish).toHaveBeenCalledWith(getChannelUserPath(testChannel.id, user1.id), {
+        action: 'preferencesChanged',
+        selfPreferences: channelPreferences,
+      })
+    })
+
+    test('works when updating notification preferences', async () => {
+      await joinUserToChannel(
+        user1,
+        testChannel,
+        user1TestChannelEntry,
+        joinUser1TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(user1TestChannelEntry)
+
+      const notificationPreferences: Patch<ChannelPreferences> = {
+        notificationLevel: ChannelNotificationLevel.Nothing,
+        muted: true,
+      }
+      const updatedChannelEntry: UserChannelEntry = {
+        ...user1TestChannelEntry,
+        channelPreferences: {
+          ...channelPreferences,
+          notificationLevel: ChannelNotificationLevel.Nothing,
+          muted: true,
+        },
+      }
+      updateUserPreferencesMock.mockResolvedValueOnce(updatedChannelEntry)
+
+      await chatService.updateUserPreferences(testChannel.id, user1.id, notificationPreferences)
+
+      expect(updateUserPreferencesMock).toHaveBeenCalledWith(
+        testChannel.id,
+        user1.id,
+        notificationPreferences,
+      )
+      expect(client1.publish).toHaveBeenCalledWith(getChannelUserPath(testChannel.id, user1.id), {
+        action: 'preferencesChanged',
+        selfPreferences: updatedChannelEntry.channelPreferences,
+      })
+    })
+  })
+
+  describe('markRead', () => {
+    const updateLastReadTimeMock = asMockedFunction(updateLastReadTime)
+    const reportedTime = new Date('2023-03-12T00:00:00.000Z')
+
+    test('publishes the position the DB actually stored, on the channel-user path', async () => {
+      // The DB clamps the reported position, so what gets published has to come back from it
+      // rather than being echoed from the request.
+      const storedTime = new Date('2023-03-13T00:00:00.000Z')
+      updateLastReadTimeMock.mockResolvedValue(storedTime)
+
+      await chatService.markRead(testChannel.id, user1.id, reportedTime)
+
+      expect(updateLastReadTimeMock).toHaveBeenCalledWith(user1.id, testChannel.id, reportedTime)
+      expect(nydus.publish).toHaveBeenCalledWith(getChannelUserPath(testChannel.id, user1.id), {
+        action: 'lastReadTimeChanged',
+        lastReadTime: storedTime.getTime(),
+      })
+    })
+
+    test('publishes nothing when there was no membership row to update', async () => {
+      updateLastReadTimeMock.mockResolvedValue(undefined)
+
+      await chatService.markRead(testChannel.id, user1.id, reportedTime)
+
+      expect(nydus.publish).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('updateUserPermissions', () => {
+    const updateUserPermissionsMock = asMockedFunction(updateUserPermissions)
+
+    beforeEach(async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+    })
+
+    test("should throw if channel doesn't exist", async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue(undefined)
+
+      await expect(
+        chatService.updateUserPermissions(
+          testChannel.id,
+          user1.id,
+          user2.id,
+          channelPermissions,
+          REGULAR_USER,
+        ),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[Error: Channel not found]`)
+    })
+
+    test('should throw if not in channel', async () => {
+      asMockedFunction(getUserChannelEntryForUser).mockResolvedValue(null)
+
+      await expect(
+        chatService.updateUserPermissions(
+          testChannel.id,
+          user1.id,
+          user2.id,
+          channelPermissions,
+          REGULAR_USER,
+        ),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: Must be in channel to update user's permissions]`,
+      )
+    })
+
+    test('should throw if target user not in channel', async () => {
+      mockChannelEntries(testChannel, [user1.id, user1TestChannelEntry])
+
+      await expect(
+        chatService.updateUserPermissions(
+          testChannel.id,
+          user1.id,
+          user2.id,
+          channelPermissions,
+          REGULAR_USER,
+        ),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: User must be in channel to update their permissions]`,
+      )
+    })
+
+    test('should throw if not enough permissions', async () => {
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      await expect(
+        chatService.updateUserPermissions(
+          testChannel.id,
+          user1.id,
+          user2.id,
+          channelPermissions,
+          REGULAR_USER,
+        ),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: You don't have enough permissions to update other user's permissions]`,
+      )
+    })
+
+    test('works when channel owner', async () => {
+      await joinUserToChannel(
+        user2,
+        testChannel,
+        user2TestChannelEntry,
+        joinUser2TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        topic: 'CHANNEL_TOPIC',
+        ownerId: user1.id,
+      })
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      await chatService.updateUserPermissions(
+        testChannel.id,
+        user1.id,
+        user2.id,
+        channelPermissions,
+        REGULAR_USER,
+      )
+
+      expect(updateUserPermissionsMock).toHaveBeenCalledWith(
+        testChannel.id,
+        user2.id,
+        channelPermissions,
+      )
+      expect(client2.publish).toHaveBeenCalledWith(getChannelUserPath(testChannel.id, user2.id), {
+        action: 'permissionsChanged',
+        selfPermissions: channelPermissions,
+      })
+    })
+
+    test('works when can edit channel permissions', async () => {
+      await joinUserToChannel(
+        user2,
+        testChannel,
+        user2TestChannelEntry,
+        joinUser2TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+      mockChannelEntries(
+        testChannel,
+        [
+          user1.id,
+          {
+            ...user1TestChannelEntry,
+            channelPermissions: { ...channelPermissions, editPermissions: true },
+          },
+        ],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      await chatService.updateUserPermissions(
+        testChannel.id,
+        user1.id,
+        user2.id,
+        channelPermissions,
+        REGULAR_USER,
+      )
+
+      expect(updateUserPermissionsMock).toHaveBeenCalledWith(
+        testChannel.id,
+        user2.id,
+        channelPermissions,
+      )
+      expect(client2.publish).toHaveBeenCalledWith(getChannelUserPath(testChannel.id, user2.id), {
+        action: 'permissionsChanged',
+        selfPermissions: channelPermissions,
+      })
+    })
+
+    test('works when a server moderator who is not in the channel', async () => {
+      await joinUserToChannel(
+        user2,
+        testChannel,
+        user2TestChannelEntry,
+        joinUser2TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue(testChannel)
+      // The caller (user1) is not in the channel.
+      mockChannelEntries(testChannel, [user2.id, user2TestChannelEntry])
+
+      await chatService.updateUserPermissions(
+        testChannel.id,
+        user1.id,
+        user2.id,
+        { ...channelPermissions, kick: true },
+        SERVER_MODERATOR,
+      )
+
+      expect(updateUserPermissionsMock).toHaveBeenCalledWith(testChannel.id, user2.id, {
+        ...channelPermissions,
+        kick: true,
+      })
+      expect(client2.publish).toHaveBeenCalledWith(getChannelUserPath(testChannel.id, user2.id), {
+        action: 'permissionsChanged',
+        selfPermissions: { ...channelPermissions, kick: true },
+      })
+    })
+
+    test('publishes userProfileChanged when promoting user to moderator', async () => {
+      await joinUserToChannel(
+        user2,
+        testChannel,
+        user2TestChannelEntry,
+        joinUser2TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        ownerId: user1.id,
+      })
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      const newPermissions = { ...channelPermissions, kick: true }
+
+      await chatService.updateUserPermissions(
+        testChannel.id,
+        user1.id,
+        user2.id,
+        newPermissions,
+        REGULAR_USER,
+      )
+
+      expect(client2.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+        action: 'userProfileChanged',
+        userId: user2.id,
+        isModerator: true,
+      })
+    })
+
+    test('publishes userProfileChanged when demoting moderator to regular user', async () => {
+      await joinUserToChannel(
+        user2,
+        testChannel,
+        user2TestChannelEntry,
+        joinUser2TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        ownerId: user1.id,
+      })
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [
+          user2.id,
+          { ...user2TestChannelEntry, channelPermissions: { ...channelPermissions, ban: true } },
+        ],
+      )
+
+      await chatService.updateUserPermissions(
+        testChannel.id,
+        user1.id,
+        user2.id,
+        channelPermissions,
+        REGULAR_USER,
+      )
+
+      expect(client2.publish).toHaveBeenCalledWith(getChannelPath(testChannel.id), {
+        action: 'userProfileChanged',
+        userId: user2.id,
+        isModerator: false,
+      })
+    })
+
+    test('does not publish userProfileChanged when moderator status unchanged', async () => {
+      await joinUserToChannel(
+        user2,
+        testChannel,
+        user2TestChannelEntry,
+        joinUser2TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        ownerId: user1.id,
+      })
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      const newPermissions = { ...channelPermissions }
+
+      await chatService.updateUserPermissions(
+        testChannel.id,
+        user1.id,
+        user2.id,
+        newPermissions,
+        REGULAR_USER,
+      )
+
+      expect(client2.publish).not.toHaveBeenCalledWith(
+        getChannelPath(testChannel.id),
+        expect.objectContaining({
+          action: 'userProfileChanged',
+        }),
+      )
+    })
+
+    test('does not publish userProfileChanged when changing between moderator permissions', async () => {
+      await joinUserToChannel(
+        user2,
+        testChannel,
+        user2TestChannelEntry,
+        joinUser2TestChannelMessage,
+      )
+
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        ownerId: user1.id,
+      })
+      mockChannelEntries(
+        testChannel,
+        [user1.id, user1TestChannelEntry],
+        [
+          user2.id,
+          { ...user2TestChannelEntry, channelPermissions: { ...channelPermissions, kick: true } },
+        ],
+      )
+
+      const newPermissions = { ...channelPermissions, ban: true }
+
+      await chatService.updateUserPermissions(
+        testChannel.id,
+        user1.id,
+        user2.id,
+        newPermissions,
+        REGULAR_USER,
+      )
+
+      expect(client2.publish).not.toHaveBeenCalledWith(
+        getChannelPath(testChannel.id),
+        expect.objectContaining({
+          action: 'userProfileChanged',
+        }),
+      )
+    })
+
+    test('should throw when targeting the channel owner', async () => {
+      asMockedFunction(getChannelInfo).mockResolvedValue({
+        ...testChannel,
+        ownerId: user2.id,
+      })
+      mockChannelEntries(
+        testChannel,
+        [
+          user1.id,
+          {
+            ...user1TestChannelEntry,
+            channelPermissions: { ...channelPermissions, editPermissions: true },
+          },
+        ],
+        [user2.id, user2TestChannelEntry],
+      )
+
+      await expect(
+        chatService.updateUserPermissions(
+          testChannel.id,
+          user1.id,
+          user2.id,
+          { ...channelPermissions, kick: true },
+          REGULAR_USER,
+        ),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: Can't update the channel owner's permissions]`,
+      )
+    })
+
+    test('should throw when a delegated moderator targets another moderator', async () => {
+      mockChannelEntries(
+        testChannel,
+        [
+          user1.id,
+          {
+            ...user1TestChannelEntry,
+            channelPermissions: { ...channelPermissions, editPermissions: true },
+          },
+        ],
+        [
+          user2.id,
+          { ...user2TestChannelEntry, channelPermissions: { ...channelPermissions, ban: true } },
+        ],
+      )
+
+      await expect(
+        chatService.updateUserPermissions(
+          testChannel.id,
+          user1.id,
+          user2.id,
+          channelPermissions,
+          REGULAR_USER,
+        ),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[Error: You don't have enough permissions to update another moderator's permissions]`,
+      )
+    })
+
+    test('allows a moderator to edit their own permissions', async () => {
+      const user1ModeratorEntry = {
+        ...user1TestChannelEntry,
+        channelPermissions: { ...channelPermissions, editPermissions: true },
+      }
+      mockChannelEntries(testChannel, [user1.id, user1ModeratorEntry])
+
+      const newPermissions = { ...channelPermissions, editPermissions: true, kick: true }
+
+      await chatService.updateUserPermissions(
+        testChannel.id,
+        user1.id,
+        user1.id,
+        newPermissions,
+        REGULAR_USER,
+      )
+
+      expect(updateUserPermissionsMock).toHaveBeenCalledWith(
+        testChannel.id,
+        user1.id,
+        newPermissions,
+      )
+    })
+  })
+})

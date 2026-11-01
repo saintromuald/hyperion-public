@@ -1,0 +1,160 @@
+import * as React from 'react'
+import { useEffect, useRef } from 'react'
+import styled, { css } from 'styled-components'
+import { bodySmall, singleLine } from '../../styles/typography'
+import { useButtonState } from '../button'
+import { buttonReset } from '../button-reset'
+import { Ripple } from '../ripple'
+import { ITEM_HEIGHT, ITEM_HEIGHT_DENSE } from './menu'
+import { BaseMenuItemProps, MenuItemSymbol, MenuItemType } from './menu-item-symbol'
+
+/**
+ * The button chrome a menu item is built out of: the button reset, the room a `Ripple` needs, and
+ * the virtual-focus, hover and disabled styling that makes a row look like part of a menu. A menu
+ * item with a layout of its own styles this and tags its component with `MenuItemSymbol` so that
+ * `MenuList` treats it as an item rather than as decoration.
+ */
+export const MenuItemButton = styled.button<{
+  $dense?: boolean
+  $focused?: boolean
+  $hasSecondaryText?: boolean
+}>`
+  ${buttonReset};
+  position: relative;
+  width: auto;
+  height: ${props =>
+    props.$hasSecondaryText ? 'auto' : `${props.$dense ? ITEM_HEIGHT_DENSE : ITEM_HEIGHT}px`};
+  min-height: ${props => (props.$dense ? ITEM_HEIGHT_DENSE : ITEM_HEIGHT)}px;
+  margin: 0 4px;
+  padding: ${props => (props.$hasSecondaryText ? '6px 8px' : '0 8px')};
+
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+
+  border-radius: 4px;
+  text-align: left;
+
+  ${props => {
+    if (!props.$focused) {
+      return ''
+    }
+
+    // NOTE(2Pac): This styling is only applied if the menu item is virtually focused. For regularly
+    // focused items, the focus styling is applied through the button (:focus-visible pseudo class)
+    // and ripple.
+    return css`
+      background-color: rgb(from var(--theme-on-surface) r g b / 0.1);
+      outline: 3px solid var(--theme-grey-blue);
+      outline-offset: 2px;
+    `
+  }}
+
+  &:disabled,
+  &[disabled] {
+    color: rgb(from var(--theme-on-surface) r g b / var(--theme-disabled-opacity));
+    pointer-events: none;
+  }
+`
+
+const ItemTextColumn = styled.div`
+  flex-grow: 1;
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+`
+
+const ItemText = styled.div`
+  ${singleLine};
+  flex-grow: 1;
+`
+
+const ItemSecondaryText = styled.div`
+  ${bodySmall};
+  ${singleLine};
+  color: var(--theme-on-surface-variant);
+`
+
+const ItemIcon = styled.span`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  width: 24px;
+  margin-right: 12px;
+  /*
+    Clips oversized icons, but leaves room for things that deliberately hang off an icon's edge,
+    like the availability dot on an avatar's corner.
+  */
+  overflow: clip;
+  overflow-clip-margin: 4px;
+`
+
+export interface MenuItemProps extends BaseMenuItemProps {
+  icon?: React.ReactNode
+  /**
+   * If true, the focused state only affects visual styling without moving actual DOM focus.
+   * This is useful when you want to maintain focus elsewhere (e.g. in an input field) while
+   * still showing keyboard navigation in the menu.
+   */
+  virtualFocus?: boolean
+}
+
+export function MenuItem({
+  text,
+  secondaryText,
+  icon,
+  dense,
+  focused,
+  disabled,
+  trailingContent,
+  onClick,
+  onKeyDown,
+  className,
+  testName,
+  virtualFocus,
+  id,
+  role,
+  'aria-selected': ariaSelected,
+}: MenuItemProps) {
+  const [buttonProps, rippleRef] = useButtonState({ onClick, onKeyDown, disabled })
+  const buttonRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!virtualFocus) {
+      if (focused) {
+        buttonRef.current?.focus()
+      } else {
+        buttonRef.current?.blur()
+      }
+    }
+  }, [focused, virtualFocus])
+
+  return (
+    <MenuItemButton
+      ref={buttonRef}
+      id={id}
+      role={role}
+      aria-selected={ariaSelected}
+      className={className}
+      data-testid={testName}
+      {...buttonProps}
+      $dense={dense}
+      $focused={focused && virtualFocus}
+      $hasSecondaryText={!!secondaryText}>
+      {icon ? <ItemIcon>{icon}</ItemIcon> : null}
+      <ItemTextColumn>
+        <ItemText>{text}</ItemText>
+        {secondaryText ? <ItemSecondaryText>{secondaryText}</ItemSecondaryText> : null}
+      </ItemTextColumn>
+      {trailingContent}
+      <Ripple ref={rippleRef} />
+    </MenuItemButton>
+  )
+}
+
+MenuItem[MenuItemSymbol] = MenuItemType.Default
+
+export const DestructiveMenuItem = styled(MenuItem)`
+  color: var(--theme-negative);
+`

@@ -1,0 +1,119 @@
+import { useCallback } from 'react'
+import styled from 'styled-components'
+import { DEV_INDICATOR } from '../../common/flags'
+import { useIsAdmin } from '../admin/admin-permissions'
+import { AdminReportCounts } from '../admin/admin-report-counts'
+import { MaterialIcon } from '../icons/material/material-icon'
+import Lockup from '../logos/lockup-system-bar-24px.svg?react'
+import { IconButton } from '../material/button'
+import { Tooltip } from '../material/tooltip'
+import { push } from '../navigation/routing'
+import { labelLarge, labelMedium } from '../styles/typography'
+import { SupportButton } from './support-button'
+import { SystemBarRoot, useSystemBarHeight } from './system-bar-placeholder'
+import { SizeLeft, SizeRight, SizeTop, windowControlsWidth } from './window-controls'
+
+const LeftSide = styled.div`
+  height: 100%;
+  padding: 0 2px;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const RightSide = styled.div`
+  height: 100%;
+  margin-left: auto;
+  padding-right: calc(${windowControlsWidth} + 8px);
+
+  display: flex;
+  align-items: center;
+`
+
+const StyledIconButton = styled(IconButton)`
+  width: 48px;
+  min-height: 24px;
+  padding: 0;
+  -webkit-app-region: no-drag;
+`
+
+const DevIndicator = styled.div`
+  ${labelLarge};
+
+  width: 72px;
+  height: 20px;
+  margin-left: 8px;
+  padding-block: 2px;
+
+  background-color: var(--theme-amber);
+  color: var(--theme-on-amber);
+  font-weight: 600;
+
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 16px;
+  text-align: center;
+  text-transform: uppercase;
+  -webkit-app-region: no-drag;
+`
+
+const StyledLockup = styled(Lockup)`
+  width: auto;
+  height: 24px;
+  flex-grow: 0;
+  flex-shrink: 0;
+`
+
+const VersionTextRoot = styled.div`
+  ${labelMedium};
+
+  color: var(--theme-on-surface-variant);
+  letter-spacing: 1.25px;
+  line-height: 1;
+`
+
+const CUR_VERSION = import.meta.env.SB_VERSION
+
+export function VersionText() {
+  return <VersionTextRoot>v{CUR_VERSION}</VersionTextRoot>
+}
+
+export function SystemBar() {
+  useSystemBarHeight()
+  const isAdmin = useIsAdmin()
+  const onAdminClick = useCallback(() => {
+    push('/admin')
+  }, [])
+
+  return (
+    <SystemBarRoot>
+      <SizeTop />
+      <SizeLeft />
+      <SizeRight />
+      <LeftSide>
+        <StyledLockup />
+        <VersionText />
+        {DEV_INDICATOR ? (
+          // TODO(tec27): Find a place for this + admin that will show up on the web version too
+          <Tooltip text='Go to dev pages' position='bottom' tabIndex={-1}>
+            <DevIndicator onClick={() => push('/dev')}>Dev</DevIndicator>
+          </Tooltip>
+        ) : null}
+        {isAdmin ? (
+          <Tooltip text='Admin' position='bottom' tabIndex={-1}>
+            <StyledIconButton
+              ariaLabel='Admin'
+              icon={<MaterialIcon icon='admin_panel_settings' size={20} filled={false} />}
+              onClick={onAdminClick}
+            />
+          </Tooltip>
+        ) : null}
+        {isAdmin ? <AdminReportCounts /> : null}
+      </LeftSide>
+      <RightSide>
+        <SupportButton />
+      </RightSide>
+    </SystemBarRoot>
+  )
+}

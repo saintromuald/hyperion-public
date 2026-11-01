@@ -1,0 +1,3036 @@
+import { Immutable } from 'immer'
+import { describe, expect, test } from 'vitest'
+import {
+  BasicChannelInfo,
+  ChannelTextMessage,
+  ChatMessageEvent,
+  ClientChatMessageType,
+  DEFAULT_CHANNEL_PREFERENCES,
+  GetBatchedChannelInfosResponse,
+  GetChannelHistoryServerResponse,
+  InitialChannelData,
+  JoinChannelMessage,
+  makeSbChannelId,
+  SbChannelId,
+  SelfJoinChannelMessage,
+  ServerChatMessage,
+  ServerChatMessageType,
+} from '../../common/chat'
+import { SbUser } from '../../common/users/sb-user'
+import { makeSbUserId, SbUserId } from '../../common/users/sb-user-id'
+import { MessagingActions } from '../messaging/actions'
+import type { HistoryLoadError } from '../messaging/message-load-error'
+import {
+  CommonMessageType,
+  CommonWhisperEchoMessage,
+  isServerOriginMessage,
+  LocalMessage,
+} from '../messaging/message-records'
+import { ChatActions } from './actions'
+import chatReducerImport, {
+  channelHasUnreadMention,
+  ChannelMessage,
+  channelNeedsAttention,
+  ChatState,
+  isChannelMuted,
+  newestKnownChannelTime,
+  newestServerOriginTime,
+  oldestServerOriginTime,
+} from './chat-reducer'
+
+// `immerKeyedReducer` accepts any action with a string `type`. These tests only ever feed it chat
+// actions, so narrow the parameter to those, both for the extra checking and so that action objects
+// can be written inline without tripping excess property checks.
+const chatReducer = chatReducerImport as unknown as (
+  state: Immutable<ChatState>,
+  action: ChatActions | MessagingActions,
+) => Immutable<ChatState>
+
+const CHANNEL_ID: SbChannelId = makeSbChannelId(1)
+const USER_ID = makeSbUserId(2)
+
+function textMessage(time: number): ChannelTextMessage {
+  return {
+    id: `text-${time}`,
+    type: ServerChatMessageType.TextMessage,
+    channelId: CHANNEL_ID,
+    time,
+    from: USER_ID,
+    text: 'hello',
+  }
+}
+
+function joinMessage(time: number): JoinChannelMessage {
+  return {
+    id: `user-join-${time}`,
+    type: ServerChatMessageType.JoinChannel,
+    channelId: CHANNEL_ID,
+    time,
+    userId: USER_ID,
+  }
+}
+
+/** A client-only message: never stored, so no page the server returns can include it. */
+function selfJoinMessage(time: number): SelfJoinChannelMessage {
+  return {
+    id: `join-${time}`,
+    type: ClientChatMessageType.SelfJoinChannel,
+    channelId: CHANNEL_ID,
+    time,
+  }
+}
+
+/** A message this client puts in the channel itself, which the server has no record of there. */
+function echoMessage(id: string, time: number): CommonWhisperEchoMessage {
+  return {
+    id,
+    type: CommonMessageType.WhisperEcho,
+    time,
+    direction: 'incoming',
+    counterpartId: USER_ID,
+    text: 'hello from elsewhere',
+  }
+}
+
+function appendLocalMessageAction(message: LocalMessage): MessagingActions {
+  return {
+    type: '@messaging/appendLocalMessage',
+    payload: { target: { surface: 'channel', channelId: CHANNEL_ID }, message },
+  }
+}
+
+function makeState(
+  overrides: {
+    messages?: ChannelMessage[]
+    carriedClientMessages?: ChannelMessage[]
+    activated?: boolean
+    atBottom?: boolean
+    unread?: boolean
+    lastReadTime?: number
+    latestMentionTime?: number
+    latestUnreadTime?: number
+    unreadLineTime?: number
+    unreadLineSeen?: boolean
+    unreadLineLeftBottom?: boolean
+    muted?: boolean
+    hasHistory?: boolean
+    loadingHistory?: boolean
+    loadingNewer?: boolean
+    hasNewer?: boolean
+    detachedNewestTime?: number
+    windowGen?: number
+    historyError?: HistoryLoadError
+    newerError?: boolean
+    userListError?: boolean
+  } = {},
+): Immutable<ChatState> {
+  const state: ChatState = {
+    joinedChannels: new Set([CHANNEL_ID]),
+    idToBasicInfo: new Map(),
+    idToDetailedInfo: new Map([[CHANNEL_ID, { id: CHANNEL_ID, userCount: 1 }]]),
+    idToJoinedInfo: new Map(),
+    idToModeratorIds: new Map(),
+    idToUsers: new Map([
+      [
+        CHANNEL_ID,
+        {
+          active: new Set<SbUserId>(),
+          offline: new Set<SbUserId>(),
+          hasLoadedUserList: false,
+          loadingUserList: false,
+          userListError: overrides.userListError ?? false,
+        },
+      ],
+    ]),
+    idToMessages: new Map([
+      [
+        CHANNEL_ID,
+        {
+          messages: overrides.messages ?? [],
+          carriedClientMessages: overrides.carriedClientMessages ?? [],
+          loadingHistory: overrides.loadingHistory ?? false,
+          hasHistory: overrides.hasHistory ?? true,
+          loadingNewer: overrides.loadingNewer ?? false,
+          hasNewer: overrides.hasNewer ?? false,
+          detachedNewestTime: overrides.detachedNewestTime,
+          windowGen: overrides.windowGen ?? 0,
+          historyError: overrides.historyError,
+          newerError: overrides.newerError ?? false,
+        },
+      ],
+    ]),
+    idToUserProfiles: new Map(),
+    idToSelfPreferences: new Map(
+      overrides.muted !== undefined
+        ? [[CHANNEL_ID, { ...DEFAULT_CHANNEL_PREFERENCES, muted: overrides.muted }]]
+        : [],
+    ),
+    idToSelfPermissions: new Map(),
+    activatedChannels: new Set(overrides.activated ? [CHANNEL_ID] : []),
+    atBottomChannels: new Set(overrides.atBottom ? [CHANNEL_ID] : []),
+    unreadChannels: new Set(overrides.unread ? [CHANNEL_ID] : []),
+    deletedChannels: new Set(),
+    privateChannels: new Set(),
+    idToLastReadTime: new Map(
+      overrides.lastReadTime !== undefined ? [[CHANNEL_ID, overrides.lastReadTime]] : [],
+    ),
+    idToLatestMentionTime: new Map(
+      overrides.latestMentionTime !== undefined ? [[CHANNEL_ID, overrides.latestMentionTime]] : [],
+    ),
+    idToLatestUnreadTime: new Map(
+      overrides.latestUnreadTime !== undefined ? [[CHANNEL_ID, overrides.latestUnreadTime]] : [],
+    ),
+    idToUnreadLine: new Map(
+      overrides.unreadLineTime !== undefined
+        ? [
+            [
+              CHANNEL_ID,
+              {
+                time: overrides.unreadLineTime,
+                seen: overrides.unreadLineSeen ?? false,
+                leftBottom: overrides.unreadLineLeftBottom ?? false,
+              },
+            ],
+          ]
+        : [],
+    ),
+  }
+
+  return state as Immutable<ChatState>
+}
+
+function updateLastReadTimeAction(lastReadTime: number, dismissUnreadLine?: boolean): ChatActions {
+  return {
+    type: '@chat/updateLastReadTime',
+    payload: { channelId: CHANNEL_ID, lastReadTime, dismissUnreadLine },
+  }
+}
+
+const CHANNEL_BASIC_INFO: BasicChannelInfo = {
+  id: CHANNEL_ID,
+  name: 'test-channel',
+  private: false,
+  official: false,
+  closed: false,
+}
+
+const SENDER: SbUser = { id: USER_ID, name: 'sender', created: 0 }
+
+function initialChannelData(
+  overrides: {
+    latestMentionTime?: number
+    latestUnreadTime?: number
+    lastReadTime?: number
+    ownerId?: SbUserId
+    moderatorIds?: SbUserId[]
+    time?: number
+  } = {},
+): InitialChannelData {
+  return {
+    channelInfo: CHANNEL_BASIC_INFO,
+    detailedChannelInfo: { id: CHANNEL_ID, userCount: 1 },
+    joinedChannelInfo: { id: CHANNEL_ID, ownerId: overrides.ownerId, membersCanInvite: false },
+    selfPreferences: { ...DEFAULT_CHANNEL_PREFERENCES },
+    selfPermissions: {
+      kick: false,
+      ban: false,
+      editPermissions: false,
+    },
+    moderatorIds: overrides.moderatorIds ?? [],
+    latestUnreadTime: overrides.latestUnreadTime,
+    lastReadTime: overrides.lastReadTime,
+    latestMentionTime: overrides.latestMentionTime,
+    time: overrides.time ?? 0,
+  }
+}
+
+function getJoinedChannelsAction(data: InitialChannelData): ChatActions {
+  return {
+    type: '@chat/getJoinedChannels',
+    payload: [data],
+  }
+}
+
+/**
+ * The state a reconnect leaves behind: everything cleared, ahead of the initialization data that
+ * refills it. A mark-read relayed from another of the user's sessions can land in this window.
+ */
+function reconnectedState(): Immutable<ChatState> {
+  return chatReducer(makeState(), { type: '@network/connect' } as unknown as ChatActions)
+}
+
+function updateMessageAction(
+  time: number,
+  mentionsSelf: boolean,
+  windowFocused = true,
+  isSelfMessage = false,
+): ChatActions {
+  const payload: ChatMessageEvent = {
+    action: 'message2',
+    message: textMessage(time),
+    user: SENDER,
+    mentions: [],
+    channelMentions: [],
+  }
+  return {
+    type: '@chat/updateMessage',
+    payload,
+    meta: { channelId: CHANNEL_ID, mentionsSelf, isSelfMessage, windowFocused },
+  }
+}
+
+function updateJoinAction(time: number, windowFocused = true): ChatActions {
+  return {
+    type: '@chat/updateJoin',
+    payload: {
+      action: 'join2',
+      user: SENDER,
+      message: joinMessage(time),
+    },
+    meta: { channelId: CHANNEL_ID, windowFocused },
+  }
+}
+
+function updateLeaveSelfAction(): ChatActions {
+  return {
+    type: '@chat/updateLeaveSelf',
+    meta: { channelId: CHANNEL_ID },
+  }
+}
+
+const HISTORY_LIMIT = 50
+
+function historyResponse(
+  messages: ServerChatMessage[],
+  {
+    hasMoreBefore = true,
+    hasMoreAfter = true,
+  }: { hasMoreBefore?: boolean; hasMoreAfter?: boolean } = {},
+): GetChannelHistoryServerResponse {
+  return {
+    messages,
+    users: [],
+    mentions: [],
+    channelMentions: [],
+    deletedChannels: [],
+    hasMoreBefore,
+    hasMoreAfter,
+  }
+}
+
+function loadMessageHistoryBeginAction({
+  windowGen = 0,
+  beforeTime = -1,
+}: { windowGen?: number; beforeTime?: number } = {}): ChatActions {
+  return {
+    type: '@chat/loadMessageHistoryBegin',
+    payload: { channelId: CHANNEL_ID, limit: HISTORY_LIMIT, beforeTime, windowGen },
+  }
+}
+
+function loadNewerMessagesBeginAction({
+  windowGen = 0,
+  afterTime = 0,
+  knownNewestTime = afterTime,
+}: { windowGen?: number; afterTime?: number; knownNewestTime?: number } = {}): ChatActions {
+  return {
+    type: '@chat/loadNewerMessagesBegin',
+    payload: { channelId: CHANNEL_ID, limit: HISTORY_LIMIT, afterTime, windowGen, knownNewestTime },
+  }
+}
+
+function loadMessagesAroundBeginAction({
+  windowGen = 0,
+  aroundTime = 0,
+  knownNewestTime,
+}: { windowGen?: number; aroundTime?: number; knownNewestTime?: number } = {}): ChatActions {
+  return {
+    type: '@chat/loadMessagesAroundBegin',
+    payload: {
+      channelId: CHANNEL_ID,
+      limit: HISTORY_LIMIT,
+      aroundTime,
+      windowGen,
+      knownNewestTime,
+    },
+  }
+}
+
+function loadMessageHistoryAction(
+  payload: GetChannelHistoryServerResponse,
+  { windowGen = 0, beforeTime = -1 }: { windowGen?: number; beforeTime?: number } = {},
+): ChatActions {
+  return {
+    type: '@chat/loadMessageHistory',
+    payload,
+    meta: { channelId: CHANNEL_ID, limit: HISTORY_LIMIT, beforeTime, windowGen },
+  }
+}
+
+function loadNewerMessagesAction(
+  payload: GetChannelHistoryServerResponse,
+  {
+    windowGen = 0,
+    afterTime = 0,
+    knownNewestTime = afterTime,
+  }: { windowGen?: number; afterTime?: number; knownNewestTime?: number } = {},
+): ChatActions {
+  return {
+    type: '@chat/loadNewerMessages',
+    payload,
+    meta: { channelId: CHANNEL_ID, limit: HISTORY_LIMIT, afterTime, windowGen, knownNewestTime },
+  }
+}
+
+function loadMessagesAroundAction(
+  payload: GetChannelHistoryServerResponse,
+  {
+    windowGen = 0,
+    aroundTime = 0,
+    knownNewestTime,
+  }: { windowGen?: number; aroundTime?: number; knownNewestTime?: number } = {},
+): ChatActions {
+  return {
+    type: '@chat/loadMessagesAround',
+    payload,
+    meta: { channelId: CHANNEL_ID, limit: HISTORY_LIMIT, aroundTime, windowGen, knownNewestTime },
+  }
+}
+
+function resetMessageWindowAction(): ChatActions {
+  return {
+    type: '@chat/resetMessageWindow',
+    payload: { channelId: CHANNEL_ID },
+  }
+}
+
+function activateChannelAction(): ChatActions {
+  return {
+    type: '@chat/activateChannel',
+    payload: { channelId: CHANNEL_ID },
+  }
+}
+
+function deactivateChannelAction(): ChatActions {
+  return {
+    type: '@chat/deactivateChannel',
+    payload: { channelId: CHANNEL_ID },
+  }
+}
+
+function updateChannelAtBottomAction(atBottom: boolean): ChatActions {
+  return {
+    type: '@chat/updateChannelAtBottom',
+    payload: { channelId: CHANNEL_ID, atBottom },
+  }
+}
+
+function unreadLineSeenAction(time: number, channelId = CHANNEL_ID): ChatActions {
+  return {
+    type: '@chat/unreadLineSeen',
+    payload: { channelId, time },
+  }
+}
+
+function windowOf(state: Immutable<ChatState>) {
+  return state.idToMessages.get(CHANNEL_ID)!
+}
+
+function messageIdsOf(state: Immutable<ChatState>): string[] {
+  return windowOf(state).messages.map(m => m.id)
+}
+
+/** Rewrites a request action into the rejected form the promise middleware dispatches. */
+function asFailure(action: ChatActions): ChatActions {
+  return {
+    ...action,
+    payload: new Error('request failed'),
+    error: true,
+  } as unknown as ChatActions
+}
+
+describe('client/chat/chat-reducer', () => {
+  describe('@chat/updateLastReadTime', () => {
+    test('does not regress the stored position when the incoming time is stale', () => {
+      const state = makeState({ lastReadTime: 1000 })
+
+      const result = chatReducer(state, updateLastReadTimeAction(500))
+
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(1000)
+    })
+
+    test('clears unread when no known server-origin message is newer than the incoming time', () => {
+      const state = makeState({
+        unread: true,
+        lastReadTime: 100,
+        messages: [textMessage(100)],
+      })
+
+      const result = chatReducer(state, updateLastReadTimeAction(200))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('keeps unread when a server-origin message is newer than the incoming time', () => {
+      const state = makeState({
+        unread: true,
+        lastReadTime: 100,
+        messages: [textMessage(300)],
+      })
+
+      const result = chatReducer(state, updateLastReadTimeAction(200))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+    })
+
+    test('a client-local message newer than the incoming time does not keep unread', () => {
+      const state = makeState({
+        unread: true,
+        lastReadTime: 100,
+        messages: [textMessage(100), selfJoinMessage(999_999_999_999)],
+      })
+
+      const result = chatReducer(state, updateLastReadTimeAction(200))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('clears the frozen divider when it is behind the incoming time', () => {
+      const state = makeState({ lastReadTime: 100, unreadLineTime: 150 })
+
+      const result = chatReducer(state, updateLastReadTimeAction(200))
+
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('keeps the frozen divider when it is at or ahead of the incoming time', () => {
+      const state = makeState({ lastReadTime: 100, unreadLineTime: 250 })
+
+      const result = chatReducer(state, updateLastReadTimeAction(200))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(250)
+    })
+
+    test('leaves the divider untouched for an activated channel', () => {
+      const state = makeState({
+        activated: true,
+        lastReadTime: 100,
+        unreadLineTime: 150,
+        messages: [textMessage(100)],
+      })
+
+      const result = chatReducer(state, updateLastReadTimeAction(200))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(150)
+      // The read position itself still advances even while activated, since this is also the path
+      // this session's own optimistic mark-read reports take.
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(200)
+    })
+
+    test('drops the frozen divider of an activated channel when dismissing it', () => {
+      const state = makeState({
+        activated: true,
+        unreadLineTime: 100,
+        lastReadTime: 100,
+        messages: [textMessage(150)],
+      })
+
+      const result = chatReducer(state, updateLastReadTimeAction(200, true))
+
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('drops a seen divider once the read report following a return to the bottom lands', () => {
+      // Messages arrive while the user is reading scrollback, so the divider is frozen where they
+      // left off; going back to the bottom is what retires it, but only once the read report from
+      // there has moved the position past it.
+      let result = chatReducer(
+        makeState({ activated: true, atBottom: true, lastReadTime: 100 }),
+        updateChannelAtBottomAction(false),
+      )
+      result = chatReducer(result, updateMessageAction(200, false))
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+
+      result = chatReducer(result, unreadLineSeenAction(100))
+      result = chatReducer(result, updateChannelAtBottomAction(true))
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+
+      result = chatReducer(result, updateLastReadTimeAction(200))
+
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('keeps a divider the user never looked at for a channel at the bottom', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: true,
+        unreadLineTime: 100,
+        unreadLineLeftBottom: true,
+        lastReadTime: 100,
+        messages: [textMessage(200)],
+      })
+
+      const result = chatReducer(state, updateLastReadTimeAction(200))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('keeps a seen divider while the view is away from the bottom', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: false,
+        unreadLineTime: 100,
+        unreadLineSeen: true,
+        unreadLineLeftBottom: true,
+        lastReadTime: 100,
+        messages: [textMessage(200)],
+      })
+
+      const result = chatReducer(state, updateLastReadTimeAction(200))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('keeps the flag while the latest mention is newer than any loaded message', () => {
+      const state = makeState({
+        unread: true,
+        lastReadTime: 100,
+        latestMentionTime: 300,
+        messages: [textMessage(150)],
+      })
+
+      const stillUnread = chatReducer(state, updateLastReadTimeAction(200))
+      expect(stillUnread.unreadChannels.has(CHANNEL_ID)).toBe(true)
+
+      const covered = chatReducer(state, updateLastReadTimeAction(300))
+      expect(covered.unreadChannels.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('clears an activated channel flag once the position covers the newest message', () => {
+      const state = makeState({
+        activated: true,
+        unread: true,
+        lastReadTime: 50,
+        unreadLineTime: 50,
+        messages: [textMessage(100)],
+      })
+
+      const result = chatReducer(state, updateLastReadTimeAction(100))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(50)
+    })
+
+    test('keeps an activated channel flag while the position is behind the newest message', () => {
+      const state = makeState({
+        activated: true,
+        unread: true,
+        lastReadTime: 50,
+        messages: [textMessage(100)],
+      })
+
+      const result = chatReducer(state, updateLastReadTimeAction(99))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+    })
+
+    test('keeps the flag when a detached present has run past what the position covers', () => {
+      const state = makeState({
+        activated: true,
+        unread: true,
+        lastReadTime: 50,
+        hasNewer: true,
+        detachedNewestTime: 200,
+        messages: [textMessage(100)],
+      })
+
+      const result = chatReducer(state, updateLastReadTimeAction(100))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+    })
+
+    test('keeps the flag when a partial read falls short of a backlog with no history loaded', () => {
+      const state = makeState({ unread: true, lastReadTime: 100, latestUnreadTime: 300 })
+
+      const result = chatReducer(state, updateLastReadTimeAction(200))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(200)
+    })
+
+    test('clears the flag when a read covers a backlog with no history loaded', () => {
+      const state = makeState({ unread: true, lastReadTime: 100, latestUnreadTime: 300 })
+
+      const result = chatReducer(state, updateLastReadTimeAction(300))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('answers a partial read the same way whether or not the backlog is loaded', () => {
+      const unloaded = makeState({ unread: true, lastReadTime: 100, latestUnreadTime: 300 })
+      const loaded = makeState({
+        unread: true,
+        lastReadTime: 100,
+        latestUnreadTime: 300,
+        messages: [textMessage(300)],
+      })
+
+      const partialUnloaded = chatReducer(unloaded, updateLastReadTimeAction(200))
+      const partialLoaded = chatReducer(loaded, updateLastReadTimeAction(200))
+      expect(partialUnloaded.unreadChannels.has(CHANNEL_ID)).toBe(true)
+      expect(partialLoaded.unreadChannels.has(CHANNEL_ID)).toBe(true)
+
+      const fullUnloaded = chatReducer(unloaded, updateLastReadTimeAction(300))
+      const fullLoaded = chatReducer(loaded, updateLastReadTimeAction(300))
+      expect(fullUnloaded.unreadChannels.has(CHANNEL_ID)).toBe(false)
+      expect(fullLoaded.unreadChannels.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('keeps the flag when a detached window ends older than the unread backlog', () => {
+      const state = makeState({
+        activated: true,
+        unread: true,
+        lastReadTime: 100,
+        latestUnreadTime: 300,
+        hasNewer: true,
+        messages: [textMessage(150)],
+      })
+
+      const result = chatReducer(state, updateLastReadTimeAction(200))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+    })
+  })
+
+  describe('channelHasUnreadMention', () => {
+    test('is false when there is no known mention time', () => {
+      const state = makeState({ lastReadTime: 100 })
+
+      expect(channelHasUnreadMention(state, CHANNEL_ID)).toBe(false)
+    })
+
+    test('is false when there is no recorded read position, even with a mention time', () => {
+      const state = makeState({ latestMentionTime: 100 })
+
+      expect(channelHasUnreadMention(state, CHANNEL_ID)).toBe(false)
+    })
+
+    test('is true when the mention time is newer than the read position', () => {
+      const state = makeState({ lastReadTime: 100, latestMentionTime: 200 })
+
+      expect(channelHasUnreadMention(state, CHANNEL_ID)).toBe(true)
+    })
+
+    test('is false when the read position has caught up to the mention time', () => {
+      const state = makeState({ lastReadTime: 200, latestMentionTime: 200 })
+
+      expect(channelHasUnreadMention(state, CHANNEL_ID)).toBe(false)
+    })
+
+    test('is true for an activated channel whose read position is behind the mention', () => {
+      const state = makeState({ activated: true, lastReadTime: 100, latestMentionTime: 200 })
+
+      expect(channelHasUnreadMention(state, CHANNEL_ID)).toBe(true)
+    })
+  })
+
+  describe('isChannelMuted', () => {
+    test('is false for a channel with no stored preferences', () => {
+      const state = makeState()
+
+      expect(isChannelMuted(state, CHANNEL_ID)).toBe(false)
+    })
+
+    test('is false when the stored preferences say unmuted', () => {
+      const state = makeState({ muted: false })
+
+      expect(isChannelMuted(state, CHANNEL_ID)).toBe(false)
+    })
+
+    test('is true when the stored preferences say muted', () => {
+      const state = makeState({ muted: true })
+
+      expect(isChannelMuted(state, CHANNEL_ID)).toBe(true)
+    })
+  })
+
+  describe('channelNeedsAttention', () => {
+    test('is false when nothing is unread', () => {
+      const state = makeState({ lastReadTime: 100 })
+
+      expect(channelNeedsAttention(state, CHANNEL_ID)).toBe(false)
+    })
+
+    test('is true for an unread channel that is not muted', () => {
+      const state = makeState({ unread: true })
+
+      expect(channelNeedsAttention(state, CHANNEL_ID)).toBe(true)
+    })
+
+    test('is false for an unread channel that is muted', () => {
+      const state = makeState({ unread: true, muted: true })
+
+      expect(channelNeedsAttention(state, CHANNEL_ID)).toBe(false)
+    })
+
+    test('is true for a muted channel with an unread mention', () => {
+      const state = makeState({
+        unread: true,
+        muted: true,
+        lastReadTime: 100,
+        latestMentionTime: 200,
+      })
+
+      expect(channelNeedsAttention(state, CHANNEL_ID)).toBe(true)
+    })
+
+    test('is false for a muted channel whose mention has been read', () => {
+      const state = makeState({
+        unread: true,
+        muted: true,
+        lastReadTime: 200,
+        latestMentionTime: 200,
+      })
+
+      expect(channelNeedsAttention(state, CHANNEL_ID)).toBe(false)
+    })
+  })
+
+  describe('@chat/getJoinedChannels / @chat/initChannel', () => {
+    test('seeds the mention time from the initial channel data', () => {
+      const state = makeState()
+
+      const result = chatReducer(
+        state,
+        getJoinedChannelsAction(initialChannelData({ latestMentionTime: 500 })),
+      )
+
+      expect(result.idToLatestMentionTime.get(CHANNEL_ID)).toBe(500)
+    })
+
+    test('does not regress an existing mention time when re-initialized with an older one', () => {
+      const state = makeState({ latestMentionTime: 500 })
+
+      const result = chatReducer(
+        state,
+        getJoinedChannelsAction(initialChannelData({ latestMentionTime: 300 })),
+      )
+
+      expect(result.idToLatestMentionTime.get(CHANNEL_ID)).toBe(500)
+    })
+
+    test('advances an existing mention time when re-initialized with a newer one', () => {
+      const state = makeState({ latestMentionTime: 300 })
+
+      const result = chatReducer(
+        state,
+        getJoinedChannelsAction(initialChannelData({ latestMentionTime: 500 })),
+      )
+
+      expect(result.idToLatestMentionTime.get(CHANNEL_ID)).toBe(500)
+    })
+
+    test('leaves the mention time unset when the initial data carries none', () => {
+      const state = makeState()
+
+      const result = chatReducer(state, getJoinedChannelsAction(initialChannelData()))
+
+      expect(result.idToLatestMentionTime.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('seeds the unread flag from the server, for a channel on screen as well', () => {
+      const state = makeState({ activated: true, atBottom: true })
+
+      const result = chatReducer(
+        state,
+        getJoinedChannelsAction(initialChannelData({ latestUnreadTime: 300, lastReadTime: 100 })),
+      )
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+    })
+
+    test('seeds how far the unread backlog runs alongside the flag', () => {
+      const state = makeState()
+
+      const result = chatReducer(
+        state,
+        getJoinedChannelsAction(initialChannelData({ latestUnreadTime: 300, lastReadTime: 100 })),
+      )
+
+      expect(result.idToLatestUnreadTime.get(CHANNEL_ID)).toBe(300)
+      expect(newestKnownChannelTime(result, CHANNEL_ID)).toBe(300)
+    })
+
+    test('leaves the unread backlog extent unset when the initial data carries none', () => {
+      const state = makeState()
+
+      const result = chatReducer(state, getJoinedChannelsAction(initialChannelData()))
+
+      expect(result.idToLatestUnreadTime.has(CHANNEL_ID)).toBe(false)
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('keeps a newer unread extent when re-initialized with an older one', () => {
+      const state = makeState({ latestUnreadTime: 500 })
+
+      const result = chatReducer(
+        state,
+        getJoinedChannelsAction(initialChannelData({ latestUnreadTime: 300 })),
+      )
+
+      expect(result.idToLatestUnreadTime.get(CHANNEL_ID)).toBe(500)
+    })
+
+    test('keeps a read position that arrived first, and lowers the badge the data seeds', () => {
+      const state = chatReducer(reconnectedState(), updateLastReadTimeAction(200))
+
+      const result = chatReducer(
+        state,
+        getJoinedChannelsAction(initialChannelData({ lastReadTime: 100, latestUnreadTime: 150 })),
+      )
+
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(200)
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('lands in the same place whichever of the data and the read update arrives first', () => {
+      const data = initialChannelData({ lastReadTime: 100, latestUnreadTime: 150 })
+
+      const readFirst = chatReducer(
+        chatReducer(reconnectedState(), updateLastReadTimeAction(200)),
+        getJoinedChannelsAction(data),
+      )
+      const dataFirst = chatReducer(
+        chatReducer(reconnectedState(), getJoinedChannelsAction(data)),
+        updateLastReadTimeAction(200),
+      )
+
+      expect(readFirst.idToLastReadTime.get(CHANNEL_ID)).toBe(200)
+      expect(readFirst.unreadChannels.has(CHANNEL_ID)).toBe(false)
+      expect(dataFirst.idToLastReadTime.get(CHANNEL_ID)).toBe(
+        readFirst.idToLastReadTime.get(CHANNEL_ID),
+      )
+      expect(dataFirst.unreadChannels.has(CHANNEL_ID)).toBe(
+        readFirst.unreadChannels.has(CHANNEL_ID),
+      )
+    })
+
+    test('keeps the badge up when the read position that arrived first stops short of the backlog', () => {
+      const state = chatReducer(reconnectedState(), updateLastReadTimeAction(200))
+
+      const result = chatReducer(
+        state,
+        getJoinedChannelsAction(initialChannelData({ lastReadTime: 100, latestUnreadTime: 300 })),
+      )
+
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(200)
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+    })
+
+    test('keeps the badge up for a mention newer than the merged read position', () => {
+      const state = chatReducer(reconnectedState(), updateLastReadTimeAction(200))
+
+      const result = chatReducer(
+        state,
+        getJoinedChannelsAction(
+          initialChannelData({ lastReadTime: 100, latestUnreadTime: 150, latestMentionTime: 400 }),
+        ),
+      )
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+    })
+
+    test('takes the initial data position when it is newer than one already recorded', () => {
+      const state = chatReducer(reconnectedState(), updateLastReadTimeAction(100))
+
+      const result = chatReducer(
+        state,
+        getJoinedChannelsAction(initialChannelData({ lastReadTime: 200, latestUnreadTime: 150 })),
+      )
+
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(200)
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+    })
+  })
+
+  describe('channel roles', () => {
+    const OWNER_ID = makeSbUserId(10)
+    const MODERATOR_ID = makeSbUserId(11)
+    const MEMBER_ID = makeSbUserId(12)
+
+    function initializedState(
+      overrides: { ownerId?: SbUserId; moderatorIds?: SbUserId[] } = {},
+    ): Immutable<ChatState> {
+      return chatReducer(makeState(), getJoinedChannelsAction(initialChannelData(overrides)))
+    }
+
+    function moderatorsOf(state: Immutable<ChatState>): ReadonlySet<SbUserId> | undefined {
+      return state.idToModeratorIds.get(CHANNEL_ID)
+    }
+
+    test('seeds the moderators from the initial channel data', () => {
+      const result = initializedState({ ownerId: OWNER_ID, moderatorIds: [MODERATOR_ID] })
+
+      expect(Array.from(moderatorsOf(result)!)).toEqual([MODERATOR_ID])
+    })
+
+    test('records a member who has just been given moderation permissions', () => {
+      const state = initializedState({ ownerId: OWNER_ID })
+
+      const result = chatReducer(state, {
+        type: '@chat/userProfileChanged',
+        payload: { action: 'userProfileChanged', userId: MEMBER_ID, isModerator: true },
+        meta: { channelId: CHANNEL_ID },
+      })
+
+      expect(moderatorsOf(result)!.has(MEMBER_ID)).toBe(true)
+    })
+
+    test('drops a member who has just lost their moderation permissions', () => {
+      const state = initializedState({ ownerId: OWNER_ID, moderatorIds: [MODERATOR_ID] })
+
+      const result = chatReducer(state, {
+        type: '@chat/userProfileChanged',
+        payload: { action: 'userProfileChanged', userId: MODERATOR_ID, isModerator: false },
+        meta: { channelId: CHANNEL_ID },
+      })
+
+      expect(moderatorsOf(result)!.has(MODERATOR_ID)).toBe(false)
+    })
+
+    test('drops a moderator who leaves the channel', () => {
+      const state = initializedState({ ownerId: OWNER_ID, moderatorIds: [MODERATOR_ID] })
+
+      const result = chatReducer(state, {
+        type: '@chat/updateLeave',
+        payload: { action: 'leave2', userId: MODERATOR_ID, time: 1000 },
+        meta: { channelId: CHANNEL_ID, windowFocused: true },
+      })
+
+      expect(moderatorsOf(result)!.has(MODERATOR_ID)).toBe(false)
+    })
+
+    test('drops a moderator who is kicked from the channel', () => {
+      const state = initializedState({ ownerId: OWNER_ID, moderatorIds: [MODERATOR_ID] })
+
+      const result = chatReducer(state, {
+        type: '@chat/updateKick',
+        payload: {
+          action: 'kick',
+          targetId: MODERATOR_ID,
+          channelName: CHANNEL_BASIC_INFO.name,
+          time: 1000,
+        },
+        meta: { channelId: CHANNEL_ID, windowFocused: true },
+      })
+
+      expect(moderatorsOf(result)!.has(MODERATOR_ID)).toBe(false)
+    })
+
+    test("forgets the channel's roles when the user leaves it", () => {
+      const state = initializedState({ ownerId: OWNER_ID, moderatorIds: [MODERATOR_ID] })
+
+      const result = chatReducer(state, updateLeaveSelfAction())
+
+      expect(moderatorsOf(result)).toBeUndefined()
+    })
+
+    test('leaves the moderators alone when the channel changes owners', () => {
+      const state = initializedState({ ownerId: OWNER_ID, moderatorIds: [MODERATOR_ID] })
+
+      const result = chatReducer(state, {
+        type: '@chat/ownerChanged',
+        payload: { action: 'ownerChanged', newOwnerId: MODERATOR_ID, time: 1000 },
+        meta: { channelId: CHANNEL_ID, windowFocused: true },
+      })
+
+      expect(Array.from(moderatorsOf(result)!)).toEqual([MODERATOR_ID])
+      expect(result.idToJoinedInfo.get(CHANNEL_ID)?.ownerId).toBe(MODERATOR_ID)
+    })
+
+    test("forgets every channel's roles on a reconnect", () => {
+      const state = initializedState({ ownerId: OWNER_ID, moderatorIds: [MODERATOR_ID] })
+
+      const result = chatReducer(state, { type: '@network/connect' } as unknown as ChatActions)
+
+      expect(result.idToModeratorIds.size).toBe(0)
+    })
+  })
+
+  describe('@chat/getBatchChannelInfo', () => {
+    const PRIVATE_CHANNEL_ID = makeSbChannelId(2)
+
+    function getBatchChannelInfoAction(
+      payload: Partial<GetBatchedChannelInfosResponse> = {},
+    ): ChatActions {
+      return {
+        type: '@chat/getBatchChannelInfo',
+        payload: {
+          channelInfos: [],
+          detailedChannelInfos: [],
+          joinedChannelInfos: [],
+          deletedChannels: [],
+          privateChannels: [],
+          ...payload,
+        },
+      }
+    }
+
+    test('adds ids the server reports as private to privateChannels', () => {
+      const state = makeState()
+
+      const result = chatReducer(
+        state,
+        getBatchChannelInfoAction({ privateChannels: [PRIVATE_CHANNEL_ID] }),
+      )
+
+      expect(result.privateChannels.has(PRIVATE_CHANNEL_ID)).toBe(true)
+    })
+
+    test('clears an id from privateChannels once its basic info arrives', () => {
+      const state = makeState()
+      const withPrivate = chatReducer(
+        state,
+        getBatchChannelInfoAction({ privateChannels: [PRIVATE_CHANNEL_ID] }),
+      )
+
+      const result = chatReducer(
+        withPrivate,
+        getBatchChannelInfoAction({
+          channelInfos: [
+            {
+              id: PRIVATE_CHANNEL_ID,
+              name: 'now-visible',
+              private: false,
+              official: false,
+              closed: false,
+            },
+          ],
+        }),
+      )
+
+      expect(result.privateChannels.has(PRIVATE_CHANNEL_ID)).toBe(false)
+      expect(result.idToBasicInfo.get(PRIVATE_CHANNEL_ID)?.name).toBe('now-visible')
+    })
+
+    test('clears an id from privateChannels when the channel is joined', () => {
+      const state = makeState()
+      const withPrivate = chatReducer(
+        state,
+        getBatchChannelInfoAction({ privateChannels: [PRIVATE_CHANNEL_ID] }),
+      )
+
+      expect(withPrivate.privateChannels.has(PRIVATE_CHANNEL_ID)).toBe(true)
+
+      const data = initialChannelData()
+      const result = chatReducer(
+        withPrivate,
+        getJoinedChannelsAction({
+          ...data,
+          channelInfo: { ...data.channelInfo, id: PRIVATE_CHANNEL_ID },
+          detailedChannelInfo: { ...data.detailedChannelInfo, id: PRIVATE_CHANNEL_ID },
+          joinedChannelInfo: { ...data.joinedChannelInfo, id: PRIVATE_CHANNEL_ID },
+        }),
+      )
+
+      expect(result.privateChannels.has(PRIVATE_CHANNEL_ID)).toBe(false)
+      expect(result.idToBasicInfo.get(PRIVATE_CHANNEL_ID)).toBeDefined()
+    })
+  })
+
+  describe('@chat/updateMessage', () => {
+    test('sets the mention time when the message mentions self', () => {
+      const state = makeState()
+
+      const result = chatReducer(state, updateMessageAction(100, true))
+
+      expect(result.idToLatestMentionTime.get(CHANNEL_ID)).toBe(100)
+    })
+
+    test('does not set the mention time when the message does not mention self', () => {
+      const state = makeState()
+
+      const result = chatReducer(state, updateMessageAction(100, false))
+
+      expect(result.idToLatestMentionTime.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('advances the mention time when a newer mention arrives', () => {
+      const state = makeState({ latestMentionTime: 100 })
+
+      const result = chatReducer(state, updateMessageAction(200, true))
+
+      expect(result.idToLatestMentionTime.get(CHANNEL_ID)).toBe(200)
+    })
+
+    test('does not regress the mention time when an older mention arrives', () => {
+      const state = makeState({ latestMentionTime: 200 })
+
+      const result = chatReducer(state, updateMessageAction(100, true))
+
+      expect(result.idToLatestMentionTime.get(CHANNEL_ID)).toBe(200)
+    })
+
+    test('a read-time advance past the mention clears the derived unread-mention state', () => {
+      let state = makeState({ lastReadTime: 50 })
+
+      state = chatReducer(state, updateMessageAction(100, true))
+      expect(channelHasUnreadMention(state, CHANNEL_ID)).toBe(true)
+
+      state = chatReducer(state, updateLastReadTimeAction(150))
+      expect(channelHasUnreadMention(state, CHANNEL_ID)).toBe(false)
+    })
+
+    test('a live message defers the trim of a pinned window while an older page is in flight', () => {
+      const messages = Array.from({ length: 200 }, (_, i) => textMessage(i + 1))
+      const state = makeState({ activated: true, atBottom: true, loadingHistory: true, messages })
+
+      const result = chatReducer(state, updateMessageAction(1000, false))
+
+      // Trimming here would drop the messages the in-flight page was fetched against, leaving a
+      // gap between it and the window once it lands.
+      expect(windowOf(result).messages.length).toBe(201)
+      expect(windowOf(result).windowGen).toBe(0)
+    })
+
+    test('a live message trims a pinned window down to the history cap once nothing is in flight', () => {
+      const messages = Array.from({ length: 200 }, (_, i) => textMessage(i + 1))
+      const state = makeState({ activated: true, atBottom: true, messages })
+
+      const result = chatReducer(state, updateMessageAction(1000, false))
+
+      expect(windowOf(result).messages.length).toBe(150)
+    })
+
+    test('a message arriving at the bottom of an unfocused window counts as unseen', () => {
+      const state = makeState({ activated: true, atBottom: true, lastReadTime: 100 })
+
+      const result = chatReducer(state, updateMessageAction(200, false, false))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(100)
+    })
+
+    test('a message arriving at the bottom of a focused window is read on arrival', () => {
+      const state = makeState({ activated: true, atBottom: true, lastReadTime: 100 })
+
+      const result = chatReducer(state, updateMessageAction(200, false, true))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(200)
+    })
+
+    test('a mention read on arrival is not an unread mention', () => {
+      const state = makeState({ activated: true, atBottom: true, lastReadTime: 100 })
+
+      const result = chatReducer(state, updateMessageAction(200, true, true))
+
+      expect(result.idToLatestMentionTime.get(CHANNEL_ID)).toBe(200)
+      expect(channelHasUnreadMention(result, CHANNEL_ID)).toBe(false)
+    })
+
+    test('a message read on arrival does not regress the read position', () => {
+      const state = makeState({ activated: true, atBottom: true, lastReadTime: 300 })
+
+      const result = chatReducer(state, updateMessageAction(200, false, true))
+
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(300)
+    })
+
+    test('a message arriving while scrolled up in an unfocused window raises both', () => {
+      const state = makeState({ activated: true, atBottom: false, lastReadTime: 100 })
+
+      const result = chatReducer(state, updateMessageAction(200, false, false))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('a message arriving while scrolled up in a focused window raises both', () => {
+      const state = makeState({ activated: true, atBottom: false, lastReadTime: 100 })
+
+      const result = chatReducer(state, updateMessageAction(200, false, true))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(100)
+    })
+
+    test('a message arriving in a channel that is not being viewed raises the unread flag', () => {
+      const state = makeState({ activated: false, lastReadTime: 100 })
+
+      const result = chatReducer(state, updateMessageAction(200, false, true))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+    })
+
+    test.each([
+      ['a stale bottom report', { activated: true, atBottom: false, lastReadTime: 100 }, true],
+      ['an unfocused window', { activated: true, atBottom: true, lastReadTime: 100 }, false],
+      ['an inactive channel', { activated: false, lastReadTime: 100 }, true],
+    ])('an own echo does not create unread state with %s', (_, stateOverrides, windowFocused) => {
+      const result = chatReducer(
+        makeState(stateOverrides),
+        updateMessageAction(200, true, windowFocused, true),
+      )
+
+      expect(messageIdsOf(result)).toEqual(['text-200'])
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+      expect(result.idToLatestMentionTime.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('an own echo drops the divider and reads the channel through the echoed message', () => {
+      const result = chatReducer(
+        makeState({ unread: true, unreadLineTime: 100, lastReadTime: 100, latestMentionTime: 150 }),
+        updateMessageAction(200, true, true, true),
+      )
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(200)
+      expect(result.idToLatestMentionTime.get(CHANNEL_ID)).toBe(150)
+      expect(channelHasUnreadMention(result, CHANNEL_ID)).toBe(false)
+    })
+
+    test('an own echo does not regress the read position', () => {
+      const result = chatReducer(
+        makeState({ unread: true, unreadLineTime: 100, lastReadTime: 300 }),
+        updateMessageAction(200, false, true, true),
+      )
+
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(300)
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('an own echo drops a divider the read position has not passed', () => {
+      const result = chatReducer(
+        makeState({
+          activated: true,
+          atBottom: false,
+          unread: true,
+          unreadLineTime: 100,
+          lastReadTime: 100,
+          messages: [textMessage(150)],
+        }),
+        updateMessageAction(200, false, true, true),
+      )
+
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(200)
+    })
+
+    test('an own echo in a channel that is not being viewed still reads it', () => {
+      const result = chatReducer(
+        makeState({ activated: false, unread: true, unreadLineTime: 100, lastReadTime: 100 }),
+        updateMessageAction(200, false, true, true),
+      )
+
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(200)
+    })
+
+    test('an own echo past a detached window still tracks the newest time', () => {
+      const result = chatReducer(
+        makeState({ hasNewer: true, activated: true, atBottom: true, lastReadTime: 100 }),
+        updateMessageAction(200, true, true, true),
+      )
+
+      expect(messageIdsOf(result)).toEqual([])
+      expect(windowOf(result).detachedNewestTime).toBe(200)
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(200)
+      expect(result.idToLatestMentionTime.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('a message arriving in an unfocused window re-freezes a divider the read position has passed', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: true,
+        unreadLineTime: 100,
+        lastReadTime: 200,
+        messages: [textMessage(150), textMessage(200)],
+      })
+
+      const result = chatReducer(state, updateMessageAction(300, false, false))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(200)
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(200)
+    })
+
+    test('a message arriving while scrolled up re-freezes a divider the read position has passed', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: false,
+        unreadLineTime: 100,
+        lastReadTime: 200,
+        messages: [textMessage(150), textMessage(200)],
+      })
+
+      const result = chatReducer(state, updateMessageAction(300, false, true))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(200)
+    })
+
+    test('a re-frozen divider is a new divider the user has not looked at yet', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: false,
+        unreadLineTime: 100,
+        unreadLineSeen: true,
+        unreadLineLeftBottom: true,
+        lastReadTime: 200,
+        messages: [textMessage(150), textMessage(200)],
+      })
+
+      const result = chatReducer(state, updateMessageAction(300, false, true))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)).toEqual({
+        time: 200,
+        seen: false,
+        leftBottom: true,
+      })
+    })
+
+    test('a message arriving while scrolled up keeps a divider the read position has not passed', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: false,
+        unreadLineTime: 100,
+        lastReadTime: 100,
+      })
+
+      const result = chatReducer(state, updateMessageAction(300, false, true))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('a message arriving while unfocused keeps a divider the read position has not passed', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: true,
+        unreadLineTime: 100,
+        lastReadTime: 100,
+      })
+
+      const result = chatReducer(state, updateMessageAction(300, false, false))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('a message arriving in a channel that is not being viewed does not re-freeze a passed divider', () => {
+      const state = makeState({ activated: false, unreadLineTime: 100, lastReadTime: 200 })
+
+      const result = chatReducer(state, updateMessageAction(300, false, true))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+    })
+  })
+
+  describe('@chat/updateJoin', () => {
+    test('a join read on arrival advances the read position like any server message', () => {
+      const state = makeState({ activated: true, atBottom: true, lastReadTime: 100 })
+
+      const result = chatReducer(state, updateJoinAction(200))
+
+      expect(messageIdsOf(result)).toEqual(['user-join-200'])
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(200)
+    })
+
+    test('a join arriving while scrolled up raises the flag and leaves the read position', () => {
+      const state = makeState({ activated: true, atBottom: false, lastReadTime: 100 })
+
+      const result = chatReducer(state, updateJoinAction(200))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(100)
+    })
+
+    test('a banner arriving in a channel that is not being viewed raises the unread flag', () => {
+      const state = makeState({ activated: false, lastReadTime: 100 })
+
+      const result = chatReducer(state, updateJoinAction(200))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+    })
+
+    test('a join past a detached window stays out of it and only moves the present', () => {
+      const state = makeState({
+        messages: [textMessage(120), textMessage(130)],
+        hasNewer: true,
+        detachedNewestTime: 400,
+        activated: true,
+        atBottom: true,
+        lastReadTime: 130,
+      })
+
+      const result = chatReducer(state, updateJoinAction(500))
+
+      expect(messageIdsOf(result)).toEqual(['text-120', 'text-130'])
+      expect(windowOf(result).detachedNewestTime).toBe(500)
+      // The forward cursor still sits at the loaded edge, so the next page covers the gap rather
+      // than seeking from beyond it.
+      expect(newestServerOriginTime(windowOf(result).messages)).toBe(130)
+    })
+
+    test('a join past a detached window still goes unread', () => {
+      const state = makeState({
+        messages: [textMessage(120)],
+        hasNewer: true,
+        activated: true,
+        atBottom: true,
+        lastReadTime: 120,
+      })
+
+      const result = chatReducer(state, updateJoinAction(500))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(120)
+    })
+
+    test('membership follows a join immediately while history is detached', () => {
+      const state = makeState({ messages: [textMessage(120)], hasNewer: true })
+
+      const result = chatReducer(state, updateJoinAction(500))
+
+      expect(result.idToUsers.get(CHANNEL_ID)!.active.has(USER_ID)).toBe(true)
+      expect(result.idToDetailedInfo.get(CHANNEL_ID)!.userCount).toBe(2)
+    })
+  })
+
+  describe('live arrivals past a detached window', () => {
+    test('a text message and a join both wait past the gap until the window pages up to them', () => {
+      // An older window, a text message arriving beyond it, then a join beyond that: the window
+      // takes neither, and both are loaded by paging forward from the window's own edge.
+      let state = makeState({
+        messages: [textMessage(120), textMessage(130)],
+        hasNewer: true,
+        activated: true,
+        atBottom: true,
+        lastReadTime: 130,
+      })
+
+      state = chatReducer(state, updateMessageAction(400, false))
+      expect(messageIdsOf(state)).toEqual(['text-120', 'text-130'])
+      expect(windowOf(state).detachedNewestTime).toBe(400)
+
+      state = chatReducer(state, updateJoinAction(500))
+      expect(messageIdsOf(state)).toEqual(['text-120', 'text-130'])
+      expect(windowOf(state).detachedNewestTime).toBe(500)
+
+      // The view can only report what it has loaded, and that position doesn't cover the gap, so the
+      // channel stays unread rather than being acknowledged up to the join.
+      const cursor = newestServerOriginTime(windowOf(state).messages)
+      expect(cursor).toBe(130)
+      state = chatReducer(state, updateLastReadTimeAction(cursor!))
+      expect(state.idToLastReadTime.get(CHANNEL_ID)).toBe(130)
+      expect(state.unreadChannels.has(CHANNEL_ID)).toBe(true)
+
+      state = chatReducer(
+        state,
+        loadNewerMessagesBeginAction({ afterTime: cursor, knownNewestTime: 500 }),
+      )
+      state = chatReducer(
+        state,
+        loadNewerMessagesAction(
+          historyResponse([textMessage(400), joinMessage(500)], { hasMoreAfter: false }),
+          { afterTime: cursor, knownNewestTime: 500 },
+        ),
+      )
+
+      expect(messageIdsOf(state)).toEqual(['text-120', 'text-130', 'text-400', 'user-join-500'])
+      expect(windowOf(state).hasNewer).toBe(false)
+      expect(windowOf(state).detachedNewestTime).toBeUndefined()
+
+      // Only now does a read report cover everything known to exist.
+      state = chatReducer(state, updateLastReadTimeAction(500))
+      expect(state.unreadChannels.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('a join landing while a forward page is in flight cannot reattach the window', () => {
+      // The page was requested when the client knew of nothing newer, so an empty response only
+      // means the server's query ran before the arrivals were stored, not that they are gone.
+      let state = makeState({
+        messages: [textMessage(120), textMessage(130)],
+        hasNewer: true,
+        activated: true,
+        atBottom: true,
+        lastReadTime: 130,
+      })
+
+      state = chatReducer(
+        state,
+        loadNewerMessagesBeginAction({ afterTime: 130, knownNewestTime: 130 }),
+      )
+      state = chatReducer(state, updateMessageAction(400, false))
+      state = chatReducer(state, updateJoinAction(500))
+      state = chatReducer(
+        state,
+        loadNewerMessagesAction(historyResponse([], { hasMoreAfter: false }), {
+          afterTime: 130,
+          knownNewestTime: 130,
+        }),
+      )
+
+      expect(messageIdsOf(state)).toEqual(['text-120', 'text-130'])
+      expect(windowOf(state).hasNewer).toBe(true)
+      expect(windowOf(state).detachedNewestTime).toBe(500)
+      expect(newestServerOriginTime(windowOf(state).messages)).toBe(130)
+    })
+  })
+
+  describe('leaving a channel', () => {
+    test('clears the mention time', () => {
+      const state = makeState({ lastReadTime: 100, latestMentionTime: 200 })
+
+      const result = chatReducer(state, updateLeaveSelfAction())
+
+      expect(result.idToLatestMentionTime.has(CHANNEL_ID)).toBe(false)
+    })
+  })
+
+  describe('@chat/loadMessageHistory', () => {
+    test('takes the older edge straight from the response instead of inferring it', () => {
+      const state = makeState()
+
+      // A short page that nonetheless has more behind it: the count says nothing about the edge.
+      const result = chatReducer(
+        state,
+        loadMessageHistoryAction(historyResponse([textMessage(100)], { hasMoreBefore: true })),
+      )
+
+      expect(windowOf(result).hasHistory).toBe(true)
+      expect(windowOf(result).loadingHistory).toBe(false)
+    })
+
+    test('clears the older edge when the response says there is nothing more', () => {
+      const state = makeState()
+
+      const result = chatReducer(
+        state,
+        loadMessageHistoryAction(historyResponse([textMessage(100)], { hasMoreBefore: false })),
+      )
+
+      expect(windowOf(result).hasHistory).toBe(false)
+    })
+
+    test('drops messages the window already holds at the seam', () => {
+      const state = makeState({ messages: [textMessage(100), textMessage(200)] })
+
+      const result = chatReducer(
+        state,
+        loadMessageHistoryAction(historyResponse([textMessage(50), textMessage(100)])),
+      )
+
+      expect(messageIdsOf(result)).toEqual(['text-50', 'text-100', 'text-200'])
+    })
+
+    test('ignores a page fetched for a window that has since been replaced', () => {
+      const state = makeState({ messages: [textMessage(200)], windowGen: 3 })
+
+      const result = chatReducer(
+        state,
+        loadMessageHistoryAction(historyResponse([textMessage(100)], { hasMoreBefore: false }), {
+          windowGen: 2,
+        }),
+      )
+
+      expect(messageIdsOf(result)).toEqual(['text-200'])
+      expect(windowOf(result).hasHistory).toBe(true)
+    })
+
+    test('a failed page clears the loading flag without touching the window', () => {
+      const state = makeState({ messages: [textMessage(200)], loadingHistory: true })
+
+      const result = chatReducer(state, asFailure(loadMessageHistoryAction(historyResponse([]))))
+
+      expect(windowOf(result).loadingHistory).toBe(false)
+      expect(messageIdsOf(result)).toEqual(['text-200'])
+      expect(windowOf(result).hasHistory).toBe(true)
+    })
+
+    test('a failed page records an error for the older edge', () => {
+      const state = makeState({ messages: [textMessage(200)], loadingHistory: true })
+
+      const result = chatReducer(state, asFailure(loadMessageHistoryAction(historyResponse([]))))
+
+      expect(windowOf(result).historyError).toEqual({ kind: 'history' })
+    })
+
+    test('requesting the older edge again clears its error', () => {
+      const state = makeState({ historyError: { kind: 'history' } })
+
+      const result = chatReducer(state, loadMessageHistoryBeginAction())
+
+      expect(windowOf(result).historyError).toBeUndefined()
+    })
+
+    test('a page that lands clears an older edge error an earlier request left behind', () => {
+      const state = makeState({ historyError: { kind: 'history' }, loadingHistory: true })
+
+      const result = chatReducer(
+        state,
+        loadMessageHistoryAction(historyResponse([textMessage(100)])),
+      )
+
+      expect(windowOf(result).historyError).toBeUndefined()
+    })
+  })
+
+  describe('@chat/loadMessagesAround', () => {
+    test('replaces the window and detaches it from the present', () => {
+      const state = makeState({
+        messages: [textMessage(900), selfJoinMessage(950)],
+        loadingHistory: true,
+        loadingNewer: true,
+      })
+
+      const result = chatReducer(
+        state,
+        loadMessagesAroundAction(
+          historyResponse([textMessage(100), textMessage(200)], {
+            hasMoreBefore: true,
+            hasMoreAfter: true,
+          }),
+          { aroundTime: 150 },
+        ),
+      )
+
+      const window = windowOf(result)
+      expect(messageIdsOf(result)).toEqual(['text-100', 'text-200'])
+      expect(window.hasHistory).toBe(true)
+      expect(window.hasNewer).toBe(true)
+      expect(window.loadingHistory).toBe(false)
+      expect(window.loadingNewer).toBe(false)
+      expect(window.windowGen).toBe(1)
+    })
+
+    test('lands attached when the fetched window reaches the newest message', () => {
+      const state = makeState({ hasNewer: true, detachedNewestTime: 500 })
+
+      const result = chatReducer(
+        state,
+        loadMessagesAroundAction(
+          historyResponse([textMessage(400), textMessage(500)], {
+            hasMoreBefore: false,
+            hasMoreAfter: false,
+          }),
+        ),
+      )
+
+      expect(windowOf(result).hasNewer).toBe(false)
+      expect(windowOf(result).hasHistory).toBe(false)
+      expect(windowOf(result).detachedNewestTime).toBeUndefined()
+    })
+
+    test('stays detached when a message arrived while the request was in flight', () => {
+      // The window held messages up to 500 when the request was dispatched (knownNewestTime), and
+      // another message arrived at 600 before the response landed, so the replacement window ending
+      // at 200 cannot have caught the present even though the server saw nothing newer.
+      const state = makeState({ messages: [textMessage(500), textMessage(600)] })
+
+      const result = chatReducer(
+        state,
+        loadMessagesAroundAction(
+          historyResponse([textMessage(100), textMessage(200)], {
+            hasMoreBefore: true,
+            hasMoreAfter: false,
+          }),
+          { aroundTime: 150, knownNewestTime: 500 },
+        ),
+      )
+
+      const window = windowOf(result)
+      expect(messageIdsOf(result)).toEqual(['text-100', 'text-200'])
+      expect(window.hasNewer).toBe(true)
+      expect(window.detachedNewestTime).toBe(600)
+    })
+
+    test('lands attached when everything past the window was already known at dispatch', () => {
+      // The newest loaded message (600) was known when the request was dispatched, so the server
+      // not returning anything newer than 200 means the newer messages have been deleted.
+      const state = makeState({ messages: [textMessage(500), textMessage(600)] })
+
+      const result = chatReducer(
+        state,
+        loadMessagesAroundAction(
+          historyResponse([textMessage(100), textMessage(200)], {
+            hasMoreBefore: true,
+            hasMoreAfter: false,
+          }),
+          { aroundTime: 150, knownNewestTime: 600 },
+        ),
+      )
+
+      const window = windowOf(result)
+      expect(window.hasNewer).toBe(false)
+      expect(window.detachedNewestTime).toBeUndefined()
+    })
+
+    test('ignores a response fetched for a window that has since been replaced', () => {
+      const state = makeState({ messages: [textMessage(900)], windowGen: 2 })
+
+      const result = chatReducer(
+        state,
+        loadMessagesAroundAction(historyResponse([textMessage(100)]), { windowGen: 1 }),
+      )
+
+      expect(messageIdsOf(result)).toEqual(['text-900'])
+      expect(windowOf(result).windowGen).toBe(2)
+    })
+
+    test('a failed replacement records the time it was asked for, so a retry can ask again', () => {
+      const state = makeState({ loadingHistory: true })
+
+      const result = chatReducer(
+        state,
+        asFailure(loadMessagesAroundAction(historyResponse([]), { aroundTime: 150 })),
+      )
+
+      expect(windowOf(result).historyError).toEqual({ kind: 'around', aroundTime: 150 })
+    })
+
+    test('requesting a replacement window clears the older edge error', () => {
+      const state = makeState({ historyError: { kind: 'history' } })
+
+      const result = chatReducer(state, loadMessagesAroundBeginAction({ aroundTime: 150 }))
+
+      expect(windowOf(result).historyError).toBeUndefined()
+    })
+
+    test('a replacement that lands clears an older edge error an earlier request left behind', () => {
+      const state = makeState({
+        historyError: { kind: 'around', aroundTime: 150 },
+        loadingHistory: true,
+      })
+
+      const result = chatReducer(
+        state,
+        loadMessagesAroundAction(historyResponse([textMessage(100)]), { aroundTime: 150 }),
+      )
+
+      expect(windowOf(result).historyError).toBeUndefined()
+    })
+
+    test('a replacement window clears the newer edge error along with the messages it belonged to', () => {
+      const state = makeState({ messages: [textMessage(900)], newerError: true })
+
+      const result = chatReducer(
+        state,
+        loadMessagesAroundAction(historyResponse([textMessage(100)]), { aroundTime: 150 }),
+      )
+
+      expect(windowOf(result).newerError).toBe(false)
+    })
+  })
+
+  describe('a detached message window', () => {
+    test('does not append a live message, but records how far the present has run ahead', () => {
+      const state = makeState({ hasNewer: true, messages: [textMessage(100)] })
+
+      const result = chatReducer(state, updateMessageAction(500, false))
+
+      expect(messageIdsOf(result)).toEqual(['text-100'])
+      expect(windowOf(result).detachedNewestTime).toBe(500)
+    })
+
+    test('keeps the newest time when an older message arrives afterwards', () => {
+      const state = makeState({ hasNewer: true, detachedNewestTime: 500 })
+
+      const result = chatReducer(state, updateMessageAction(400, false))
+
+      expect(windowOf(result).detachedNewestTime).toBe(500)
+    })
+
+    test('a live message still marks the channel unread and records a mention', () => {
+      const state = makeState({ hasNewer: true })
+
+      const result = chatReducer(state, updateMessageAction(500, true))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+      expect(result.idToLatestMentionTime.get(CHANNEL_ID)).toBe(500)
+    })
+
+    test('a live message goes unread at the bottom of the loaded window, freezing the divider', () => {
+      const state = makeState({
+        hasNewer: true,
+        activated: true,
+        atBottom: true,
+        lastReadTime: 100,
+      })
+
+      const result = chatReducer(state, updateMessageAction(500, false))
+
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(100)
+    })
+
+    test('a live message past a detached window re-freezes a divider the read position has passed', () => {
+      const state = makeState({
+        hasNewer: true,
+        activated: true,
+        atBottom: true,
+        unreadLineTime: 100,
+        lastReadTime: 200,
+      })
+
+      const result = chatReducer(state, updateMessageAction(500, false))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(200)
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(true)
+      expect(windowOf(result).detachedNewestTime).toBe(500)
+    })
+
+    test('a live mention at the bottom of the loaded window is an unread mention', () => {
+      const state = makeState({
+        hasNewer: true,
+        activated: true,
+        atBottom: true,
+        lastReadTime: 100,
+      })
+
+      const result = chatReducer(state, updateMessageAction(500, true))
+
+      expect(channelHasUnreadMention(result, CHANNEL_ID)).toBe(true)
+    })
+
+    test('an attached channel at the bottom does not freeze the divider', () => {
+      const state = makeState({ activated: true, atBottom: true, lastReadTime: 100 })
+
+      const result = chatReducer(state, updateMessageAction(500, false))
+
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('is never trimmed while it grows, even when the view is at the bottom of it', () => {
+      const messages = Array.from({ length: 200 }, (_, i) => textMessage(i + 1))
+      const state = makeState({
+        hasNewer: true,
+        activated: true,
+        atBottom: true,
+        messages,
+      })
+
+      const result = chatReducer(
+        state,
+        loadNewerMessagesAction(historyResponse([textMessage(1000)]), { afterTime: 200 }),
+      )
+
+      expect(windowOf(result).messages.length).toBe(201)
+    })
+
+    test('is not trimmed when the view returns to the bottom of it', () => {
+      const messages = Array.from({ length: 200 }, (_, i) => textMessage(i + 1))
+      const state = makeState({ hasNewer: true, activated: true, messages })
+
+      const result = chatReducer(state, {
+        type: '@chat/updateChannelAtBottom',
+        payload: { channelId: CHANNEL_ID, atBottom: true },
+      })
+
+      expect(windowOf(result).messages.length).toBe(200)
+    })
+  })
+
+  describe('@chat/loadNewerMessages', () => {
+    test('appends the page and reattaches once the server has nothing newer', () => {
+      const state = makeState({ hasNewer: true, messages: [textMessage(100)] })
+
+      const result = chatReducer(
+        state,
+        loadNewerMessagesAction(historyResponse([textMessage(200)], { hasMoreAfter: false }), {
+          afterTime: 100,
+        }),
+      )
+
+      expect(messageIdsOf(result)).toEqual(['text-100', 'text-200'])
+      expect(windowOf(result).hasNewer).toBe(false)
+      expect(windowOf(result).loadingNewer).toBe(false)
+    })
+
+    test('drops messages the window already holds at the seam', () => {
+      const state = makeState({ hasNewer: true, messages: [textMessage(100), textMessage(200)] })
+
+      const result = chatReducer(
+        state,
+        loadNewerMessagesAction(historyResponse([textMessage(200), textMessage(300)])),
+      )
+
+      expect(messageIdsOf(result)).toEqual(['text-100', 'text-200', 'text-300'])
+    })
+
+    test('stays detached while the server still has newer messages', () => {
+      const state = makeState({ hasNewer: true, messages: [textMessage(100)] })
+
+      const result = chatReducer(
+        state,
+        loadNewerMessagesAction(historyResponse([textMessage(200)], { hasMoreAfter: true })),
+      )
+
+      expect(windowOf(result).hasNewer).toBe(true)
+    })
+
+    test('stays detached when a message arrived past the end of the final page', () => {
+      const state = makeState({
+        hasNewer: true,
+        detachedNewestTime: 300,
+        messages: [textMessage(100)],
+      })
+
+      const result = chatReducer(
+        state,
+        loadNewerMessagesAction(historyResponse([textMessage(200)], { hasMoreAfter: false })),
+      )
+
+      expect(windowOf(result).hasNewer).toBe(true)
+      expect(windowOf(result).detachedNewestTime).toBe(300)
+    })
+
+    test('reattaches when the awaited message was already known at dispatch (deleted)', () => {
+      const state = makeState({
+        hasNewer: true,
+        detachedNewestTime: 300,
+        messages: [textMessage(100)],
+      })
+
+      const result = chatReducer(
+        state,
+        loadNewerMessagesAction(historyResponse([textMessage(200)], { hasMoreAfter: false }), {
+          afterTime: 100,
+          knownNewestTime: 300,
+        }),
+      )
+
+      expect(windowOf(result).hasNewer).toBe(false)
+      expect(windowOf(result).detachedNewestTime).toBeUndefined()
+    })
+
+    test('reattaches once the window catches up to what arrived while detached', () => {
+      const state = makeState({
+        hasNewer: true,
+        detachedNewestTime: 300,
+        messages: [textMessage(100)],
+      })
+
+      const result = chatReducer(
+        state,
+        loadNewerMessagesAction(
+          historyResponse([textMessage(200), textMessage(300)], {
+            hasMoreAfter: false,
+          }),
+        ),
+      )
+
+      expect(windowOf(result).hasNewer).toBe(false)
+      expect(windowOf(result).detachedNewestTime).toBeUndefined()
+    })
+
+    test('ignores a page fetched for a window that has since been replaced', () => {
+      const state = makeState({
+        hasNewer: true,
+        windowGen: 4,
+        loadingNewer: true,
+        messages: [textMessage(100)],
+      })
+
+      const result = chatReducer(
+        state,
+        loadNewerMessagesAction(historyResponse([textMessage(200)], { hasMoreAfter: false }), {
+          windowGen: 3,
+        }),
+      )
+
+      expect(messageIdsOf(result)).toEqual(['text-100'])
+      expect(windowOf(result).hasNewer).toBe(true)
+      expect(windowOf(result).loadingNewer).toBe(true)
+    })
+
+    test('a failed page clears the loading flag and leaves the window detached', () => {
+      const state = makeState({ hasNewer: true, loadingNewer: true, messages: [textMessage(100)] })
+
+      const result = chatReducer(state, asFailure(loadNewerMessagesAction(historyResponse([]))))
+
+      expect(windowOf(result).loadingNewer).toBe(false)
+      expect(windowOf(result).hasNewer).toBe(true)
+      expect(messageIdsOf(result)).toEqual(['text-100'])
+    })
+
+    test('a failed page records an error for the newer edge', () => {
+      const state = makeState({ hasNewer: true, loadingNewer: true, messages: [textMessage(100)] })
+
+      const result = chatReducer(state, asFailure(loadNewerMessagesAction(historyResponse([]))))
+
+      expect(windowOf(result).newerError).toBe(true)
+    })
+
+    test('requesting the newer edge again clears its error', () => {
+      const state = makeState({ hasNewer: true, newerError: true, messages: [textMessage(100)] })
+
+      const result = chatReducer(state, loadNewerMessagesBeginAction({ afterTime: 100 }))
+
+      expect(windowOf(result).newerError).toBe(false)
+    })
+
+    test('a page that lands clears a newer edge error an earlier request left behind', () => {
+      const state = makeState({
+        hasNewer: true,
+        newerError: true,
+        loadingNewer: true,
+        messages: [textMessage(100)],
+      })
+
+      const result = chatReducer(
+        state,
+        loadNewerMessagesAction(historyResponse([textMessage(200)]), { afterTime: 100 }),
+      )
+
+      expect(windowOf(result).newerError).toBe(false)
+    })
+  })
+
+  describe('@chat/resetMessageWindow', () => {
+    test('empties the window and returns it to the present', () => {
+      const state = makeState({
+        messages: [textMessage(100)],
+        hasHistory: false,
+        hasNewer: true,
+        detachedNewestTime: 500,
+        loadingNewer: true,
+        windowGen: 2,
+      })
+
+      const result = chatReducer(state, resetMessageWindowAction())
+
+      const window = windowOf(result)
+      expect(window.messages).toEqual([])
+      expect(window.hasHistory).toBe(true)
+      expect(window.hasNewer).toBe(false)
+      expect(window.detachedNewestTime).toBeUndefined()
+      expect(window.loadingNewer).toBe(false)
+      expect(window.windowGen).toBe(3)
+    })
+
+    test('clears both edge errors along with the window they belonged to', () => {
+      const state = makeState({
+        messages: [textMessage(100)],
+        historyError: { kind: 'history' },
+        newerError: true,
+      })
+
+      const result = chatReducer(state, resetMessageWindowAction())
+
+      expect(windowOf(result).historyError).toBeUndefined()
+      expect(windowOf(result).newerError).toBe(false)
+    })
+  })
+
+  describe('@chat/activateChannel', () => {
+    test('freezes the divider at the read position when the channel has unread messages', () => {
+      const state = makeState({ unread: true, lastReadTime: 100, atBottom: true })
+
+      const result = chatReducer(state, activateChannelAction())
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+      expect(result.activatedChannels.has(CHANNEL_ID)).toBe(true)
+    })
+
+    test('keeps the unread flag until the read report covers the newest message', () => {
+      const state = makeState({
+        unread: true,
+        atBottom: true,
+        lastReadTime: 100,
+        messages: [textMessage(200)],
+      })
+
+      const activated = chatReducer(state, activateChannelAction())
+      expect(activated.unreadChannels.has(CHANNEL_ID)).toBe(true)
+
+      const read = chatReducer(activated, updateLastReadTimeAction(200))
+      expect(read.unreadChannels.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('keeps the unread flag when the view opens on a read report short of the newest', () => {
+      const state = makeState({
+        unread: true,
+        atBottom: false,
+        lastReadTime: 100,
+        messages: [textMessage(200)],
+      })
+
+      const activated = chatReducer(state, activateChannelAction())
+      const read = chatReducer(activated, updateLastReadTimeAction(150))
+
+      expect(read.unreadChannels.has(CHANNEL_ID)).toBe(true)
+    })
+
+    test('leaves the at-bottom state the view reported in place', () => {
+      expect(
+        chatReducer(makeState({ atBottom: true }), activateChannelAction()).atBottomChannels.has(
+          CHANNEL_ID,
+        ),
+      ).toBe(true)
+      expect(
+        chatReducer(makeState(), activateChannelAction()).atBottomChannels.has(CHANNEL_ID),
+      ).toBe(false)
+    })
+
+    test('consumes a divider the read position has passed when opening at the bottom', () => {
+      const state = makeState({ lastReadTime: 200, unreadLineTime: 100, atBottom: true })
+
+      const result = chatReducer(state, activateChannelAction())
+
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('keeps a divider the read position has passed when opening away from the bottom', () => {
+      const state = makeState({ lastReadTime: 200, unreadLineTime: 100 })
+
+      const result = chatReducer(state, activateChannelAction())
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('keeps a divider the read position has not passed', () => {
+      const state = makeState({ lastReadTime: 100, unreadLineTime: 100, atBottom: true })
+
+      const result = chatReducer(state, activateChannelAction())
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('keeps a divider frozen by this activation', () => {
+      const state = makeState({ unread: true, lastReadTime: 100, atBottom: true })
+
+      const result = chatReducer(state, activateChannelAction())
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('a divider frozen at the bottom has no trip away from it behind it', () => {
+      const state = makeState({ unread: true, lastReadTime: 100, atBottom: true })
+
+      const result = chatReducer(state, activateChannelAction())
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)).toEqual({
+        time: 100,
+        seen: false,
+        leftBottom: false,
+      })
+    })
+
+    test('a divider frozen away from the bottom counts as one the view has left', () => {
+      const state = makeState({ unread: true, lastReadTime: 100, atBottom: false })
+
+      const result = chatReducer(state, activateChannelAction())
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)).toEqual({
+        time: 100,
+        seen: false,
+        leftBottom: true,
+      })
+    })
+  })
+
+  describe('@chat/deactivateChannel', () => {
+    test('clears both edge errors so the next visit makes a fresh attempt', () => {
+      const state = makeState({
+        activated: true,
+        messages: [textMessage(100)],
+        historyError: { kind: 'history' },
+        newerError: true,
+      })
+
+      const result = chatReducer(state, deactivateChannelAction())
+
+      expect(windowOf(result).historyError).toBeUndefined()
+      expect(windowOf(result).newerError).toBe(false)
+    })
+
+    test('consumes a divider the read position has passed when left at the bottom', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: true,
+        lastReadTime: 200,
+        unreadLineTime: 100,
+      })
+
+      const result = chatReducer(state, deactivateChannelAction())
+
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('keeps a divider the read position has passed when left away from the bottom', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: false,
+        lastReadTime: 200,
+        unreadLineTime: 100,
+      })
+
+      const result = chatReducer(state, deactivateChannelAction())
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('keeps a divider the read position has not passed', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: true,
+        lastReadTime: 100,
+        unreadLineTime: 100,
+      })
+
+      const result = chatReducer(state, deactivateChannelAction())
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('drops a detached window entirely', () => {
+      const messages = Array.from({ length: 200 }, (_, i) => textMessage(i + 1))
+      const state = makeState({
+        activated: true,
+        hasNewer: true,
+        detachedNewestTime: 500,
+        messages,
+      })
+
+      const result = chatReducer(state, deactivateChannelAction())
+
+      const window = windowOf(result)
+      expect(window.messages).toEqual([])
+      expect(window.hasNewer).toBe(false)
+      expect(window.detachedNewestTime).toBeUndefined()
+      expect(window.hasHistory).toBe(true)
+      expect(window.windowGen).toBe(1)
+    })
+
+    test('dropping a detached window lowers the loading flags of in-flight requests', () => {
+      const state = makeState({
+        activated: true,
+        hasNewer: true,
+        loadingHistory: true,
+        loadingNewer: true,
+        messages: [textMessage(100)],
+      })
+
+      const result = chatReducer(state, deactivateChannelAction())
+
+      expect(windowOf(result).loadingHistory).toBe(false)
+      expect(windowOf(result).loadingNewer).toBe(false)
+    })
+
+    test('keeps a divider when the bottom of the window is not the newest message', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: true,
+        hasNewer: true,
+        lastReadTime: 200,
+        unreadLineTime: 100,
+      })
+
+      const result = chatReducer(state, deactivateChannelAction())
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('clears the activation flags for a channel with nothing loaded', () => {
+      const base = makeState({ activated: true, atBottom: true })
+      const state = { ...base, idToMessages: new Map() } as Immutable<ChatState>
+
+      const result = chatReducer(state, deactivateChannelAction())
+
+      expect(result.activatedChannels.has(CHANNEL_ID)).toBe(false)
+      expect(result.atBottomChannels.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('trims an attached window down to the history cap', () => {
+      const messages = Array.from({ length: 200 }, (_, i) => textMessage(i + 1))
+      const state = makeState({ activated: true, messages })
+
+      const result = chatReducer(state, deactivateChannelAction())
+
+      expect(windowOf(result).messages.length).toBe(150)
+    })
+
+    test('leaves the generation alone when nothing is in flight to invalidate', () => {
+      const messages = Array.from({ length: 200 }, (_, i) => textMessage(i + 1))
+      const state = makeState({ activated: true, messages })
+
+      const result = chatReducer(state, deactivateChannelAction())
+
+      expect(windowOf(result).windowGen).toBe(0)
+    })
+
+    test('lowers the loading flags of an attached window, so a request that never settles cannot wedge them', () => {
+      const state = makeState({
+        activated: true,
+        loadingHistory: true,
+        loadingNewer: true,
+        messages: [textMessage(100)],
+      })
+
+      const result = chatReducer(state, deactivateChannelAction())
+
+      expect(windowOf(result).loadingHistory).toBe(false)
+      expect(windowOf(result).loadingNewer).toBe(false)
+    })
+
+    test('discards a page fetched against the older edge the trim moves', () => {
+      const messages = Array.from({ length: 200 }, (_, i) => textMessage(i + 1))
+      const state = makeState({ activated: true, loadingHistory: true, messages })
+
+      const deactivated = chatReducer(state, deactivateChannelAction())
+      expect(windowOf(deactivated).windowGen).toBe(1)
+      expect(windowOf(deactivated).messages.length).toBe(150)
+
+      // The page was fetched for the messages the trim just removed, so applying it would leave
+      // the window holding it directly in front of a gap.
+      const result = chatReducer(
+        deactivated,
+        loadMessageHistoryAction(historyResponse([textMessage(0)]), {
+          windowGen: 0,
+          beforeTime: 1,
+        }),
+      )
+
+      expect(messageIdsOf(result)).toEqual(messageIdsOf(deactivated))
+      expect(windowOf(result).loadingHistory).toBe(false)
+    })
+  })
+
+  describe('@chat/updateChannelAtBottom', () => {
+    test('trims scrollback down to the history cap when the view returns to the bottom', () => {
+      const messages = Array.from({ length: 200 }, (_, i) => textMessage(i + 1))
+      const state = makeState({ activated: true, messages })
+
+      const result = chatReducer(state, updateChannelAtBottomAction(true))
+
+      expect(windowOf(result).messages.length).toBe(150)
+    })
+
+    test('defers the trim while an older page is in flight, keeping the window it was fetched for', () => {
+      const messages = Array.from({ length: 200 }, (_, i) => textMessage(i + 1))
+      const state = makeState({ activated: true, loadingHistory: true, messages })
+
+      const result = chatReducer(state, updateChannelAtBottomAction(true))
+
+      expect(windowOf(result).messages.length).toBe(200)
+      expect(windowOf(result).windowGen).toBe(0)
+    })
+
+    test('a page in flight lands contiguously on the window it was fetched for', () => {
+      const messages = Array.from({ length: 200 }, (_, i) => textMessage(i + 1))
+      let result = chatReducer(
+        makeState({ activated: true, loadingHistory: true, messages }),
+        updateChannelAtBottomAction(true),
+      )
+      // Scrolling away again before the page lands leaves nothing to trim the seam afterwards, so
+      // a window trimmed past the page's boundary would keep the gap for as long as it's loaded.
+      result = chatReducer(result, updateChannelAtBottomAction(false))
+      result = chatReducer(
+        result,
+        loadMessageHistoryAction(historyResponse([textMessage(0)]), { beforeTime: 1 }),
+      )
+
+      expect(messageIdsOf(result)).toEqual(['text-0', ...messages.map(m => m.id)])
+    })
+
+    test('a report from away from the bottom records that the view left it', () => {
+      const state = makeState({ activated: true, atBottom: true, unreadLineTime: 100 })
+
+      const result = chatReducer(state, updateChannelAtBottomAction(false))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.leftBottom).toBe(true)
+    })
+
+    test('drops a divider the user looked at when the view returns to the bottom past it', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: false,
+        unreadLineTime: 100,
+        unreadLineSeen: true,
+        unreadLineLeftBottom: true,
+        lastReadTime: 200,
+      })
+
+      const result = chatReducer(state, updateChannelAtBottomAction(true))
+
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('keeps a divider the user never looked at when the view returns to the bottom', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: false,
+        unreadLineTime: 100,
+        unreadLineLeftBottom: true,
+        lastReadTime: 200,
+      })
+
+      const result = chatReducer(state, updateChannelAtBottomAction(true))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('keeps a divider the read position has not passed', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: false,
+        unreadLineTime: 100,
+        unreadLineSeen: true,
+        unreadLineLeftBottom: true,
+        lastReadTime: 100,
+      })
+
+      const result = chatReducer(state, updateChannelAtBottomAction(true))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('keeps a divider on a view that arrives at the bottom without having left it', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: false,
+        unreadLineTime: 100,
+        unreadLineSeen: true,
+        lastReadTime: 200,
+      })
+
+      const result = chatReducer(state, updateChannelAtBottomAction(true))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('keeps a divider at the loaded bottom of a window detached from the present', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: false,
+        hasNewer: true,
+        unreadLineTime: 100,
+        unreadLineSeen: true,
+        unreadLineLeftBottom: true,
+        lastReadTime: 200,
+      })
+
+      const result = chatReducer(state, updateChannelAtBottomAction(true))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+
+    test('a mount/cleanup/remount cycle at the bottom leaves the divider where it is', () => {
+      // The cycle React's StrictMode runs in development, where the list arrives at the bottom with
+      // the divider on screen every time and the read report follows it there. The user never
+      // scrolled away from where they left off, so the divider still marks it.
+      let result = chatReducer(
+        makeState({
+          unread: true,
+          atBottom: true,
+          lastReadTime: 100,
+          messages: [textMessage(200)],
+        }),
+        activateChannelAction(),
+      )
+      result = chatReducer(result, unreadLineSeenAction(100))
+      result = chatReducer(result, deactivateChannelAction())
+      result = chatReducer(result, updateChannelAtBottomAction(true))
+      result = chatReducer(result, activateChannelAction())
+      result = chatReducer(result, updateLastReadTimeAction(200))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.time).toBe(100)
+    })
+  })
+
+  describe('@chat/unreadLineSeen', () => {
+    test('records that the divider has been in view', () => {
+      const state = makeState({ activated: true, atBottom: false, unreadLineTime: 100 })
+
+      const result = chatReducer(state, unreadLineSeenAction(100))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.seen).toBe(true)
+    })
+
+    test('ignores a report for a time the divider no longer sits at', () => {
+      const state = makeState({ activated: true, atBottom: false, unreadLineTime: 200 })
+
+      const result = chatReducer(state, unreadLineSeenAction(100))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.seen).toBe(false)
+    })
+
+    test('drops a divider the view is already back at the bottom of', () => {
+      // A jump straight to the bottom from above the divider lands with it still on screen, and the
+      // view reports where it ended up before it reports what's in the viewport.
+      const state = makeState({
+        activated: true,
+        atBottom: true,
+        unreadLineTime: 100,
+        unreadLineLeftBottom: true,
+        lastReadTime: 200,
+      })
+
+      const result = chatReducer(state, unreadLineSeenAction(100))
+
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('does nothing for a channel with no divider', () => {
+      const state = makeState({ activated: true, atBottom: true, lastReadTime: 200 })
+
+      const result = chatReducer(state, unreadLineSeenAction(100))
+
+      expect(result.idToUnreadLine.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('does nothing for a channel that is not joined', () => {
+      const state = makeState({ activated: true, atBottom: true, unreadLineTime: 100 })
+
+      const result = chatReducer(state, unreadLineSeenAction(100, makeSbChannelId(99)))
+
+      expect(result.idToUnreadLine.get(CHANNEL_ID)?.seen).toBe(false)
+    })
+  })
+
+  describe('@chat/retrieveUserList', () => {
+    function retrieveUserListBeginAction(): ChatActions {
+      return {
+        type: '@chat/retrieveUserListBegin',
+        payload: { channelId: CHANNEL_ID },
+      }
+    }
+
+    function retrieveUserListAction(payload: SbUser[] = []): ChatActions {
+      return {
+        type: '@chat/retrieveUserList',
+        payload,
+        meta: { channelId: CHANNEL_ID },
+      }
+    }
+
+    test('a failure clears both the loading and loaded flags so the list can be requested again', () => {
+      const loading = chatReducer(makeState(), retrieveUserListBeginAction())
+      expect(loading.idToUsers.get(CHANNEL_ID)?.loadingUserList).toBe(true)
+      expect(loading.idToUsers.get(CHANNEL_ID)?.hasLoadedUserList).toBe(true)
+
+      const result = chatReducer(loading, asFailure(retrieveUserListAction()))
+
+      expect(result.idToUsers.get(CHANNEL_ID)?.loadingUserList).toBe(false)
+      expect(result.idToUsers.get(CHANNEL_ID)?.hasLoadedUserList).toBe(false)
+    })
+
+    test('a failure records an error for the panel to show', () => {
+      const loading = chatReducer(makeState(), retrieveUserListBeginAction())
+
+      const result = chatReducer(loading, asFailure(retrieveUserListAction()))
+
+      expect(result.idToUsers.get(CHANNEL_ID)?.userListError).toBe(true)
+    })
+
+    test('requesting the list again clears its error', () => {
+      const state = makeState({ userListError: true })
+
+      const result = chatReducer(state, retrieveUserListBeginAction())
+
+      expect(result.idToUsers.get(CHANNEL_ID)?.userListError).toBe(false)
+    })
+  })
+
+  describe('oldestServerOriginTime', () => {
+    test('returns the oldest server-recorded time, skipping a client-only message at the head', () => {
+      expect(
+        oldestServerOriginTime([
+          selfJoinMessage(999_999_999_999),
+          textMessage(100),
+          textMessage(200),
+        ]),
+      ).toBe(100)
+    })
+
+    test('returns undefined when the window holds no server-origin message', () => {
+      expect(oldestServerOriginTime([selfJoinMessage(100), selfJoinMessage(200)])).toBeUndefined()
+    })
+  })
+
+  describe('client-only banner times', () => {
+    const OTHER_ID = makeSbUserId(20)
+    const NEW_OWNER_ID = makeSbUserId(21)
+
+    // Far behind the local clock, so a banner stamped with `Date.now()` would be told apart.
+    const EVENT_TIME = 250
+
+    function initializedState(): Immutable<ChatState> {
+      return chatReducer(makeState(), getJoinedChannelsAction(initialChannelData({ time: 50 })))
+    }
+
+    function bannersOf(state: Immutable<ChatState>) {
+      return windowOf(state).messages.filter(m => !isServerOriginMessage(m))
+    }
+
+    test('stamps the self-join banner with the initialization data time', () => {
+      const result = initializedState()
+
+      expect(bannersOf(result).map(m => [m.type, m.time])).toEqual([
+        [ClientChatMessageType.SelfJoinChannel, 50],
+      ])
+    })
+
+    test.each([
+      [
+        ClientChatMessageType.LeaveChannel,
+        {
+          type: '@chat/updateLeave',
+          payload: {
+            action: 'leave2',
+            userId: OTHER_ID,
+            newOwnerId: NEW_OWNER_ID,
+            time: EVENT_TIME,
+          },
+          meta: { channelId: CHANNEL_ID, windowFocused: true },
+        },
+      ],
+      [
+        ClientChatMessageType.KickUser,
+        {
+          type: '@chat/updateKick',
+          payload: {
+            action: 'kick',
+            targetId: OTHER_ID,
+            channelName: CHANNEL_BASIC_INFO.name,
+            newOwnerId: NEW_OWNER_ID,
+            time: EVENT_TIME,
+          },
+          meta: { channelId: CHANNEL_ID, windowFocused: true },
+        },
+      ],
+      [
+        ClientChatMessageType.BanUser,
+        {
+          type: '@chat/updateBan',
+          payload: {
+            action: 'ban',
+            targetId: OTHER_ID,
+            channelName: CHANNEL_BASIC_INFO.name,
+            newOwnerId: NEW_OWNER_ID,
+            time: EVENT_TIME,
+          },
+          meta: { channelId: CHANNEL_ID, windowFocused: true },
+        },
+      ],
+    ] satisfies Array<[ClientChatMessageType, ChatActions]>)(
+      'stamps the %s banner and its owner change with the event time',
+      (bannerType, action) => {
+        const result = chatReducer(initializedState(), action)
+
+        expect(bannersOf(result).map(m => [m.type, m.time])).toEqual([
+          [ClientChatMessageType.SelfJoinChannel, 50],
+          [bannerType, EVENT_TIME],
+          [ClientChatMessageType.NewChannelOwner, EVENT_TIME],
+        ])
+      },
+    )
+
+    test('stamps the owner-change banner with the event time', () => {
+      const result = chatReducer(initializedState(), {
+        type: '@chat/ownerChanged',
+        payload: { action: 'ownerChanged', newOwnerId: NEW_OWNER_ID, time: EVENT_TIME },
+        meta: { channelId: CHANNEL_ID, windowFocused: true },
+      })
+
+      expect(bannersOf(result).map(m => [m.type, m.time])).toEqual([
+        [ClientChatMessageType.SelfJoinChannel, 50],
+        [ClientChatMessageType.NewChannelOwner, EVENT_TIME],
+      ])
+    })
+
+    test('a dropped kick banner returns between the stored messages around it', () => {
+      let result = initializedState()
+      result = chatReducer(result, updateMessageAction(100, false))
+      result = chatReducer(result, updateMessageAction(200, false))
+      result = chatReducer(result, {
+        type: '@chat/updateKick',
+        payload: {
+          action: 'kick',
+          targetId: OTHER_ID,
+          channelName: CHANNEL_BASIC_INFO.name,
+          time: EVENT_TIME,
+        },
+        meta: { channelId: CHANNEL_ID, windowFocused: true },
+      })
+      result = chatReducer(result, updateMessageAction(300, false))
+      const kickId = bannersOf(result).find(m => m.type === ClientChatMessageType.KickUser)!.id
+
+      result = chatReducer(result, resetMessageWindowAction())
+      result = chatReducer(
+        result,
+        loadMessageHistoryAction(
+          historyResponse([textMessage(100), textMessage(200), textMessage(300), textMessage(400)]),
+          { windowGen: 1 },
+        ),
+      )
+
+      expect(messageIdsOf(result)).toEqual(['text-100', 'text-200', kickId, 'text-300', 'text-400'])
+    })
+  })
+
+  describe('carried client-only messages', () => {
+    test('jump to present: a dropped self-join banner returns on the next newest-page fetch', () => {
+      const banner = selfJoinMessage(1_000_000)
+      const state = makeState({ messages: [textMessage(100), textMessage(200), banner] })
+
+      let result = chatReducer(state, resetMessageWindowAction())
+      expect(messageIdsOf(result)).toEqual([])
+      expect(windowOf(result).carriedClientMessages.map(m => m.id)).toEqual([banner.id])
+
+      result = chatReducer(
+        result,
+        loadMessageHistoryAction(
+          historyResponse([textMessage(300), textMessage(400)], { hasMoreBefore: true }),
+          { windowGen: 1 },
+        ),
+      )
+
+      expect(messageIdsOf(result)).toEqual(['text-300', 'text-400', banner.id])
+      expect(windowOf(result).carriedClientMessages).toEqual([])
+    })
+
+    test('deep detour: a banner stays carried through an old-range fetch, then returns on reattach', () => {
+      const banner = selfJoinMessage(1_000_000)
+      const state = makeState({
+        activated: true,
+        hasNewer: true,
+        messages: [textMessage(500), banner],
+      })
+
+      // Deactivating a window detached from the present drops it whole, carrying the banner.
+      let result = chatReducer(state, deactivateChannelAction())
+      expect(messageIdsOf(result)).toEqual([])
+      expect(windowOf(result).carriedClientMessages.map(m => m.id)).toEqual([banner.id])
+
+      // A detour into an old range: the fetched page doesn't reach anywhere near the banner's
+      // time, and the server still has newer messages behind it, so the banner stays carried.
+      result = chatReducer(
+        result,
+        loadMessagesAroundAction(
+          historyResponse([textMessage(100), textMessage(200)], {
+            hasMoreBefore: true,
+            hasMoreAfter: true,
+          }),
+          { windowGen: 1, aroundTime: 150 },
+        ),
+      )
+      expect(messageIdsOf(result)).toEqual(['text-100', 'text-200'])
+      expect(windowOf(result).carriedClientMessages.map(m => m.id)).toEqual([banner.id])
+
+      // Paging forward until the server reports nothing newer reattaches the window, which now
+      // covers everything newer than what's loaded and reclaims the banner.
+      result = chatReducer(
+        result,
+        loadNewerMessagesAction(historyResponse([textMessage(300)], { hasMoreAfter: false }), {
+          windowGen: 2,
+          afterTime: 200,
+          knownNewestTime: 200,
+        }),
+      )
+
+      expect(messageIdsOf(result)).toEqual(['text-100', 'text-200', 'text-300', banner.id])
+      expect(windowOf(result).carriedClientMessages).toEqual([])
+      expect(windowOf(result).hasNewer).toBe(false)
+    })
+
+    test('evicts the oldest carried message once the cap is exceeded', () => {
+      const existingCarried = Array.from({ length: 50 }, (_, i) => selfJoinMessage(i + 1))
+      const newBanner = selfJoinMessage(1000)
+      const state = makeState({
+        carriedClientMessages: existingCarried,
+        messages: [textMessage(500), newBanner],
+      })
+
+      const result = chatReducer(state, resetMessageWindowAction())
+
+      const carried = windowOf(result).carriedClientMessages
+      expect(carried.length).toBe(50)
+      expect(carried.map(m => m.id)).not.toContain(existingCarried[0].id)
+      expect(carried.map(m => m.id)).toContain(newBanner.id)
+    })
+  })
+
+  describe('@messaging/appendLocalMessage', () => {
+    test('appends to an attached channel without touching unread state', () => {
+      const state = makeState({
+        activated: true,
+        atBottom: true,
+        lastReadTime: 100,
+        messages: [textMessage(100)],
+      })
+
+      const result = chatReducer(state, appendLocalMessageAction(echoMessage('echo', 200)))
+
+      expect(messageIdsOf(result)).toEqual(['text-100', 'echo'])
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+      expect(result.idToLastReadTime.get(CHANNEL_ID)).toBe(100)
+    })
+
+    test('a detached channel carries the message instead of appending it', () => {
+      const state = makeState({ hasNewer: true, messages: [textMessage(100)] })
+
+      const result = chatReducer(state, appendLocalMessageAction(echoMessage('echo', 200)))
+
+      expect(messageIdsOf(result)).toEqual(['text-100'])
+      expect(windowOf(result).carriedClientMessages.map(m => m.id)).toEqual(['echo'])
+      expect(result.unreadChannels.has(CHANNEL_ID)).toBe(false)
+    })
+
+    test('a message carried while detached comes back once the window reattaches', () => {
+      let result = chatReducer(
+        makeState({ hasNewer: true, messages: [textMessage(100)] }),
+        appendLocalMessageAction(echoMessage('echo', 200)),
+      )
+
+      result = chatReducer(
+        result,
+        loadNewerMessagesAction(historyResponse([textMessage(300)], { hasMoreAfter: false }), {
+          afterTime: 100,
+          knownNewestTime: 100,
+        }),
+      )
+
+      expect(windowOf(result).hasNewer).toBe(false)
+      expect(messageIdsOf(result)).toEqual(['text-100', 'echo', 'text-300'])
+      expect(windowOf(result).carriedClientMessages).toEqual([])
+    })
+
+    test('a message for a channel this client has no state for is dropped', () => {
+      const state = makeState({ messages: [textMessage(100)] })
+
+      const result = chatReducer(state, {
+        type: '@messaging/appendLocalMessage',
+        payload: {
+          target: { surface: 'channel', channelId: makeSbChannelId(99) },
+          message: echoMessage('echo', 200),
+        },
+      })
+
+      expect(messageIdsOf(result)).toEqual(['text-100'])
+      expect(windowOf(result).carriedClientMessages).toEqual([])
+    })
+
+    test('a message for another kind of surface is left to that surface', () => {
+      const state = makeState({ messages: [textMessage(100)] })
+
+      const result = chatReducer(state, {
+        type: '@messaging/appendLocalMessage',
+        payload: { target: { surface: 'lobby' }, message: echoMessage('echo', 200) },
+      })
+
+      expect(messageIdsOf(result)).toEqual(['text-100'])
+      expect(windowOf(result).carriedClientMessages).toEqual([])
+    })
+
+    test('the inactive-channel trim cuts it like any other message', () => {
+      const messages = Array.from({ length: 150 }, (_, i) => textMessage(i + 1))
+      let result = chatReducer(
+        makeState({ activated: true, messages }),
+        appendLocalMessageAction(echoMessage('echo', 200)),
+      )
+      expect(messageIdsOf(result)).toHaveLength(151)
+
+      result = chatReducer(result, deactivateChannelAction())
+
+      expect(messageIdsOf(result)).toHaveLength(150)
+      expect(messageIdsOf(result)).toContain('echo')
+      expect(messageIdsOf(result)).not.toContain('text-1')
+      expect(windowOf(result).carriedClientMessages).toEqual([])
+    })
+  })
+
+  describe('channel order', () => {
+    function channelData(id: number): InitialChannelData {
+      const channelId = makeSbChannelId(id)
+      const data = initialChannelData()
+      return {
+        ...data,
+        channelInfo: { ...data.channelInfo, id: channelId, name: `channel-${id}` },
+        detailedChannelInfo: { ...data.detailedChannelInfo, id: channelId },
+        joinedChannelInfo: { ...data.joinedChannelInfo, id: channelId },
+      }
+    }
+
+    function joinedListAction(ids: number[]): ChatActions {
+      return { type: '@chat/getJoinedChannels', payload: ids.map(channelData) }
+    }
+
+    function initChannelAction(id: number): ChatActions {
+      return {
+        type: '@chat/initChannel',
+        payload: { action: 'init3', ...channelData(id) },
+        meta: { channelId: makeSbChannelId(id) },
+      }
+    }
+
+    function orderChangedAction(ids: number[]): ChatActions {
+      return {
+        type: '@chat/channelOrderChanged',
+        payload: { channelIds: ids.map(makeSbChannelId) },
+      }
+    }
+
+    function orderOf(state: Immutable<ChatState>): number[] {
+      return Array.from(state.joinedChannels, id => Number(id))
+    }
+
+    test('lists joined channels in the order the server sent them', () => {
+      const result = chatReducer(reconnectedState(), joinedListAction([3, 1, 2]))
+      expect(orderOf(result)).toEqual([3, 1, 2])
+    })
+
+    test("applies the server's order to a channel initialized before the list arrived", () => {
+      let state = chatReducer(reconnectedState(), initChannelAction(2))
+      state = chatReducer(state, joinedListAction([3, 2, 1]))
+      expect(orderOf(state)).toEqual([3, 2, 1])
+    })
+
+    test('keeps a channel initialized while the list was loading, but not in it, at the end', () => {
+      let state = chatReducer(reconnectedState(), initChannelAction(4))
+      state = chatReducer(state, joinedListAction([3, 1]))
+      expect(orderOf(state)).toEqual([3, 1, 4])
+    })
+
+    test('reorders the joined channels', () => {
+      let state = chatReducer(reconnectedState(), joinedListAction([1, 2, 3]))
+      state = chatReducer(state, orderChangedAction([3, 1, 2]))
+      expect(orderOf(state)).toEqual([3, 1, 2])
+    })
+
+    test('skips listed channels that are not joined and keeps unlisted ones after', () => {
+      let state = chatReducer(reconnectedState(), joinedListAction([1, 2, 3, 4]))
+      state = chatReducer(state, orderChangedAction([4, 9, 2]))
+      expect(orderOf(state)).toEqual([4, 2, 1, 3])
+    })
+
+    test('adds a newly joined channel to the end of a reordered list', () => {
+      let state = chatReducer(reconnectedState(), joinedListAction([1, 2, 3]))
+      state = chatReducer(state, orderChangedAction([3, 2, 1]))
+      state = chatReducer(state, initChannelAction(5))
+      expect(orderOf(state)).toEqual([3, 2, 1, 5])
+    })
+
+    test('leaving a channel keeps the order of the rest', () => {
+      let state = chatReducer(reconnectedState(), joinedListAction([1, 2, 3]))
+      state = chatReducer(state, orderChangedAction([3, 1, 2]))
+      state = chatReducer(state, updateLeaveSelfAction())
+      expect(orderOf(state)).toEqual([3, 2])
+    })
+  })
+})

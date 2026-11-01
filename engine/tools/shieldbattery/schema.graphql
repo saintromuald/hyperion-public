@@ -1,0 +1,1271 @@
+"""
+Any of the possible race choices after random has been resolved.
+"""
+scalar AssignedRace
+
+"""
+A streamer an admin has blocked from the live-streams feed (shown on the home page and the
+dedicated live streams page), for the admin blocked-streams list. The block hides them from the
+`liveStreams` feed only; the `twitch_login`/`twitch_display_name` come from their
+currently-linked channel (via a LEFT JOIN) and are absent if they've since unlinked.
+"""
+type BlockedStream {
+	"""
+	The Twitch login of the blocked user's currently-linked channel, if they still have one.
+	"""
+	twitchLogin: String
+	"""
+	The Twitch display name of the blocked user's currently-linked channel, if any.
+	"""
+	twitchDisplayName: String
+	"""
+	When the block was created.
+	"""
+	createdAt: DateTime!
+	"""
+	A globally unique ID for this block. At most one block exists per user, so this is derived
+	from the blocked user's ID.
+	"""
+	id: String!
+	"""
+	The blocked ShieldBattery user.
+	"""
+	user: SbUser
+	"""
+	The admin who created the block, if their account still exists.
+	"""
+	blockedBy: SbUser
+}
+
+type CommendPlayerPayload {
+	feedback: GameFeedback!
+	"""
+	The commended player, with their updated `commendCount`.
+	"""
+	commendedUser: SbUser!
+}
+
+input CreateSignupCodeInput {
+	expiresAt: DateTime!
+	maxUses: Int
+	notes: String
+}
+
+type CurrentUser {
+	id: SbUserId!
+	"""
+	The user's display name (may differ from their login name).
+	"""
+	name: String!
+	"""
+	The name the user logs in with (may differ from their display name).
+	"""
+	loginName: String!
+	email: String!
+	emailVerified: Boolean!
+	acceptedPrivacyVersion: Int!
+	acceptedTermsVersion: Int!
+	acceptedUsePolicyVersion: Int!
+	locale: String
+	"""
+	When the user last changed their login name (for rate limiting display)
+	"""
+	lastLoginNameChange: DateTime
+	"""
+	When the user last changed their display name (for rate limiting display)
+	"""
+	lastNameChange: DateTime
+	"""
+	Number of display name change tokens available
+	"""
+	nameChangeTokens: Int!
+	"""
+	A fully-qualified URL to the user's uploaded avatar, or null if they haven't uploaded one.
+	"""
+	avatarUrl: String
+	permissions: SbPermissions!
+	canChangeDisplayName: Boolean!
+	nextDisplayNameChangeAllowedAt: DateTime
+}
+
+"""
+Implement the DateTime<Utc> scalar
+
+The input/output is a string in RFC3339 format.
+"""
+scalar DateTime
+
+type DisplayNameAuditEntry {
+	id: UUID!
+	userId: SbUserId!
+	oldName: String!
+	newName: String!
+	changedAt: DateTime!
+	changeReason: String
+	userAgent: String
+	sessionId: String
+	usedToken: Boolean!
+	changedByUser: SbUser
+	ipAddress: String
+}
+
+type Game {
+	id: UUID!
+	startTime: DateTime!
+	config: GameConfig!
+	disputable: Boolean!
+	disputeRequested: Boolean!
+	disputeReviewed: Boolean!
+	gameLength: Int
+	results: [ReconciledPlayerResultEntry!]
+	map: UploadedMap!
+	"""
+	Each player's standing in the game's matchmaking mode during the season the game started
+	in. This is their standing as of now rather than as of the game, so once the game's results
+	are in, it includes them. Empty for games that weren't from matchmaking; a player with no
+	rating in that mode and season is left out.
+	"""
+	currentRanks: [GamePlayerRank!]!
+}
+
+union GameConfig = GameConfigDataLobby | GameConfigDataMatchmaking
+
+type GameConfigDataLobby {
+	gameType: GameType!
+	gameSubType: Int!
+	teams: [[GamePlayer!]!]!
+	gameSourceExtra: LobbyExtra!
+}
+
+type GameConfigDataMatchmaking {
+	gameType: GameType!
+	gameSubType: Int!
+	teams: [[GamePlayer!]!]!
+	gameSourceExtra: MatchmakingExtra!
+}
+
+"""
+The current user's ability to commend or report the other players of one game.
+"""
+type GameFeedback {
+	"""
+	The game's id, which clients can cache this by. Everything else here is about the current
+	user.
+	"""
+	id: UUID!
+	"""
+	When commending and reporting close for this game (its end plus 24 hours). Null when the game
+	has no results yet, was canceled, or the current user didn't play in it.
+	"""
+	closesAt: DateTime
+	"""
+	What the current user has already given in this game.
+	"""
+	given: [GivenGameFeedback!]!
+	"""
+	How many more commends the current user can give right now.
+	"""
+	commendsRemaining: Int!
+	"""
+	When `commendsRemaining` is 0: when the oldest commend in the window ages out.
+	"""
+	commendsAvailableAt: DateTime
+	"""
+	Players in this game the current user commended within the last day (in any game).
+	"""
+	recentCommends: [RecentCommend!]!
+}
+
+enum GameFeedbackKind {
+	COMMEND
+	REPORT
+}
+
+type GamePlayer {
+	race: Race!
+	isComputer: Boolean!
+	user: SbUser
+}
+
+"""
+A player's standing in a matchmaking mode for a season. Carries only what's public about it
+(points, record and placement progress), never the player's rating.
+"""
+type GamePlayerRank {
+	userId: SbUserId!
+	matchmakingType: MatchmakingType!
+	seasonId: Int!
+	points: Float!
+	wins: Int!
+	losses: Int!
+	"""
+	Games played since the player's last MMR reset. Below the placement match count, the
+	player's division isn't decided yet.
+	"""
+	lifetimeGames: Int!
+	"""
+	Identifies the standing itself (a player in a mode for a season), so every game that
+	player is in shares one cached copy.
+	"""
+	id: String!
+}
+
+type GameReport {
+	id: UUID!
+	reason: GameReportReason!
+	details: String
+	"""
+	How far into the game, in seconds of game time, the report was filed. Null for reports filed
+	after the game.
+	"""
+	gameTimeSeconds: Int
+	createdAt: DateTime!
+	resolvedAt: DateTime
+	resolution: GameReportResolution
+	resolutionNotes: String
+	reporter: SbUser
+	reportedUser: SbUser
+	resolver: SbUser
+	"""
+	The reported game, so the admin UI can show context and link to it.
+	"""
+	game: Game
+	"""
+	The best (longest) replay for this game, if one was uploaded, as a signed download URL plus
+	the file id + hash the client needs to cache and watch it. Guarded directly (not just via
+	the query) because `report_game` returns a `GameReport` to any logged-in user and field
+	guards aren't transitive — without this, a non-admin could select it off the mutation
+	response and get a signed URL that skips the per-user replay ACLs.
+	"""
+	replay: GameReportReplay
+	"""
+	Credibility context for the reporter: how their past reports have resolved. Derived stats,
+	not a stored score. Guarded directly (see `replay`) so it isn't reachable off the
+	unguarded `report_game` mutation response. Batched via a DataLoader so a list of reports
+	doesn't fan out one query per row.
+	"""
+	reporterStats: GameReportUserStats!
+	"""
+	The mirror of `reporter_stats` for the reported user — surfaces reports filed *against* them
+	(also catches brigading, where several reporters pile onto one player). Guarded directly
+	(see `replay`), batched via the same DataLoader.
+	"""
+	reportedUserStats: GameReportUserStats!
+	"""
+	Other reports against the same player for the same game (this one excluded), newest first —
+	so an admin sees the whole incident at once and doesn't, e.g., dismiss a report a sibling has
+	already gotten actioned. Detail-view only (the list view doesn't select it), so no batching.
+	"""
+	siblingReports: [GameReport!]!
+}
+
+type GameReportConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [GameReportEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [GameReport!]!
+}
+
+"""
+An edge in a connection.
+"""
+type GameReportEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: GameReport!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+input GameReportFilter {
+	"""
+	Include already-resolved reports. Defaults to false (unresolved queue only).
+	"""
+	includeResolved: Boolean
+	"""
+	Restrict to reports filed against this user (the "reports against" moderation view).
+	"""
+	reportedUserId: SbUserId
+}
+
+"""
+Why a player was reported. Stored in the `reason` TEXT column (not a PG enum) so the vocabulary
+stays a code-only change; the DB string form is defined by [`GameReportReason::to_db`].
+"""
+enum GameReportReason {
+	"""
+	Any mechanism of unfair advantage: hacks, third-party tools, or game/map exploit abuse.
+	"""
+	CHEATING
+	"""
+	Left the game mid-match (mostly relevant for allies in team games). Note this is distinct
+	from queue dodging, which is handled automatically by matchmaking bans.
+	"""
+	ABANDONING
+	"""
+	Stayed in the game but sabotaged it: feeding, intentional losing, AFK, refusing to play.
+	"""
+	GRIEFING
+	"""
+	Harassment, hate speech, or toxicity in game chat.
+	"""
+	ABUSIVE_CHAT
+	"""
+	Anything else; the details field is required for this reason.
+	"""
+	OTHER
+}
+
+type GameReportReplay {
+	replayFileId: UUID!
+	"""
+	Hex-encoded SHA-256 of the replay file; matches `GameReplayInfo.hash` on the client.
+	"""
+	hash: String!
+	"""
+	Signed URL for downloading the replay.
+	"""
+	url: String!
+}
+
+"""
+The outcome of resolving a report. `Dismissed` (unfounded / insufficient evidence) is kept
+distinct from `Abusive` (the report itself was bad-faith) so the two never get conflated in the
+reporter-credibility stats. Stored in the `resolution` TEXT column.
+"""
+enum GameReportResolution {
+	"""
+	The report was valid and action was taken.
+	"""
+	ACTIONED
+	"""
+	Unfounded or insufficient evidence.
+	"""
+	DISMISSED
+	"""
+	The report itself was bad-faith (false reporting, harassment-by-report).
+	"""
+	ABUSIVE
+	"""
+	A valid duplicate of another report for the same target/game.
+	"""
+	DUPLICATE
+}
+
+"""
+A count of how a user's reports (as reporter or as reported) have resolved.
+"""
+type GameReportUserStats {
+	total: Int!
+	actioned: Int!
+	dismissed: Int!
+	abusive: Int!
+	duplicate: Int!
+	pending: Int!
+}
+
+"""
+The preset game ruleset that was selected (or UMS).
+"""
+scalar GameType
+
+"""
+Something the current user has already given another player in a game.
+"""
+type GivenGameFeedback {
+	userId: SbUserId!
+	kind: GameFeedbackKind!
+}
+
+type League {
+	id: UUID!
+	name: String!
+	matchmakingType: MatchmakingType!
+	description: String!
+	signupsAfter: DateTime!
+	startAt: DateTime!
+	endAt: DateTime!
+	rulesAndInfo: String
+	link: String
+	imageUrl: String
+	badgeUrl: String
+}
+
+"""
+A ShieldBattery user who is currently live-streaming, for the home-page feed.
+"""
+type LiveStream {
+	"""
+	The Twitch login name (used in `twitch.tv/<login>` URLs).
+	"""
+	twitchLogin: String!
+	"""
+	The Twitch display name.
+	"""
+	twitchDisplayName: String!
+	"""
+	The stream's title.
+	"""
+	title: String!
+	"""
+	The Twitch category/game being streamed.
+	"""
+	gameName: String!
+	"""
+	The stream's current viewer count.
+	"""
+	viewerCount: Int!
+	"""
+	When the stream started.
+	"""
+	startedAt: DateTime!
+	"""
+	A ready-to-use thumbnail URL at a fixed size.
+	"""
+	thumbnailUrl: String!
+	"""
+	A globally unique ID for this stream. A user has at most one live stream at a time, so this
+	is derived from the streamer's user ID.
+	"""
+	id: String!
+	"""
+	The ShieldBattery user who is streaming.
+	"""
+	user: SbUser
+}
+
+type LobbyExtra {
+	turnRate: Int
+	useLegacyLimits: Boolean
+	"""
+	Whether the game was played without the ShieldBattery game logic fixes that make replays
+	play back differently in StarCraft: Remastered without ShieldBattery. Missing for games
+	recorded before this setting existed, which should be treated as `false`.
+	"""
+	starcraftCompatibleReplays: Boolean
+}
+
+type LoginNameAuditEntry {
+	id: UUID!
+	userId: SbUserId!
+	oldLoginName: String!
+	newLoginName: String!
+	changedAt: DateTime!
+	changeReason: String
+	userAgent: String
+	sessionId: String
+	changedByUser: SbUser
+	ipAddress: String
+}
+
+type MapFile {
+	format: String!
+	tileset: Int!
+	originalName: String!
+	originalDescription: String!
+	slots: Int!
+	umsSlots: Int!
+	umsForces: [MapForce!]!
+	width: Int!
+	height: Int!
+	isEud: Boolean!
+	parserVersion: Int!
+	imageVersion: Int!
+	id: String!
+	image256Url: String!
+	image512Url: String!
+	image1024Url: String!
+	image2048Url: String!
+}
+
+type MapForce {
+	name: String!
+	teamId: Int!
+	players: [MapForcePlayer!]!
+}
+
+type MapForcePlayer {
+	playerId: Int!
+	race: MapForcePlayerRace!
+	typeId: Int!
+	isComputer: Boolean!
+}
+
+"""
+The race configuration for a player in a map force (either a preset race or 'any' for selectable).
+"""
+scalar MapForcePlayerRace
+
+"""
+Which map listings a map appears in. Visibility never restricts access: any map can be viewed, downloaded and played by anyone who has its id.
+"""
+scalar MapVisibility
+
+"""
+The built-in default knob values, returned alongside the stored overrides so the admin UI can
+show each field's effective default as a placeholder / reset target.
+"""
+type MatchmakerConfigDefaults {
+	searchIntervalSeconds: Float!
+	maxPlayersExamined: Int!
+	weightRatingVariance: Float!
+	weightWinProb: Float!
+	weightLatency: Float!
+	uncertaintyK: Float!
+	winProbScale: Float!
+	minQuality: Float!
+	adaptiveComfortableMultiplier: Int!
+	adaptiveDecayPerMissing: Float!
+	populationHalfLifeSeconds: Float!
+}
+
+input MatchmakerConfigInput {
+	searchIntervalSeconds: Float
+	maxPlayersExamined: Int
+	global: MatchmakerModeConfigOverridesInput!
+	perMode: [MatchmakerPerModeOverrideInput!]!
+}
+
+"""
+The current matchmaker config: the stored overrides plus the built-in defaults.
+"""
+type MatchmakerConfigView {
+	searchIntervalSeconds: Float
+	maxPlayersExamined: Int
+	global: MatchmakerModeConfigOverrides!
+	perMode: [MatchmakerPerModeOverride!]!
+	defaults: MatchmakerConfigDefaults!
+	"""
+	Built-in per-mode adjustments to `defaults`, for the modes that have any. A mode's effective
+	default for a field is its adjustment here if set, otherwise the value in `defaults`; stored
+	global and per-mode overrides take precedence over both.
+	"""
+	modeDefaults: [MatchmakerPerModeOverride!]!
+}
+
+"""
+Stored (JSON) form of [`ModeConfig`]: a sparse set of knob overrides. Doubles as the GraphQL
+`MatchmakerModeConfigOverrides` (output) / `MatchmakerModeConfigOverridesInput` (input) type, so
+the admin form sends and receives exactly the shape that is persisted.
+"""
+type MatchmakerModeConfigOverrides {
+	weightRatingVariance: Float
+	weightWinProb: Float
+	weightLatency: Float
+	uncertaintyK: Float
+	winProbScale: Float
+	minQuality: Float
+	adaptiveComfortableMultiplier: Int
+	adaptiveDecayPerMissing: Float
+	populationHalfLifeSeconds: Float
+}
+
+"""
+Stored (JSON) form of [`ModeConfig`]: a sparse set of knob overrides. Doubles as the GraphQL
+`MatchmakerModeConfigOverrides` (output) / `MatchmakerModeConfigOverridesInput` (input) type, so
+the admin form sends and receives exactly the shape that is persisted.
+"""
+input MatchmakerModeConfigOverridesInput {
+	weightRatingVariance: Float
+	weightWinProb: Float
+	weightLatency: Float
+	uncertaintyK: Float
+	winProbScale: Float
+	minQuality: Float
+	adaptiveComfortableMultiplier: Int
+	adaptiveDecayPerMissing: Float
+	populationHalfLifeSeconds: Float
+}
+
+"""
+A per-mode override entry. (The stored form is a `mode -> overrides` map; GraphQL has no native
+map type, so it's exposed as a list keyed by `matchmakingType`.)
+"""
+type MatchmakerPerModeOverride {
+	matchmakingType: MatchmakingType!
+	config: MatchmakerModeConfigOverrides!
+}
+
+input MatchmakerPerModeOverrideInput {
+	matchmakingType: MatchmakingType!
+	config: MatchmakerModeConfigOverridesInput!
+}
+
+interface MatchmakingExtra {
+	matchmakingType: MatchmakingType!
+}
+
+type MatchmakingExtra1V1Data implements MatchmakingExtra {
+	matchmakingType: MatchmakingType!
+}
+
+type MatchmakingExtra1V1FastestData implements MatchmakingExtra {
+	matchmakingType: MatchmakingType!
+}
+
+type MatchmakingExtra2V2BghData implements MatchmakingExtra {
+	matchmakingType: MatchmakingType!
+}
+
+type MatchmakingExtra2V2Data implements MatchmakingExtra {
+	"""
+	The user Ids of players in the match, grouped into lists by party. Players not in a party
+	will be in a list by themselves.
+	"""
+	parties: [[SbUserId!]!]!
+	matchmakingType: MatchmakingType!
+}
+
+type MatchmakingExtra2V2FastestData implements MatchmakingExtra {
+	matchmakingType: MatchmakingType!
+}
+
+type MatchmakingExtra2V2HuntersData implements MatchmakingExtra {
+	matchmakingType: MatchmakingType!
+}
+
+type MatchmakingExtra3V3BghData implements MatchmakingExtra {
+	matchmakingType: MatchmakingType!
+}
+
+type MatchmakingExtra3V3FastestData implements MatchmakingExtra {
+	matchmakingType: MatchmakingType!
+}
+
+type MatchmakingExtra3V3HuntersData implements MatchmakingExtra {
+	matchmakingType: MatchmakingType!
+}
+
+"""
+All of the matchmaking types that we support. These values match the enum values used in the database.
+"""
+scalar MatchmakingType
+
+type Mutation {
+	"""
+	Commends another player from a game both users played in.
+	"""
+	commendPlayer(gameId: UUID!, userId: SbUserId!): CommendPlayerPayload!
+	"""
+	Files a report against another player from a game both users participated in, either while
+	the game is being played or afterward until the game's feedback window closes. Any logged-in
+	user may call this (subject to the reporting restriction and the per-hour cap), but not for a
+	player they already commended in that game. Filed reports never expire; only the chance to
+	file one does.
+	"""
+	reportGame(input: ReportGameInput!): GameReport!
+	"""
+	Resolves a report with an outcome (which feeds the credibility stats). Idempotency is
+	enforced: a report can only be resolved once.
+	"""
+	resolveGameReport(id: UUID!, resolution: GameReportResolution!, notes: String): GameReport!
+	"""
+	Resolves every still-pending sibling report of `id` (same game + reported player, excluding
+	`id` itself) with the given resolution — a one-click way to clear the rest of an incident
+	after handling one report (typically as `Duplicate`). Reporters are notified per sibling
+	exactly as if each had been resolved individually. Returns how many were resolved.
+	"""
+	resolveSiblingReports(id: UUID!, resolution: GameReportResolution!, notes: String): Int!
+	newsCreatePost(post: NewsPostCreation!): NewsPost!
+	newsUpdatePost(id: UUID!, updates: NewsPostUpdates!): NewsPost!
+	newsDeletePost(id: UUID!): Boolean!
+	"""
+	Sets (or clears, if message is not provided) the urgent message at the top of the home page.
+	"""
+	newsSetUrgentMessage(message: UrgentMessageInput): Boolean!
+	"""
+	Begins linking the current user's Twitch account, returning the Twitch OAuth authorize URL
+	the client should open. Completing the flow calls `twitchCompleteLink` with the resulting
+	`code` and `state`. `desktop` selects the loopback redirect URI used by the desktop app
+	instead of our web callback.
+	"""
+	twitchStartLink(desktop: Boolean! = false): TwitchLinkStart!
+	"""
+	Completes linking the current user's Twitch account using the `code` and `state` returned by
+	the Twitch OAuth redirect.
+	"""
+	twitchCompleteLink(code: String!, state: String!): TwitchConnection!
+	"""
+	Removes the current user's Twitch connection. Returns whether a connection was removed.
+	"""
+	twitchUnlink: Boolean!
+	"""
+	Blocks a user's stream from appearing in the live-streams feed (shown on the home page and
+	the dedicated live streams page). Idempotent (a repeat block keeps the original). The block
+	hides them from the feed only, not from the profile stream card / avatar "live" ring / friend
+	notifications. Requires the `manageLiveStreams` permission.
+	"""
+	blockStream(userId: SbUserId!): Boolean!
+	"""
+	Removes a user's feed block, letting their stream appear in the feed again. Returns whether a
+	block was removed. Requires the `manageLiveStreams` permission.
+	"""
+	unblockStream(userId: SbUserId!): Boolean!
+	userUpdateCurrent(currentPassword: String!, changes: UpdateCurrentUserChanges!): CurrentUser!
+	userUpdatePermissions(userId: SbUserId!, permissions: SbPermissionsInput!): SbUser!
+	"""
+	Forcibly changes a user's display name. Optionally grants them a name change token so they
+	can pick a replacement themselves without waiting out the usual cooldown.
+	"""
+	userAdminChangeDisplayName(userId: SbUserId!, newName: String!, grantToken: Boolean!, reason: String): SbUser!
+	userAddRestrictedName(pattern: String!, kind: RestrictedNameKind!, reason: RestrictedNameReason!): NameRestriction!
+	userDeleteRestrictedName(id: Int!): Int!
+	userTestRestrictedName(name: String!): NameRestriction
+	createSignupCode(input: CreateSignupCodeInput!): SignupCode!
+	"""
+	Replaces the matchmaker config. Writes the row, appends to `matchmaking_config_history`, and
+	hot-reloads the live config so the change takes effect within one search tick. Out-of-range
+	values are clamped when the config is loaded, so this won't fail on a bad number.
+	"""
+	updateMatchmakingConfig(config: MatchmakerConfigInput!): MatchmakerConfigView!
+}
+
+type NameRestriction {
+	id: Int!
+	pattern: String!
+	kind: RestrictedNameKind!
+	reason: RestrictedNameReason!
+	createdAt: DateTime!
+	createdBy: SbUser
+}
+
+type NewsPost {
+	id: UUID!
+	coverImagePath: String
+	title: String!
+	summary: String!
+	content: String!
+	publishedAt: DateTime
+	updatedAt: DateTime!
+	author: SbUser
+	"""
+	A fully-qualified URL to this post's cover image, or null if it has none.
+	"""
+	coverImageUrl: String
+	"""
+	A fully-qualified URL to the half-resolution variant of this post's cover image, or null if
+	it has none.
+	"""
+	coverImageSmallUrl: String
+	edits: [NewsPostEdit!]!
+}
+
+type NewsPostConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [NewsPostEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [NewsPost!]!
+}
+
+input NewsPostCreation {
+	authorId: SbUserId
+	coverImagePath: String
+	title: String!
+	summary: String!
+	content: String!
+	publishedAt: DateTime
+}
+
+"""
+An edge in a connection.
+"""
+type NewsPostEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: NewsPost!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type NewsPostEdit {
+	id: UUID!
+	coverImagePath: String
+	title: String!
+	summary: String!
+	content: String!
+	publishedAt: DateTime
+	editedAt: DateTime!
+	editor: SbUser
+	author: SbUser
+}
+
+"""
+Partial updates for an existing news post. Fields omitted from the input are left unchanged.
+For `publishedAt` and `coverImagePath`, an explicit null clears the current value (e.g.
+unpublishing a post), so a single mutation covers editing, publishing now, scheduling, and
+unpublishing.
+"""
+input NewsPostUpdates {
+	title: String
+	summary: String
+	content: String
+	publishedAt: DateTime
+	coverImagePath: String
+}
+
+"""
+Information about pagination in a connection
+"""
+type PageInfo {
+	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
+	When paginating forwards, are there more items?
+	"""
+	hasNextPage: Boolean!
+	"""
+	When paginating backwards, the cursor to continue.
+	"""
+	startCursor: String
+	"""
+	When paginating forwards, the cursor to continue.
+	"""
+	endCursor: String
+}
+
+type Query {
+	"""
+	What the current user can still commend or report in a game, and what they already have.
+	"""
+	gameFeedback(gameId: UUID!): GameFeedback!
+	"""
+	Fetches a single report by id, for the admin detail view.
+	"""
+	gameReport(id: UUID!): GameReport
+	"""
+	Lists game reports for moderation. Unresolved-only by default (newest first); pass
+	`includeResolved` to see everything, or `reportedUserId` to see reports against one player.
+	"""
+	gameReports(filter: GameReportFilter, after: String, before: String, first: Int, last: Int): GameReportConnection!
+	game(id: UUID!): Game
+	"""
+	A selection of the matchmaking games currently in progress: up to six, favoring games
+	between higher-rated players while spreading the picks across matchmaking types. Ordered
+	with the best game of each type first, so a consumer showing fewer keeps the variety.
+	"""
+	liveGames: [Game!]!
+	activeLeagues: [League!]!
+	futureLeagues: [League!]!
+	pastLeagues: [League!]!
+	newsPosts(includeUnpublished: Boolean, after: String, before: String, first: Int, last: Int): NewsPostConnection!
+	"""
+	Retrieves a single news post by ID. Published posts are visible to everyone; unpublished or
+	scheduled posts are only returned to users with the ManageNews permission (for draft preview).
+	"""
+	newsPost(id: UUID!): NewsPost
+	urgentMessage: UrgentMessage
+	"""
+	The current user's linked Twitch connection, or `null` if they haven't linked one.
+	"""
+	myTwitchConnection: TwitchConnection
+	"""
+	ShieldBattery users currently live-streaming StarCraft, ordered by viewer count (highest
+	first). Users an admin has blocked from the feed are omitted (the block hides them here only;
+	their live state elsewhere -- profile, avatar ring, friend notifications -- is unaffected).
+	"""
+	liveStreams: [LiveStream!]!
+	"""
+	Streamers an admin has blocked from the live-streams feed, newest first. For the admin
+	blocked-streams management UI.
+	"""
+	blockedStreams: [BlockedStream!]!
+	"""
+	The ids of every ShieldBattery user who is currently live-streaming (any category). This lets
+	the client badge "live" state across user lists (friends, chat, etc.) from a single lookup,
+	with per-stream details fetched lazily via `SbUser.liveStream` where needed. Category-agnostic
+	by design, matching the profile "Live" badge (`live_streams` is the StarCraft-filtered feed).
+	"""
+	liveStreamUserIds: [SbUserId!]!
+	user(id: SbUserId!): SbUser
+	userByDisplayName(name: String!): SbUser
+	currentUser: CurrentUser
+	restrictedNames: [NameRestriction!]!
+	userLoginNameAuditHistory(userId: SbUserId!, limit: Int, offset: Int): [LoginNameAuditEntry!]!
+	userDisplayNameAuditHistory(userId: SbUserId!, limit: Int, offset: Int): [DisplayNameAuditEntry!]!
+	signupCodes(includeExhausted: Boolean): [SignupCode!]!
+	"""
+	The current matchmaker config: stored overrides plus the built-in defaults.
+	"""
+	matchmakingConfig: MatchmakerConfigView!
+	"""
+	Every mode a user has ever played ranked, with all-time totals and their standing
+	against the last rating they held before this season.
+	
+	All-time rather than current-season because it drives a page about all-time history:
+	sourcing the mode list from the current season's ratings hides a player's whole
+	history the moment they skip a season.
+	
+	The delta is deliberately measured across the season boundary rather than within the
+	current season: when a season resets MMR, everyone restarts from the same place, and
+	the interesting number is how their standing now compares to what they last held —
+	not how far they've climbed back from the reset. It's `None` for a mode first played
+	this season, which has nothing to compare against.
+	
+	Separate from [`user_rating_history`] because the profile shows this on every mode's
+	header, including collapsed ones whose history hasn't been fetched.
+	"""
+	userRankedModes(userId: SbUserId!): [UserRankedMode!]!
+	"""
+	A user's rating and points over time in a single mode, oldest first.
+	"""
+	userRatingHistory(userId: SbUserId!, matchmakingType: MatchmakingType!): RatingHistory!
+}
+
+"""
+Any of the possible race choices that can be selected.
+"""
+scalar Race
+
+type RatingHistory {
+	matchmakingType: MatchmakingType!
+	"""
+	Games actually played, before any downsampling.
+	"""
+	totalGames: Int!
+	"""
+	Whether `points` is a reduced view of the full history.
+	"""
+	downsampled: Boolean!
+	points: [RatingHistoryPoint!]!
+}
+
+type RatingHistoryPoint {
+	changeDate: DateTime!
+	"""
+	`None` for games played during placement matches, whose ratings are provisional and
+	never sent. Points are public throughout, so a placement game still carries those.
+	"""
+	rating: Float
+	points: Float!
+	"""
+	The season this game fell in, derived from `change_date`.
+	"""
+	seasonId: Int!
+}
+
+"""
+A player the current user commended within the last day, in any game, who can't be commended
+again until `availableAt`.
+"""
+type RecentCommend {
+	userId: SbUserId!
+	availableAt: DateTime!
+}
+
+type ReconciledPlayerResult {
+	apm: Int!
+	race: AssignedRace!
+	result: ReconciledResult!
+}
+
+type ReconciledPlayerResultEntry {
+	id: SbUserId!
+	result: ReconciledPlayerResult!
+}
+
+enum ReconciledResult {
+	WIN
+	LOSS
+	DRAW
+	UNKNOWN
+}
+
+input ReportGameInput {
+	gameId: UUID!
+	reportedUserId: SbUserId!
+	reason: GameReportReason!
+	details: String
+	"""
+	How far into the game, in seconds of game time, the report is being filed. Only set for
+	reports filed while the game is being played.
+	"""
+	gameTimeSeconds: Int
+}
+
+enum RestrictedNameKind {
+	EXACT
+	REGEX
+}
+
+enum RestrictedNameReason {
+	PROFANITY
+	RESERVED
+}
+
+"""
+A map ID in the ShieldBattery system.
+"""
+scalar SbMapId
+
+type SbPermissions {
+	"""
+	The user ID these permissions are for. This is mainly so the client has a key for caching
+	purposes, and is not generally used elsewhere.
+	"""
+	id: SbUserId!
+	editPermissions: Boolean!
+	debug: Boolean!
+	useDevelopmentClient: Boolean!
+	banUsers: Boolean!
+	manageLeagues: Boolean!
+	manageMaps: Boolean!
+	manageMapPools: Boolean!
+	manageMatchmaking: Boolean!
+	manageMatchmakingSeasons: Boolean!
+	manageMatchmakingTimes: Boolean!
+	massDeleteMaps: Boolean!
+	moderateChatChannels: Boolean!
+	manageNews: Boolean!
+	manageBugReports: Boolean!
+	manageGameReports: Boolean!
+	manageRestrictedNames: Boolean!
+	manageSignupCodes: Boolean!
+	manageLiveStreams: Boolean!
+}
+
+input SbPermissionsInput {
+	"""
+	The user ID these permissions are for. This is mainly so the client has a key for caching
+	purposes, and is not generally used elsewhere.
+	"""
+	id: SbUserId!
+	editPermissions: Boolean!
+	debug: Boolean!
+	useDevelopmentClient: Boolean!
+	banUsers: Boolean!
+	manageLeagues: Boolean!
+	manageMaps: Boolean!
+	manageMapPools: Boolean!
+	manageMatchmaking: Boolean!
+	manageMatchmakingSeasons: Boolean!
+	manageMatchmakingTimes: Boolean!
+	massDeleteMaps: Boolean!
+	moderateChatChannels: Boolean!
+	manageNews: Boolean!
+	manageBugReports: Boolean!
+	manageGameReports: Boolean!
+	manageRestrictedNames: Boolean!
+	manageSignupCodes: Boolean!
+	manageLiveStreams: Boolean!
+}
+
+type SbUser {
+	id: SbUserId!
+	"""
+	The user's display name (may differ from their login name).
+	"""
+	name: String!
+	"""
+	A fully-qualified URL to the user's uploaded avatar, or null if they haven't uploaded one.
+	"""
+	avatarUrl: String
+	permissions: SbPermissions!
+	"""
+	The Twitch channel this user has linked, if any (shown on their profile).
+	"""
+	twitchChannel: TwitchChannel
+	"""
+	This user's current Twitch stream, if they are live right now.
+	"""
+	liveStream: LiveStream
+	"""
+	How many commends this user has received from other players, all time.
+	"""
+	commendCount: Int!
+}
+
+"""
+A user ID in the ShieldBattery system.
+"""
+scalar SbUserId
+
+type SignupCode {
+	id: UUID!
+	code: String!
+	createdAt: DateTime!
+	expiresAt: DateTime!
+	maxUses: Int
+	uses: Int!
+	exhausted: Boolean!
+	notes: String
+	createdByUser: SbUser
+}
+
+"""
+A public view of a user's linked Twitch channel, shown on their profile.
+"""
+type TwitchChannel {
+	"""
+	The Twitch login name (used in `twitch.tv/<login>` URLs).
+	"""
+	twitchLogin: String!
+	"""
+	The Twitch display name.
+	"""
+	twitchDisplayName: String!
+	"""
+	A globally unique ID for this channel. At most one Twitch account is linked per user, so
+	this is derived from the ShieldBattery user's ID.
+	"""
+	id: String!
+}
+
+"""
+A persistent link between a ShieldBattery user and their Twitch account.
+"""
+type TwitchConnection {
+	"""
+	Twitch's stable numeric user id for the linked account.
+	"""
+	twitchUserId: String!
+	"""
+	The Twitch login name (used in `twitch.tv/<login>` URLs).
+	"""
+	twitchLogin: String!
+	"""
+	The Twitch display name (may differ from the login name in capitalization).
+	"""
+	twitchDisplayName: String!
+	"""
+	When the account was first linked.
+	"""
+	linkedAt: DateTime!
+	"""
+	A globally unique ID for this link. At most one Twitch account is linked per user, so this
+	is derived from the ShieldBattery user's ID.
+	"""
+	id: String!
+}
+
+"""
+The result of starting a Twitch link: the authorize URL the client should open.
+"""
+type TwitchLinkStart {
+	"""
+	The Twitch OAuth authorize URL the client should open (e.g. in a popup) to begin linking.
+	"""
+	url: String!
+}
+
+"""
+A UUID is a unique 128-bit number, stored as 16 octets. UUIDs are parsed as
+Strings within GraphQL. UUIDs are used to assign unique identifiers to
+entities without requiring a central allocating authority.
+
+# References
+
+* [Wikipedia: Universally Unique Identifier](http://en.wikipedia.org/wiki/Universally_unique_identifier)
+* [RFC4122: A Universally Unique Identifier (UUID) URN Namespace](http://tools.ietf.org/html/rfc4122)
+"""
+scalar UUID
+
+input UpdateCurrentUserChanges {
+	email: String
+	newPassword: String
+	loginName: String
+	name: String
+}
+
+type UploadedMap {
+	id: SbMapId!
+	name: String!
+	description: String!
+	uploadDate: DateTime!
+	visibility: MapVisibility!
+	uploader: SbUser!
+	mapFile: MapFile!
+}
+
+type UrgentMessage {
+	id: UUID!
+	title: String!
+	message: String!
+	translations: [UrgentMessageTranslation!]!
+	"""
+	The time the message was published (in UTC). This will serialize as an RFC 3339 string.
+	"""
+	publishedAt: DateTime!
+}
+
+input UrgentMessageInput {
+	title: String!
+	message: String!
+	translations: [UrgentMessageTranslationInput!]
+}
+
+type UrgentMessageTranslation {
+	language: String!
+	title: String!
+	message: String!
+}
+
+input UrgentMessageTranslationInput {
+	language: String!
+	title: String!
+	message: String!
+}
+
+type UserRankedMode {
+	matchmakingType: MatchmakingType!
+	"""
+	Games played in this mode across every season.
+	"""
+	totalGames: Int!
+	wins: Int!
+	losses: Int!
+	"""
+	The most recent rating in this mode, whenever it was last played. `None` while the
+	player hasn't finished placement matches since their last MMR reset — a provisional
+	rating is never sent.
+	"""
+	rating: Float
+	"""
+	Current rating minus the last rating held before this season started. Spans an MMR
+	reset, so a reset season typically shows a drop until the player climbs back. `None`
+	for a mode first played this season, which has nothing to compare against, and `None`
+	whenever either endpoint sits inside placement matches — a delta against a hidden
+	rating would reveal it.
+	"""
+	delta: Float
+}
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Provides a scalar specification URL for specifying the behavior of custom scalar types.
+"""
+directive @specifiedBy(url: String!) on SCALAR
+schema {
+	query: Query
+	mutation: Mutation
+}

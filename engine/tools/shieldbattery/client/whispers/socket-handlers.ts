@@ -1,0 +1,159 @@
+import { nanoid } from 'nanoid'
+import { NydusClient } from 'nydus-client'
+import { TypedIpcRenderer } from '../../common/ipc'
+import { UserAvailability } from '../../common/users/availability'
+import { WhisperEvent, WhisperUserEvent } from '../../common/whispers'
+import { isInActiveGame } from '../active-game/game-client-reducer'
+import { audioManager, AvailableSound } from '../audio/audio-manager'
+import { dispatch, Dispatchable, ThunkAction } from '../dispatch-registry'
+import windowFocus from '../dom/window-focus'
+import { jotaiStore } from '../jotai-store'
+import { lastChatSurfaceAtom } from '../messaging/local-message-target'
+import { CommonMessageType, CommonWhisperEchoMessage } from '../messaging/message-records'
+import { lastWhisperSenderAtom } from './whisper-atoms'
+
+const ipcRenderer = new TypedIpcRenderer()
+
+type EventToActionMap = {
+  [E in WhisperEvent['action']]: (event: Extract<WhisperEvent, { action: E }>) => Dispatchable
+}
+
+const eventToAction: EventToActionMap = {
+  initSession3(event) {
+    return {
+      type: '@whispers/initSession',
+      payload: {
+        target: event.target,
+      },
+    }
+  },
+
+  closeSession(event) {
+    return {
+      type: '@whispers/closeSession',
+      payload: {
+        target: event.target,
+      },
+    }
+  },
+
+  message(event): ThunkAction {
+    return (dispatch, getState) => {
+      const {
+        auth: { self },
+        relationships: { blocks },
+        whispers: { byId: whispersById },
+        settings: { account: accountSettings },
+        gameClient,
+      } = getState()
+
+      if (!self) {
+        return
+      }
+
+      const isSelfMessage = event.message.from === self.user.id
+      const isBlocked = blocks.has(event.message.from)
+      const windowFocused = windowFocus.isFocused()
+      // While this client is in a game with the whisper quiet setting on, or the user is in do not
+      // disturb, a whisper neither sounds nor asks for attention; the unread recording in the
+      // `@whispers/updateMessage` dispatch below is unaffected.
+      const quiet =
+        accountSettings.availability === UserAvailability.DoNotDisturb ||
+        (accountSettings.quietWhispersWhileInGame && isInActiveGame(gameClient))
+      if (!isSelfMessage && !isBlocked && !quiet) {
+        // Notify the main process of the new message, so it can display an appropriate notification
+        ipcRenderer.send('chatNewMessage', {
+          urgent: true,
+          flashTaskbar: accountSettings.flashTaskbar,
+        })
+      }
+
+      const { from, to } = event.message
+      const target = self.user.id === to ? from : to
+      dispatch({
+        type: '@whispers/updateMessage',
+        payload: event,
+        meta: { target, isSelfMessage, windowFocused },
+      })
+
+      // A blocked sender's whisper is silent everywhere: it's not echoed, and it doesn't become
+      // the `/reply` target. Quieting only holds back sound/attention above, so it plays no part
+      // in either decision here.
+      if (!isSelfMessage && !isBlocked) {
+        jotaiStore.set(lastWhisperSenderAtom, from)
+      }
+      if (!isBlocked && accountSettings.showWhispersEverywhere) {
+        const surface = jotaiStore.get(lastChatSurfaceAtom)
+        // With no channel or lobby seen yet there is nowhere to show the whisper.
+        if (surface !== undefined) {
+          dispatch({
+            type: '@messaging/appendLocalMessage',
+            payload: {
+              target: surface,
+              message: {
+                id: nanoid(),
+                type: CommonMessageType.WhisperEcho,
+                time: event.message.time,
+                direction: isSelfMessage ? 'outgoing' : 'incoming',
+                counterpartId: target,
+                text: event.message.text,
+                ...(event.message.emote ? { emote: true } : {}),
+                ...(event.message.outcome ? { outcome: event.message.outcome } : {}),
+              } satisfies CommonWhisperEchoMessage,
+            },
+          })
+        }
+      }
+
+      const session = whispersById.get(target)
+      if (!session) {
+        return
+      }
+
+      if (
+        !isSelfMessage &&
+        !isBlocked &&
+        !quiet &&
+        accountSettings.playMessageSounds &&
+        (!session.activated || !windowFocused)
+      ) {
+        audioManager.playSound(AvailableSound.MessageAlert)
+      }
+    }
+  },
+}
+
+type EventToUserActionMap = {
+  [E in WhisperUserEvent['action']]: (
+    event: Extract<WhisperUserEvent, { action: E }>,
+  ) => Dispatchable
+}
+
+const eventToUserAction: EventToUserActionMap = {
+  lastReadTimeChanged(event) {
+    return {
+      type: '@whispers/updateLastReadTime',
+      payload: {
+        targetId: event.target,
+        lastReadTime: event.lastReadTime,
+      },
+    }
+  },
+}
+
+export default function registerModule({ siteSocket }: { siteSocket: NydusClient }) {
+  siteSocket.registerRoute('/whispers3/:userAndTarget', (route, event) => {
+    const actionName = event.action as WhisperEvent['action']
+    if (!eventToAction[actionName]) return
+
+    const action = eventToAction[actionName]!(event)
+    if (action) dispatch(action)
+  })
+
+  siteSocket.registerRoute('/whispers3/users/:userId', (route, event: WhisperUserEvent) => {
+    if (!Object.hasOwn(eventToUserAction, event.action)) return
+
+    const action = eventToUserAction[event.action](event as any)
+    if (action) dispatch(action)
+  })
+}

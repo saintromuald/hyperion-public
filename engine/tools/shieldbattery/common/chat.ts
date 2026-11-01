@@ -1,0 +1,1014 @@
+import { Tagged } from 'type-fest'
+import { Jsonify } from './json'
+import { Patch } from './patch'
+import { RolledOutcome } from './rolled-outcomes'
+import { AvailabilityInfo } from './users/availability'
+import { SbUser } from './users/sb-user'
+import { SbUserId } from './users/sb-user-id'
+
+export const CHANNEL_BANNER_WIDTH = 736 * 2
+export const CHANNEL_BANNER_HEIGHT = 414 * 2
+export const CHANNEL_BADGE_WIDTH = 80 * 4
+export const CHANNEL_BADGE_HEIGHT = 80 * 4
+
+export const MAXIMUM_JOINED_CHANNELS = 40
+export const MAXIMUM_OWNED_CHANNELS = 20
+
+export const SEARCH_CHANNELS_LIMIT = 40
+export const CHANNEL_USER_PERMISSIONS_LIMIT = 40
+export const CHANNEL_BANS_LIMIT = 40
+export const CHANNEL_INVITE_LINKS_LIMIT = 40
+
+export type SbChannelId = Tagged<number, 'SbChannelId'>
+
+/**
+ * Converts a channel ID number into a properly typed version. Alternative methods of retrieving an
+ * SbChannelId should be preferred, such as using a value retrieved from the database, or getting
+ * one via the common Joi validator.
+ */
+export function makeSbChannelId(id: number): SbChannelId {
+  return id as SbChannelId
+}
+
+/**
+ * The channel every new account is put into. Signing up depends on it existing and being open, so
+ * it can't be closed or deleted.
+ */
+export const INITIAL_CHANNEL_ID = makeSbChannelId(1)
+
+export enum ChatServiceErrorCode {
+  CannotChangeChannelOwner = 'CannotChangeChannelOwner',
+  CannotEditChannel = 'CannotEditChannel',
+  CannotModerateChannelOwner = 'CannotModerateChannelOwner',
+  CannotModerateChannelModerator = 'CannotModerateChannelModerator',
+  CannotModerateYourself = 'CannotModerateYourself',
+  /** The channel every new account is put into can't be closed or deleted. */
+  CannotRemoveInitialChannel = 'CannotRemoveInitialChannel',
+  /** Server moderators have closed the channel, so nobody can join it. */
+  ChannelClosed = 'ChannelClosed',
+  /** Another channel already has the requested name. */
+  ChannelNameTaken = 'ChannelNameTaken',
+  ChannelNotFound = 'ChannelNotFound',
+  /** The request only makes sense for a private channel, and the channel is public. */
+  ChannelNotPrivate = 'ChannelNotPrivate',
+  /**
+   * The channel exists and is private, and the requester is neither a member nor a server
+   * moderator.
+   */
+  ChannelPrivate = 'ChannelPrivate',
+  InappropriateImage = 'InappropriateImage',
+  /**
+   * The invite link doesn't exist, has expired, has been used up, or belongs to a channel that is
+   * no longer private. Which of those it is is deliberately not revealed.
+   */
+  InviteLinkInvalid = 'InviteLinkInvalid',
+  MaximumJoinedChannels = 'MaximumJoinedChannels',
+  MaximumOwnedChannels = 'MaximumOwnedChannels',
+  MessageNotFound = 'MessageNotFound',
+  NoInitialChannelData = 'NoChannelData',
+  NotEnoughPermissions = 'NotEnoughPermissions',
+  NotInChannel = 'NotInChannel',
+  TargetNotBanned = 'TargetNotBanned',
+  TargetNotInChannel = 'TargetNotInChannel',
+  UserBanned = 'UserBanned',
+  UserChatRestricted = 'UserChatRestricted',
+  UserNotFound = 'UserNotFound',
+  UserOffline = 'UserOffline',
+}
+
+/** Chat messages which are persisted in the DB and shown each time the user opens the app. */
+export enum ServerChatMessageType {
+  TextMessage = 'message',
+  JoinChannel = 'joinChannel',
+}
+
+/** Chat messages which are only displayed on the client and are cleared when the app reloads. */
+export enum ClientChatMessageType {
+  BanUser = 'banUser',
+  KickUser = 'kickUser',
+  LeaveChannel = 'leaveChannel',
+  NewChannelOwner = 'newOwner',
+  SelfJoinChannel = 'selfJoinChannel',
+}
+
+export type ChatMessageType = ServerChatMessageType | ClientChatMessageType
+
+const SERVER_CHAT_MESSAGE_TYPES: ReadonlySet<ChatMessageType> = new Set(
+  Object.values(ServerChatMessageType),
+)
+
+/**
+ * Returns whether a chat message originated on the server, i.e. it's stored in the database and its
+ * `time` is the time it was recorded there. Client-only messages are never stored, so they can't be
+ * fetched again or used anywhere a durable server record is needed (e.g. read positions or history
+ * cursors), even though their `time` is the server's time of the event they announce.
+ */
+export function isServerChatMessage(message: { type: ChatMessageType }): boolean {
+  return SERVER_CHAT_MESSAGE_TYPES.has(message.type)
+}
+
+export interface BaseChatMessage {
+  id: string
+  type: ChatMessageType
+  channelId: SbChannelId
+  time: number
+}
+
+/** A common text message that the user types in a channel. */
+export interface ChannelTextMessage extends BaseChatMessage {
+  type: typeof ServerChatMessageType.TextMessage
+  from: SbUserId
+  text: string
+  /**
+   * Present and `true` for an action line the user sent with `/me`, which renders as
+   * `* Name action` instead of `Name: text`. Never carried as `false`.
+   */
+  emote?: boolean
+  /**
+   * Present on an action line announcing something the server settled for the user (a roll, a coin
+   * flip, an 8-ball answer, a unit quote). Only the server puts it there; the message endpoints
+   * refuse it.
+   */
+  outcome?: RolledOutcome
+}
+
+/** A message that is displayed in the chat when someone joins the channel. */
+export interface JoinChannelMessage extends BaseChatMessage {
+  type: typeof ServerChatMessageType.JoinChannel
+  userId: SbUserId
+}
+
+/** A message that is displayed in the chat when someone leaves the channel. */
+export interface LeaveChannelMessage extends BaseChatMessage {
+  type: typeof ClientChatMessageType.LeaveChannel
+  userId: SbUserId
+}
+
+/** A message that is displayed in the chat when someone gets kicked from the channel. */
+export interface KickUserMessage extends BaseChatMessage {
+  type: typeof ClientChatMessageType.KickUser
+  userId: SbUserId
+}
+
+/** A message that is displayed in the chat when someone gets banned from the channel. */
+export interface BanUserMessage extends BaseChatMessage {
+  type: typeof ClientChatMessageType.BanUser
+  userId: SbUserId
+}
+
+/**
+ * A message that is displayed in the chat when a current owner of the channel leaves and a new
+ * owner is selected.
+ */
+export interface NewChannelOwnerMessage extends BaseChatMessage {
+  type: typeof ClientChatMessageType.NewChannelOwner
+  newOwnerId: SbUserId
+}
+
+/**
+ * A message that is displayed in the chat to the particular user when they join the channel. Only
+ * they can see this message.
+ */
+export interface SelfJoinChannelMessage extends BaseChatMessage {
+  type: typeof ClientChatMessageType.SelfJoinChannel
+}
+
+export type ServerChatMessage = ChannelTextMessage | JoinChannelMessage
+
+export type ClientChatMessage =
+  | BanUserMessage
+  | KickUserMessage
+  | LeaveChannelMessage
+  | NewChannelOwnerMessage
+  | SelfJoinChannelMessage
+
+export type ChatMessage = ServerChatMessage | ClientChatMessage
+
+/**
+ * Channel information that is always present and available (e.g. used in channel mentions)
+ */
+export interface BasicChannelInfo {
+  /** The channel ID. */
+  id: SbChannelId
+  /** The name of the chat channel. */
+  name: string
+  /**
+   * A flag indicating whether the chat channel is private or not. Private chat channels can only be
+   * joined through an invite link.
+   */
+  private: boolean
+  /**
+   * A flag indicating whether the chat channel is declared as an "official" channel. Official
+   * channels can have certain rules (e.g. they're created by staff, they have no owners, they don't
+   * get deleted if everyone leaves, etc.) that distinguish them from regular channels.
+   */
+  official: boolean
+  /**
+   * A flag indicating whether server moderators have closed the chat channel. A closed channel has
+   * no members and can't be joined until it's reopened.
+   */
+  closed: boolean
+}
+
+/**
+ * Channel information that is displayed in summaries/overviews. This information will not be
+ * available for any private channels that the current user has not joined.
+ */
+export interface DetailedChannelInfo {
+  /** The channel ID. */
+  id: SbChannelId
+  /** The description of the chat channel, if set. */
+  description?: string
+  /** The path to the banner image of the chat channel, if set. */
+  bannerPath?: string
+  /** The path to the badge image of the chat channel, if set. */
+  badgePath?: string
+  /** The Number of users in the channel. */
+  userCount: number
+}
+
+/**
+ * Channel information that is displayed in the channels themselves, and only given to users who
+ * have joined that channel.
+ */
+export interface JoinedChannelInfo {
+  /** The channel ID. */
+  id: SbChannelId
+  /**
+   * The ID of the user that is considered a channel owner. Usually the person who joined the chat
+   * channel the earliest. Is `undefined` for official channels.
+   */
+  ownerId?: SbUserId
+  /** An optional short message to describe the current topic of the channel. */
+  topic?: string
+  /**
+   * Whether members other than the owner may create invite links into the channel. Only meaningful
+   * for private channels; the owner and server moderators can always create them.
+   */
+  membersCanInvite: boolean
+}
+
+/**
+ * Which messages in a channel actively alert the user (the alert sound, plus the transient tray
+ * icon and taskbar flash), as opposed to only marking the channel unread.
+ */
+export enum ChannelNotificationLevel {
+  /** Every message alerts. */
+  All = 'all',
+  /** Only messages that mention the user alert. */
+  Mentions = 'mentions',
+  /** No message alerts, mentions included. */
+  Nothing = 'nothing',
+}
+
+export const ALL_CHANNEL_NOTIFICATION_LEVELS: ReadonlyArray<ChannelNotificationLevel> =
+  Object.values(ChannelNotificationLevel)
+
+export interface ChannelPreferences {
+  /** A flag indicating whether to show/hide the channel banner for a user. */
+  hideBanner: boolean
+  /**
+   * Which messages alert the user. Mute doesn't change this: a mention still alerts at the
+   * `Mentions` and `All` levels while the channel is muted, and `Nothing` silences mentions too.
+   */
+  notificationLevel: ChannelNotificationLevel
+  /**
+   * Whether the channel is muted. A muted channel never alerts for a message that doesn't mention
+   * the user and doesn't show as unread for one, so a busy channel can stay joined without pulling
+   * attention. Mentions still show and (subject to `notificationLevel`) still alert, and messages
+   * keep arriving and rendering normally.
+   */
+  muted: boolean
+}
+
+export const DEFAULT_CHANNEL_PREFERENCES: Readonly<ChannelPreferences> = {
+  hideBanner: false,
+  notificationLevel: ChannelNotificationLevel.Mentions,
+  muted: false,
+}
+
+export interface ChannelPermissions {
+  /**
+   * A flag indicating whether the user has a permission to kick someone from the channel. Kicking a
+   * user allows them to rejoin the channel immediately after they've been kicked.
+   */
+  kick: boolean
+  /**
+   * A flag indicating whether the user has a permission to ban someone from the channel. Banning a
+   * user forbids them from rejoining the channel until they've been unbanned.
+   */
+  ban: boolean
+  /** A flag indicating whether the user has a permission to edit other user's permissions. */
+  editPermissions: boolean
+}
+
+export interface InitialChannelData {
+  /** The basic information about the channel that the current user is initializing. */
+  channelInfo: BasicChannelInfo
+  /** The detailed information about the channel that the current user is initializing. */
+  detailedChannelInfo: DetailedChannelInfo
+  /** The channel information specific to user's joined channels. */
+  joinedChannelInfo: JoinedChannelInfo
+  /** The channel preferences for the current user that is initializing the channel. */
+  selfPreferences: ChannelPreferences
+  /** The channel permissions for the current user that is initializing the channel. */
+  selfPermissions: ChannelPermissions
+  /**
+   * IDs of the channel members holding a moderation permission (kick, ban or editPermissions).
+   * Listed regardless of ownership; the owner is named by `joinedChannelInfo.ownerId`.
+   */
+  moderatorIds: SbUserId[]
+  /**
+   * Epoch millis of the newest message in the channel that sits past the user's read position and
+   * counts toward unreadness. Omitted when there is none, which is what marks the channel read.
+   *
+   * A time rather than a flag: a client holding nothing but this initialization data has no
+   * messages to measure a read position against, so a flag would leave it unable to tell a read
+   * position that covers the whole unread backlog from one that covers only part of it, and it
+   * would have to guess which way to move the badge when another of the user's sessions reads
+   * partway through.
+   */
+  latestUnreadTime?: number
+  /**
+   * Epoch millis of the user's read position in the channel: their last recorded read position, or
+   * one millisecond before their join date if they've never recorded one. Used to place the
+   * unread-messages divider and, against `latestUnreadTime`, to decide badge state.
+   */
+  lastReadTime?: number
+  /**
+   * Time (as a Unix timestamp in milliseconds) of the newest message that mentions this user and
+   * is newer than their read position for the channel. Omitted when there is no such message.
+   */
+  latestMentionTime?: number
+  /**
+   * Epoch millis (server clock) of the moment this data describes: the join itself for a channel
+   * the user has just joined, otherwise when the server produced the data. The client stamps the
+   * line announcing the channel with it, so that line sorts and reads consistently with the
+   * server-recorded times of the messages around it.
+   */
+  time: number
+}
+
+export interface ChatInitEvent extends InitialChannelData {
+  action: 'init3'
+}
+
+export interface ChatJoinEvent {
+  action: 'join2'
+  /** A user info for the channel user that has joined the chat channel. */
+  user: SbUser
+  /** A message info for the user joining a channel that is saved in the DB. */
+  message: JoinChannelMessage
+  /** The joining user's availability, omitted if it's the default (online, no message). */
+  availability?: AvailabilityInfo
+}
+
+export interface ChatEditEvent {
+  action: 'edit'
+  /** The updated basic information about the edited channel. */
+  channelInfo: BasicChannelInfo
+  /** The updated detailed information about the edited channel. */
+  detailedChannelInfo: DetailedChannelInfo
+  /** The updated channel information specific to user's edited channel. */
+  joinedChannelInfo: JoinedChannelInfo
+}
+
+export interface ChatLeaveEvent {
+  action: 'leave2'
+  /** The ID of a user that has left the chat channel. */
+  userId: SbUserId
+  /** Epoch millis (server clock) of when the user left. */
+  time: number
+  /** The ID of a user that was selected as a new owner of the channel, if any. */
+  newOwnerId?: SbUserId
+}
+
+export interface ChatKickEvent {
+  action: 'kick'
+  /** The ID of a user that was kicked from the chat channel. */
+  targetId: SbUserId
+  /** The name of the chat channel user was kicked from. */
+  channelName: string
+  /** Epoch millis (server clock) of when the user was kicked. */
+  time: number
+  /** The ID of a user that was selected as a new owner of the channel, if any. */
+  newOwnerId?: SbUserId
+}
+
+export interface ChatBanEvent {
+  action: 'ban'
+  /** The ID of a user that was banned from the chat channel. */
+  targetId: SbUserId
+  /** The name of the chat channel user was banned from. */
+  channelName: string
+  /** Epoch millis (server clock) of when the user was banned. */
+  time: number
+  /** The ID of a user that was selected as a new owner of the channel, if any. */
+  newOwnerId?: SbUserId
+}
+
+/**
+ * Server moderators have closed or deleted the chat channel, which removed every member from it.
+ */
+export interface ChatChannelRemovedEvent {
+  action: 'channelRemoved'
+}
+
+export interface ChatOwnerChangedEvent {
+  action: 'ownerChanged'
+  /** The ID of a user that is the new owner of the chat channel. */
+  newOwnerId: SbUserId
+  /** Epoch millis (server clock) of when the ownership changed. */
+  time: number
+}
+
+export interface ChatMessageEvent {
+  action: 'message2'
+  /** A text message that was sent in a chat channel. */
+  message: ChannelTextMessage
+  /** User info for the channel user that sent the message. */
+  user: SbUser
+  /** User infos for all channel users that were mentioned in the message, if any. */
+  mentions: SbUser[]
+  /** Basic channel info for all channels that were mentioned in the message, if any. */
+  channelMentions: BasicChannelInfo[]
+}
+
+export interface ChatMessageDeletedEvent {
+  action: 'messageDeleted'
+  /** The ID of a message that was deleted in a chat channel. */
+  messageId: string
+}
+
+export interface ChatInitActiveUsersEvent {
+  action: 'initActiveUsers'
+  /** A list of IDs of active users that are in the chat channel. */
+  activeUserIds: SbUserId[]
+  /**
+   * The availability of each active user whose availability isn't the default (online, no message).
+   * Every active user not listed here has the default.
+   */
+  availabilities: Array<AvailabilityInfo & { userId: SbUserId }>
+}
+
+export interface ChatUserActiveEvent {
+  action: 'userActive2'
+  /** The ID of a user that has become active in a chat channel. */
+  userId: SbUserId
+  /** The user's availability, omitted if it's the default (online, no message). */
+  availability?: AvailabilityInfo
+}
+
+/**
+ * The availability of an online user in the chat channel has changed. Channel members see each
+ * other's availability, while activity (lobby, queue, game) stays visible to friends only.
+ */
+export interface ChatUserAvailabilityEvent {
+  action: 'userAvailability'
+  userId: SbUserId
+  availability: AvailabilityInfo
+}
+
+export interface ChatUserOfflineEvent {
+  action: 'userOffline2'
+  /** The ID of a user that went offline in a chat channel. */
+  userId: SbUserId
+}
+
+export interface ChatUserProfileChangedEvent {
+  action: 'userProfileChanged'
+  userId: SbUserId
+  isModerator: boolean
+}
+
+/**
+ * Events that are sent to all clients in a particular chat channel.
+ */
+export type ChatEvent =
+  | ChatJoinEvent
+  | ChatEditEvent
+  | ChatLeaveEvent
+  | ChatKickEvent
+  | ChatBanEvent
+  | ChatChannelRemovedEvent
+  | ChatOwnerChangedEvent
+  | ChatMessageEvent
+  | ChatMessageDeletedEvent
+  | ChatInitActiveUsersEvent
+  | ChatUserActiveEvent
+  | ChatUserAvailabilityEvent
+  | ChatUserOfflineEvent
+  | ChatUserProfileChangedEvent
+
+export interface ChatPreferencesChangedEvent {
+  action: 'preferencesChanged'
+  /** The channel preferences for the current user whose preferences have changed. */
+  selfPreferences: ChannelPreferences
+}
+
+export interface ChatPermissionsChangedEvent {
+  action: 'permissionsChanged'
+  /** The channel permissions for the current user whose permissions have changed. */
+  selfPermissions: ChannelPermissions
+}
+
+export interface ChatReadTimeChangedEvent {
+  action: 'lastReadTimeChanged'
+  /** Epoch ms of this user's server-recorded read position in the channel. */
+  lastReadTime: number
+}
+
+/** Events that are sent to a particular user in a particular chat channel. */
+export type ChatUserEvent =
+  | ChatInitEvent
+  | ChatPreferencesChangedEvent
+  | ChatPermissionsChangedEvent
+  | ChatReadTimeChangedEvent
+
+export interface ChatChannelOrderChangedEvent {
+  action: 'channelOrderChanged'
+  /** The IDs of the user's joined channels, in the order they should be listed. */
+  channelIds: SbChannelId[]
+}
+
+/** Events that are sent to a particular user about their chat channels as a whole. */
+export type ChatSelfEvent = ChatChannelOrderChangedEvent
+
+/**
+ * The response returned when joining a specific chat channel.
+ */
+export interface JoinChannelResponse {
+  /** The basic information about the joined channel. */
+  channelInfo: BasicChannelInfo
+  /** The detailed information about the joined channel. */
+  detailedChannelInfo: DetailedChannelInfo
+  /** The channel information specific to user's joined channel. */
+  joinedChannelInfo: JoinedChannelInfo
+}
+
+/**
+ * An invite link into a private channel. Holding the link is what lets someone join the channel, so
+ * its token must only ever be shown to the people it's meant for.
+ */
+export interface ChannelInviteLink {
+  /** The link's token, as it appears in the link's URL. */
+  token: string
+  channelId: SbChannelId
+  /** The user who created the link. Everyone who joins through it is recorded against them. */
+  createdBy: SbUserId
+  createdAt: Date
+  /** When the link stops working, or `undefined` if it never expires. */
+  expiresAt?: Date
+  /** How many joins the link allows in total, or `undefined` if it's unlimited. */
+  maxUses?: number
+  /** How many users have joined the channel through the link. */
+  uses: number
+}
+
+export type ChannelInviteLinkJson = Jsonify<ChannelInviteLink>
+
+export function toChannelInviteLinkJson(inviteLink: ChannelInviteLink): ChannelInviteLinkJson {
+  return {
+    token: inviteLink.token,
+    channelId: inviteLink.channelId,
+    createdBy: inviteLink.createdBy,
+    createdAt: Number(inviteLink.createdAt),
+    expiresAt: inviteLink.expiresAt ? Number(inviteLink.expiresAt) : undefined,
+    maxUses: inviteLink.maxUses,
+    uses: inviteLink.uses,
+  }
+}
+
+/** The lifetimes, in seconds, an invite link can be created with (besides never expiring). */
+export const INVITE_LINK_EXPIRY_OPTIONS_SECONDS: ReadonlyArray<number> = [
+  30 * 60,
+  60 * 60,
+  6 * 60 * 60,
+  12 * 60 * 60,
+  24 * 60 * 60,
+  7 * 24 * 60 * 60,
+]
+/** The lifetime, in seconds, of an invite link created without choosing one. */
+export const DEFAULT_INVITE_LINK_EXPIRY_SECONDS = 7 * 24 * 60 * 60
+
+/** The use limits an invite link can be created with (besides allowing unlimited uses). */
+export const INVITE_LINK_MAX_USES_OPTIONS: ReadonlyArray<number> = [1, 5, 10, 25, 50, 100]
+
+/**
+ * The body of a request to create an invite link for a private channel. A field left out takes its
+ * default.
+ */
+export interface CreateChannelInviteLinkRequest {
+  /**
+   * How long the link keeps working, one of `INVITE_LINK_EXPIRY_OPTIONS_SECONDS`, or `null` for a
+   * link that never expires.
+   */
+  expiresInSeconds?: number | null
+  /**
+   * How many joins the link allows, one of `INVITE_LINK_MAX_USES_OPTIONS`, or `null` for no limit.
+   */
+  maxUses?: number | null
+}
+
+/** The response returned when creating an invite link for a private channel. */
+export interface CreateChannelInviteLinkResponse {
+  inviteLink: ChannelInviteLinkJson
+}
+
+/** The response returned when getting the requester's own invite link for a private channel. */
+export interface GetOwnChannelInviteLinkResponse {
+  /** The newest link the requester created that still works, if there is one. */
+  inviteLink?: ChannelInviteLinkJson
+}
+
+/**
+ * The response returned when listing a channel's invite links. The tokens make every link usable
+ * by whoever sees them, so this goes only to the channel's owner and server moderators.
+ */
+export interface ListChannelInviteLinksResponse {
+  channelId: SbChannelId
+  /** The channel's links that still work, newest first. */
+  inviteLinks: ChannelInviteLinkJson[]
+  /** Whether more links are available past this page. */
+  hasMoreInviteLinks: boolean
+  /** User infos for the links' creators. */
+  users: SbUser[]
+}
+
+/**
+ * The response returned when looking up the channel an invite link leads into. Anyone holding a
+ * valid link gets this, member or not.
+ */
+export interface GetChannelInviteLinkResponse {
+  channelInfo: BasicChannelInfo
+  detailedChannelInfo: DetailedChannelInfo
+  /** When the link stops working, or `undefined` if it never expires. */
+  expiresAt?: number
+  /** Whether the requester is already a member of the channel. */
+  isMember: boolean
+}
+
+/**
+ * The body data of the API route for editing the channel info.
+ */
+export interface EditChannelRequest {
+  description?: string | null
+  topic?: string | null
+  deleteBanner?: boolean
+  deleteBadge?: boolean
+  /** Makes the channel private or public. Official channels can't be made private. */
+  private?: boolean
+  /** Lets members other than the owner create invite links into the channel, or stops them. */
+  membersCanInvite?: boolean
+}
+
+/**
+ * The settings of a channel being created. The banner and badge images are sent alongside as
+ * files.
+ */
+export interface CreateChannelRequest {
+  name: string
+  description?: string
+  topic?: string
+  /** Creates the channel as private, so it can only be joined through an invite link. */
+  private?: boolean
+  /** Lets members other than the owner create invite links. Only applies to private channels. */
+  membersCanInvite?: boolean
+}
+
+/** The body data of the admin API route for renaming a channel. */
+export interface RenameChannelRequest {
+  name: string
+}
+
+/**
+ * The response returned when editing a specific chat channel.
+ */
+export interface EditChannelResponse {
+  /** The updated basic information about the edited channel. */
+  channelInfo: BasicChannelInfo
+  /** The updated detailed information about the edited channel. */
+  detailedChannelInfo: DetailedChannelInfo
+  /** The updated channel information specific to user's edited channel. */
+  joinedChannelInfo: JoinedChannelInfo
+}
+
+export interface SendChatMessageServerRequest {
+  message: string
+  /**
+   * Present and `true` for an action line the user sent with `/me`, which renders as
+   * `* Name action` instead of `Name: text`. Never carried as `false`.
+   */
+  emote?: boolean
+}
+
+/**
+ * The body data of the API route for reporting a user's read position in a chat channel.
+ */
+export interface MarkChannelReadRequest {
+  /** Epoch ms of the newest message the user has seen in the channel. */
+  lastReadTime: number
+}
+
+/**
+ * Payload returned for a request to retrieve the channel message history.
+ */
+export interface GetChannelHistoryServerResponse {
+  /** A list of messages that were retrieved for the chat channel. */
+  messages: ServerChatMessage[]
+  /**
+   * A list of user infos for all channel users that were the main "subject" in the messages, if
+   * any. The "subject" is defined based on the message type, i.e. for `TextMessage` it's the author
+   * of the message, for `JoinedChannelMessage` it's the user that has joined, etc.
+   */
+  users: SbUser[]
+  /** A list of user infos for all channel users that were mentioned in the messages, if any. */
+  mentions: SbUser[]
+  /** A list of basic channel info for all channels that were mentioned in the messages, if any. */
+  channelMentions: BasicChannelInfo[]
+  /** A list of channel IDs saved in various channel messages that no longer exist. */
+  deletedChannels: SbChannelId[]
+  /**
+   * Whether messages older than the returned window exist. For requests with `afterTime`, this is
+   * always true (the cursor implies the client already holds older messages).
+   */
+  hasMoreBefore: boolean
+  /**
+   * Whether messages newer than the returned window existed when the query executed. For requests
+   * with `beforeTime`, this is always true (the cursor implies the client already holds newer
+   * messages); for requests with no cursor (a newest-page fetch), it is always false.
+   */
+  hasMoreAfter: boolean
+}
+
+/**
+ * Available moderation actions in a chat channel. Only users with specific permissions should be
+ * able to perform them.
+ */
+export enum ChannelModerationAction {
+  Kick = 'kick',
+  Ban = 'ban',
+}
+
+/**
+ * The body data of the API route for moderating users in a chat channel, e.g. kicking or banning
+ * them.
+ */
+export interface ModerateChannelUserServerRequest {
+  /** Precise moderation action that will be performed on the user, e.g. kicked or banned. */
+  moderationAction: ChannelModerationAction
+  /**
+   * Optional reason for the moderation action. Mostly useful for more permanent moderation actions,
+   * e.g. banning.
+   */
+  moderationReason?: string
+}
+
+/**
+ * The body data of the API route for transferring the ownership of a chat channel to one of its
+ * other members.
+ */
+export interface TransferChannelOwnershipRequest {
+  /** The ID of the user that should become the channel's new owner. */
+  targetId: SbUserId
+}
+
+/**
+ * Specific chat information about a user in a particular channel, such as their join date, their
+ * channel role (e.g. are they a moderator), etc.
+ *
+ * This should be publicly available information. If you need to return information that should only
+ * be available to the user themselves (or admins), use `UserChannelEntry` instead.
+ */
+export interface ChatUserProfile {
+  userId: SbUserId
+  channelId: SbChannelId
+  joinDate: Date
+  /**
+   * User is considered a channel moderator if they are an owner of the channel, or have one of the
+   * following permissions:
+   *  - editPermissions
+   *  - ban
+   *  - kick
+   */
+  isModerator: boolean
+}
+
+export type ChatUserProfileJson = Jsonify<ChatUserProfile>
+
+export function toChatUserProfileJson(chatUserProfile: ChatUserProfile): ChatUserProfileJson {
+  return {
+    userId: chatUserProfile.userId,
+    channelId: chatUserProfile.channelId,
+    joinDate: Number(chatUserProfile.joinDate),
+    isModerator: chatUserProfile.isModerator,
+  }
+}
+
+/**
+ * The response returned when fetching a profile of a user in a specific chat channel.
+ */
+export interface GetChatUserProfileResponse {
+  /** The ID of a user for which the profile is being returned. */
+  userId: SbUserId
+  /** The specific channel for which the user's profile is being returned. */
+  channelId: SbChannelId
+  /**
+   * User's profile in a specific chat channel. Includes stuff like their channel join date, channel
+   * permissions, etc. Can be `undefined` in case the user has left the channel, but their name is
+   * still visible in old messages.
+   */
+  profile?: ChatUserProfileJson
+}
+
+/**
+ * The body of a request when updating the preferences of a user in a specific chat channel.
+ */
+export type UpdateChannelUserPreferencesRequest = Patch<ChannelPreferences>
+
+/**
+ * The body of a request when changing the order of the current user's joined channels.
+ */
+export interface UpdateChannelOrderRequest {
+  /** The IDs of the user's joined channels, in the order they should be listed. */
+  channelIds: SbChannelId[]
+}
+
+/**
+ * The response returned when fetching the permissions of a user in a specific chat channel.
+ */
+export interface GetChannelUserPermissionsResponse {
+  /** The ID of a user for which the permissions are being returned. */
+  userId: SbUserId
+  /** The specific channel for which the user's permissions are being returned. */
+  channelId: SbChannelId
+  /** User's permissions in a specific channel. */
+  permissions: ChannelPermissions
+}
+
+/**
+ * Specific chat information about a user in a particular channel, such as their join date, their
+ * preferences, permissions, etc.
+ *
+ * This contains information that isn't meant to be public, so it should only be returned to the user
+ * themselves, the channel's owner and moderators (users with the `editPermissions` permission), and
+ * server admins.
+ */
+export interface UserChannelEntry {
+  userId: SbUserId
+  channelId: SbChannelId
+  joinDate: Date
+  channelPreferences: ChannelPreferences
+  channelPermissions: ChannelPermissions
+}
+
+export type UserChannelEntryJson = Jsonify<UserChannelEntry>
+
+export function toUserChannelEntryJson(userChannelEntry: UserChannelEntry): UserChannelEntryJson {
+  return {
+    userId: userChannelEntry.userId,
+    channelId: userChannelEntry.channelId,
+    joinDate: Number(userChannelEntry.joinDate),
+    channelPreferences: userChannelEntry.channelPreferences,
+    channelPermissions: userChannelEntry.channelPermissions,
+  }
+}
+
+export function fromUserChannelEntryJson(
+  userChannelEntryJson: UserChannelEntryJson,
+): UserChannelEntry {
+  return {
+    userId: userChannelEntryJson.userId,
+    channelId: userChannelEntryJson.channelId,
+    joinDate: new Date(userChannelEntryJson.joinDate),
+    channelPreferences: userChannelEntryJson.channelPreferences,
+    channelPermissions: userChannelEntryJson.channelPermissions,
+  }
+}
+
+/**
+ * The response returned when listing user channel entries for a particular channel.
+ *
+ * This contains information that isn't meant to be public (e.g. permissions and preferences), so it
+ * should only be returned to the channel's owner and moderators (users with the `editPermissions`
+ * permission), and server admins.
+ */
+export interface ListUserChannelEntriesResponse {
+  /** The ID of the channel for which the user channel entries are being returned. */
+  channelId: SbChannelId
+  /** A list of user channel entries for the channel. */
+  userChannelEntries: UserChannelEntryJson[]
+  /** A flag indicating whether more users are available. */
+  hasMoreUsers: boolean
+  /** A list of user infos for the channel. */
+  users: SbUser[]
+}
+
+/**
+ * An active ban of a user in a particular chat channel.
+ *
+ * This is moderation information, so it should only be returned to the channel's owner and
+ * moderators (users with the `editPermissions` or `ban` permission), and server admins.
+ */
+export interface ChannelBanEntry {
+  userId: SbUserId
+  channelId: SbChannelId
+  banTime: Date
+  /**
+   * The user that placed the ban. Not set for automated bans (e.g. ban evasion detection) or if
+   * it wasn't recorded.
+   */
+  bannedBy?: SbUserId
+  /** Optional reason the ban was placed, as entered by the moderator that placed it. */
+  reason?: string
+  /** Whether the ban was placed automatically (e.g. by ban evasion detection). */
+  automated: boolean
+}
+
+export type ChannelBanEntryJson = Jsonify<ChannelBanEntry>
+
+export function toChannelBanEntryJson(channelBanEntry: ChannelBanEntry): ChannelBanEntryJson {
+  return {
+    userId: channelBanEntry.userId,
+    channelId: channelBanEntry.channelId,
+    banTime: Number(channelBanEntry.banTime),
+    bannedBy: channelBanEntry.bannedBy,
+    reason: channelBanEntry.reason,
+    automated: channelBanEntry.automated,
+  }
+}
+
+export function fromChannelBanEntryJson(channelBanEntryJson: ChannelBanEntryJson): ChannelBanEntry {
+  return {
+    userId: channelBanEntryJson.userId,
+    channelId: channelBanEntryJson.channelId,
+    banTime: new Date(channelBanEntryJson.banTime),
+    bannedBy: channelBanEntryJson.bannedBy,
+    reason: channelBanEntryJson.reason,
+    automated: channelBanEntryJson.automated,
+  }
+}
+
+/**
+ * The response returned when listing the active bans in a particular channel.
+ *
+ * This is moderation information, so it should only be returned to the channel's owner and
+ * moderators (users with the `editPermissions` or `ban` permission), and server admins.
+ */
+export interface ListChannelBansResponse {
+  /** The ID of the channel for which the bans are being returned. */
+  channelId: SbChannelId
+  /** A list of active bans in the channel, most recent first. */
+  bans: ChannelBanEntryJson[]
+  /** A flag indicating whether more bans are available. */
+  hasMoreBans: boolean
+  /** User infos for the banned users and the moderators that banned them. */
+  users: SbUser[]
+}
+
+/**
+ * The body of a request when updating the permissions of a user in a specific chat channel.
+ */
+export interface UpdateChannelUserPermissionsRequest {
+  /** The new permissions to update the user to. */
+  permissions: ChannelPermissions
+}
+
+/**
+ * The response returned when fetching the batched channel info.
+ */
+export interface GetBatchedChannelInfosResponse {
+  channelInfos: BasicChannelInfo[]
+  detailedChannelInfos: DetailedChannelInfo[]
+  joinedChannelInfos: JoinedChannelInfo[]
+  /**
+   * Requested channel IDs that name no existing channel (deleted, or never existed), so a client
+   * can stop treating them as still loading.
+   */
+  deletedChannels: SbChannelId[]
+  /**
+   * Requested channel IDs that exist but are private and the requester isn't a member of. Nothing
+   * about them is returned beyond the id, so a client can show a generic private-channel label
+   * instead of waiting for a name.
+   */
+  privateChannels: SbChannelId[]
+}
+
+/**
+ * The response returned when fetching the channel info.
+ */
+export interface GetChannelInfoResponse {
+  channelInfo: BasicChannelInfo
+  detailedChannelInfo?: DetailedChannelInfo
+  joinedChannelInfo?: JoinedChannelInfo
+}
+
+/**
+ * The response returned when searching the channels..
+ */
+export interface SearchChannelsResponse {
+  channelInfos: BasicChannelInfo[]
+  detailedChannelInfos: DetailedChannelInfo[]
+  joinedChannelInfos: JoinedChannelInfo[]
+  hasMoreChannels: boolean
+}

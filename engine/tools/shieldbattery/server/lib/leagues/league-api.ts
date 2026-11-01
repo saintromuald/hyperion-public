@@ -1,0 +1,629 @@
+import { RouterContext } from '@koa/router'
+import httpErrors from 'http-errors'
+import Joi from 'joi'
+import mime from 'mime'
+import { assertUnreachable } from '../../../common/assert-unreachable'
+import { decodeMatchup } from '../../../common/games/game-filters'
+import { GET_GAMES_LIMIT, GetGamesResponse, toGameRecordJson } from '../../../common/games/games'
+import { MAX_IMAGE_SIZE_BYTES } from '../../../common/images'
+import {
+  AdminAddLeagueResponse,
+  AdminEditLeagueResponse,
+  AdminGetLeagueResponse,
+  AdminGetLeaguesResponse,
+  GetLeagueByIdResponse,
+  GetLeagueLeaderboardResponse,
+  GetLeaguesListResponse,
+  JoinLeagueResponse,
+  League,
+  LEAGUE_BADGE_HEIGHT,
+  LEAGUE_BADGE_WIDTH,
+  LEAGUE_IMAGE_HEIGHT,
+  LEAGUE_IMAGE_WIDTH,
+  LeagueErrorCode,
+  LeagueId,
+  ServerAdminAddLeagueRequest,
+  ServerAdminEditLeagueRequest,
+  toClientLeagueUserJson,
+  toLeagueJson,
+} from '../../../common/leagues/leagues'
+import { toMapInfoJson } from '../../../common/maps'
+import { ALL_MATCHMAKING_TYPES } from '../../../common/matchmaking'
+import { NotificationType } from '../../../common/notifications'
+import { Patch } from '../../../common/patch'
+import { SbUserId } from '../../../common/users/sb-user-id'
+import transact from '../db/transaction'
+import { CodedError, makeErrorConverterMiddleware } from '../errors/coded-error'
+import { asHttpError } from '../errors/error-with-payload'
+import { writeFile } from '../files'
+import { handleMultipartFiles } from '../files/handle-multipart-files'
+import { createImagePath, resizeImage } from '../files/images'
+import { GET_GAMES_QUERY_SCHEMA, getGameListSideData } from '../games/game-list-data'
+import { getGames } from '../games/game-models'
+import { httpApi, httpBeforeAll } from '../http/http-api'
+import { httpBefore, httpDelete, httpGet, httpPatch, httpPost } from '../http/route-decorators'
+import NotificationService from '../notifications/notification-service'
+import { checkAllPermissions } from '../permissions/check-permissions'
+import { Redis } from '../redis/redis'
+import { ReplayService } from '../replays/replay-service'
+import ensureLoggedIn from '../session/ensure-logged-in'
+import createThrottle from '../throttle/create-throttle'
+import throttleMiddleware, { throttleByUserOrIp } from '../throttle/middleware'
+import { findUsersById } from '../users/user-model'
+import { validateRequest } from '../validation/joi-validator'
+import { json } from '../validation/json-validator'
+import { getLeaderboard, updateLeaderboards } from './leaderboard'
+import {
+  adminGetAllLeagues,
+  adminGetLeague,
+  banLeagueUser,
+  createLeague,
+  getAllLeaguesForUser,
+  getCurrentLeagues,
+  getFutureLeagues,
+  getLeague,
+  getLeagueUser,
+  getManyLeagueUsers,
+  getPastLeagues,
+  joinLeagueForUser,
+  LeagueUser,
+  leaveLeagueForUser,
+  unbanLeagueUser,
+  updateLeague,
+} from './league-models'
+import { LeagueStartNotifier } from './league-start-notifier'
+
+class LeagueApiError extends CodedError<LeagueErrorCode> {}
+
+const convertLeagueApiErrors = makeErrorConverterMiddleware(err => {
+  if (!(err instanceof LeagueApiError)) {
+    throw err
+  }
+
+  switch (err.code) {
+    case LeagueErrorCode.NotFound:
+      throw asHttpError(404, err)
+    case LeagueErrorCode.AlreadyEnded:
+      throw asHttpError(410, err)
+
+    default:
+      assertUnreachable(err.code)
+  }
+})
+
+function leagueIdFromUrl(ctx: RouterContext): LeagueId {
+  const { params } = validateRequest(ctx, {
+    params: Joi.object<{ leagueId: LeagueId }>({
+      leagueId: Joi.string().uuid().required(),
+    }),
+  })
+
+  try {
+    return params.leagueId
+  } catch (err) {
+    throw new httpErrors.BadRequest('invalid league id')
+  }
+}
+
+const leagueGamesListThrottle = createThrottle('leaguegames', {
+  rate: 20,
+  burst: 40,
+  window: 60000,
+})
+
+async function removeLeagueUser(redis: Redis, leagueId: LeagueId, userId: SbUserId) {
+  await transact(async client => {
+    await leaveLeagueForUser(leagueId, userId, client)
+    await updateLeaderboards(redis, [{ leagueId, userId }], client)
+  })
+}
+
+@httpApi('/leagues/')
+@httpBeforeAll(convertLeagueApiErrors)
+export class LeagueApi {
+  constructor(
+    private redis: Redis,
+    private replayService: ReplayService,
+  ) {}
+
+  @httpGet('/:leagueId/games')
+  @httpBefore(throttleMiddleware(leagueGamesListThrottle, throttleByUserOrIp))
+  async getLeagueGames(ctx: RouterContext): Promise<GetGamesResponse> {
+    const leagueId = leagueIdFromUrl(ctx)
+    const {
+      query: {
+        source,
+        duration,
+        mapName,
+        playerName,
+        format,
+        matchup,
+        sort,
+        offset,
+        startDate,
+        endDate,
+        includeShort,
+      },
+    } = validateRequest(ctx, {
+      query: GET_GAMES_QUERY_SCHEMA,
+    })
+
+    const now = new Date()
+    const league = await getLeague(leagueId, now)
+    if (!league) {
+      throw new LeagueApiError(LeagueErrorCode.NotFound, 'league not found')
+    }
+
+    const decodedMatchup = matchup && format ? decodeMatchup(format, matchup) : undefined
+
+    const games = await getGames({
+      leagueId,
+      limit: GET_GAMES_LIMIT,
+      offset: offset ?? 0,
+      source,
+      duration,
+      mapName,
+      playerName,
+      format,
+      matchup: decodedMatchup,
+      sort,
+      // A game only produces a league_user_changes row when it started inside the league's window
+      // (reconciliation keys that off `start_at <= startTime < end_at`), so intersecting the date
+      // filter with [startAt, endAt) can never drop a league game. It does, however, let the
+      // descending start_time index skip every game outside the league's lifetime instead of
+      // scanning back from the newest completed matchmaking game — which is the difference between
+      // a fast page and a full index walk for a league that ended long ago.
+      startDate: Math.max(startDate ?? 0, Number(league.startAt)),
+      endDate: Math.min(endDate ?? Number.MAX_SAFE_INTEGER, Number(league.endAt)),
+      includeShort,
+    })
+
+    const { users, maps, replays } = await getGameListSideData({
+      games,
+      currentUserId: ctx.session?.user?.id,
+      replayService: this.replayService,
+      logger: ctx.log,
+    })
+
+    return {
+      games: games.map(g => toGameRecordJson(g)),
+      maps: maps.map(m => toMapInfoJson(m)),
+      users,
+      hasMoreGames: games.length >= GET_GAMES_LIMIT,
+      replays,
+    }
+  }
+
+  @httpGet('/')
+  async getLeagues(ctx: RouterContext): Promise<GetLeaguesListResponse> {
+    const now = new Date()
+    const isLoggedIn = !!ctx.session?.user
+    const [past, current, future, selfLeagues] = await Promise.all([
+      getPastLeagues(now),
+      getCurrentLeagues(now),
+      getFutureLeagues(now),
+      isLoggedIn ? getAllLeaguesForUser(ctx.session!.user.id) : [],
+    ])
+    return {
+      past: past.map(l => toLeagueJson(l)),
+      current: current.map(l => toLeagueJson(l)),
+      future: future.map(l => toLeagueJson(l)),
+      selfLeagues: selfLeagues.map(lu => toClientLeagueUserJson(lu)),
+    }
+  }
+
+  @httpGet('/:leagueId')
+  async getLeagueById(ctx: RouterContext): Promise<GetLeagueByIdResponse> {
+    const leagueId = leagueIdFromUrl(ctx)
+    const now = new Date()
+    const league = await getLeague(leagueId, now)
+
+    if (!league) {
+      throw new LeagueApiError(LeagueErrorCode.NotFound, 'league not found')
+    }
+
+    let selfLeagueUser: LeagueUser | undefined
+    if (ctx.session?.user) {
+      selfLeagueUser = await getLeagueUser(leagueId, ctx.session.user.id)
+    }
+
+    return {
+      league: toLeagueJson(league),
+      selfLeagueUser: selfLeagueUser ? toClientLeagueUserJson(selfLeagueUser) : undefined,
+    }
+  }
+
+  @httpGet('/:leagueId/leaderboard')
+  async getLeaderboard(ctx: RouterContext): Promise<GetLeagueLeaderboardResponse> {
+    const leagueId = leagueIdFromUrl(ctx)
+    const now = new Date()
+    const [league, leaderboard] = await Promise.all([
+      getLeague(leagueId, now),
+      getLeaderboard(this.redis, leagueId),
+    ])
+
+    if (!league) {
+      throw new LeagueApiError(LeagueErrorCode.NotFound, 'league not found')
+    }
+
+    const [users, leagueUsers] = await Promise.all([
+      leaderboard.length > 0 ? findUsersById(leaderboard) : [],
+      leaderboard.length > 0 ? getManyLeagueUsers(leagueId, leaderboard) : [],
+    ])
+    const activeUserIds = new Set(leagueUsers.map(lu => lu.userId))
+
+    return {
+      league: toLeagueJson(league),
+      leaderboard: leaderboard.filter(id => activeUserIds.has(id)),
+      leagueUsers: leagueUsers.map(lu => toClientLeagueUserJson(lu)),
+      users,
+    }
+  }
+
+  @httpPost('/:leagueId/join')
+  @httpBefore(ensureLoggedIn)
+  async joinLeague(ctx: RouterContext): Promise<JoinLeagueResponse> {
+    const leagueId = leagueIdFromUrl(ctx)
+    const now = new Date()
+    const league = await getLeague(leagueId, now)
+
+    if (!league) {
+      throw new LeagueApiError(LeagueErrorCode.NotFound, 'league not found')
+    } else if (league.endAt <= now) {
+      throw new LeagueApiError(LeagueErrorCode.AlreadyEnded, 'league already ended')
+    }
+
+    const selfLeagueUser = await joinLeagueForUser(leagueId, ctx.session!.user.id)
+
+    return {
+      league: toLeagueJson(league),
+      selfLeagueUser: toClientLeagueUserJson(selfLeagueUser),
+    }
+  }
+
+  @httpDelete('/:leagueId/membership')
+  @httpBefore(ensureLoggedIn)
+  async leaveLeague(ctx: RouterContext): Promise<void> {
+    const leagueId = leagueIdFromUrl(ctx)
+    const now = new Date()
+    const league = await getLeague(leagueId, now)
+    if (!league) {
+      throw new LeagueApiError(LeagueErrorCode.NotFound, 'league not found')
+    } else if (league.endAt <= now) {
+      throw new LeagueApiError(LeagueErrorCode.AlreadyEnded, 'league already ended')
+    }
+    await removeLeagueUser(this.redis, leagueId, ctx.session!.user.id)
+  }
+}
+
+@httpApi('/admin/leagues/')
+@httpBeforeAll(convertLeagueApiErrors, ensureLoggedIn, checkAllPermissions('manageLeagues'))
+export class LeagueAdminApi {
+  constructor(
+    private notificationService: NotificationService,
+    private leagueStartNotifier: LeagueStartNotifier,
+    private redis: Redis,
+  ) {}
+
+  @httpGet('/')
+  async getLeagues(ctx: RouterContext): Promise<AdminGetLeaguesResponse> {
+    const leagues = await adminGetAllLeagues()
+    return { leagues: leagues.map(l => toLeagueJson(l)) }
+  }
+
+  @httpGet('/:leagueId')
+  async getLeague(ctx: RouterContext): Promise<AdminGetLeagueResponse> {
+    const leagueId = leagueIdFromUrl(ctx)
+    const league = await adminGetLeague(leagueId)
+
+    if (!league) {
+      throw new LeagueApiError(LeagueErrorCode.NotFound, 'league not found')
+    }
+
+    return { league: toLeagueJson(league) }
+  }
+
+  @httpPost('/')
+  @httpBefore(handleMultipartFiles(MAX_IMAGE_SIZE_BYTES))
+  async addLeague(ctx: RouterContext): Promise<AdminAddLeagueResponse> {
+    const {
+      body: { leagueData },
+    } = validateRequest(ctx, {
+      body: Joi.object<{ leagueData: ServerAdminAddLeagueRequest }>({
+        leagueData: json.object({
+          name: Joi.string().required(),
+          matchmakingType: Joi.valid(...ALL_MATCHMAKING_TYPES).required(),
+          description: Joi.string().required(),
+          signupsAfter: Joi.date().timestamp().min(Date.now()).required(),
+          startAt: Joi.date().timestamp().min(Date.now()).required(),
+          endAt: Joi.date().timestamp().min(Date.now()).required(),
+          rulesAndInfo: Joi.string(),
+          link: Joi.string().uri({ scheme: ['http', 'https'] }),
+        }),
+      }),
+    })
+
+    if (leagueData.signupsAfter > leagueData.startAt) {
+      throw new httpErrors.BadRequest('signupsAfter must be before startAt')
+    } else if (leagueData.startAt > leagueData.endAt) {
+      throw new httpErrors.BadRequest('startAt must be before endAt')
+    }
+
+    const imageFile = ctx.request.files?.image
+    const badgeFile = ctx.request.files?.badge
+    if ((imageFile && Array.isArray(imageFile)) || (badgeFile && Array.isArray(badgeFile))) {
+      throw new httpErrors.BadRequest('only one image/badge file can be uploaded')
+    }
+    const [image, imageExtension] = imageFile
+      ? await resizeImage(imageFile.filepath, LEAGUE_IMAGE_WIDTH, LEAGUE_IMAGE_HEIGHT)
+      : [undefined, undefined]
+    const [badge, badgeExtension] = badgeFile
+      ? await resizeImage(badgeFile.filepath, LEAGUE_BADGE_WIDTH, LEAGUE_BADGE_HEIGHT)
+      : [undefined, undefined]
+
+    let imagePath: string | undefined
+    if (image) {
+      imagePath = createImagePath('league-images', imageExtension)
+    }
+    let badgePath: string | undefined
+    if (badge) {
+      badgePath = createImagePath('league-images', badgeExtension)
+    }
+
+    // Image paths are randomly generated rather than derived from the league, so the files can be
+    // stored before the row that points at them exists. Files that never get a row are unreachable
+    // and harmless, whereas a stored path pointing at a missing file would render as a broken
+    // image.
+    const filePromises: Array<Promise<unknown>> = []
+
+    if (image && imagePath) {
+      const buffer = await image.toBuffer()
+      filePromises.push(
+        writeFile(imagePath, buffer, {
+          acl: 'public-read',
+          type: mime.getType(imageExtension),
+        }),
+      )
+    }
+    if (badge && badgePath) {
+      const buffer = await badge.toBuffer()
+      filePromises.push(
+        writeFile(badgePath, buffer, {
+          acl: 'public-read',
+          type: mime.getType(badgeExtension),
+        }),
+      )
+    }
+
+    await Promise.all(filePromises)
+
+    const league = await createLeague({
+      ...leagueData,
+      imagePath,
+      badgePath,
+    })
+    this.leagueStartNotifier.scheduleLeague(league.id, league.startAt)
+
+    return {
+      league: toLeagueJson(league),
+    }
+  }
+
+  @httpPatch('/:leagueId')
+  @httpBefore(handleMultipartFiles(MAX_IMAGE_SIZE_BYTES))
+  async editLeague(ctx: RouterContext): Promise<AdminEditLeagueResponse> {
+    const leagueId = leagueIdFromUrl(ctx)
+    const originalLeague = await adminGetLeague(leagueId)
+
+    if (!originalLeague) {
+      throw new LeagueApiError(LeagueErrorCode.NotFound, 'league not found')
+    }
+
+    const {
+      body: { leagueChanges },
+    } = validateRequest(ctx, {
+      body: Joi.object<{ leagueChanges: ServerAdminEditLeagueRequest }>({
+        leagueChanges: json.object({
+          name: Joi.string(),
+          matchmakingType: Joi.valid(...ALL_MATCHMAKING_TYPES),
+          description: Joi.string(),
+          signupsAfter: Joi.date().timestamp(),
+          startAt: Joi.date().timestamp(),
+          endAt: Joi.date().timestamp(),
+          rulesAndInfo: Joi.string().allow(null),
+          link: Joi.string().allow(null),
+          deleteImage: Joi.boolean(),
+          deleteBadge: Joi.boolean(),
+        }),
+      }),
+    })
+
+    const now = new Date()
+
+    if (leagueChanges.signupsAfter && originalLeague.signupsAfter <= now) {
+      throw new httpErrors.BadRequest('cannot change signupsAfter once signups have started')
+    } else if (leagueChanges.signupsAfter && leagueChanges.signupsAfter <= now) {
+      throw new httpErrors.BadRequest('cannot change signupsAfter to a time in the past')
+    }
+
+    if (leagueChanges.startAt && originalLeague.startAt <= now) {
+      throw new httpErrors.BadRequest('cannot change startAt once the league has started')
+    } else if (leagueChanges.startAt && leagueChanges.startAt <= now) {
+      throw new httpErrors.BadRequest('cannot change startAt to a time in the past')
+    }
+
+    if (leagueChanges.endAt && originalLeague.endAt <= now) {
+      throw new httpErrors.BadRequest('cannot change endAt once the league has ended')
+    } else if (leagueChanges.endAt && leagueChanges.endAt <= now) {
+      throw new httpErrors.BadRequest('cannot change endAt to a time in the past')
+    }
+
+    const imageFile = ctx.request.files?.image
+    const badgeFile = ctx.request.files?.badge
+    if ((imageFile && Array.isArray(imageFile)) || (badgeFile && Array.isArray(badgeFile))) {
+      throw new httpErrors.BadRequest('only one image/badge file can be uploaded')
+    }
+    const [image, imageExtension] = imageFile
+      ? await resizeImage(imageFile.filepath, LEAGUE_IMAGE_WIDTH, LEAGUE_IMAGE_HEIGHT)
+      : [undefined, undefined]
+    const [badge, badgeExtension] = badgeFile
+      ? await resizeImage(badgeFile.filepath, LEAGUE_BADGE_WIDTH, LEAGUE_BADGE_HEIGHT)
+      : [undefined, undefined]
+
+    let imagePath: string | undefined
+    if (image) {
+      imagePath = createImagePath('league-images', imageExtension)
+    }
+    let badgePath: string | undefined
+    if (badge) {
+      badgePath = createImagePath('league-images', badgeExtension)
+    }
+
+    // Image paths are randomly generated rather than derived from the league, so the files can be
+    // stored before the row that points at them exists. Files that never get a row are unreachable
+    // and harmless, whereas a stored path pointing at a missing file would render as a broken
+    // image.
+    const filePromises: Array<Promise<unknown>> = []
+
+    if (image && imagePath) {
+      const buffer = await image.toBuffer()
+      filePromises.push(
+        writeFile(imagePath, buffer, {
+          acl: 'public-read',
+          type: mime.getType(imageExtension),
+        }),
+      )
+    }
+    if (badge && badgePath) {
+      const buffer = await badge.toBuffer()
+      filePromises.push(
+        writeFile(badgePath, buffer, {
+          acl: 'public-read',
+          type: mime.getType(badgeExtension),
+        }),
+      )
+    }
+
+    await Promise.all(filePromises)
+
+    const updatedLeague: Patch<Omit<League, 'id'>> = {
+      ...leagueChanges,
+    }
+    delete (updatedLeague as any).image
+    delete (updatedLeague as any).deleteImage
+    delete (updatedLeague as any).badge
+    delete (updatedLeague as any).deleteBadge
+
+    if (leagueChanges.deleteImage) {
+      updatedLeague.imagePath = null
+    } else if (imagePath) {
+      updatedLeague.imagePath = imagePath
+    }
+    if (leagueChanges.deleteBadge) {
+      updatedLeague.badgePath = null
+    } else if (badgePath) {
+      updatedLeague.badgePath = badgePath
+    }
+
+    const league = await updateLeague(leagueId, updatedLeague)
+    if (leagueChanges.startAt) {
+      this.leagueStartNotifier.scheduleLeague(league.id, league.startAt)
+    }
+
+    return {
+      league: toLeagueJson(league),
+    }
+  }
+
+  @httpPatch('/:leagueId/:userId/ban')
+  async banUserFromLeague(ctx: RouterContext): Promise<void> {
+    const {
+      params: { leagueId, userId },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ leagueId: LeagueId; userId: SbUserId }>({
+        leagueId: Joi.string().uuid().required(),
+        userId: Joi.number().min(1).required(),
+      }),
+    })
+
+    const league = await adminGetLeague(leagueId)
+
+    if (!league) {
+      throw new LeagueApiError(LeagueErrorCode.NotFound, 'league not found')
+    }
+
+    const leagueUser = await getLeagueUser(leagueId, userId)
+
+    if (!leagueUser) {
+      throw new LeagueApiError(LeagueErrorCode.NotFound, 'user is not in the league')
+    }
+
+    if (leagueUser.isBanned) {
+      // Already banned, so this is a no-op (and we avoid sending a duplicate notification)
+      return
+    }
+
+    await banLeagueUser(leagueUser)
+    await this.notificationService.addNotification({
+      userId,
+      data: {
+        type: NotificationType.LeagueBan,
+        leagueName: league.name,
+      },
+    })
+  }
+
+  @httpDelete('/:leagueId/users/:userId')
+  async removeUserFromLeague(ctx: RouterContext): Promise<void> {
+    const {
+      params: { leagueId, userId },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ leagueId: LeagueId; userId: SbUserId }>({
+        leagueId: Joi.string().uuid().required(),
+        userId: Joi.number().integer().min(1).required(),
+      }),
+    })
+    if (!(await adminGetLeague(leagueId))) {
+      throw new LeagueApiError(LeagueErrorCode.NotFound, 'league not found')
+    }
+    await removeLeagueUser(this.redis, leagueId, userId)
+  }
+
+  @httpPatch('/:leagueId/:userId/unban')
+  async unbanUserFromLeague(ctx: RouterContext): Promise<void> {
+    const {
+      params: { leagueId, userId },
+    } = validateRequest(ctx, {
+      params: Joi.object<{ leagueId: LeagueId; userId: SbUserId }>({
+        leagueId: Joi.string().uuid().required(),
+        userId: Joi.number().min(1).required(),
+      }),
+    })
+
+    const league = await adminGetLeague(leagueId)
+
+    if (!league) {
+      throw new LeagueApiError(LeagueErrorCode.NotFound, 'league not found')
+    }
+
+    const leagueUser = await getLeagueUser(leagueId, userId)
+
+    if (!leagueUser) {
+      throw new LeagueApiError(LeagueErrorCode.NotFound, 'user is not in the league')
+    }
+
+    if (!leagueUser.isBanned) {
+      // Not banned, so this is a no-op (and we avoid sending a spurious notification)
+      return
+    }
+
+    await unbanLeagueUser(leagueUser)
+    await this.notificationService.addNotification({
+      userId,
+      data: {
+        type: NotificationType.LeagueUnban,
+        leagueName: league.name,
+      },
+    })
+  }
+}

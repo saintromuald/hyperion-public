@@ -1,0 +1,673 @@
+import { castDraft, Draft, Immutable } from 'immer'
+import { nanoid } from 'nanoid'
+import { GameType, isTeamType } from '../../common/games/game-type'
+import { isUms, Lobby } from '../../common/lobbies'
+import {
+  changesGameSettings,
+  LobbyRunStateJson,
+  LobbySeriesGameJson,
+} from '../../common/lobbies/lobby-network'
+import { SbLobbyId } from '../../common/lobbies/sb-lobby-id'
+import { Slot, SlotType } from '../../common/lobbies/slot'
+import { SbUserId } from '../../common/users/sb-user-id'
+import { ReduxAction } from '../action-types'
+import { CommonMessageType, SbMessage } from '../messaging/message-records'
+import { immerKeyedReducer } from '../reducers/keyed-reducer'
+import { JoinLobbyMessage, LobbyMessageType } from './lobby-message-records'
+
+export interface LobbyLoadingState {
+  isCountingDown: boolean
+  countdownTimer: number
+  isLoading: boolean
+}
+
+const EMPTY_LOADING_STATE: LobbyLoadingState = Object.freeze({
+  isCountingDown: false,
+  countdownTimer: -1,
+  isLoading: false,
+})
+
+const EMPTY_SLOT: Slot = Object.freeze({
+  type: SlotType.Open,
+  race: 'r',
+  id: '',
+  joinedAt: 0,
+  hasForcedRace: false,
+  playerId: 0,
+  typeId: 0,
+})
+
+const EMPTY_LOBBY: Lobby = Object.freeze({
+  id: '' as SbLobbyId,
+  name: '',
+  map: undefined,
+  mapQueue: [],
+  gameType: GameType.Melee,
+  gameSubType: 0,
+  teams: [],
+  bench: [],
+  host: EMPTY_SLOT,
+  useLegacyLimits: false,
+  starcraftCompatibleReplays: true,
+  lockedAlliances: false,
+  visibility: 'listed',
+  createdAt: 0,
+})
+
+/**
+ * A lobby's running game and who's still in it (see `LobbyRunStateJson`), plus a client-only
+ * timestamp captured when this client first observed the run state -- used to show a rough
+ * elapsed-time readout without the server needing to report an exact start time.
+ */
+export interface LobbyRunState extends LobbyRunStateJson {
+  startedAt: number
+}
+
+export interface CurrentLobbyState {
+  // TODO(tec27): `info` holds the server's JSON-serialized lobby directly, so e.g. `map` is a
+  // `MapInfoJson` rather than a full `MapInfo`. We should probably move the map data out of this
+  // struct generally.
+  info: Lobby
+  /** The lobby's running game, while it's `inGame`; absent while it's gathering. */
+  runState?: LobbyRunState
+  loadingState: LobbyLoadingState
+  /** The lobby's chat log. */
+  chat: SbMessage[]
+  /** The members who have marked themselves ready for the lobby's next game. */
+  readyUserIds: SbUserId[]
+  /** The games the lobby has played so far, oldest first. */
+  series: LobbySeriesGameJson[]
+  activated: boolean
+  hasUnread: boolean
+}
+
+const DEFAULT_STATE: CurrentLobbyState = {
+  info: EMPTY_LOBBY,
+  runState: undefined,
+  loadingState: EMPTY_LOADING_STATE,
+  chat: [],
+  readyUserIds: [],
+  series: [],
+  activated: false,
+  hasUnread: false,
+}
+
+/** Returns whether the client currently considers itself to be a member of a lobby. */
+export function isInLobby(state: CurrentLobbyState): boolean {
+  return !!(state.info && state.info.name)
+}
+
+type LobbyDraft = Draft<CurrentLobbyState>
+
+const CHAT_MESSAGE_LIMIT = 200
+
+/**
+ * Appends message(s) to the lobby chat log, then drops the oldest entry if it grew past the cap.
+ * At most one entry is trimmed per call, even when the call pushes more than one message, so a
+ * multi-message push can leave the log slightly over the cap until the next push.
+ *
+ * Says nothing about unread state: only a message that is part of the lobby's own conversation
+ * marks it unread, which `pushChat` is for.
+ */
+function appendChat(draft: LobbyDraft, ...messages: SbMessage[]): void {
+  draft.chat.push(...castDraft(messages))
+  if (draft.chat.length > CHAT_MESSAGE_LIMIT) {
+    draft.chat.shift()
+  }
+}
+
+/**
+ * Appends message(s) that belong to the lobby's own conversation, which is everything the lobby and
+ * its members say or do. Such a message arriving while the view isn't activated marks the log
+ * unread.
+ */
+function pushChat(draft: LobbyDraft, ...messages: SbMessage[]): void {
+  appendChat(draft, ...messages)
+  draft.hasUnread ||= !draft.activated
+}
+
+/**
+ * Drops everything that described the lobby we were in, for the handlers that mean we're out of it.
+ */
+function clearLobby(draft: LobbyDraft): void {
+  draft.info = castDraft(EMPTY_LOBBY)
+  draft.runState = undefined
+  draft.loadingState = EMPTY_LOADING_STATE
+  draft.readyUserIds = []
+  draft.series = []
+}
+
+/**
+ * Drops every ready mark the lobby holds.
+ *
+ * The server clears them all at once in a few situations without an event of its own for it, so the
+ * handlers for the events that describe those situations apply the same rule here. Being ready is
+ * about a specific game under a specific set of settings, so anything that changes what the lobby is
+ * about to play (or plays it) spends the marks it collected.
+ */
+function clearReady(draft: LobbyDraft): void {
+  draft.readyUserIds = []
+}
+
+/**
+ * Announces the members that a whole-lobby replacement put on the bench. The server sends only the
+ * complete new lobby for those (with no accompanying benchAdd diffs), so a layout change that
+ * displaces seated members onto the bench needs its own bench-join lines here or nobody in the lobby
+ * sees that those members are now waiting.
+ */
+function pushNewBenchJoins(draft: LobbyDraft, previousBenchIds: ReadonlySet<SbUserId>): void {
+  for (const benched of draft.info.bench) {
+    if (!previousBenchIds.has(benched.userId)) {
+      pushChat(draft, {
+        id: nanoid(),
+        type: LobbyMessageType.LobbyBenchJoin,
+        time: Date.now(),
+        userId: benched.userId,
+      })
+    }
+  }
+}
+
+/** Drops one member's explicit ready mark. */
+function forgetReady(draft: LobbyDraft, userId: SbUserId): void {
+  draft.readyUserIds = draft.readyUserIds.filter(id => id !== userId)
+}
+
+/**
+ * Applies the bookkeeping that runs after every handler below: once the lobby is gone, the view
+ * state gets reset, with a non-empty chat log getting cleared on the way out counting as unread
+ * (so leaving a lobby with unseen messages still queues up `hasUnread` for the next time one's
+ * joined). The empty-chat case assigns nothing, leaving the state referentially unchanged for
+ * actions that arrive while out of a lobby.
+ */
+function finalizeLobbyUpdate(draft: LobbyDraft): void {
+  if (!draft.info.name) {
+    draft.activated = false
+    draft.hasUnread = draft.chat.length > 0
+    if (draft.chat.length) {
+      draft.chat = []
+    }
+  }
+}
+
+/**
+ * Keys are constrained to real action types (and the handler map below is declared with
+ * `satisfies`, so excess-property checking applies): a typo'd key fails to compile instead of
+ * producing a handler that silently never fires.
+ */
+type LobbyHandlerMap = {
+  [A in ReduxAction['type']]?: (
+    draft: LobbyDraft,
+    action: Extract<ReduxAction, { type: A }>,
+    originalState: Immutable<CurrentLobbyState>,
+  ) => void
+}
+
+type AnyLobbyHandler = (draft: LobbyDraft, action: any, originalState: any) => void
+
+/**
+ * Returns whether the lobby currently has a slot at the given position, which is the precondition
+ * every handler that updates a slot by index shares.
+ *
+ * It fails either because we aren't in a lobby at all (e.g. the event trailed our own removal in a
+ * diff, leaving the empty lobby with no teams behind), or because the position doesn't match the
+ * layout we hold (e.g. the event raced a settings change that rebuilt it). Such an event describes
+ * a lobby we aren't looking at, so it is dropped rather than applied to whatever happens to be at
+ * that index.
+ */
+function hasSlotAt(draft: LobbyDraft, teamIndex: number, slotIndex: number): boolean {
+  return !!draft.info.teams[teamIndex]?.slots[slotIndex]
+}
+
+/**
+ * Wraps every handler in `handlers` so that `finalizeLobbyUpdate` runs after each one
+ * automatically, instead of relying on every handler remembering to call it itself. Making the
+ * bookkeeping structural this way means a future handler can't forget it -- forgetting it would
+ * silently break the leave-clears-chat behavior.
+ */
+function withLobbyBookkeeping<T extends LobbyHandlerMap>(handlers: T): T {
+  const wrapped: Record<string, AnyLobbyHandler> = {}
+  for (const key of Object.keys(handlers)) {
+    const handler = (handlers as Record<string, AnyLobbyHandler>)[key]
+    wrapped[key] = (draft, action, originalState) => {
+      handler(draft, action, originalState)
+      finalizeLobbyUpdate(draft)
+    }
+  }
+  return wrapped as T
+}
+
+const lobbyHandlers = {
+  '@lobbies/init'(draft, action) {
+    draft.info = castDraft(action.payload.lobby)
+    // Present when joining a lobby that's already `inGame` (e.g. taking a bench seat mid-game).
+    draft.runState = action.payload.runState
+      ? {
+          ...action.payload.runState,
+          startedAt: performance.now() - action.payload.runState.elapsedMs,
+        }
+      : undefined
+    draft.loadingState = EMPTY_LOADING_STATE
+    draft.readyUserIds = action.payload.readyUsers.slice()
+    draft.series = castDraft(action.payload.series.slice())
+    pushChat(draft, {
+      id: nanoid(),
+      type: LobbyMessageType.SelfJoinLobby,
+      time: Date.now(),
+      lobby: draft.info.name,
+      hostId: draft.info.host.userId!,
+    })
+  },
+
+  '@lobbies/updateSlotCreate'(draft, action) {
+    const { teamIndex, slotIndex, slot } = action.payload
+    if (!hasSlotAt(draft, teamIndex, slotIndex)) {
+      return
+    }
+
+    draft.info.teams[teamIndex].slots[slotIndex] = slot
+
+    if (slot.type === SlotType.Human || slot.type === SlotType.Observer) {
+      const team = draft.info.teams[teamIndex]
+      let arrivalSeat: JoinLobbyMessage['arrivalSeat']
+      if (team.isObserver) {
+        arrivalSeat = { kind: 'observer' }
+      } else if (isTeamType(draft.info.gameType) || isUms(draft.info.gameType)) {
+        arrivalSeat = { kind: 'team', teamId: team.teamId, name: team.name }
+      }
+      pushChat(draft, {
+        id: nanoid(),
+        type: LobbyMessageType.JoinLobby,
+        time: Date.now(),
+        userId: slot.userId!,
+        arrivalSeat,
+      })
+    }
+  },
+
+  '@lobbies/updateRaceChange'(draft, action) {
+    const { teamIndex, slotIndex, newRace } = action.payload
+    if (!hasSlotAt(draft, teamIndex, slotIndex)) {
+      return
+    }
+
+    draft.info.teams[teamIndex].slots[slotIndex].race = newRace
+  },
+
+  '@lobbies/updateSlotChange'(draft, action) {
+    const { teamIndex, slotIndex, player } = action.payload
+    if (!hasSlotAt(draft, teamIndex, slotIndex)) {
+      return
+    }
+
+    draft.info.teams[teamIndex].slots[slotIndex] = player
+  },
+
+  '@lobbies/updateSettingsChange'(draft, action) {
+    if (!draft.info.name) {
+      // Not in a lobby (e.g. this event trailed our own removal in a diff) - nothing to update
+      return
+    }
+
+    const previousBenchIds = new Set(draft.info.bench.map(benched => benched.userId))
+
+    draft.info = castDraft(action.payload.lobby)
+    // A rename, visibility change, or new map queue leaves the game the lobby is about to play
+    // exactly as it was, so those are the changes people don't have to answer for again.
+    if (changesGameSettings(action.payload.changedSettings)) {
+      clearReady(draft)
+    }
+    pushChat(draft, {
+      id: nanoid(),
+      type: LobbyMessageType.LobbySettingsChange,
+      time: Date.now(),
+      changedSettings: action.payload.changedSettings,
+      changedBy: draft.info.host.userId!,
+      warpFieldOn: action.payload.changedSettings.includes('starcraftCompatibleReplays')
+        ? !action.payload.lobby.starcraftCompatibleReplays
+        : undefined,
+    })
+    pushNewBenchJoins(draft, previousBenchIds)
+  },
+
+  '@lobbies/updateMapQueueAdvance'(draft, action) {
+    if (!draft.info.name) {
+      return
+    }
+
+    const previousBenchIds = new Set(draft.info.bench.map(benched => benched.userId))
+    // Skipped maps are always the ones at the front of the queue, but they're matched up by id
+    // rather than by position so a queue this client has a stale copy of can't misname them.
+    const previousQueue = new Map(draft.info.mapQueue.map(map => [map.id, map.name]))
+    const advanced = draft.info.mapQueue.length > action.payload.skippedMapIds.length
+
+    draft.info = castDraft(action.payload.lobby)
+    pushChat(draft, {
+      id: nanoid(),
+      type: LobbyMessageType.LobbyMapQueueAdvance,
+      time: Date.now(),
+      mapName: advanced ? draft.info.map?.name : undefined,
+      skippedMapNames: action.payload.skippedMapIds.flatMap(id => previousQueue.get(id) ?? []),
+    })
+    pushNewBenchJoins(draft, previousBenchIds)
+  },
+
+  '@lobbies/updateBenchAdd'(draft, action) {
+    if (!draft.info.name) {
+      // Not in a lobby (e.g. this event trailed our own removal in a diff) - nothing to update
+      return
+    }
+
+    draft.info.bench.push(action.payload.user)
+    pushChat(draft, {
+      id: nanoid(),
+      type: LobbyMessageType.LobbyBenchJoin,
+      time: Date.now(),
+      userId: action.payload.user.userId,
+    })
+  },
+
+  '@lobbies/updateBenchRemove'(draft, action) {
+    if (!draft.info.name) {
+      // Not in a lobby (e.g. this event trailed our own removal in a diff) - nothing to update
+      return
+    }
+
+    const { userId, reason } = action.payload
+    draft.info.bench = draft.info.bench.filter(benched => benched.userId !== userId)
+
+    // A reason means they're out of the lobby, which nothing else reports for a bench member. An
+    // absent one means they were seated, which the accompanying slot events already describe.
+    if (reason === 'left') {
+      pushChat(draft, { id: nanoid(), type: LobbyMessageType.LeaveLobby, time: Date.now(), userId })
+    } else if (reason === 'kicked') {
+      pushChat(draft, {
+        id: nanoid(),
+        type: LobbyMessageType.KickLobbyPlayer,
+        time: Date.now(),
+        userId,
+      })
+    } else if (reason === 'banned') {
+      pushChat(draft, {
+        id: nanoid(),
+        type: LobbyMessageType.BanLobbyPlayer,
+        time: Date.now(),
+        userId,
+      })
+    }
+  },
+
+  '@lobbies/updateLeaveSelf'(draft) {
+    clearLobby(draft)
+  },
+
+  '@lobbies/updateKickSelf'(draft) {
+    clearLobby(draft)
+  },
+
+  '@lobbies/updateBanSelf'(draft) {
+    clearLobby(draft)
+  },
+
+  '@lobbies/updateHostChange'(draft, action) {
+    if (!draft.info.name) {
+      // Not in a lobby (e.g. this event trailed our own removal in a diff) - nothing to update
+      return
+    }
+
+    if (draft.info.host.userId !== action.payload.userId) {
+      forgetReady(draft, draft.info.host.userId!)
+    }
+    draft.info.host = action.payload
+    pushChat(draft, {
+      id: nanoid(),
+      type: LobbyMessageType.LobbyHostChange,
+      time: Date.now(),
+      userId: draft.info.host.userId!,
+    })
+  },
+
+  '@lobbies/updateGameStarted'(draft, action) {
+    if (!draft.info.name) {
+      // Not in a lobby (e.g. this event trailed our own removal in a diff) - nothing to update
+      return
+    }
+
+    // Unlike the other lifecycle transitions above, the lobby survives its own game: its info is
+    // left as-is, and `runState` tracks the game until it regroups.
+    draft.runState = {
+      ...action.payload.runState,
+      // Anchored against the carried elapsed time, so someone arriving mid-game reads it right.
+      startedAt: performance.now() - action.payload.runState.elapsedMs,
+    }
+    draft.loadingState = EMPTY_LOADING_STATE
+    // The game the members were ready for is the one that just launched, so their marks are spent.
+    clearReady(draft)
+    pushChat(draft, {
+      id: nanoid(),
+      type: LobbyMessageType.LobbyGameStarted,
+      time: Date.now(),
+    })
+  },
+
+  '@lobbies/updateMemberGameEnded'(draft, action) {
+    if (!draft.info.name || !draft.runState) {
+      return
+    }
+
+    draft.runState.inGameUsers = draft.runState.inGameUsers.filter(
+      id => id !== action.payload.userId,
+    )
+    pushChat(draft, {
+      id: nanoid(),
+      type: LobbyMessageType.LobbyMemberGameEnded,
+      time: Date.now(),
+      userId: action.payload.userId,
+    })
+  },
+
+  '@lobbies/updateRegroup'(draft, action) {
+    if (!draft.info.name) {
+      return
+    }
+
+    draft.runState = undefined
+    draft.series.push(castDraft(action.payload.game))
+    // A lobby coming out of a game gathers for the next one with nobody ready yet.
+    clearReady(draft)
+    pushChat(draft, {
+      id: nanoid(),
+      type: LobbyMessageType.LobbyRegroup,
+      time: Date.now(),
+      gameId: action.payload.game.gameId,
+    })
+  },
+
+  '@lobbies/updateSeriesGameUpdated'(draft, action) {
+    const game = draft.series.find(g => g.gameId === action.payload.gameId)
+    if (!game) {
+      // Results settle well after a game ends, so one can arrive for a game this client never saw
+      // (it played out before we joined, or our series was reset by leaving).
+      return
+    }
+
+    game.result = action.payload.result
+  },
+
+  '@lobbies/updateReadyChange'(draft, action) {
+    if (!draft.info.name) {
+      return
+    }
+
+    const { userId, isReady } = action.payload
+    if (isReady) {
+      if (!draft.readyUserIds.includes(userId)) {
+        draft.readyUserIds.push(userId)
+      }
+    } else {
+      draft.readyUserIds = draft.readyUserIds.filter(id => id !== userId)
+    }
+  },
+
+  '@network/connect'(draft) {
+    clearLobby(draft)
+  },
+
+  '@lobbies/updateChatMessage'(draft, action) {
+    if (!draft.info.name) {
+      return
+    }
+
+    const { message } = action.payload
+    pushChat(draft, {
+      id: nanoid(),
+      type: CommonMessageType.TextMessage,
+      time: message.time,
+      from: message.from,
+      text: message.text,
+      ...(message.emote ? { emote: true } : {}),
+      ...(message.outcome ? { outcome: message.outcome } : {}),
+    })
+  },
+
+  '@lobbies/updateLeave'(draft, action) {
+    if (!draft.info.name) {
+      return
+    }
+
+    forgetReady(draft, action.payload.player.userId!)
+    pushChat(draft, {
+      id: nanoid(),
+      type: LobbyMessageType.LeaveLobby,
+      time: Date.now(),
+      userId: action.payload.player.userId!,
+    })
+  },
+
+  '@lobbies/updateKick'(draft, action) {
+    if (!draft.info.name) {
+      return
+    }
+
+    forgetReady(draft, action.payload.player.userId!)
+    pushChat(draft, {
+      id: nanoid(),
+      type: LobbyMessageType.KickLobbyPlayer,
+      time: Date.now(),
+      userId: action.payload.player.userId!,
+    })
+  },
+
+  '@lobbies/updateBan'(draft, action) {
+    if (!draft.info.name) {
+      return
+    }
+
+    forgetReady(draft, action.payload.player.userId!)
+    pushChat(draft, {
+      id: nanoid(),
+      type: LobbyMessageType.BanLobbyPlayer,
+      time: Date.now(),
+      userId: action.payload.player.userId!,
+    })
+  },
+
+  '@lobbies/updateCountdownStart'(draft, action) {
+    draft.loadingState.isCountingDown = true
+    draft.loadingState.countdownTimer = action.payload
+
+    if (!draft.info.name) {
+      return
+    }
+
+    pushChat(
+      draft,
+      { id: nanoid(), type: LobbyMessageType.LobbyCountdownStarted, time: Date.now() },
+      {
+        id: nanoid(),
+        type: LobbyMessageType.LobbyCountdownTick,
+        time: Date.now(),
+        timeLeft: draft.loadingState.countdownTimer,
+      },
+    )
+  },
+
+  '@lobbies/updateCountdownTick'(draft, action) {
+    draft.loadingState.countdownTimer = action.payload
+
+    if (!draft.info.name) {
+      return
+    }
+
+    pushChat(draft, {
+      id: nanoid(),
+      type: LobbyMessageType.LobbyCountdownTick,
+      time: Date.now(),
+      timeLeft: draft.loadingState.countdownTimer,
+    })
+  },
+
+  '@lobbies/updateCountdownCanceled'(draft) {
+    draft.loadingState.isCountingDown = false
+    draft.loadingState.countdownTimer = -1
+
+    if (!draft.info.name) {
+      return
+    }
+
+    pushChat(draft, {
+      id: nanoid(),
+      type: LobbyMessageType.LobbyCountdownCanceled,
+      time: Date.now(),
+    })
+  },
+
+  '@lobbies/updateLoadingStart'(draft) {
+    draft.loadingState.isLoading = true
+    draft.loadingState.isCountingDown = false
+  },
+
+  '@lobbies/updateLoadingCanceled'(draft, action) {
+    draft.loadingState.isLoading = false
+    draft.loadingState.isCountingDown = false
+    draft.loadingState.countdownTimer = -1
+
+    if (!draft.info.name) {
+      return
+    }
+
+    pushChat(draft, {
+      id: nanoid(),
+      type: LobbyMessageType.LobbyLoadingCanceled,
+      time: Date.now(),
+      usersAtFault: action.payload.usersAtFault,
+      reason: action.payload.reason,
+    })
+  },
+
+  // A message this client puts in the lobby log itself: the answer to a command run there, or a
+  // whisper echoed into it. Neither is the lobby talking, so neither marks the log unread.
+  '@messaging/appendLocalMessage'(draft, action) {
+    const { target, message } = action.payload
+    if (target.surface !== 'lobby' || !draft.info.name) {
+      return
+    }
+
+    appendChat(draft, message)
+  },
+
+  '@lobbies/activate'(draft) {
+    if (draft.info.name) {
+      draft.hasUnread = false
+      draft.activated = true
+    }
+  },
+
+  '@lobbies/deactivate'(draft) {
+    if (draft.info.name) {
+      draft.activated = false
+    }
+  },
+} satisfies LobbyHandlerMap
+
+export default immerKeyedReducer(DEFAULT_STATE, withLobbyBookkeeping(lobbyHandlers))

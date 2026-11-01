@@ -1,0 +1,610 @@
+import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { GroupedVirtuoso, GroupedVirtuosoHandle, Virtuoso, VirtuosoHandle } from 'react-virtuoso'
+import styled from 'styled-components'
+import {
+  EncodedMatchupString,
+  GameDurationFilter,
+  GameFormat,
+  GameSortOption,
+  GameSourceFilter,
+} from '../../common/games/game-filters'
+import { SbUserId } from '../../common/users/sb-user-id'
+import { useContextMenu } from '../dom/use-context-menu'
+import { useMediaQuery } from '../dom/use-media-query'
+import { useFormatLocale } from '../i18n/locale-formats'
+import { useKeyListener } from '../keyboard/key-listener'
+import InfiniteScrollList from '../lists/infinite-scroll-list'
+import { Popover, usePopoverController } from '../material/popover'
+import { useHistoryEntryKey, useLocationSearchParam } from '../navigation/router-hooks'
+import { createViewStateStore } from '../navigation/view-state-store'
+import { useVirtuosoScrollMemory } from '../navigation/virtuoso-scroll-memory'
+import { useUserLocalStorageValue } from '../react/state-hooks'
+import { useAppSelector } from '../redux-hooks'
+import { bodyLarge } from '../styles/typography'
+import { navigateToGameResults } from './action-creators'
+import {
+  DayHeader,
+  formatDayHeaderLabel,
+  getDayBoundaries,
+  groupGamesByDay,
+  resolveDateRangeMs,
+} from './day-header'
+import { GameContextMenuContent } from './game-context-menu'
+import { GameFilterBar } from './game-filter-bar'
+import {
+  isDateSort,
+  parseDuration,
+  parseFormat,
+  parseMatchup,
+  parseSort,
+  parseSource,
+} from './game-filter-url'
+import { GameListEntry } from './game-list-entry'
+import { GameRecordSidePanel } from './game-record-side-panel'
+import { SaveReplayMenuContent } from './save-replay-menu'
+import { GameListSearchPage, useGameListSearch } from './use-game-list-search'
+import { FilterMemorySurface, useRememberedFilters } from './use-remembered-filters'
+
+const NoResults = styled.div`
+  ${bodyLarge};
+
+  color: var(--theme-on-surface-variant);
+`
+
+const ErrorText = styled.div`
+  ${bodyLarge};
+
+  color: var(--theme-error);
+`
+
+const BodyRow = styled.div`
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+`
+
+const ListColumn = styled.div`
+  flex-grow: 1;
+  min-width: 0;
+
+  /*
+    Named container so row cells (see game-list-entry.tsx) can adapt to the actual width rows get —
+    which depends on the window size *and* whether the side detail panel is showing — rather than
+    the viewport or the whole BodyRow (which also includes the panel's width).
+  */
+  container: game-list-rows / inline-size;
+`
+
+/**
+ * Viewport width below which the list goes compact: the detail side panel isn't rendered, and a
+ * single click on a row navigates to the game instead of selecting it into the panel. Derived from
+ * what the list column needs beside the panel: the result, players (328px basis) and duration cells
+ * plus gaps and row padding come to 584px; with the 340px panel and the 24px column gap that's
+ * 948px, plus the page's 48px of horizontal padding. Sits below the desktop app's 1024px minimum
+ * window width, so the app itself never loses the panel.
+ */
+const COMPACT_LAYOUT_BELOW_PX = 1000
+const COMPACT_LAYOUT_QUERY = `(width < ${COMPACT_LAYOUT_BELOW_PX}px)`
+
+const SELECTION_MEMORY_MAX_AGE_MS = 30 * 60 * 1000
+
+const selectedIdCache = createViewStateStore<string>('game-list-selection', {
+  maxAgeMs: SELECTION_MEMORY_MAX_AGE_MS,
+})
+
+/** The normalized, ready-to-request filter values a game list view is currently showing. */
+export interface GameListFilters {
+  ranked?: boolean
+  custom?: boolean
+  source?: GameSourceFilter
+  duration?: GameDurationFilter
+  sort?: GameSortOption
+  mapName?: string
+  playerName?: string
+  format?: GameFormat
+  matchup?: EncodedMatchupString
+  /** Inclusive lower bound (unix ms) on the game's start time. */
+  startDate?: number
+  /** Inclusive upper bound (unix ms) on the game's start time. */
+  endDate?: number
+  /** When true, includes games shorter than `MIN_GAME_LENGTH_MS` (hidden by default). */
+  includeShort?: boolean
+}
+
+export interface GameListViewProps {
+  /**
+   * Loads one page of games for the given filters/offset — implemented per surface (the games
+   * page, a user's match history, a league's games) by dispatching the matching request. Resolves
+   * with the page's game ids and whether more remain; populating the normalized game/map/user
+   * stores is a side effect of that dispatch.
+   */
+  loadPage: (
+    filters: GameListFilters,
+    offset: number,
+    signal: AbortSignal,
+  ) => Promise<GameListSearchPage>
+  /**
+   * Which surface this is, naming the saved set its mode-like filter preferences (sort, duration,
+   * short games, and whichever mode filters it shows) are remembered in across visits.
+   */
+  surface: Exclude<FilterMemorySurface, 'replays'>
+  /** Shows the Ranked/Custom source toggles and reads their URL params (match history only). */
+  showRankedCustom?: boolean
+  /** Shows the game source (All/Ranked/Custom) filter chip and reads its URL param (games page only). */
+  showSourceFilter?: boolean
+  /** Shows each human player's own reconciled result as a compact chip beside their name. */
+  showResult?: boolean
+  /**
+   * Whose perspective rows and the side panel roster are ordered from: this user's team (or the
+   * user) is listed first (match history only).
+   */
+  forUserId?: SbUserId
+  /** Rendered in place of the list once a load has confirmed there are no matching games. */
+  noResultsText: string
+  /** Rendered in place of the list when a load fails. */
+  errorText: string
+  /**
+   * The surface's scroll container, which the list is virtualized against (only rows near its
+   * viewport are mounted). The view also remembers and restores this container's scroll position
+   * per history entry, so the surface must not apply its own scroll memory to it while the view is
+   * shown. Nothing is rendered in the list's place until it is available.
+   */
+  scrollParent: HTMLElement | null
+}
+
+/**
+ * The shared games-list surface: a filter bar over a paginated, selectable list with a detail side
+ * panel and per-row context menu, backed by `useGameListSearch`. The games page, match history, and
+ * a league's games tab are all thin wrappers that supply a `loadPage` and their own outer layout.
+ *
+ * Owns the filter state (mirrored to URL search params, with the mode-like ones remembered per
+ * surface across visits), the list selection, and the keyboard navigation; callers differ only in
+ * where they fetch from and a few presentation flags. Renders as a fragment (filter bar, then the
+ * list/panel row) so each surface controls its own container and spacing.
+ *
+ * At compact (phone) viewport widths the side panel is dropped and a row click navigates straight
+ * to the game.
+ *
+ * The rows are virtualized against the surface's scroll container, grouped under day headers for
+ * date-based sorts and flat otherwise, the same way the replay library renders its list.
+ */
+export function GameListView({
+  loadPage,
+  surface,
+  showRankedCustom = false,
+  showSourceFilter = false,
+  showResult = false,
+  forUserId,
+  noResultsText,
+  errorText,
+  scrollParent,
+}: GameListViewProps) {
+  const { t } = useTranslation()
+  const locale = useFormatLocale()
+  const compactLayout = useMediaQuery(COMPACT_LAYOUT_QUERY)
+
+  const [rankedParam, setRankedParam] = useLocationSearchParam('ranked')
+  const [customParam, setCustomParam] = useLocationSearchParam('custom')
+  const [sourceParam, setSourceParam] = useLocationSearchParam('source')
+  const [durationParam, setDurationParam] = useLocationSearchParam('duration')
+  const [sortParam, setSortParam] = useLocationSearchParam('sort')
+  const [mapName, setMapNameParam] = useLocationSearchParam('mapName')
+  const [playerName, setPlayerNameParam] = useLocationSearchParam('playerName')
+  const [formatParam, setFormatParam] = useLocationSearchParam('format')
+  const [matchupParam, setMatchupParam] = useLocationSearchParam('matchup')
+  const [startDateParam, setStartDateParam] = useLocationSearchParam('startDate')
+  const [endDateParam, setEndDateParam] = useLocationSearchParam('endDate')
+  const [includeShortParam, setIncludeShortParam] = useLocationSearchParam('includeShort')
+
+  // Only the params a surface actually shows are remembered for it, which also keeps a hand-edited
+  // param that surface ignores from counting as "the URL specifies the filters".
+  const rememberedUrlValues: Record<string, string> = {
+    sort: sortParam,
+    duration: durationParam,
+    includeShort: includeShortParam,
+  }
+  if (showSourceFilter) {
+    rememberedUrlValues.source = sourceParam
+  }
+  if (showRankedCustom) {
+    rememberedUrlValues.ranked = rankedParam
+    rememberedUrlValues.custom = customParam
+  }
+  const { values: filterValues, save: saveFilterPrefs } = useRememberedFilters(
+    surface,
+    rememberedUrlValues,
+  )
+
+  // Ranked/custom only exist on the match-history surface; elsewhere we neither read nor send them,
+  // so a hand-edited `?ranked=true` on another surface can't leak into the request.
+  const ranked = showRankedCustom && filterValues.ranked === 'true'
+  const custom = showRankedCustom && filterValues.custom === 'true'
+  // The source filter only exists on the games page; elsewhere we neither read nor send it, so a
+  // hand-edited `?source=custom` on another surface can't leak into the request.
+  const source = showSourceFilter ? parseSource(filterValues.source) : GameSourceFilter.All
+  const duration = parseDuration(filterValues.duration)
+  const sort = parseSort(filterValues.sort)
+  const format = parseFormat(formatParam)
+  const matchup = parseMatchup(matchupParam, format)
+  const includeShort = filterValues.includeShort === 'true'
+
+  const entryKey = useHistoryEntryKey()
+  // Read once per mount: a lazy initializer runs at most once, so this never re-reads the store on
+  // a re-render.
+  const [selectedId, setSelectedId] = useState<string | undefined>(() =>
+    entryKey !== undefined ? selectedIdCache.get(entryKey) : undefined,
+  )
+  const groupedRef = useRef<GroupedVirtuosoHandle>(null)
+  const flatRef = useRef<VirtuosoHandle>(null)
+  // Only one of the two lists is mounted at a time (grouped for date-based sorts, flat otherwise),
+  // so state capture reads whichever handle is live.
+  const [virtuosoStateRef] = useState(() => ({
+    get current(): GroupedVirtuosoHandle | VirtuosoHandle | null {
+      return groupedRef.current ?? flatRef.current
+    },
+  }))
+  const restoredSnapshot = useVirtuosoScrollMemory(scrollParent, virtuosoStateRef)
+  // A filter change replaces the URL in place, keeping the same visit key, so the snapshot captured
+  // for this entry stops matching the list contents once the list resets. From then on it must not
+  // be re-applied by a list that remounts (e.g. after an error or empty result clears).
+  const [snapshotInvalidated, setSnapshotInvalidated] = useState(false)
+  const restoreStateFrom = snapshotInvalidated ? undefined : restoredSnapshot
+
+  // Remembered per-user and shared across the replay library, games page, match history, and league
+  // games: hides the game length and (where shown) the match result — both spoilers — from list rows.
+  const [spoilerFree, setSpoilerFree] = useUserLocalStorageValue('gamesSpoilerFree', false)
+
+  const { onContextMenu, contextMenuPopoverProps } = useContextMenu()
+  const [saveMenuOpen, openSaveMenu, closeSaveMenu] = usePopoverController()
+
+  const loadPageForSearch = (offset: number, signal: AbortSignal): Promise<GameListSearchPage> => {
+    const { startMs, endMs } = resolveDateRangeMs(startDateParam, endDateParam)
+    return loadPage(
+      {
+        ranked: ranked || undefined,
+        custom: custom || undefined,
+        source: source === GameSourceFilter.All ? undefined : source,
+        duration: duration === GameDurationFilter.All ? undefined : duration,
+        sort: sort === GameSortOption.LatestFirst ? undefined : sort,
+        mapName: mapName || undefined,
+        playerName: playerName || undefined,
+        format,
+        matchup,
+        startDate: startMs,
+        endDate: endMs,
+        includeShort: includeShort || undefined,
+      },
+      offset,
+      signal,
+    )
+  }
+
+  const {
+    games,
+    hasMoreGames,
+    isLoadingMore,
+    searchError,
+    refreshToken,
+    reset: resetSearch,
+    onLoadMore,
+  } = useGameListSearch(loadPageForSearch)
+  const reset = () => {
+    setSnapshotInvalidated(true)
+    resetSearch()
+  }
+
+  useEffect(() => {
+    if (entryKey === undefined) {
+      return undefined
+    }
+
+    // Cleanup-time write, matching `useScrollMemory`'s timing: a selection is never un-made (a
+    // restored id absent from the current list just falls back to the default selection below), so
+    // unlike the game-id window there's nothing to delete here.
+    return () => {
+      if (selectedId !== undefined) {
+        selectedIdCache.set(entryKey, selectedId)
+      }
+    }
+  }, [entryKey, selectedId])
+
+  const explicitlySelectedGame = games.find(g => g.id === selectedId)
+  // The side panel needs something to show, so at full width an unselected list defaults to its
+  // first game. At compact widths there is no panel and rows navigate on click, so only an explicit
+  // selection (keyboard, context menu) counts; nothing is highlighted until one is made.
+  const selectedGame = compactLayout ? explicitlySelectedGame : (explicitlySelectedGame ?? games[0])
+  const selectedIndex = selectedGame ? games.findIndex(g => g.id === selectedGame.id) : -1
+  const selectedReplayInfo = useAppSelector(s =>
+    selectedGame ? s.games.replayInfoById.get(selectedGame.id) : undefined,
+  )
+  const sortIsDateBased = isDateSort(sort)
+
+  const selectIndex = (index: number) => {
+    if (index < 0 || index >= games.length) return
+    const game = games[index]
+    setSelectedId(game.id)
+    // Only one of these lists is mounted at a time, so the other ref is null. Both take the index
+    // among the games themselves, not counting day headers.
+    groupedRef.current?.scrollIntoView({ index })
+    flatRef.current?.scrollIntoView({ index })
+  }
+  const moveSelection = (delta: number) => {
+    if (games.length === 0) return
+    if (selectedIndex < 0) {
+      // Nothing is selected yet, so the first movement key lands on the first row rather than
+      // stepping past it.
+      selectIndex(0)
+      return
+    }
+    const next = Math.min(Math.max(selectedIndex + delta, 0), games.length - 1)
+    selectIndex(next)
+  }
+
+  useKeyListener({
+    onKeyDown: (event: KeyboardEvent) => {
+      // Every key here acts on the games list, but this page's key listener boundary is shared with
+      // other UI (e.g. the social sidebar's chat input, whose keydowns bubble to the document).
+      // While a text-entry element has focus, the keystroke belongs to it instead.
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return false
+      }
+
+      switch (event.code) {
+        case 'ArrowUp':
+          moveSelection(-1)
+          return true
+        case 'ArrowDown':
+          moveSelection(1)
+          return true
+        case 'PageUp':
+          moveSelection(-10)
+          return true
+        case 'PageDown':
+          moveSelection(10)
+          return true
+        case 'Home':
+          selectIndex(0)
+          return true
+        case 'End':
+          selectIndex(games.length - 1)
+          return true
+        case 'Enter':
+        case 'NumpadEnter': {
+          const active = document.activeElement
+          // If the user is on an interactive control (e.g. a focused button), let it handle Enter.
+          if (
+            active instanceof HTMLElement &&
+            (active.tagName === 'BUTTON' || active.tagName === 'A')
+          ) {
+            return false
+          }
+          if (!selectedGame) {
+            return false
+          }
+          navigateToGameResults(selectedGame.id)
+          return true
+        }
+      }
+
+      return false
+    },
+  })
+
+  const filterBar = (
+    <GameFilterBar
+      showRankedCustom={showRankedCustom}
+      ranked={ranked}
+      setRanked={v => {
+        setRankedParam(v ? 'true' : '')
+        saveFilterPrefs()
+        reset()
+      }}
+      custom={custom}
+      setCustom={v => {
+        setCustomParam(v ? 'true' : '')
+        saveFilterPrefs()
+        reset()
+      }}
+      showSourceFilter={showSourceFilter}
+      source={source}
+      setSource={v => {
+        setSourceParam(v === GameSourceFilter.All ? '' : v)
+        saveFilterPrefs()
+        reset()
+      }}
+      duration={duration}
+      setDuration={v => {
+        setDurationParam(v === GameDurationFilter.All ? '' : v)
+        saveFilterPrefs()
+        reset()
+      }}
+      sort={sort}
+      setSort={v => {
+        setSortParam(v === GameSortOption.LatestFirst ? '' : v)
+        saveFilterPrefs()
+        reset()
+      }}
+      mapName={mapName}
+      setMapName={v => {
+        setMapNameParam(v)
+        reset()
+      }}
+      playerName={playerName}
+      setPlayerName={v => {
+        setPlayerNameParam(v)
+        reset()
+      }}
+      format={format}
+      setFormat={v => {
+        setFormatParam(v ?? '')
+        // A matchup is tied to a specific format (team size), so any existing value no longer
+        // applies once the format changes. Clear it so it doesn't linger in the URL as cruft.
+        setMatchupParam('')
+        reset()
+      }}
+      matchup={matchup}
+      setMatchup={v => {
+        setMatchupParam(v ?? '')
+        reset()
+      }}
+      includeShort={includeShort}
+      setIncludeShort={v => {
+        setIncludeShortParam(v ? 'true' : '')
+        saveFilterPrefs()
+        reset()
+      }}
+      spoilerFree={spoilerFree}
+      setSpoilerFree={setSpoilerFree}
+      startDate={startDateParam}
+      setStartDate={v => {
+        setStartDateParam(v)
+        reset()
+      }}
+      endDate={endDateParam}
+      setEndDate={v => {
+        setEndDateParam(v)
+        reset()
+      }}
+    />
+  )
+
+  // A page load that's returned at least once with nothing left to fetch is a confirmed empty
+  // result; until then (including the very first, still in-flight page) we render the list shell so
+  // its own loading indicator can show.
+  const confirmedEmpty = !hasMoreGames && games.length === 0
+
+  let listBody: React.ReactNode
+  if (searchError) {
+    listBody = <ErrorText>{errorText}</ErrorText>
+  } else if (confirmedEmpty) {
+    listBody = <NoResults>{noResultsText}</NoResults>
+  } else if (scrollParent) {
+    const renderRow = (index: number) => {
+      const game = games[index]
+      if (!game) return null
+      return (
+        <GameListEntry
+          game={game}
+          showResult={showResult}
+          forUserId={forUserId}
+          spoilerFree={spoilerFree}
+          selected={game.id === selectedGame?.id}
+          onClick={compactLayout ? gameId => navigateToGameResults(gameId) : setSelectedId}
+          onDoubleClick={compactLayout ? undefined : gameId => navigateToGameResults(gameId)}
+          onContextMenu={(gameId, event) => {
+            setSelectedId(gameId)
+            onContextMenu(event)
+          }}
+        />
+      )
+    }
+
+    let list: React.ReactNode
+    if (sortIsDateBased) {
+      const dayGroups = groupGamesByDay(games)
+      const { todayStartMs, yesterdayStartMs } = getDayBoundaries()
+      list = (
+        <GroupedVirtuoso
+          key='grouped'
+          ref={groupedRef}
+          customScrollParent={scrollParent}
+          restoreStateFrom={restoreStateFrom}
+          groupCounts={dayGroups.map(g => g.count)}
+          groupContent={index => (
+            <DayHeader
+              label={formatDayHeaderLabel(
+                dayGroups[index].dayStartMs,
+                todayStartMs,
+                yesterdayStartMs,
+                locale,
+                t,
+              )}
+            />
+          )}
+          itemContent={renderRow}
+        />
+      )
+    } else {
+      // NOTE: `Virtuoso` and `GroupedVirtuoso` share the same underlying component type, so
+      // switching between them reconciles as a prop update and leaves stale group state behind.
+      // Distinct keys force a full remount when the sort switches between the two.
+      list = (
+        <Virtuoso
+          key='flat'
+          ref={flatRef}
+          customScrollParent={scrollParent}
+          restoreStateFrom={restoreStateFrom}
+          totalCount={games.length}
+          itemContent={renderRow}
+        />
+      )
+    }
+
+    listBody = (
+      <InfiniteScrollList
+        nextLoadingEnabled={true}
+        isLoadingNext={isLoadingMore}
+        hasNextData={hasMoreGames}
+        refreshToken={refreshToken}
+        onLoadNextData={onLoadMore}>
+        {list}
+      </InfiniteScrollList>
+    )
+  }
+
+  // Mirrors the replay library's inspector: dropped entirely once there are confirmed to be no
+  // results, rather than showing an empty "select a game" placeholder beside the empty-state message.
+  // Also dropped at compact widths, where rows navigate on click instead of selecting — there's
+  // nothing for a selection to show.
+  const showPanel = !compactLayout && !confirmedEmpty && !searchError
+
+  return (
+    <>
+      {filterBar}
+
+      <BodyRow>
+        <ListColumn>{listBody}</ListColumn>
+
+        {showPanel ? (
+          <GameRecordSidePanel
+            game={selectedGame}
+            forUserId={forUserId}
+            spoilerFree={spoilerFree}
+            alignWithFirstRow={sortIsDateBased}
+            onViewResults={gameId => navigateToGameResults(gameId)}
+          />
+        ) : null}
+      </BodyRow>
+
+      {selectedGame ? (
+        <Popover {...contextMenuPopoverProps}>
+          <GameContextMenuContent
+            game={selectedGame}
+            onDismiss={contextMenuPopoverProps.onDismiss}
+            onOpenSaveMenu={openSaveMenu}
+          />
+        </Popover>
+      ) : null}
+
+      {selectedGame && selectedReplayInfo && IS_ELECTRON ? (
+        <Popover
+          open={saveMenuOpen}
+          onDismiss={closeSaveMenu}
+          anchorX={contextMenuPopoverProps.anchorX}
+          anchorY={contextMenuPopoverProps.anchorY}
+          originX={contextMenuPopoverProps.originX}
+          originY={contextMenuPopoverProps.originY}>
+          <SaveReplayMenuContent replayInfo={selectedReplayInfo} onDismiss={closeSaveMenu} />
+        </Popover>
+      ) : null}
+    </>
+  )
+}

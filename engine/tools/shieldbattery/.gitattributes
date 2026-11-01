@@ -1,0 +1,33 @@
+# Force unix style line endings for everything
+* text=auto eol=lf
+
+*.ico binary
+*.png binary
+*.jpg binary
+*.webp binary
+*.ai binary
+*.scm binary
+*.scx binary
+*.msi binary
+*.exe binary
+*.diff binary
+*.dll binary
+*.opus binary
+*.mp4 binary
+*.afdesign binary
+
+*.otf binary
+*.ttf binary
+*.woff2 binary
+
+# Custom for Visual Studio
+*.sln    merge=union
+*.csproj merge=union
+*.vbproj merge=union
+*.fsproj merge=union
+*.dbproj merge=union
+
+*.bat eol=crlf
+
+# Github Linguist attributes - https://github.com/github/linguist#overrides
+server/testing/google/**/* linguist-generated

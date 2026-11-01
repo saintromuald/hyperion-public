@@ -1,0 +1,1378 @@
+import { TFunction } from 'i18next'
+import { IntRange, SetRequired, Simplify, Tagged } from 'type-fest'
+import { assertUnreachable } from './assert-unreachable'
+import { BasicChannelInfo } from './chat'
+import { binarySearch } from './data-structures/arrays'
+import { GameServerRegionId } from './game-server-regions'
+import { Jsonify } from './json'
+import { MapInfoJson, SbMapId } from './maps'
+import { AssignedRaceChar, RaceChar } from './races'
+import { MatchmakingType } from './typeshare'
+import { SbUser } from './users/sb-user'
+import { SbUserId } from './users/sb-user-id'
+
+/**
+ * How long after a season has ended that rankings are considered "finalized" and will not be
+ * altered further.
+ */
+export const MATCHMAKING_SEASON_FINALIZED_TIME_MS = 6 * 60 * 60 * 1000 // 6 hours
+
+export { MatchmakingType }
+
+export const ALL_MATCHMAKING_TYPES: ReadonlyArray<MatchmakingType> = Object.values(MatchmakingType)
+
+/** The team-size family a mode belongs to. The primary axis for grouping modes in the UI. */
+export type MatchmakingFormat = '1v1' | '2v2' | '3v3'
+
+/** The ruleset/map family of a mode within a format. */
+export type MatchmakingVariant = 'standard' | 'hunters' | 'bgh' | 'fastest'
+
+/**
+ * How players choose maps for a mode:
+ * - `veto`: players veto maps they don't want to play; the match map is chosen from what remains.
+ * - `pick`: players positively select maps they're willing to play; the match map is chosen from the
+ *   intersection of all players' selections.
+ * - `fixed`: the mode always plays a single map. The selection is made automatically and players
+ *   can't change it (handled internally like a `pick` with one forced map).
+ */
+export type MapSelectionStyle = 'veto' | 'pick' | 'fixed'
+
+/**
+ * Static, data-driven description of a matchmaking mode. This is the single source of truth for the
+ * per-mode properties that were previously hardcoded in `switch (MatchmakingType)` statements
+ * scattered across the codebase. UI and server code should read from here (and iterate
+ * `MATCHMAKING_MODES`) rather than switching on `MatchmakingType`, so that adding a mode is mostly a
+ * matter of adding an entry to the registry.
+ */
+export interface MatchmakingModeInfo {
+  type: MatchmakingType
+  /** Team-size family; the primary grouping axis in the UI. */
+  format: MatchmakingFormat
+  /** Ruleset/map family within the format. */
+  variant: MatchmakingVariant
+  /** Number of players per team. */
+  teamSize: number
+  /** How maps are chosen for this mode. */
+  mapSelectionStyle: MapSelectionStyle
+  /** Whether players can pick an alternate race for mirror matchups (1v1-style modes only). */
+  supportsAlternateRace: boolean
+  /**
+   * Returns the mode's localized display label. Written as an inline `t()` call with a string-literal
+   * key so the translation extractor (i18next-cli) can statically extract it — a dynamic `t(key)` is invisible to the
+   * extractor, which (with `keepRemoved: false`) would drop the key from the catalog.
+   */
+  label: (t: TFunction) => string
+}
+
+/**
+ * The registry of all matchmaking modes, keyed by `MatchmakingType`. The `satisfies` clause forces an
+ * entry for every `MatchmakingType`, so adding a value to the enum is a compile error until the new
+ * mode is described here.
+ */
+export const MATCHMAKING_MODES = {
+  [MatchmakingType.Match1v1]: {
+    type: MatchmakingType.Match1v1,
+    format: '1v1',
+    variant: 'standard',
+    teamSize: 1,
+    mapSelectionStyle: 'veto',
+    supportsAlternateRace: true,
+    label: t => t('matchmaking.type.1v1', '1v1'),
+  },
+  [MatchmakingType.Match1v1Fastest]: {
+    type: MatchmakingType.Match1v1Fastest,
+    format: '1v1',
+    variant: 'fastest',
+    teamSize: 1,
+    mapSelectionStyle: 'pick',
+    supportsAlternateRace: true,
+    label: t => t('matchmaking.type.1v1fastest', '1v1 Fastest'),
+  },
+  [MatchmakingType.Match2v2]: {
+    type: MatchmakingType.Match2v2,
+    format: '2v2',
+    variant: 'standard',
+    teamSize: 2,
+    mapSelectionStyle: 'veto',
+    supportsAlternateRace: false,
+    label: t => t('matchmaking.type.2v2', '2v2'),
+  },
+  [MatchmakingType.Match2v2Bgh]: {
+    type: MatchmakingType.Match2v2Bgh,
+    format: '2v2',
+    variant: 'bgh',
+    teamSize: 2,
+    mapSelectionStyle: 'fixed',
+    supportsAlternateRace: false,
+    label: t => t('matchmaking.type.2v2bgh', '2v2 BGH'),
+  },
+  [MatchmakingType.Match2v2Hunters]: {
+    type: MatchmakingType.Match2v2Hunters,
+    format: '2v2',
+    variant: 'hunters',
+    teamSize: 2,
+    mapSelectionStyle: 'fixed',
+    supportsAlternateRace: false,
+    label: t => t('matchmaking.type.2v2hunters', '2v2 Hunters'),
+  },
+  [MatchmakingType.Match2v2Fastest]: {
+    type: MatchmakingType.Match2v2Fastest,
+    format: '2v2',
+    variant: 'fastest',
+    teamSize: 2,
+    mapSelectionStyle: 'pick',
+    supportsAlternateRace: false,
+    label: t => t('matchmaking.type.2v2fastest', '2v2 Fastest'),
+  },
+  [MatchmakingType.Match3v3Bgh]: {
+    type: MatchmakingType.Match3v3Bgh,
+    format: '3v3',
+    variant: 'bgh',
+    teamSize: 3,
+    mapSelectionStyle: 'fixed',
+    supportsAlternateRace: false,
+    label: t => t('matchmaking.type.3v3bgh', '3v3 BGH'),
+  },
+  [MatchmakingType.Match3v3Hunters]: {
+    type: MatchmakingType.Match3v3Hunters,
+    format: '3v3',
+    variant: 'hunters',
+    teamSize: 3,
+    mapSelectionStyle: 'fixed',
+    supportsAlternateRace: false,
+    label: t => t('matchmaking.type.3v3hunters', '3v3 Hunters'),
+  },
+  [MatchmakingType.Match3v3Fastest]: {
+    type: MatchmakingType.Match3v3Fastest,
+    format: '3v3',
+    variant: 'fastest',
+    teamSize: 3,
+    mapSelectionStyle: 'pick',
+    supportsAlternateRace: false,
+    label: t => t('matchmaking.type.3v3fastest', '3v3 Fastest'),
+  },
+} satisfies Record<MatchmakingType, MatchmakingModeInfo>
+
+/** Returns the static mode descriptor for a given `MatchmakingType`. */
+export function getMatchmakingModeInfo(type: MatchmakingType): MatchmakingModeInfo {
+  return MATCHMAKING_MODES[type]
+}
+
+export function matchmakingTypeToLabel(type: MatchmakingType, t: TFunction): string {
+  return MATCHMAKING_MODES[type].label(t)
+}
+
+/** All matchmaking formats, in the canonical order they should be presented in the UI. */
+export const MATCHMAKING_FORMATS: ReadonlyArray<MatchmakingFormat> = ['1v1', '2v2', '3v3']
+
+/** Returns the matchmaking types belonging to a given format, in canonical (enum) order. */
+export function getMatchmakingTypesForFormat(format: MatchmakingFormat): MatchmakingType[] {
+  return ALL_MATCHMAKING_TYPES.filter(type => MATCHMAKING_MODES[type].format === format)
+}
+
+/**
+ * Returns whether or not a given `MatchmakingType` has vetoes (versus positive map selections,
+ * e.g. select the maps you want to play on).
+ */
+export function hasVetoes(type: MatchmakingType): boolean {
+  return MATCHMAKING_MODES[type].mapSelectionStyle === 'veto'
+}
+
+/**
+ * Returns whether the matchmaking type is a solo (one player per team) mode, which we have different
+ * division handling for.
+ */
+export function isSoloType(type: MatchmakingType): boolean {
+  return MATCHMAKING_MODES[type].teamSize === 1
+}
+
+/**
+ * The factor we use to determine the "target" points for a player of a given rating. For example, a
+ * player with rating `R` would be expected to achieve about `R * POINTS_FOR_RATING_TARGET_FACTOR`
+ * points.
+ */
+export const POINTS_FOR_RATING_TARGET_FACTOR = 4
+
+/**
+ * Divisions that players can place into, based on their points.
+ *
+ * NOTE(tec27): Be careful changing the values of these, they are expected to match image filenames.
+ */
+export enum MatchmakingDivision {
+  Unrated = 'unrated',
+  Bronze1 = 'bronze1',
+  Bronze2 = 'bronze2',
+  Bronze3 = 'bronze3',
+  Silver1 = 'silver1',
+  Silver2 = 'silver2',
+  Silver3 = 'silver3',
+  Gold1 = 'gold1',
+  Gold2 = 'gold2',
+  Gold3 = 'gold3',
+  Platinum1 = 'platinum1',
+  Platinum2 = 'platinum2',
+  Platinum3 = 'platinum3',
+  Diamond1 = 'diamond1',
+  Diamond2 = 'diamond2',
+  Diamond3 = 'diamond3',
+  Champion = 'champion',
+}
+
+export const ALL_MATCHMAKING_DIVISIONS: ReadonlyArray<MatchmakingDivision> =
+  Object.values(MatchmakingDivision)
+
+export function matchmakingDivisionToLabel(rank: MatchmakingDivision, t: TFunction): string {
+  switch (rank) {
+    case MatchmakingDivision.Unrated:
+      return t ? t('matchmaking.division.unrated', 'Unrated') : 'Unrated'
+    case MatchmakingDivision.Bronze1:
+      return t
+        ? t('matchmaking.division.bronze', {
+            defaultValue: 'Bronze {{level}}',
+            level: 1,
+          })
+        : 'Bronze 1'
+    case MatchmakingDivision.Bronze2:
+      return t
+        ? t('matchmaking.division.bronze', {
+            defaultValue: 'Bronze {{level}}',
+            level: 2,
+          })
+        : 'Bronze 2'
+    case MatchmakingDivision.Bronze3:
+      return t
+        ? t('matchmaking.division.bronze', {
+            defaultValue: 'Bronze {{level}}',
+            level: 3,
+          })
+        : 'Bronze 3'
+    case MatchmakingDivision.Silver1:
+      return t
+        ? t('matchmaking.division.silver', {
+            defaultValue: 'Silver {{level}}',
+            level: 1,
+          })
+        : 'Silver 1'
+    case MatchmakingDivision.Silver2:
+      return t
+        ? t('matchmaking.division.silver', {
+            defaultValue: 'Silver {{level}}',
+            level: 2,
+          })
+        : 'Silver 2'
+    case MatchmakingDivision.Silver3:
+      return t
+        ? t('matchmaking.division.silver', {
+            defaultValue: 'Silver {{level}}',
+            level: 3,
+          })
+        : 'Silver 3'
+    case MatchmakingDivision.Gold1:
+      return t
+        ? t('matchmaking.division.gold', {
+            defaultValue: 'Gold {{level}}',
+            level: 1,
+          })
+        : 'Gold 1'
+    case MatchmakingDivision.Gold2:
+      return t
+        ? t('matchmaking.division.gold', {
+            defaultValue: 'Gold {{level}}',
+            level: 2,
+          })
+        : 'Gold 2'
+    case MatchmakingDivision.Gold3:
+      return t
+        ? t('matchmaking.division.gold', {
+            defaultValue: 'Gold {{level}}',
+            level: 3,
+          })
+        : 'Gold 3'
+    case MatchmakingDivision.Platinum1:
+      return t
+        ? t('matchmaking.division.platinum', {
+            defaultValue: 'Platinum {{level}}',
+            level: 1,
+          })
+        : 'Platinum 1'
+    case MatchmakingDivision.Platinum2:
+      return t
+        ? t('matchmaking.division.platinum', {
+            defaultValue: 'Platinum {{level}}',
+            level: 2,
+          })
+        : 'Platinum 2'
+    case MatchmakingDivision.Platinum3:
+      return t
+        ? t('matchmaking.division.platinum', {
+            defaultValue: 'Platinum {{level}}',
+            level: 3,
+          })
+        : 'Platinum 3'
+    case MatchmakingDivision.Diamond1:
+      return t
+        ? t('matchmaking.division.diamond', {
+            defaultValue: 'Diamond {{level}}',
+            level: 1,
+          })
+        : 'Diamond 1'
+    case MatchmakingDivision.Diamond2:
+      return t
+        ? t('matchmaking.division.diamond', {
+            defaultValue: 'Diamond {{level}}',
+            level: 2,
+          })
+        : 'Diamond 2'
+    case MatchmakingDivision.Diamond3:
+      return t
+        ? t('matchmaking.division.diamond', {
+            defaultValue: 'Diamond {{level}}',
+            level: 3,
+          })
+        : 'Diamond 3'
+    case MatchmakingDivision.Champion:
+      return t ? t('matchmaking.division.champion', 'Champion') : 'Champion'
+    default:
+      return assertUnreachable(rank)
+  }
+}
+
+export type MatchmakingDivisionWithBounds = [
+  division: MatchmakingDivision,
+  low: number,
+  high: number,
+]
+
+type MatchmakingDivisionWithBoundsAndBonusFactor = [
+  division: MatchmakingDivision,
+  low: number,
+  high: number,
+  bonusFactorLow: number,
+  bonusFactorHigh: number,
+]
+
+/**
+ * A version of the division bounds. Each season places its divisions with the version it was played
+ * under, so changing the bounds doesn't move past seasons' divisions.
+ */
+export type DivisionTableVersion = 1 | 2
+
+/** The version of the division bounds that new seasons use. */
+export const CURRENT_DIVISION_TABLE_VERSION: DivisionTableVersion = 2
+
+// Divisions have a specific range of points they cover and have a separate factor for how much the
+// bonus pool applies to them. (It is divided into a low and high factor to ensure the division
+// bounds are continuous.) An active player's points settle at about
+// `POINTS_FOR_RATING_TARGET_FACTOR` times their rating plus the bonus they've used, so a bound with
+// a factor of 1 asks the same rating of them all season, while a bound with a lower factor asks for
+// less rating as the season goes on. The lower divisions use lower factors so they mark progress
+// that bonus points help with; the divisions from Silver 3 up use a factor of 1 so they mark skill.
+// This is version 2 of the bounds.
+const V2_DIVISIONS_TO_POINTS_SOLO: ReadonlyArray<MatchmakingDivisionWithBoundsAndBonusFactor> = [
+  [MatchmakingDivision.Bronze1, -Infinity, 800, 0, 0],
+  [MatchmakingDivision.Bronze2, 800, 1600, 0, 0],
+  [MatchmakingDivision.Bronze3, 1600, 2400, 0, 0],
+  [MatchmakingDivision.Silver1, 2400, 4400, 0, 0.75],
+  [MatchmakingDivision.Silver2, 4400, 5000, 0.75, 1],
+  [MatchmakingDivision.Silver3, 5000, 5600, 1, 1],
+  [MatchmakingDivision.Gold1, 5600, 5920, 1, 1],
+  [MatchmakingDivision.Gold2, 5920, 6240, 1, 1],
+  [MatchmakingDivision.Gold3, 6240, 6560, 1, 1],
+  [MatchmakingDivision.Platinum1, 6560, 6880, 1, 1],
+  [MatchmakingDivision.Platinum2, 6880, 7200, 1, 1],
+  [MatchmakingDivision.Platinum3, 7200, 7520, 1, 1],
+  [MatchmakingDivision.Diamond1, 7520, 7840, 1, 1],
+  [MatchmakingDivision.Diamond2, 7840, 8160, 1, 1],
+  [MatchmakingDivision.Diamond3, 8160, 8480, 1, 1],
+  [MatchmakingDivision.Champion, 8480, Infinity, 1, 1],
+]
+
+// Team ratings spread less widely than 1v1 ratings, so the divisions from Gold up are narrower
+// steps of rating, with Gold starting around the 35th percentile of active team players. The lower
+// divisions are the 1v1 bounds scaled to match.
+const V2_DIVISIONS_TO_POINTS_TEAM: ReadonlyArray<MatchmakingDivisionWithBoundsAndBonusFactor> = [
+  [MatchmakingDivision.Bronze1, -Infinity, 860, 0, 0],
+  [MatchmakingDivision.Bronze2, 860, 1710, 0, 0],
+  [MatchmakingDivision.Bronze3, 1710, 2570, 0, 0],
+  [MatchmakingDivision.Silver1, 2570, 4710, 0, 0.75],
+  [MatchmakingDivision.Silver2, 4710, 5360, 0.75, 1],
+  [MatchmakingDivision.Silver3, 5360, 6000, 1, 1],
+  [MatchmakingDivision.Gold1, 6000, 6240, 1, 1],
+  [MatchmakingDivision.Gold2, 6240, 6480, 1, 1],
+  [MatchmakingDivision.Gold3, 6480, 6720, 1, 1],
+  [MatchmakingDivision.Platinum1, 6720, 6960, 1, 1],
+  [MatchmakingDivision.Platinum2, 6960, 7200, 1, 1],
+  [MatchmakingDivision.Platinum3, 7200, 7440, 1, 1],
+  [MatchmakingDivision.Diamond1, 7440, 7680, 1, 1],
+  [MatchmakingDivision.Diamond2, 7680, 7920, 1, 1],
+  [MatchmakingDivision.Diamond3, 7920, 8160, 1, 1],
+  [MatchmakingDivision.Champion, 8160, Infinity, 1, 1],
+]
+
+// Version 1 of the division bounds, used by seasons whose points were earned under a fixed per-win
+// catch-up that stopped at a floor rather than following the player's rating. Most players' points
+// stayed below their rating's target, so the bounds sit lower and the bonus factors stay below 1
+// through Gold.
+const V1_DIVISIONS_TO_POINTS_SOLO: ReadonlyArray<MatchmakingDivisionWithBoundsAndBonusFactor> = [
+  [MatchmakingDivision.Bronze1, -Infinity, 800, 0, 0],
+  [MatchmakingDivision.Bronze2, 800, 1520, 0, 0],
+  [MatchmakingDivision.Bronze3, 1520, 2240, 0, 0],
+  [MatchmakingDivision.Silver1, 2240, 2960, 0, 0.3],
+  [MatchmakingDivision.Silver2, 2960, 3680, 0.3, 0.3],
+  [MatchmakingDivision.Silver3, 3680, 4400, 0.3, 0.3],
+  [MatchmakingDivision.Gold1, 4400, 5120, 0.3, 0.6],
+  [MatchmakingDivision.Gold2, 5120, 5840, 0.6, 0.6],
+  [MatchmakingDivision.Gold3, 5840, 6560, 0.6, 0.6],
+  [MatchmakingDivision.Platinum1, 6560, 6800, 0.6, 1],
+  [MatchmakingDivision.Platinum2, 6800, 7040, 1, 1],
+  [MatchmakingDivision.Platinum3, 7040, 7280, 1, 1],
+  [MatchmakingDivision.Diamond1, 7280, 7520, 1, 1],
+  [MatchmakingDivision.Diamond2, 7520, 7760, 1, 1],
+  [MatchmakingDivision.Diamond3, 7760, 8000, 1, 1],
+  [MatchmakingDivision.Champion, 8000, Infinity, 1, 1],
+]
+
+const V1_DIVISIONS_TO_POINTS_TEAM: ReadonlyArray<MatchmakingDivisionWithBoundsAndBonusFactor> = [
+  [MatchmakingDivision.Bronze1, -Infinity, 700, 0, 0],
+  [MatchmakingDivision.Bronze2, 700, 1400, 0, 0],
+  [MatchmakingDivision.Bronze3, 1400, 2100, 0, 0],
+  [MatchmakingDivision.Silver1, 2100, 2800, 0, 0.3],
+  [MatchmakingDivision.Silver2, 2800, 3500, 0.3, 0.3],
+  [MatchmakingDivision.Silver3, 3500, 4200, 0.3, 0.3],
+  [MatchmakingDivision.Gold1, 4200, 4900, 0.3, 0.6],
+  [MatchmakingDivision.Gold2, 4900, 5600, 0.6, 0.6],
+  [MatchmakingDivision.Gold3, 5600, 6300, 0.6, 0.6],
+  [MatchmakingDivision.Platinum1, 6300, 6500, 0.6, 1],
+  [MatchmakingDivision.Platinum2, 6500, 6700, 1, 1],
+  [MatchmakingDivision.Platinum3, 6700, 6900, 1, 1],
+  [MatchmakingDivision.Diamond1, 6900, 7100, 1, 1],
+  [MatchmakingDivision.Diamond2, 7100, 7300, 1, 1],
+  [MatchmakingDivision.Diamond3, 7300, 7500, 1, 1],
+  [MatchmakingDivision.Champion, 7500, Infinity, 1, 1],
+]
+
+const UNRATED_BOUNDS: Readonly<MatchmakingDivisionWithBounds> = [
+  MatchmakingDivision.Unrated,
+  -Infinity,
+  Infinity,
+]
+
+/**
+ * What placing points into divisions needs to know about a season at a particular time: the bonus
+ * pool accrued by then, and the version of the division bounds it uses
+ * (`CURRENT_DIVISION_TABLE_VERSION` if not given).
+ */
+export interface DivisionContext {
+  bonusPool: number
+  tableVersion?: DivisionTableVersion
+}
+
+function getDivisionTable(
+  solo: boolean,
+  context: Readonly<DivisionContext>,
+): ReadonlyArray<MatchmakingDivisionWithBoundsAndBonusFactor> {
+  const version = context.tableVersion ?? CURRENT_DIVISION_TABLE_VERSION
+  switch (version) {
+    case 1:
+      return solo ? V1_DIVISIONS_TO_POINTS_SOLO : V1_DIVISIONS_TO_POINTS_TEAM
+    case 2:
+      return solo ? V2_DIVISIONS_TO_POINTS_SOLO : V2_DIVISIONS_TO_POINTS_TEAM
+    default:
+      return assertUnreachable(version)
+  }
+}
+
+function binarySearchPoints(
+  solo: boolean,
+  points: number,
+  context: Readonly<DivisionContext>,
+): number {
+  const { bonusPool } = context
+  return binarySearch(
+    getDivisionTable(solo, context),
+    points,
+    ([_, low, high, bonusFactorLow, bonusFactorHigh], points) => {
+      if (low + bonusPool * bonusFactorLow > points) {
+        return 1
+      } else if (high + bonusPool * bonusFactorHigh <= points) {
+        return -1
+      } else {
+        return 0
+      }
+    },
+  )
+}
+
+function addBonusPoolToDivisionBounds(
+  [
+    division,
+    low,
+    high,
+    bonusFactorLow,
+    bonusFactorHigh,
+  ]: Readonly<MatchmakingDivisionWithBoundsAndBonusFactor>,
+  bonusPool: number,
+): MatchmakingDivisionWithBounds {
+  return [
+    division,
+    Math.max(0, low + bonusPool * bonusFactorLow),
+    high + bonusPool * bonusFactorHigh,
+  ]
+}
+
+/**
+ * Returns every division with its points bounds in a given context, in ascending order. Intended
+ * for UI that needs the whole ladder at once (e.g. drawing division bands behind a points chart)
+ * rather than the division a particular value falls in.
+ */
+export function getAllDivisionsWithBounds(
+  solo: boolean,
+  context: Readonly<DivisionContext>,
+): Array<Readonly<MatchmakingDivisionWithBounds>> {
+  return getDivisionTable(solo, context).map(b =>
+    addBonusPoolToDivisionBounds(b, context.bonusPool),
+  )
+}
+
+/** Converts a given points value into a matching `MatchmakingDivision`. */
+export function pointsToMatchmakingDivision(
+  solo: boolean,
+  points: number,
+  context: Readonly<DivisionContext>,
+): MatchmakingDivision {
+  const index = binarySearchPoints(solo, points, context)
+  return index >= 0 ? getDivisionTable(solo, context)[index][0] : MatchmakingDivision.Unrated
+}
+
+/**
+ * Converts a given points value into a matching `MatchmakingDivision` and returns it, as well as
+ * the low (inclusive) and high (exclusive) points bound for the division.
+ */
+export function pointsToMatchmakingDivisionAndBounds(
+  solo: boolean,
+  points: number,
+  context: Readonly<DivisionContext>,
+): Readonly<MatchmakingDivisionWithBounds> {
+  const index = binarySearchPoints(solo, points, context)
+  return index >= 0
+    ? addBonusPoolToDivisionBounds(getDivisionTable(solo, context)[index], context.bonusPool)
+    : UNRATED_BOUNDS
+}
+
+/**
+ * Retrieves all the relevant divisions for a points change (that is, if a player goes from
+ * Silver 1 to Gold 2, it would return a list of [Silver 1, Silver 2, Silver 3, Gold 1, Gold 2]).
+ * The resulting list will be ordered correctly such that the starting division is first, and ending
+ * is last.
+ */
+export function getDivisionsForPointsChange(
+  solo: boolean,
+  startingPoints: number,
+  endingPoints: number,
+  context: Readonly<DivisionContext>,
+): Array<Readonly<MatchmakingDivisionWithBounds>> {
+  const startingIndex = binarySearchPoints(solo, startingPoints, context)
+  const endingIndex = binarySearchPoints(solo, endingPoints, context)
+  const divisionsToPoints = getDivisionTable(solo, context)
+  const withBounds = (b: Readonly<MatchmakingDivisionWithBoundsAndBonusFactor>) =>
+    addBonusPoolToDivisionBounds(b, context.bonusPool)
+
+  if (startingIndex === -1 && endingIndex === -1) {
+    return [UNRATED_BOUNDS]
+  } else if (startingIndex === -1) {
+    return [UNRATED_BOUNDS, withBounds(divisionsToPoints[endingIndex])]
+  } else if (endingIndex === -1) {
+    return [UNRATED_BOUNDS, withBounds(divisionsToPoints[startingIndex])]
+  }
+
+  if (startingIndex > endingIndex) {
+    return divisionsToPoints
+      .slice(endingIndex, startingIndex + 1)
+      .reverse()
+      .map(withBounds)
+  } else {
+    return divisionsToPoints.slice(startingIndex, endingIndex + 1).map(withBounds)
+  }
+}
+
+export function getDivisionColor(division: MatchmakingDivision) {
+  switch (division) {
+    case MatchmakingDivision.Bronze1:
+    case MatchmakingDivision.Bronze2:
+    case MatchmakingDivision.Bronze3:
+      return '#BD7956'
+    case MatchmakingDivision.Silver1:
+    case MatchmakingDivision.Silver2:
+    case MatchmakingDivision.Silver3:
+      return '#9CA1A3'
+    case MatchmakingDivision.Gold1:
+    case MatchmakingDivision.Gold2:
+    case MatchmakingDivision.Gold3:
+      return '#D5BF6D'
+    case MatchmakingDivision.Platinum1:
+    case MatchmakingDivision.Platinum2:
+    case MatchmakingDivision.Platinum3:
+      return '#72CBF4'
+    case MatchmakingDivision.Diamond1:
+    case MatchmakingDivision.Diamond2:
+    case MatchmakingDivision.Diamond3:
+      return '#B96CED'
+    case MatchmakingDivision.Champion:
+      return '#F27537'
+    case MatchmakingDivision.Unrated:
+      return '#87ABCA'
+    default:
+      return assertUnreachable(division)
+  }
+}
+
+/** How many matches a user must play before we show them a rating. */
+export const NUM_PLACEMENT_MATCHES = 5
+
+export type SeasonId = Tagged<number, 'SeasonId'>
+
+/**
+ * Converts a season ID number into a properly typed version. Alternative methods of retrieving a
+ * SeasonId should be preferred, such as using a value retrieved rom the database.
+ */
+export function makeSeasonId(id: number): SeasonId {
+  return id as SeasonId
+}
+
+export interface MatchmakingSeason {
+  id: SeasonId
+  startDate: Date
+  endDate?: Date
+  name: string
+  resetMmr: boolean
+  /** The version of the division bounds this season's divisions are placed with. */
+  divisionTableVersion: DivisionTableVersion
+}
+
+export type MatchmakingSeasonJson = Jsonify<MatchmakingSeason>
+
+export function toMatchmakingSeasonJson(season: MatchmakingSeason): MatchmakingSeasonJson {
+  return {
+    id: season.id,
+    startDate: Number(season.startDate),
+    endDate: season.endDate ? Number(season.endDate) : undefined,
+    name: season.name,
+    resetMmr: season.resetMmr,
+    divisionTableVersion: season.divisionTableVersion,
+  }
+}
+
+/**
+ * The amount of bonus points accrued per millisecond since the start of a season. Bonus points are
+ * used to improve wins and offset losses, until the bonus pool has been exhausted.
+ */
+export const MATCHMAKING_BONUS_EARNED_PER_MS = 200 / (7 * 24 * 60 * 60 * 1000) // 200 per week
+
+/**
+ * The amount of time before the end of the season that the bonus pool is frozen and does not
+ * continue accruing more points. This is intended to allow users to play out the rest of their
+ * bonus points and to not penalize players for not playing in the last couple days/hours of the
+ * season.
+ */
+export const MATCHMAKING_BONUS_FREEZE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+/**
+ * Returns the total number of bonus points in the pool so far, taking into account the
+ * end-of-season bonus pool freeze.
+ */
+export function getTotalBonusPool(at: Date, seasonStart: Date, seasonEnd?: Date): number {
+  const freezeStart = seasonEnd
+    ? Number(seasonEnd) - MATCHMAKING_BONUS_FREEZE_PERIOD_MS
+    : Number.MAX_SAFE_INTEGER
+  const time = Math.min(Number(at), freezeStart)
+  const timeSinceSeasonStart = time - Number(seasonStart)
+  return Math.max(0, Math.floor(timeSinceSeasonStart * MATCHMAKING_BONUS_EARNED_PER_MS))
+}
+
+function isMatchmakingSeason(
+  season: MatchmakingSeason | MatchmakingSeasonJson,
+): season is MatchmakingSeason {
+  return typeof season.startDate !== 'number'
+}
+
+/**
+ * Returns the total number of bonus points in the pool so far for a season, taking into account the
+ * end-of-season bonus pool freeze.
+ */
+export function getTotalBonusPoolForSeason(
+  at: Date,
+  season: MatchmakingSeason | MatchmakingSeasonJson,
+): number {
+  const [start, end] = isMatchmakingSeason(season)
+    ? [season.startDate, season.endDate]
+    : [new Date(season.startDate), season.endDate ? new Date(season.endDate) : undefined]
+  return getTotalBonusPool(at, start, end)
+}
+
+/** Returns the context for placing points into a season's divisions as of a particular time. */
+export function getDivisionContext(
+  at: Date,
+  season: Readonly<MatchmakingSeason> | Readonly<MatchmakingSeasonJson>,
+): DivisionContext {
+  return {
+    bonusPool: getTotalBonusPoolForSeason(at, season),
+    tableVersion: season.divisionTableVersion,
+  }
+}
+
+/**
+ * A Record of MatchmakingType -> the size of a team within a match. Derived from
+ * `MATCHMAKING_MODES`, which is the source of truth for team sizes.
+ */
+export const TEAM_SIZES: Readonly<Record<MatchmakingType, number>> = Object.fromEntries(
+  ALL_MATCHMAKING_TYPES.map(type => [type, MATCHMAKING_MODES[type].teamSize]),
+) as Record<MatchmakingType, number>
+
+export function isValidMatchmakingType(type: string) {
+  return Object.values(MatchmakingType).includes(type as MatchmakingType)
+}
+
+/** The time period after which a user who has played no games will be considered "inactive". */
+export const MATCHMAKING_INACTIVE_TIME_MS = 14 * 24 * 60 * 60 * 1000 // 14 days
+
+/**
+ * Returns whether a player was considered inactive by the system given the last time they played a
+ * game and the time of a new game.
+ */
+export function wasPlayerInactive(lastPlayedDate: Date, gameDate: Date): boolean {
+  return Number(lastPlayedDate) > 0
+    ? Number(gameDate) - Number(lastPlayedDate) >= MATCHMAKING_INACTIVE_TIME_MS
+    : false
+}
+
+/** How long users have to accept a match, in milliseconds. */
+export const MATCHMAKING_ACCEPT_MATCH_TIME_MS = 60000
+
+/** Time allowed for each draft pick in milliseconds. */
+export const DRAFT_PICK_TIME_MS = 15000
+
+export type DraftPlayer = { userId: SbUserId; provisionalRace: RaceChar } & (
+  | { hasLocked: false }
+  | { hasLocked: true; finalRace: RaceChar }
+)
+
+export interface DraftTeam {
+  players: DraftPlayer[]
+}
+
+export interface AnonymizedDraftTeam {
+  players: AnonymizedDraftPlayer[]
+}
+
+export const NUM_ANONYMIZED_NAMES = 6
+
+export type AnonymizedNameIndex = IntRange<0, typeof NUM_ANONYMIZED_NAMES>
+
+/**
+ * Retrieve an anonymized name for use when a player's name cannot be known yet (e.g. during the
+ * draft). Values should be from [0, NUM_ANONYMIZED_NAMES].
+ */
+export function getAnonymizedName(nameIndex: AnonymizedNameIndex, t: TFunction): string {
+  switch (nameIndex) {
+    case 0:
+      return t('matchmaking.draftScreen.anonymizedName0', 'Rusty Rhynadon')
+    case 1:
+      return t('matchmaking.draftScreen.anonymizedName1', 'Bold Bengalaas')
+    case 2:
+      return t('matchmaking.draftScreen.anonymizedName2', 'Sneaky Scantid')
+    case 3:
+      return t('matchmaking.draftScreen.anonymizedName3', 'Keen Kakaru')
+    case 4:
+      return t('matchmaking.draftScreen.anonymizedName4', 'Ruthless Ragnasaur')
+    default:
+      return t('matchmaking.draftScreen.anonymizedName5', 'Unstable Ursadon')
+  }
+}
+
+export type AnonymizedDraftPlayer = { index: number; nameIndex: AnonymizedNameIndex } & (
+  | { hasLocked: false }
+  | { hasLocked: true; finalRace: RaceChar }
+)
+
+export interface ClientDraftState {
+  mapId: SbMapId
+  currentPicker?: { team: number; slot: number }
+  myTeamIndex: number
+  ownTeam: DraftTeam
+  opponentTeam: AnonymizedDraftTeam
+  pickOrder: Array<[team: number, slot: number]>
+  isCompleted: boolean
+}
+
+/**
+ * Describes a player in the matchmaking. This only includes information that are relevant and safe
+ * to send to other players in the matchmaking.
+ */
+export interface MatchmakingPlayer {
+  id: number
+  // TODO(2Pac): Don't send `name` and instead get it from the store
+  name: string
+  race: RaceChar
+  rating: number
+}
+
+export type MatchmakingResult = 'loss' | 'win'
+
+/**
+ * The change that occurred to a player's matchmaking rating as a result of a game. This only
+ * contains fields that can be publicly visible (keeping internal factors hidden).
+ */
+export interface PublicMatchmakingRatingChange {
+  userId: SbUserId
+  matchmakingType: MatchmakingType
+  gameId: string
+  /**
+   * When the change occurred (this is when the game was reconciled, not necessarily when it was
+   * played or finished).
+   */
+  changeDate: Date
+  outcome: MatchmakingResult
+  /** The player's rating after this game. If the user is in placement matches, this will be 0. */
+  rating: number
+  /** The delta between the user's old rating and their new rating. */
+  ratingChange: number
+  /** The player's ranked points after this game. */
+  points: number
+  /** The delta between the user's old points and their new points. */
+  pointsChange: number
+  /** The amount of bonus points this user has used this season. */
+  bonusUsed: number
+  /** The amount of bonus points used for this game. */
+  bonusUsedChange: number
+  /** The number of games this user has played since the last MMR reset. */
+  lifetimeGames: number
+}
+
+export type PublicMatchmakingRatingChangeJson = Jsonify<PublicMatchmakingRatingChange>
+
+/**
+ * Returns the division a player was in going into the game a rating change came from: their points
+ * before the change, placed with the season's bonus pool as of that game. A player who was still in
+ * placement matches going into the game was unrated.
+ */
+export function getDivisionBeforeRatingChange(
+  change: Readonly<
+    Pick<
+      PublicMatchmakingRatingChangeJson,
+      'matchmakingType' | 'points' | 'pointsChange' | 'lifetimeGames'
+    >
+  >,
+  context: Readonly<DivisionContext>,
+): MatchmakingDivision {
+  // `lifetimeGames` counts the game the change came from.
+  if (change.lifetimeGames - 1 < NUM_PLACEMENT_MATCHES) {
+    return MatchmakingDivision.Unrated
+  }
+  return pointsToMatchmakingDivision(
+    isSoloType(change.matchmakingType),
+    change.points - change.pointsChange,
+    context,
+  )
+}
+
+export function toPublicMatchmakingRatingChangeJson(
+  input: Readonly<PublicMatchmakingRatingChange>,
+): PublicMatchmakingRatingChangeJson {
+  const inPlacements = input.lifetimeGames < NUM_PLACEMENT_MATCHES
+
+  return {
+    userId: input.userId,
+    matchmakingType: input.matchmakingType,
+    gameId: input.gameId,
+    changeDate: Number(input.changeDate),
+    outcome: input.outcome,
+    rating: inPlacements ? 0 : input.rating,
+    ratingChange: inPlacements ? 0 : input.ratingChange,
+    points: input.points,
+    pointsChange: input.pointsChange,
+    bonusUsed: input.bonusUsed,
+    bonusUsedChange: input.bonusUsedChange,
+    lifetimeGames: input.lifetimeGames,
+  }
+}
+
+export interface MatchmakingPreferencesData1v1 {
+  /**
+   * A flag indicating whether the user has selected to use the alternate race in mirror matchups.
+   */
+  useAlternateRace?: boolean
+  /** The race the user has selected to use in mirror matchups. */
+  alternateRace?: AssignedRaceChar
+}
+
+interface BaseMatchmakingPreferences<T extends MatchmakingType, D> {
+  userId: SbUserId
+  matchmakingType: T
+  /** The main race the user has selected to play in the matchmaking with. */
+  race: RaceChar
+  /**
+   * The ID of the map pool that will be used in the matchmaking. The way in which this map pool
+   * will be used depends on the matchmaking type, as each matchmaking type can create its own rules
+   * in which to use it (e.g. preferred maps, map vetoes, etc.). This can also be used to determine
+   * if the map pool has changed.
+   */
+  mapPoolId: number
+  /**
+   * An array of map IDs that the user has selected through a map selection process. The meaning
+   * of this selection depends on the matchmaking type and the system it's using. E.g. 1v1/2v2 might
+   * use this list as maps the user has vetoed, while in 3v3 it might be used as as a list of maps
+   * that the user wants to queue on.
+   */
+  mapSelections: SbMapId[]
+  data: D
+}
+
+export type MatchmakingPreferences1v1 = BaseMatchmakingPreferences<
+  MatchmakingType.Match1v1,
+  MatchmakingPreferencesData1v1
+>
+
+export type MatchmakingPreferences2v2 = BaseMatchmakingPreferences<
+  MatchmakingType.Match2v2,
+  Record<string, never>
+>
+
+export type MatchmakingPreferences2v2Bgh = BaseMatchmakingPreferences<
+  MatchmakingType.Match2v2Bgh,
+  Record<string, never>
+>
+
+export type MatchmakingPreferences2v2Hunters = BaseMatchmakingPreferences<
+  MatchmakingType.Match2v2Hunters,
+  Record<string, never>
+>
+
+export type MatchmakingPreferences2v2Fastest = BaseMatchmakingPreferences<
+  MatchmakingType.Match2v2Fastest,
+  Record<string, never>
+>
+
+export type MatchmakingPreferences3v3Bgh = BaseMatchmakingPreferences<
+  MatchmakingType.Match3v3Bgh,
+  Record<string, never>
+>
+
+export type MatchmakingPreferences3v3Hunters = BaseMatchmakingPreferences<
+  MatchmakingType.Match3v3Hunters,
+  Record<string, never>
+>
+
+export type MatchmakingPreferences3v3Fastest = BaseMatchmakingPreferences<
+  MatchmakingType.Match3v3Fastest,
+  Record<string, never>
+>
+
+// NOTE(tec27): At the moment we can share the data between 1v1 and 1v1Fastest but if need be we
+// could use a separate data type
+export type MatchmakingPreferences1v1Fastest = BaseMatchmakingPreferences<
+  MatchmakingType.Match1v1Fastest,
+  MatchmakingPreferencesData1v1
+>
+
+/**
+ * Describes a user's preferences for finding a match in matchmaking. Each matchmaking type can have
+ * its own custom data, with `race`, `mapPoolId`, and `mapSelections` being common among all
+ * matchmaking types.
+ */
+export type MatchmakingPreferences =
+  | MatchmakingPreferences1v1
+  | MatchmakingPreferences1v1Fastest
+  | MatchmakingPreferences2v2
+  | MatchmakingPreferences2v2Bgh
+  | MatchmakingPreferences2v2Hunters
+  | MatchmakingPreferences2v2Fastest
+  | MatchmakingPreferences3v3Bgh
+  | MatchmakingPreferences3v3Hunters
+  | MatchmakingPreferences3v3Fastest
+
+export type PartialMatchmakingPreferences = SetRequired<
+  Partial<MatchmakingPreferences>,
+  'matchmakingType' | 'userId'
+>
+
+export type MatchmakingPreferencesOfType<M extends MatchmakingType> = Simplify<
+  MatchmakingPreferences & {
+    matchmakingType: M
+  }
+>
+
+export type PreferenceData = MatchmakingPreferences['data']
+
+export function defaultPreferenceData<M extends MatchmakingType>(
+  matchmakingType: M,
+): MatchmakingPreferencesOfType<M>['data'] {
+  return MATCHMAKING_MODES[matchmakingType].supportsAlternateRace
+    ? { useAlternateRace: false, alternateRace: 'z' }
+    : {}
+}
+
+export function defaultPreferences<M extends MatchmakingType>(
+  matchmakingType: M,
+  userId: SbUserId,
+  mapPoolId = 1,
+): MatchmakingPreferencesOfType<M> {
+  return {
+    userId,
+    matchmakingType: matchmakingType as any,
+    race: 'r',
+    mapPoolId,
+    mapSelections: [],
+    data: defaultPreferenceData<M>(matchmakingType),
+  }
+}
+
+export interface GetPreferencesResponse {
+  preferences: MatchmakingPreferences
+  currentMapPoolId: number
+  mapInfos: MapInfoJson[]
+  /**
+   * Whether this type is part of the user's current find-match mode selection (i.e. it was in their
+   * most recent search). The find-match page seeds its default selection from these flags.
+   */
+  selected: boolean
+}
+
+export interface SearchedType {
+  matchmakingType: MatchmakingType
+  race: RaceChar
+}
+
+export interface StartSearchEvent {
+  type: 'startSearch'
+  /** All matchmaking types currently being searched for, with the selected race per type. */
+  searchedTypes: SearchedType[]
+}
+
+/** A match has been found and players must ready accept it within a timeout. */
+export interface MatchFoundEvent {
+  type: 'matchFound'
+  matchmakingType: MatchmakingType
+  numPlayers: number
+  acceptedPlayers: number
+
+  acceptTimeTotalMillis: number
+  acceptTimeLeftMillis: number
+
+  hasAccepted: boolean
+}
+
+export interface PlayerAcceptedEvent {
+  type: 'playerAccepted'
+  /** A number of players that have currently accepted the match. */
+  acceptedPlayers: number
+}
+
+export interface AcceptTimeoutEvent {
+  type: 'acceptTimeout'
+}
+
+export interface RequeueEvent {
+  type: 'requeue'
+}
+
+export interface MatchReadyEvent {
+  type: 'matchReady'
+}
+
+/**
+ * Why a match fell apart after every player accepted it. `error` covers failures no player is
+ * blamed for, so nobody was removed from the queue over it.
+ */
+export type MatchCanceledReason =
+  | 'playerLeft'
+  | 'playerFailedToLoad'
+  | 'loadTimeout'
+  | 'error'
+  | 'setupUnresolved'
+  | 'gameAnomaly'
+
+export interface CancelLoadingEvent {
+  type: 'cancelLoading'
+  reason: MatchCanceledReason
+  /**
+   * Present only for the recipient whose lobby-policy violation caused the cancellation. Their
+   * penalty is applied separately, and a `LobbyViolationPenaltyEvent` follows once it has been.
+   */
+  penalty?: 'pending'
+}
+
+/** The eventual outcome of a relay-attested lobby-policy violation. */
+export interface LobbyViolationPenaltyEvent {
+  type: 'lobbyViolationPenalty'
+  gameId: string
+  queueRemoved: boolean
+  penalty: 'lossAndBan' | 'lossAndWarning'
+}
+
+export interface GameStartedEvent {
+  type: 'gameStarted'
+}
+
+export interface QueueStatusEvent {
+  type: 'queueStatus'
+  /**
+   * Indicates what matchmaking types this user is currently queued for, or `undefined` if they
+   * are not queued for anything.
+   */
+  matchmaking?: { types: MatchmakingType[] }
+}
+
+export interface DraftStartedEvent {
+  type: 'draftStarted'
+  draftState: ClientDraftState
+  mapInfo: MapInfoJson
+}
+
+export interface DraftPickStartedEvent {
+  type: 'draftPickStarted'
+  teamId: number
+  index: number
+}
+
+export interface DraftProvisionalPickEvent {
+  type: 'draftProvisionalPick'
+  teamId: number
+  index: number
+  race: RaceChar
+}
+
+export interface DraftPickLockedEvent {
+  type: 'draftPickLocked'
+  teamId: number
+  index: number
+  race: RaceChar
+}
+
+export interface DraftCompletedEvent {
+  type: 'draftCompleted'
+}
+
+export interface DraftCancelEvent {
+  type: 'draftCancel'
+  reason: MatchCanceledReason
+}
+
+/**
+ * The matchmaking service encountered an unrecoverable error (e.g. the Rust matchmaker restarted).
+ * The player has been removed from the queue and must re-queue manually.
+ */
+export interface MatchmakingServiceErrorEvent {
+  type: 'matchmakingServiceError'
+}
+
+export enum DraftMessageType {
+  // TODO(tec27): Unify with the base message types when we move everything to immer
+  TextMessage = 'message',
+}
+
+export interface DraftChatTextMessage {
+  id: string
+  type: typeof DraftMessageType.TextMessage
+  time: number
+  from: SbUserId
+  text: string
+}
+
+export type DraftChatMessage = DraftChatTextMessage
+
+export interface DraftChatMessageEvent {
+  type: 'draftChatMessage'
+  message: DraftChatMessage
+  mentions: SbUser[]
+  channelMentions: BasicChannelInfo[]
+}
+
+export type MatchmakingEvent =
+  | LobbyViolationPenaltyEvent
+  | StartSearchEvent
+  | MatchFoundEvent
+  | PlayerAcceptedEvent
+  | AcceptTimeoutEvent
+  | RequeueEvent
+  | MatchReadyEvent
+  | CancelLoadingEvent
+  | GameStartedEvent
+  | QueueStatusEvent
+  | DraftStartedEvent
+  | DraftPickStartedEvent
+  | DraftProvisionalPickEvent
+  | DraftPickLockedEvent
+  | DraftCompletedEvent
+  | DraftCancelEvent
+  | DraftChatMessageEvent
+  | MatchmakingServiceErrorEvent
+
+/**
+ * Describes the current status (enabled/disabled) of a particular MatchmakingType on the server.
+ */
+export interface MatchmakingStatus {
+  type: MatchmakingType
+  enabled: boolean
+  startDate?: Date
+  nextStartDate?: Date
+  nextEndDate?: Date
+}
+
+/** Compares two MatchmakingStatus objects for equality. */
+export function statusesEqual(a?: MatchmakingStatus, b?: MatchmakingStatus): boolean {
+  if (a === b) {
+    return true
+  } else if (a === undefined || b === undefined) {
+    return false
+  } else {
+    return (
+      a.type === b.type &&
+      a.enabled === b.enabled &&
+      a.startDate === b.startDate &&
+      a.nextStartDate === b.nextStartDate &&
+      a.nextEndDate === b.nextEndDate
+    )
+  }
+}
+
+export type MatchmakingStatusJson = Jsonify<MatchmakingStatus>
+
+export function toMatchmakingStatusJson(status: MatchmakingStatus): MatchmakingStatusJson {
+  return {
+    type: status.type,
+    enabled: status.enabled,
+    startDate: status.startDate ? Number(status.startDate) : undefined,
+    nextStartDate: status.nextStartDate ? Number(status.nextStartDate) : undefined,
+    nextEndDate: status.nextEndDate ? Number(status.nextEndDate) : undefined,
+  }
+}
+
+export function fromMatchmakingStatusJson(status: MatchmakingStatusJson): MatchmakingStatus {
+  return {
+    type: status.type,
+    enabled: status.enabled,
+    startDate: status.startDate ? new Date(status.startDate) : undefined,
+    nextStartDate: status.nextStartDate ? new Date(status.nextStartDate) : undefined,
+    nextEndDate: status.nextEndDate ? new Date(status.nextEndDate) : undefined,
+  }
+}
+
+/**
+ * An event sent by the MatchmakingStatusService to describe the status of MatchmakingTypes on
+ * the server. Sent both to initialize all the statuses, as well as for updates to particular types.
+ */
+export type MatchmakingStatusUpdateEvent = MatchmakingStatusJson[]
+
+/** Describes how a user completed matchmaking (i.e. how their search process was terminated). */
+export enum MatchmakingCompletionType {
+  /** The user completed matchmaking by finding a match. */
+  Found = 'found',
+  /** The user completed matchmaking by canceling out of the search process. */
+  Cancel = 'cancel',
+  /** The user completed matchmaking by disconnecting from the server. */
+  Disconnect = 'disconnect',
+}
+
+/** A record of a terminated matchmaking search. */
+export interface MatchmakingCompletion {
+  id: string
+  userId: SbUserId
+  matchmakingType: MatchmakingType
+  completionType: MatchmakingCompletionType
+  searchTimeMillis: number
+  completionTime: Date
+  /**
+   * The user's rating in this matchmaking type at the time they queued. Lets queue-health analysis
+   * (search/cancel times, abandonment) be sliced by skill band. `undefined` for historical rows
+   * recorded before this was captured.
+   */
+  rating?: number
+}
+
+export enum MatchmakingServiceErrorCode {
+  ClientDisconnected = 'clientDisconnected',
+  GameplayConflict = 'gameplayConflict',
+  LoadFailed = 'loadFailed',
+  InvalidClient = 'invalidClient',
+  InvalidMapPool = 'invalidMapPool',
+  InvalidMaps = 'invalidMaps',
+  MatchAlreadyStarting = 'matchAlreadyStarting',
+  MatchmakingDisabled = 'matchmakingDisabled',
+  NotInQueue = 'notInQueue',
+  NoActiveMatch = 'noActiveMatch',
+  TooManyPlayers = 'tooManyPlayers',
+  UserBanned = 'userBanned',
+  UserOffline = 'userOffline',
+  NoActiveDraft = 'noActiveDraft',
+  InvalidDraftPick = 'invalidDraftPick',
+  UserChatRestricted = 'userChatRestricted',
+}
+
+export interface FindMatchRequest {
+  clientId: string
+  /** Array with one entry per queued type. Order is not significant. */
+  preferences: MatchmakingPreferences[]
+  identifiers: [type: number, hashStr: string][]
+  /**
+   * The game server region the player wants to home in: their manually-selected region if they
+   * have one and it's still in the server-provided region list, otherwise resolved by the client
+   * from its measured latency table (lowest-RTT region, i.e. Auto). Omitted when the client has no
+   * measured regions (dev loopback, or no coordinator-configured regions); the server tolerates its
+   * absence and the player simply carries no latency signal into matchmaking.
+   */
+  region?: GameServerRegionId
+  /**
+   * The player's measured round-trip time (ms) to `region`. Present only alongside `region`, and
+   * absent even then for a manual pick the client hasn't measured yet.
+   */
+  rttMs?: number
+  /**
+   * Whether `region` came from the player's manual server-region setting rather than the auto
+   * (lowest-RTT) resolution; recorded for game diagnostics. Present only alongside `region`.
+   */
+  regionManual?: boolean
+  /**
+   * base64 (standard, padded) of the player's per-session netcode v2 public key, generated by their
+   * app when they queue. The server embeds it in the coordinator-signed session token minted at
+   * match time. Optional in this shared type, but the matchmaking endpoint requires it: matchmaking
+   * is always multi-human and every real client is an up-to-date Electron app.
+   */
+  clientPubkey?: string
+}
+
+export interface DraftProvisionalPickRequest {
+  race: RaceChar
+}
+
+export interface DraftLockPickRequest {
+  race: RaceChar
+}
+
+export interface DraftChatMessageRequest {
+  message: string
+}
+
+export interface GetMatchmakingBanStatusResponse {
+  bannedUntil?: number
+}
+
+export enum MatchmakingSeasonsServiceErrorCode {
+  MustBeInFuture = 'mustBeInFuture',
+  NotFound = 'notFound',
+}
+
+export interface GetMatchmakingSeasonsResponse {
+  seasons: MatchmakingSeasonJson[]
+  current: SeasonId
+}
+
+export type ServerAddMatchmakingSeasonRequest = Omit<
+  MatchmakingSeason,
+  'id' | 'divisionTableVersion'
+>
+
+export type AddMatchmakingSeasonRequest = Jsonify<ServerAddMatchmakingSeasonRequest>
+
+export interface AddMatchmakingSeasonResponse {
+  season: MatchmakingSeasonJson
+}

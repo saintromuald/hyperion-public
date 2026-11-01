@@ -1,0 +1,168 @@
+import { useCallback } from 'react'
+import ReactDOM from 'react-dom'
+import { useTranslation } from 'react-i18next'
+import styled, { createGlobalStyle, css } from 'styled-components'
+import { TypedIpcRenderer } from '../../common/ipc'
+import { useExternalElement } from '../dom/use-external-element-ref'
+import CloseIcon from '../icons/codicons/chrome-close.svg?react'
+import MaximizeIcon from '../icons/codicons/chrome-maximize.svg?react'
+import MinimizeIcon from '../icons/codicons/chrome-minimize.svg?react'
+import RestoreIcon from '../icons/codicons/chrome-restore.svg?react'
+import { buttonReset } from '../material/button-reset'
+import { zIndexWindowControls } from '../material/zindex'
+
+const ipcRenderer = new TypedIpcRenderer()
+
+const windowControlsHeight = IS_ELECTRON ? '32px' : '0px'
+const buttonWidth = 48
+/** The total width taken up by the window controls at the right edge of the system bar. */
+export const windowControlsWidth = `${buttonWidth * 3}px`
+
+const WindowControlsStyle = createGlobalStyle`
+  .sb-window-controls {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: ${zIndexWindowControls};
+  }
+`
+
+const button = css`
+  ${buttonReset};
+  width: ${buttonWidth}px;
+  height: ${windowControlsHeight};
+  padding: 4px 0;
+
+  cursor: pointer;
+  float: right;
+  line-height: ${windowControlsHeight};
+  text-align: center;
+  vertical-align: center;
+
+  -webkit-app-region: no-drag;
+
+  &:hover {
+    background-color: var(--theme-container-high);
+  }
+
+  &:active {
+    background-color: var(--theme-container-highest);
+  }
+`
+
+const CloseButton = styled.button`
+  ${button};
+
+  &:hover {
+    background-color: rgb(from var(--theme-negative) r g b / 0.8);
+  }
+
+  &:active {
+    background-color: rgb(from var(--theme-negative) r g b / 0.88);
+  }
+`
+
+const StyledMaximizeIcon = styled(MaximizeIcon)`
+  display: inline;
+
+  .maximized & {
+    display: none;
+  }
+`
+
+const StyledRestoreIcon = styled(RestoreIcon)`
+  display: none;
+
+  .maximized & {
+    display: inline;
+  }
+`
+
+const MaximizeRestoreButton = styled.button`
+  ${button};
+`
+
+const MinimizeButton = styled.button`
+  ${button};
+`
+
+const sizeBase = css`
+  -webkit-app-region: no-drag;
+  position: absolute;
+  z-index: 1000;
+
+  .maximized & {
+    display: none;
+    -webkit-app-region: inherit;
+  }
+`
+
+export const SizeTop = styled.div`
+  ${sizeBase};
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+`
+
+export const SizeLeft = styled.div`
+  ${sizeBase};
+  width: 4px;
+  top: 0;
+  left: 0;
+  bottom: 0;
+`
+
+export const SizeRight = styled.div`
+  ${sizeBase};
+  width: 4px;
+  top: 0;
+  right: 0;
+  bottom: 0;
+`
+
+export function WindowControls() {
+  const { t } = useTranslation()
+  const container = useExternalElement(elem => {
+    elem.classList.add('sb-window-controls')
+  })
+  const onCloseClick = useCallback(() => {
+    let shouldDisplayCloseHint
+    const KEY = 'closeHintShown'
+    const val = window.localStorage.getItem(KEY)
+    if (!val) {
+      shouldDisplayCloseHint = true
+      window.localStorage.setItem(KEY, 'true')
+    } else {
+      shouldDisplayCloseHint = false
+    }
+    ipcRenderer.send('windowClose', shouldDisplayCloseHint)
+  }, [])
+  const onMaximizeClick = useCallback(() => {
+    ipcRenderer.send('windowMaximize')
+  }, [])
+  const onMinimizeClick = useCallback(() => {
+    ipcRenderer.send('windowMinimize')
+  }, [])
+
+  // The reason why we're using portals to render window controls is so we can ensure they always
+  // stay on top of other components, even dialogs and other components that use portals
+  return ReactDOM.createPortal(
+    <>
+      <WindowControlsStyle />
+      <CloseButton title={t('windowControls.close', 'Close')} onClick={onCloseClick}>
+        <CloseIcon />
+      </CloseButton>
+      <MaximizeRestoreButton
+        title={t('windowControls.maximizeRestore', 'Maximize/Restore')}
+        onClick={onMaximizeClick}>
+        <StyledMaximizeIcon />
+        <StyledRestoreIcon />
+      </MaximizeRestoreButton>
+      <MinimizeButton title={t('windowControls.minimize', 'Minimize')} onClick={onMinimizeClick}>
+        <MinimizeIcon />
+      </MinimizeButton>
+    </>,
+    container,
+  )
+}

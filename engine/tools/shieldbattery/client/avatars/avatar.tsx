@@ -1,0 +1,204 @@
+import { useContext, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+import styled, { css } from 'styled-components'
+import { SbUserId } from '../../common/users/sb-user-id'
+import { useAppDispatch, useAppSelector } from '../redux-hooks'
+import { labelSmall } from '../styles/typography'
+import { LiveUsersContext } from '../twitch/live-state'
+import { getBatchUserInfo } from '../users/action-creators'
+import { AvailabilityDot } from '../users/availability'
+import PlaceholderIcon from './avatar-placeholder.svg?react'
+import { randomColorForString } from './colors'
+
+/**
+ * A ring drawn around an avatar to indicate the user is currently live-streaming. Uses `outline`
+ * (which follows the avatar's border-radius and whose offset gap shows the real surface behind it)
+ * so the ring reads consistently on any background without needing to know the surface color.
+ * Paired with a small "LIVE" tag docked at the bottom of the ring (see `LiveTag`). The avatar's
+ * corners are deliberately left clear so corner dots stay available for other status indicators
+ * (e.g. presence).
+ */
+const liveRing = css`
+  outline: 3px solid var(--theme-live);
+  outline-offset: 1px;
+`
+
+const AvatarRoot = styled.div<{ $live?: boolean }>`
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  ${props => (props.$live ? liveRing : '')};
+`
+
+const AvatarImage = styled.img<{ $glowing?: boolean }>`
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  ${props => (props.$glowing ? `box-shadow: 0 0 8px var(--theme-amber)` : '')};
+`
+
+/**
+ * The "LIVE" tag for a live-ringed avatar, centered on the bottom of the ring. Shares the ring's
+ * color, so the two read as one shape (the tag interrupting the ring) rather than a chip floating
+ * over it.
+ */
+const LiveTag = styled.div`
+  ${labelSmall};
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 4px;
+
+  background-color: var(--theme-live);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  line-height: 12px;
+  text-transform: uppercase;
+`
+
+export const IconContainer = styled.div`
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+`
+
+export const IconAvatar = styled(PlaceholderIcon)<{ $glowing?: boolean; $color?: string }>`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  fill: ${props => props.$color};
+  ${props => (props.$glowing ? 'filter: blur(4px)' : '')};
+`
+
+export interface AvatarProps {
+  user?: string
+  image?: string
+  color?: string
+  glowing?: boolean
+  className?: string
+  /**
+   * Whether to draw the "live" treatment (ring + "LIVE" tag) around the avatar (currently: the
+   * user is streaming on Twitch).
+   */
+  live?: boolean
+  /** Native tooltip text shown while `live`, explaining what the treatment means. */
+  liveTitle?: string
+  /** Rendered over the avatar, inside its positioned root (e.g. a corner indicator). */
+  children?: React.ReactNode
+}
+
+export function Avatar({
+  image,
+  user,
+  color,
+  glowing,
+  className,
+  live,
+  liveTitle,
+  children,
+}: AvatarProps) {
+  const { t } = useTranslation()
+
+  let contents
+  if (image) {
+    contents = <AvatarImage src={image} $glowing={glowing} />
+  } else {
+    let avatarColor
+    if (color) {
+      avatarColor = color
+    } else if (user) {
+      avatarColor = randomColorForString(user)
+    } else {
+      avatarColor = 'var(--theme-on-surface-variant)'
+    }
+
+    contents = (
+      <>
+        {glowing ? <IconAvatar $color={avatarColor} $glowing={true} /> : null}
+        <IconAvatar $color={avatarColor} />
+      </>
+    )
+  }
+
+  return (
+    <AvatarRoot className={className} $live={live} title={live ? liveTitle : undefined}>
+      {contents}
+      {live ? <LiveTag aria-hidden={true}>{t('twitch.live.badge', 'Live')}</LiveTag> : null}
+      {children}
+    </AvatarRoot>
+  )
+}
+
+const LoadingAvatar = styled.div`
+  width: 40px;
+  height: auto;
+  aspect-ratio: 1 / 1;
+
+  background-color: var(--theme-skeleton);
+  border-radius: 100%;
+`
+
+export interface ConnectedAvatarProps {
+  userId: SbUserId
+  className?: string
+  /**
+   * Whether to show the live-streaming ring when this user is live. Defaults to true. Set to false
+   * in surfaces that render their own live treatment for the avatar (e.g. the profile header and
+   * hover card, which draw their own ring + badge).
+   */
+  showLiveIndicator?: boolean
+  /**
+   * Whether to show the user's availability as a dot on the avatar's bottom-right corner, when it's
+   * known. Meant for surfaces that present a user's presence (friends, channel members, profiles).
+   */
+  showAvailability?: boolean
+  /**
+   * Whether the availability dot also marks users known to be offline, for surfaces that list people
+   * regardless of whether they're online (friends, whispers, profiles). Requires `showAvailability`.
+   */
+  showOffline?: boolean
+}
+
+export function ConnectedAvatar({
+  userId,
+  className,
+  showLiveIndicator = true,
+  showAvailability = false,
+  showOffline = false,
+}: ConnectedAvatarProps) {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const username = useAppSelector(s => s.users.byId.get(userId)?.name)
+  const avatarUrl = useAppSelector(s => s.users.byId.get(userId)?.avatarUrl)
+  const liveUsers = useContext(LiveUsersContext)
+  const isLive = showLiveIndicator && liveUsers.has(userId)
+
+  useEffect(() => {
+    dispatch(getBatchUserInfo(userId))
+  }, [dispatch, userId])
+
+  if (!username) {
+    return <LoadingAvatar className={className} />
+  } else {
+    return (
+      <Avatar
+        user={username}
+        image={avatarUrl}
+        className={className}
+        live={isLive}
+        liveTitle={t('twitch.live.avatarTooltip', 'Live on Twitch')}>
+        {showAvailability ? <AvailabilityDot userId={userId} showOffline={showOffline} /> : null}
+      </Avatar>
+    )
+  }
+}

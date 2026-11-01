@@ -1,0 +1,1555 @@
+import { ResultOf } from '@graphql-typed-document-node/core'
+import { ChangeEvent, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import styled from 'styled-components'
+import { useMutation, useQuery } from 'urql'
+import { Route, Switch } from 'wouter'
+import swallowNonBuiltins from '../../common/async/swallow-non-builtins'
+import { getErrorStack } from '../../common/errors'
+import { MAX_IMAGE_SIZE_BYTES } from '../../common/images'
+import {
+  MAX_VIDEO_SIZE_BYTES,
+  NewsImageUploadResponse,
+  NewsVideoUploadResponse,
+} from '../../common/news'
+import { apiUrl, urlPath } from '../../common/urls'
+import { useSelfUser } from '../auth/auth-utils'
+import { openDialog } from '../dialogs/action-creators'
+import { DialogType } from '../dialogs/dialog-type'
+import { useForm, useFormCallbacks, ValidatorMap } from '../forms/form-hook'
+import { required } from '../forms/validators'
+import { graphql } from '../gql'
+import { NewsPostCreation, NewsPostUpdates } from '../gql/graphql'
+import { longTimestamp } from '../i18n/date-formats'
+import { useFormat } from '../i18n/locale-formats'
+import { MaterialIcon } from '../icons/material/material-icon'
+import logger from '../logging/logger'
+import {
+  applyMarkdownFormat,
+  markdownFormatForKeyEvent,
+  MarkdownFormatKind,
+  MarkdownToolbar,
+  ToolbarButton,
+} from '../markdown/markdown-toolbar'
+import { FilledButton, IconButton, OutlinedButton, TextButton } from '../material/button'
+import { DestructiveMenuItem, MenuItem } from '../material/menu/item'
+import { MenuList } from '../material/menu/menu'
+import { Popover, usePopoverController, useRefAnchorPosition } from '../material/popover'
+import { TextField } from '../material/text-field'
+import { useLocationSearchParam } from '../navigation/router-hooks'
+import { push } from '../navigation/routing'
+import { fetchJson } from '../network/fetch'
+import { NewsMarkdown } from '../news/news-markdown'
+import { NewsDeletePostMutation, NewsUpdatePostMutation } from '../news/news-post-mutations'
+import { getPostStatus, PostStatus } from '../news/news-post-status'
+import { EDITOR_RETURN_TO_PARAM, EDITOR_RETURN_TO_POST, urlForNewsPost } from '../news/news-url'
+import { LoadingDotsArea } from '../progress/dots'
+import { useNow } from '../react/date-hooks'
+import { useAppDispatch } from '../redux-hooks'
+import { useSnackbarController } from '../snackbars/snackbar-overlay'
+import { CenteredContentContainer } from '../styles/centered-container'
+import { ContainerLevel, containerStyles } from '../styles/colors'
+import {
+  bodyLarge,
+  bodyMedium,
+  labelMedium,
+  singleLine,
+  titleLarge,
+  titleMedium,
+} from '../styles/typography'
+import { ConnectedUsername } from '../users/connected-username'
+import {
+  NewsPostSettings,
+  PUBLISH_MODE_DRAFT,
+  PUBLISH_MODE_NOW,
+  PUBLISH_MODE_PUBLISHED,
+  PUBLISH_MODE_SCHEDULE,
+  PublishMode,
+} from './news-post-settings-dialog'
+
+const AdminNewsListQuery = graphql(/* GraphQL */ `
+  query AdminNewsList($first: Int, $after: String) {
+    newsPosts(includeUnpublished: true, first: $first, after: $after) {
+      edges {
+        node {
+          id
+          title
+          summary
+          publishedAt
+          updatedAt
+          author {
+            id
+            name
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`)
+
+const AdminNewsPostQuery = graphql(/* GraphQL */ `
+  query AdminNewsPost($id: UUID!) {
+    newsPost(id: $id) {
+      id
+      title
+      summary
+      content
+      publishedAt
+      coverImagePath
+      coverImageUrl
+      author {
+        id
+        name
+      }
+    }
+  }
+`)
+
+const AdminNewsHistoryQuery = graphql(/* GraphQL */ `
+  query AdminNewsHistory($id: UUID!) {
+    newsPost(id: $id) {
+      id
+      title
+      edits {
+        title
+        summary
+        content
+        publishedAt
+        coverImagePath
+        editedAt
+        editor {
+          id
+          name
+        }
+      }
+    }
+  }
+`)
+
+const NewsCreatePostMutation = graphql(/* GraphQL */ `
+  mutation NewsCreatePost($post: NewsPostCreation!) {
+    newsCreatePost(post: $post) {
+      id
+    }
+  }
+`)
+
+const PAGE_SIZE = 20
+
+/** Formats a `Date` for a `datetime-local` input value (`YYYY-MM-DDTHH:mm`, local time). */
+export function toDateTimeLocalString(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  )
+}
+
+export function AdminNews() {
+  return (
+    <Switch>
+      <Route path='/admin/news/new' component={AdminNewsCreate} />
+      <Route path='/admin/news/:id/history' component={AdminNewsHistory} />
+      <Route path='/admin/news/:id' component={AdminNewsEdit} />
+      <Route component={AdminNewsList} />
+    </Switch>
+  )
+}
+
+const Root = styled.div`
+  padding-block: 24px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+`
+
+const HeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+`
+
+const Title = styled.div`
+  ${titleLarge};
+`
+
+const HeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const ErrorText = styled.div`
+  ${bodyLarge};
+  color: var(--theme-error);
+`
+
+const NotFoundText = styled.div`
+  ${bodyLarge};
+  color: var(--theme-on-surface-variant);
+`
+
+const ListTable = styled.div`
+  display: flex;
+  flex-direction: column;
+
+  border: 1px solid var(--theme-outline-variant);
+  border-radius: 4px;
+`
+
+const ListHeaderRow = styled.div`
+  ${labelMedium};
+
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 12px;
+
+  color: var(--theme-on-surface-variant);
+  border-bottom: 1px solid var(--theme-outline-variant);
+`
+
+const RowRoot = styled.div`
+  min-height: 60px;
+  padding: 8px 12px;
+
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  &:not(:last-child) {
+    border-bottom: 1px solid var(--theme-outline-variant);
+  }
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+  }
+`
+
+const TitleCell = styled.div`
+  flex: 1 1 auto;
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const TitleText = styled.div`
+  ${titleMedium};
+  ${singleLine};
+`
+
+const SummaryText = styled.div`
+  ${bodyMedium};
+  ${singleLine};
+  color: var(--theme-on-surface-variant);
+`
+
+const StatusCell = styled.div`
+  flex: 0 0 auto;
+  width: 176px;
+`
+
+const AuthorCell = styled.div`
+  ${bodyMedium};
+  ${singleLine};
+  flex: 0 0 auto;
+  width: 148px;
+`
+
+const UpdatedCell = styled.div`
+  ${bodyMedium};
+  flex: 0 0 auto;
+  width: 176px;
+  color: var(--theme-on-surface-variant);
+`
+
+const ActionsCell = styled.div`
+  flex: 0 0 auto;
+  width: 48px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`
+
+const EmDash = styled.span`
+  color: var(--theme-on-surface-variant);
+`
+
+const StatusCellRoot = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+`
+
+const STATUS_COLORS: Record<PostStatus['kind'], string> = {
+  draft: 'var(--theme-on-surface-variant)',
+  scheduled: 'var(--theme-amber)',
+  published: 'var(--theme-positive)',
+}
+
+const StatusChip = styled.div<{ $kind: PostStatus['kind'] }>`
+  ${labelMedium};
+
+  height: 22px;
+  padding: 0 10px;
+
+  display: inline-flex;
+  align-items: center;
+
+  border: 1px solid currentColor;
+  border-radius: 11px;
+  color: ${props => STATUS_COLORS[props.$kind]};
+`
+
+const StatusDate = styled.div`
+  ${bodyMedium};
+  color: var(--theme-on-surface-variant);
+`
+
+function StatusDisplay({
+  publishedAt,
+  now,
+}: {
+  publishedAt: string | null | undefined
+  now: number
+}) {
+  const { t } = useTranslation()
+  const longTimestampFormat = useFormat(longTimestamp)
+  const status = getPostStatus(publishedAt, now)
+
+  let label: string
+  switch (status.kind) {
+    case 'draft':
+      label = t('admin.news.status.draft', 'Draft')
+      break
+    case 'scheduled':
+      label = t('admin.news.status.scheduled', 'Scheduled')
+      break
+    case 'published':
+      label = t('admin.news.status.published', 'Published')
+      break
+    default:
+      label = status satisfies never
+  }
+
+  return (
+    <StatusCellRoot>
+      <StatusChip $kind={status.kind}>{label}</StatusChip>
+      {status.kind !== 'draft' ? (
+        <StatusDate>{longTimestampFormat.format(status.date)}</StatusDate>
+      ) : null}
+    </StatusCellRoot>
+  )
+}
+
+const LoadMoreRow = styled.div`
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+`
+
+function AdminNewsList() {
+  const { t } = useTranslation()
+  // One `after` cursor per loaded page (the first page has none). We page with cursors rather than
+  // growing `first`, because the server clamps `first` — an ever-growing page size would silently
+  // stop returning new rows past the clamp.
+  const [pageCursors, setPageCursors] = useState<Array<string | null>>([null])
+  // Bumped on refresh to re-mount the pages and force a fresh fetch. Publishing/unpublishing/
+  // deleting reorders the connection, so we reset to the first page rather than trying to patch it
+  // in the (awkward-to-invalidate) graphcache.
+  const [refreshToken, setRefreshToken] = useState(0)
+  // `useNow`'s tick can be up to 30s stale, which would briefly classify a just-published post as
+  // "Scheduled" — refreshes floor the clock to the refresh time so new statuses classify correctly.
+  const [minNow, setMinNow] = useState(0)
+  const now = Math.max(useNow(30_000), minNow)
+
+  const [{ fetching: updating, error: updateError }, updatePost] =
+    useMutation(NewsUpdatePostMutation)
+  const [{ fetching: deleting, error: deleteError }, deletePost] =
+    useMutation(NewsDeletePostMutation)
+  const mutating = updating || deleting
+
+  const refresh = () => {
+    setMinNow(Date.now())
+    setPageCursors([null])
+    setRefreshToken(token => token + 1)
+  }
+
+  const setPublishedAt = (id: string, publishedAt: string | null) => {
+    updatePost({ id, updates: { publishedAt } })
+      .then(result => {
+        if (!result.error) {
+          refresh()
+        }
+      })
+      .catch(swallowNonBuiltins)
+  }
+
+  const onDelete = (id: string) => {
+    deletePost({ id })
+      .then(result => {
+        if (!result.error) {
+          refresh()
+        }
+      })
+      .catch(swallowNonBuiltins)
+  }
+
+  return (
+    <CenteredContentContainer>
+      <Root>
+        <HeaderRow>
+          <Title>{t('admin.news.title', 'Manage news')}</Title>
+          <HeaderActions>
+            <OutlinedButton
+              label={t('admin.news.refresh', 'Refresh')}
+              onClick={refresh}
+              disabled={mutating}
+            />
+            <FilledButton
+              label={t('admin.news.newPost', 'New post')}
+              iconStart='add'
+              onClick={() => push('/admin/news/new')}
+            />
+          </HeaderActions>
+        </HeaderRow>
+        {updateError ? (
+          <ErrorText>
+            {t('admin.news.updateError', 'Error updating post:')} {updateError.message}
+          </ErrorText>
+        ) : null}
+        {deleteError ? (
+          <ErrorText>
+            {t('admin.news.deleteError', 'Error deleting post:')} {deleteError.message}
+          </ErrorText>
+        ) : null}
+        <ListTable>
+          <ListHeaderRow>
+            <TitleCell>{t('admin.news.column.title', 'Title')}</TitleCell>
+            <StatusCell>{t('admin.news.column.status', 'Status')}</StatusCell>
+            <AuthorCell>{t('admin.news.column.author', 'Author')}</AuthorCell>
+            <UpdatedCell>{t('admin.news.column.updated', 'Updated')}</UpdatedCell>
+            <ActionsCell />
+          </ListHeaderRow>
+          {pageCursors.map((cursor, i) => (
+            <NewsListPage
+              key={`${refreshToken}:${cursor ?? 'first'}`}
+              after={cursor}
+              now={now}
+              isLastPage={i === pageCursors.length - 1}
+              mutating={mutating}
+              onLoadMore={endCursor => setPageCursors(prev => [...prev, endCursor])}
+              onPublishNow={id => setPublishedAt(id, new Date().toISOString())}
+              onUnpublish={id => setPublishedAt(id, null)}
+              onDelete={onDelete}
+            />
+          ))}
+        </ListTable>
+      </Root>
+    </CenteredContentContainer>
+  )
+}
+
+type NewsListPost = ResultOf<typeof AdminNewsListQuery>['newsPosts']['edges'][number]['node']
+
+function NewsListPage({
+  after,
+  now,
+  isLastPage,
+  mutating,
+  onLoadMore,
+  onPublishNow,
+  onUnpublish,
+  onDelete,
+}: {
+  after: string | null
+  now: number
+  isLastPage: boolean
+  mutating: boolean
+  onLoadMore: (endCursor: string) => void
+  onPublishNow: (id: string) => void
+  onUnpublish: (id: string) => void
+  onDelete: (id: string) => void
+}) {
+  const { t } = useTranslation()
+  const [{ data, fetching, error }] = useQuery({
+    query: AdminNewsListQuery,
+    variables: { first: PAGE_SIZE, after: after ?? undefined },
+    // Show cached rows immediately but always revalidate, so a refresh (or returning from an edit)
+    // reflects server state.
+    requestPolicy: 'cache-and-network',
+  })
+
+  const posts = data?.newsPosts.edges.map(e => e.node) ?? []
+  const pageInfo = data?.newsPosts.pageInfo
+
+  return (
+    <>
+      {posts.map(post => (
+        <NewsPostRow
+          key={post.id}
+          post={post}
+          now={now}
+          mutating={mutating}
+          onPublishNow={onPublishNow}
+          onUnpublish={onUnpublish}
+          onDelete={onDelete}
+        />
+      ))}
+      {fetching && !data ? <LoadingDotsArea /> : null}
+      {error ? (
+        <ErrorText>
+          {t('admin.news.loadError', 'Error loading news posts:')} {error.message}
+        </ErrorText>
+      ) : null}
+      {isLastPage && pageInfo?.hasNextPage && pageInfo.endCursor ? (
+        <LoadMoreRow>
+          <OutlinedButton
+            label={t('admin.news.loadMore', 'Load more')}
+            onClick={() => onLoadMore(pageInfo.endCursor!)}
+          />
+        </LoadMoreRow>
+      ) : null}
+    </>
+  )
+}
+
+const ConfirmDeleteRoot = styled.div`
+  ${bodyLarge};
+
+  flex: 1 1 auto;
+
+  display: flex;
+  align-items: center;
+  gap: 16px;
+`
+
+const ConfirmDeleteText = styled.div`
+  flex: 1 1 auto;
+`
+
+function NewsPostRow({
+  post,
+  now,
+  mutating,
+  onPublishNow,
+  onUnpublish,
+  onDelete,
+}: {
+  post: NewsListPost
+  now: number
+  mutating: boolean
+  onPublishNow: (id: string) => void
+  onUnpublish: (id: string) => void
+  onDelete: (id: string) => void
+}) {
+  const { t } = useTranslation()
+  const longTimestampFormat = useFormat(longTimestamp)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [anchorRef, anchorX, anchorY, refreshAnchorPos] = useRefAnchorPosition('right', 'top')
+  const [menuOpen, openMenu, closeMenu] = usePopoverController({ refreshAnchorPos })
+  const status = getPostStatus(post.publishedAt, now)
+
+  if (confirmingDelete) {
+    return (
+      <RowRoot>
+        <ConfirmDeleteRoot>
+          <ConfirmDeleteText>
+            {t('admin.news.confirmDelete', 'Delete "{{title}}"? This cannot be undone.', {
+              title: post.title,
+            })}
+          </ConfirmDeleteText>
+          <TextButton
+            label={t('common.actions.cancel', 'Cancel')}
+            onClick={() => setConfirmingDelete(false)}
+            disabled={mutating}
+          />
+          <TextButton
+            label={t('common.actions.delete', 'Delete')}
+            onClick={() => {
+              setConfirmingDelete(false)
+              onDelete(post.id)
+            }}
+            disabled={mutating}
+          />
+        </ConfirmDeleteRoot>
+      </RowRoot>
+    )
+  }
+
+  return (
+    <RowRoot data-testid='news-post-row'>
+      <TitleCell>
+        <TitleText>{post.title}</TitleText>
+        <SummaryText>{post.summary}</SummaryText>
+      </TitleCell>
+      <StatusCell>
+        <StatusDisplay publishedAt={post.publishedAt} now={now} />
+      </StatusCell>
+      <AuthorCell>
+        {post.author ? <ConnectedUsername userId={post.author.id} /> : <EmDash>—</EmDash>}
+      </AuthorCell>
+      <UpdatedCell>{longTimestampFormat.format(new Date(post.updatedAt))}</UpdatedCell>
+      <ActionsCell>
+        <IconButton
+          ref={anchorRef}
+          icon={<MaterialIcon icon='more_vert' />}
+          title={t('admin.news.action.menu', 'Actions')}
+          onClick={openMenu}
+          disabled={mutating}
+        />
+        <Popover
+          open={menuOpen}
+          onDismiss={closeMenu}
+          anchorX={anchorX ?? 0}
+          anchorY={anchorY ?? 0}
+          originX='right'
+          originY='top'>
+          <MenuList>
+            <MenuItem
+              icon={<MaterialIcon icon='edit' />}
+              text={t('admin.news.action.edit', 'Edit')}
+              onClick={() => {
+                closeMenu()
+                push(urlPath`/admin/news/${post.id}`)
+              }}
+            />
+            <MenuItem
+              icon={<MaterialIcon icon='history' />}
+              text={t('admin.news.action.history', 'Edit history')}
+              onClick={() => {
+                closeMenu()
+                push(urlPath`/admin/news/${post.id}/history`)
+              }}
+            />
+            {status.kind !== 'published' ? (
+              <MenuItem
+                icon={<MaterialIcon icon='publish' />}
+                text={t('admin.news.action.publishNow', 'Publish now')}
+                onClick={() => {
+                  closeMenu()
+                  onPublishNow(post.id)
+                }}
+              />
+            ) : null}
+            {status.kind !== 'draft' ? (
+              <MenuItem
+                icon={<MaterialIcon icon='unpublished' />}
+                text={t('admin.news.action.unpublish', 'Unpublish')}
+                onClick={() => {
+                  closeMenu()
+                  onUnpublish(post.id)
+                }}
+              />
+            ) : null}
+            <DestructiveMenuItem
+              icon={<MaterialIcon icon='delete' />}
+              text={t('admin.news.action.delete', 'Delete')}
+              onClick={() => {
+                closeMenu()
+                setConfirmingDelete(true)
+              }}
+            />
+          </MenuList>
+        </Popover>
+      </ActionsCell>
+    </RowRoot>
+  )
+}
+
+function AdminNewsCreate() {
+  return <NewsEditor post={undefined} />
+}
+
+function AdminNewsEdit({ params: { id } }: { params: { id: string } }) {
+  const { t } = useTranslation()
+  const [{ data, fetching, error }] = useQuery({
+    query: AdminNewsPostQuery,
+    variables: { id },
+  })
+
+  const post = data?.newsPost
+
+  if (error) {
+    return (
+      <CenteredContentContainer>
+        <Root>
+          <ErrorText>
+            {t('admin.news.loadError', 'Error loading news posts:')} {error.message}
+          </ErrorText>
+        </Root>
+      </CenteredContentContainer>
+    )
+  }
+  if (!post) {
+    return fetching ? (
+      <LoadingDotsArea />
+    ) : (
+      <CenteredContentContainer>
+        <Root>
+          <NotFoundText>
+            {t('admin.news.notFound', 'No news post found with this ID.')}
+          </NotFoundText>
+        </Root>
+      </CenteredContentContainer>
+    )
+  }
+
+  // Keyed by id so switching directly between two edit pages (e.g. via history) remounts the
+  // editor instead of keeping the previous post's form state.
+  return <NewsEditor key={post.id} post={post} />
+}
+
+type EditablePost = NonNullable<ResultOf<typeof AdminNewsPostQuery>['newsPost']>
+
+export interface NewsEditorModel {
+  title: string
+  summary: string
+  content: string
+  publishMode: PublishMode
+  scheduledAt: string
+}
+
+// The public news post page renders markdown at a 720px max width (see `news-post-page.tsx`);
+// this is that width plus the preview pane's 24px of horizontal padding on each side. The editor
+// column is capped at the same width so both sides of the split view keep a readable line length.
+const EDITOR_COLUMN_MAX_WIDTH = 768
+const editorColumnWidth = `minmax(0, ${EDITOR_COLUMN_MAX_WIDTH}px)`
+
+const EditorRoot = styled.div`
+  height: 100%;
+  padding-block: 24px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+`
+
+const FormArea = styled.div`
+  flex: 1 1 0;
+  min-height: 0;
+
+  display: grid;
+  grid-template-columns: ${editorColumnWidth} ${editorColumnWidth};
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas:
+    'title preview'
+    'toolbar preview'
+    'editor preview';
+  column-gap: 24px;
+  row-gap: 8px;
+`
+
+const EditorColumn = styled.div`
+  grid-area: editor;
+  min-width: 0;
+  overflow-y: auto;
+
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+`
+
+const EditorToolbar = styled(MarkdownToolbar)`
+  grid-area: toolbar;
+`
+
+const ContentField = styled(TextField)`
+  width: 100%;
+`
+
+const PreviewContainer = styled.div`
+  grid-area: preview;
+  min-width: 0;
+  position: relative;
+`
+
+const MarkdownPreview = styled(NewsMarkdown)`
+  position: absolute;
+  inset: 0;
+  padding: 16px 24px;
+
+  border: 1px solid var(--theme-outline-variant);
+  border-radius: 4px;
+  overflow-y: auto;
+`
+
+const Form = styled.form`
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  max-width: ${2 * EDITOR_COLUMN_MAX_WIDTH + 24}px;
+  margin-inline: auto;
+
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+`
+
+const TitleField = styled(TextField)`
+  grid-area: title;
+  width: 100%;
+`
+
+const HiddenFileInput = styled.input`
+  display: none;
+`
+
+const UploadHint = styled.div`
+  ${bodyMedium};
+  color: var(--theme-on-surface-variant);
+`
+
+/**
+ * Strips a filename down to something reasonable to use as image alt text: drops the extension,
+ * removes characters that would break markdown image syntax, and turns `-`/`_` runs into spaces.
+ *
+ * E.g. `"my-cool_screenshot v2.png"` -> `"my cool screenshot v2"`.
+ */
+export function altTextFromFilename(filename: string): string {
+  const dotIndex = filename.lastIndexOf('.')
+  const base = dotIndex > 0 ? filename.slice(0, dotIndex) : filename
+  const withoutBrackets = base.replace(/[[\]()]/g, '')
+  const spaced = withoutBrackets.replace(/[-_]+/g, ' ')
+  return spaced.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Splices an image markdown snippet (`![altText](url)`) into editor content. When a cursor
+ * selection is given the snippet replaces it; otherwise the snippet is appended as its own block.
+ * Returns the new content and the cursor position right after the snippet's opening `![`.
+ */
+export function insertInlineImage(
+  content: string,
+  url: string,
+  altText: string,
+  selection?: { start: number; end: number },
+): { content: string; cursor: number } {
+  const snippet = `![${altText}](${url})`
+
+  if (selection) {
+    const { start, end } = selection
+    return {
+      content: content.slice(0, start) + snippet + content.slice(end),
+      cursor: start + 2,
+    }
+  }
+
+  if (content.trim() === '') {
+    return { content: snippet, cursor: 2 }
+  }
+
+  const trimmed = content.replace(/\s+$/, '')
+  return {
+    content: `${trimmed}\n\n${snippet}`,
+    cursor: trimmed.length + 2 + 2,
+  }
+}
+
+/** Computes the `publishedAt` value for a newly-created post (undefined leaves it a draft). */
+export function createPublishedAt(model: NewsEditorModel): string | undefined {
+  switch (model.publishMode) {
+    case PUBLISH_MODE_DRAFT:
+      return undefined
+    case PUBLISH_MODE_NOW:
+    case PUBLISH_MODE_PUBLISHED:
+      return new Date().toISOString()
+    case PUBLISH_MODE_SCHEDULE:
+      return new Date(model.scheduledAt).toISOString()
+    default:
+      return model.publishMode satisfies never
+  }
+}
+
+/**
+ * Computes the `publishedAt` change to send in an update, or `undefined` if the publish state is
+ * unchanged (so we omit the field and leave it alone). A returned `{ value: null }` unpublishes.
+ */
+export function publishedAtUpdate(
+  model: NewsEditorModel,
+  originalPublishedAt: string | null,
+): { value: string | null } | undefined {
+  if (model.publishMode === PUBLISH_MODE_PUBLISHED) {
+    // The post keeps its existing publish time; there's nothing to send.
+    return undefined
+  }
+  if (model.publishMode === PUBLISH_MODE_DRAFT) {
+    return originalPublishedAt === null ? undefined : { value: null }
+  }
+  if (model.publishMode === PUBLISH_MODE_NOW) {
+    // An explicit "publish now" always re-dates the post to the current time.
+    return { value: new Date().toISOString() }
+  }
+
+  // Scheduled: compare at minute precision (the input's granularity) so re-saving an untouched
+  // post doesn't bump its publish time.
+  const targetMinute = Math.floor(new Date(model.scheduledAt).getTime() / 60_000)
+  const originalMinute =
+    originalPublishedAt !== null
+      ? Math.floor(new Date(originalPublishedAt).getTime() / 60_000)
+      : null
+  if (targetMinute === originalMinute) {
+    return undefined
+  }
+  return { value: new Date(model.scheduledAt).toISOString() }
+}
+
+function NewsEditor({ post }: { post: EditablePost | undefined }) {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const selfUser = useSelfUser()
+  const [returnTo] = useLocationSearchParam(EDITOR_RETURN_TO_PARAM)
+  const snackbarController = useSnackbarController()
+  const [{ fetching: creating, error: createError }, createPost] =
+    useMutation(NewsCreatePostMutation)
+  const [{ fetching: updating, error: updateError }, updatePost] =
+    useMutation(NewsUpdatePostMutation)
+  const fetching = creating || updating
+  const error = createError ?? updateError
+
+  const [coverImagePath, setCoverImagePath] = useState<string | null>(post?.coverImagePath ?? null)
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(post?.coverImageUrl ?? null)
+
+  const imageFileInputRef = useRef<HTMLInputElement>(null)
+  const contentInputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
+  // Tracks whether the content field has ever been focused: a textarea's selectionStart/End
+  // default to 0 before any user interaction, so a selection is only a real cursor position once
+  // the field has been focused at some point.
+  const contentEverFocusedRef = useRef(false)
+  const [imageUploading, setImageUploading] = useState(false)
+  const [imageError, setImageError] = useState<string | undefined>(undefined)
+
+  const videoFileInputRef = useRef<HTMLInputElement>(null)
+  const [videoUploading, setVideoUploading] = useState(false)
+  const [videoError, setVideoError] = useState<string | undefined>(undefined)
+
+  // Splices the uploaded file's URL into the content textarea as inline markdown, at the current
+  // cursor position. Shared by the image and video upload handlers: the inserted markdown syntax
+  // is identical for both, since the renderer branches on the URL's extension.
+  const insertUploadedMediaAtCursor = (url: string, filename: string) => {
+    // Read the content from the DOM element rather than the form state this closure captured
+    // when the upload started, so text typed while the upload was in flight isn't lost.
+    const textarea = contentInputRef.current
+    const currentContent = textarea?.value ?? getInputValue('content')
+    const selection =
+      textarea &&
+      contentEverFocusedRef.current &&
+      textarea.selectionStart !== null &&
+      textarea.selectionEnd !== null
+        ? { start: textarea.selectionStart, end: textarea.selectionEnd }
+        : undefined
+    const { content, cursor } = insertInlineImage(
+      currentContent,
+      url,
+      altTextFromFilename(filename),
+      selection,
+    )
+    setInputValue('content', content)
+    requestAnimationFrame(() => {
+      if (textarea) {
+        textarea.focus()
+        textarea.setSelectionRange(cursor, cursor)
+      }
+    })
+  }
+
+  const onImageFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    // Reset the input so selecting the same file again still fires a change event.
+    event.target.value = ''
+    if (!file) {
+      return
+    }
+    if (!file.type.startsWith('image/')) {
+      setImageError(t('admin.news.form.imageInvalidType', 'Please choose an image file.'))
+      return
+    }
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setImageError(t('admin.news.form.imageTooLarge', 'That image is too large (max 5 MB).'))
+      return
+    }
+
+    setImageError(undefined)
+    setImageUploading(true)
+    const formData = new FormData()
+    formData.append('image', file)
+    // Inline images upload through the same endpoint/pipeline as cover images.
+    fetchJson<NewsImageUploadResponse>(apiUrl`news/images`, {
+      method: 'POST',
+      body: formData,
+    })
+      .then(result => {
+        setImageUploading(false)
+        insertUploadedMediaAtCursor(result.url, file.name)
+      })
+      .catch(err => {
+        setImageUploading(false)
+        setImageError(
+          t('admin.news.form.imageUploadError', 'Something went wrong uploading the image.'),
+        )
+        logger.error(`Error uploading news inline image: ${getErrorStack(err)}`)
+      })
+  }
+
+  const onVideoFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    // Reset the input so selecting the same file again still fires a change event.
+    event.target.value = ''
+    if (!file) {
+      return
+    }
+    if (!file.type.startsWith('video/')) {
+      setVideoError(
+        t('admin.news.form.videoInvalidType', 'Please choose an mp4 or webm video file.'),
+      )
+      return
+    }
+    if (file.size > MAX_VIDEO_SIZE_BYTES) {
+      setVideoError(t('admin.news.form.videoTooLarge', 'That video is too large (max 30 MB).'))
+      return
+    }
+
+    setVideoError(undefined)
+    setVideoUploading(true)
+    const formData = new FormData()
+    formData.append('video', file)
+    fetchJson<NewsVideoUploadResponse>(apiUrl`news/videos`, {
+      method: 'POST',
+      body: formData,
+    })
+      .then(result => {
+        setVideoUploading(false)
+        insertUploadedMediaAtCursor(result.url, file.name)
+      })
+      .catch(err => {
+        setVideoUploading(false)
+        setVideoError(
+          t('admin.news.form.videoUploadError', 'Something went wrong uploading the video.'),
+        )
+        logger.error(`Error uploading news inline video: ${getErrorStack(err)}`)
+      })
+  }
+
+  const onFormat = (kind: MarkdownFormatKind) => {
+    const textarea = contentInputRef.current
+    const currentContent = textarea?.value ?? getInputValue('content')
+    const selection =
+      textarea &&
+      contentEverFocusedRef.current &&
+      textarea.selectionStart !== null &&
+      textarea.selectionEnd !== null
+        ? { start: textarea.selectionStart, end: textarea.selectionEnd }
+        : undefined
+    const result = applyMarkdownFormat(kind, currentContent, selection)
+    setInputValue('content', result.content)
+    requestAnimationFrame(() => {
+      if (textarea) {
+        textarea.focus()
+        textarea.setSelectionRange(result.selectionStart, result.selectionEnd)
+      }
+    })
+  }
+
+  // The post's saved status at mount, fixed for the lifetime of the editor: a draft starts on the
+  // draft mode, a post scheduled for the future starts on the schedule mode showing that time, and
+  // an already-published post starts on its own published mode rather than presenting as
+  // scheduled. Both the scheduled and published cases prefill scheduledAt from the current publish
+  // time, so switching to the schedule mode starts from where the post already is.
+  const [initialStatus] = useState(() => getPostStatus(post?.publishedAt, Date.now()))
+  const [mountedAt] = useState(() => new Date())
+
+  let publishMode: PublishMode = PUBLISH_MODE_DRAFT
+  let scheduledAt = toDateTimeLocalString(mountedAt)
+  if (initialStatus.kind === 'scheduled') {
+    publishMode = PUBLISH_MODE_SCHEDULE
+    scheduledAt = toDateTimeLocalString(initialStatus.date)
+  } else if (initialStatus.kind === 'published') {
+    publishMode = PUBLISH_MODE_PUBLISHED
+    scheduledAt = toDateTimeLocalString(initialStatus.date)
+  }
+
+  const defaults: NewsEditorModel = {
+    title: post?.title ?? '',
+    summary: post?.summary ?? '',
+    content: post?.content ?? '',
+    publishMode,
+    scheduledAt,
+  }
+
+  const validations: ValidatorMap<NewsEditorModel> = {
+    // Titles and summaries are trimmed on save, so a whitespace-only one has to fail validation
+    // here rather than go out as an empty string. Summaries have the further wrinkle that the save
+    // flow only opens the settings dialog (where the summary error can actually be seen) for
+    // summaries that are blank after trimming.
+    title: value =>
+      value.trim() ? undefined : t('admin.news.form.titleRequired', 'Title is required'),
+    summary: value =>
+      value.trim() ? undefined : t('admin.news.form.summaryRequired', 'Summary is required'),
+    content: required(t('admin.news.form.contentRequired', 'Content is required')),
+    scheduledAt: (value, model) => {
+      if (model.publishMode !== PUBLISH_MODE_SCHEDULE) {
+        return undefined
+      }
+      if (!value || Number.isNaN(new Date(value).getTime())) {
+        return t('admin.news.form.scheduleRequired', 'Choose a valid date and time')
+      }
+      return undefined
+    },
+  }
+
+  const { submit, bindInput, form, getInputValue, setInputValue } = useForm<NewsEditorModel>(
+    defaults,
+    validations,
+  )
+
+  useFormCallbacks(form, {
+    onSubmit: model => {
+      // Leading/trailing whitespace isn't meaningful in a title or summary, so it's stripped
+      // before comparing against the saved post and before sending to the server.
+      const title = model.title.trim()
+      const summary = model.summary.trim()
+
+      if (post) {
+        const updates: NewsPostUpdates = {}
+        if (title !== post.title) {
+          updates.title = title
+        }
+        if (summary !== post.summary) {
+          updates.summary = summary
+        }
+        if (model.content !== post.content) {
+          updates.content = model.content
+        }
+        const publishedChange = publishedAtUpdate(model, post.publishedAt ?? null)
+        if (publishedChange) {
+          updates.publishedAt = publishedChange.value
+        }
+        if (coverImagePath !== (post.coverImagePath ?? null)) {
+          // Send the new path, or an explicit null to clear it; omit when unchanged.
+          updates.coverImagePath = coverImagePath
+        }
+
+        // The editor opened from a post's own page returns there on save, so the editor doesn't
+        // have to go back through the list.
+        const savedUrl =
+          returnTo === EDITOR_RETURN_TO_POST ? urlForNewsPost(post.id, title) : '/admin/news'
+
+        if (Object.keys(updates).length === 0) {
+          push(savedUrl)
+          return
+        }
+
+        updatePost({ id: post.id, updates })
+          .then(result => {
+            if (!result.error) {
+              snackbarController.showSnackbar(t('admin.news.saved', 'News post saved'))
+              push(savedUrl)
+            }
+          })
+          .catch(swallowNonBuiltins)
+      } else {
+        const publishedAt = createPublishedAt(model)
+        const creation: NewsPostCreation = {
+          // The server records the creator in the edit log and enforces authorId == self; sending
+          // it makes the post render "by {name}" like an authored post.
+          authorId: selfUser?.id,
+          title,
+          summary,
+          content: model.content,
+          ...(publishedAt !== undefined ? { publishedAt } : {}),
+          ...(coverImagePath !== null ? { coverImagePath } : {}),
+        }
+
+        createPost({ post: creation })
+          .then(result => {
+            if (!result.error) {
+              snackbarController.showSnackbar(t('admin.news.created', 'News post created'))
+              push('/admin/news')
+            }
+          })
+          .catch(swallowNonBuiltins)
+      }
+    },
+  })
+
+  const openSettings = (showErrorsOnOpen: boolean = false) => {
+    dispatch(
+      openDialog({
+        type: DialogType.NewsPostSettings,
+        initData: {
+          savedStatus: initialStatus,
+          settings: {
+            summary: getInputValue('summary'),
+            publishMode: getInputValue('publishMode'),
+            scheduledAt: getInputValue('scheduledAt'),
+            coverImagePath,
+            coverImageUrl,
+          },
+          showErrorsOnOpen,
+          onApply: (s: NewsPostSettings) => {
+            setInputValue('summary', s.summary)
+            setInputValue('publishMode', s.publishMode)
+            setInputValue('scheduledAt', s.scheduledAt)
+            setCoverImagePath(s.coverImagePath)
+            setCoverImageUrl(s.coverImageUrl)
+          },
+        },
+      }),
+    )
+  }
+
+  const onSaveClick = () => {
+    // The summary and schedule fields are edited in the post settings dialog now, so a validation
+    // failure on either needs to open that dialog rather than failing silently against inputs that
+    // no longer appear on this page. Opening it this way shows the failure immediately, since a
+    // fresh dialog otherwise has no validation errors until a field is touched.
+    const scheduleInvalid =
+      getInputValue('publishMode') === PUBLISH_MODE_SCHEDULE &&
+      Number.isNaN(new Date(getInputValue('scheduledAt')).getTime())
+    if (!getInputValue('summary').trim() || scheduleInvalid) {
+      openSettings(true)
+    } else {
+      submit()
+    }
+  }
+
+  // The save button doubles as a summary of the publish state chosen in the post settings
+  // dialog, so what saving will do is visible without opening it.
+  const publishModeValue = getInputValue('publishMode')
+  let saveLabel: string
+  switch (publishModeValue) {
+    case PUBLISH_MODE_DRAFT:
+      saveLabel = t('admin.news.saveDraft', 'Save draft')
+      break
+    case PUBLISH_MODE_NOW:
+      saveLabel = t('admin.news.publishNow', 'Publish now')
+      break
+    case PUBLISH_MODE_SCHEDULE:
+      saveLabel = t('admin.news.schedulePost', 'Schedule post')
+      break
+    case PUBLISH_MODE_PUBLISHED:
+      saveLabel = t('admin.news.saveChanges', 'Save changes')
+      break
+    default:
+      saveLabel = publishModeValue satisfies never
+  }
+
+  return (
+    <CenteredContentContainer $fullWidth={true} data-content-fullbleed=''>
+      <EditorRoot>
+        <HeaderRow>
+          <Title>
+            {post
+              ? t('admin.news.editTitle', 'Edit news post')
+              : t('admin.news.createTitle', 'Create news post')}
+          </Title>
+          <HeaderActions>
+            {post ? (
+              <TextButton
+                label={t('admin.news.viewPost', 'View post')}
+                iconStart='open_in_new'
+                onClick={() => push(urlForNewsPost(post.id, post.title))}
+              />
+            ) : null}
+            <TextButton
+              label={t('admin.news.backToList', 'Back to list')}
+              onClick={() => push('/admin/news')}
+            />
+            <OutlinedButton
+              label={t('admin.news.form.postSettings', 'Post settings')}
+              iconStart='settings'
+              onClick={() => openSettings()}
+            />
+            <FilledButton
+              label={saveLabel}
+              onClick={onSaveClick}
+              disabled={fetching || imageUploading || videoUploading}
+            />
+          </HeaderActions>
+        </HeaderRow>
+        {error ? <ErrorText>{error.message}</ErrorText> : null}
+        <Form
+          onSubmit={event => {
+            // Implicit submission (e.g. Enter in the title field) needs the same
+            // missing-summary/schedule handling as the save button, since submitting directly
+            // would fail validation against inputs that only render in the settings dialog.
+            event.preventDefault()
+            onSaveClick()
+          }}>
+          <FormArea>
+            <TitleField {...bindInput('title')} label={t('admin.news.form.title', 'Title')} />
+            <EditorToolbar onFormat={onFormat}>
+              <HiddenFileInput
+                ref={imageFileInputRef}
+                type='file'
+                accept='image/*'
+                onChange={onImageFileSelected}
+                data-testid='news-inline-image-file-input'
+              />
+              <ToolbarButton
+                icon={<MaterialIcon icon='add_photo_alternate' />}
+                label={t('admin.news.form.insertImage', 'Insert image')}
+                tooltipText={t('admin.news.form.insertImageTooltip', 'Insert image (up to 5 MB)')}
+                disabled={imageUploading}
+                onClick={() => imageFileInputRef.current?.click()}
+              />
+              {imageUploading ? (
+                <UploadHint>{t('admin.news.form.imageUploading', 'Uploading…')}</UploadHint>
+              ) : null}
+              <HiddenFileInput
+                ref={videoFileInputRef}
+                type='file'
+                accept='video/mp4,video/webm'
+                onChange={onVideoFileSelected}
+                data-testid='news-inline-video-file-input'
+              />
+              <ToolbarButton
+                icon={<MaterialIcon icon='videocam' />}
+                label={t('admin.news.form.insertVideo', 'Insert video')}
+                tooltipText={t('admin.news.form.insertVideoTooltip', 'Insert video (up to 30 MB)')}
+                disabled={videoUploading}
+                onClick={() => videoFileInputRef.current?.click()}
+              />
+              {videoUploading ? (
+                <UploadHint>{t('admin.news.form.videoUploading', 'Uploading…')}</UploadHint>
+              ) : null}
+            </EditorToolbar>
+            <EditorColumn>
+              <ContentField
+                {...bindInput('content')}
+                ref={contentInputRef}
+                onFocus={() => {
+                  contentEverFocusedRef.current = true
+                }}
+                onKeyDown={event => {
+                  const kind = markdownFormatForKeyEvent(event)
+                  if (kind) {
+                    event.preventDefault()
+                    onFormat(kind)
+                  }
+                }}
+                label={t('admin.news.form.content', 'Content (Markdown)')}
+                multiline={true}
+                rows={18}
+              />
+              {imageError ? <ErrorText>{imageError}</ErrorText> : null}
+              {videoError ? <ErrorText>{videoError}</ErrorText> : null}
+            </EditorColumn>
+            <PreviewContainer>
+              <MarkdownPreview source={getInputValue('content')} allowMedia={true} />
+            </PreviewContainer>
+          </FormArea>
+        </Form>
+      </EditorRoot>
+    </CenteredContentContainer>
+  )
+}
+
+const HistoryList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+const HistoryEntryRoot = styled.div`
+  ${containerStyles(ContainerLevel.Low)};
+
+  padding: 12px 16px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  border-radius: 4px;
+`
+
+const HistoryEntryHeader = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+`
+
+const HistoryEntryWhen = styled.div`
+  ${bodyMedium};
+  color: var(--theme-on-surface-variant);
+`
+
+const HistoryEntryChangeKind = styled.div`
+  ${labelMedium};
+  color: var(--theme-amber);
+`
+
+const HistoryEntryTitle = styled.div`
+  ${titleMedium};
+`
+
+const HistoryEntryMeta = styled.div`
+  ${bodyMedium};
+  color: var(--theme-on-surface-variant);
+`
+
+const HistoryEntryChanges = styled.div`
+  ${bodyMedium};
+`
+
+export type NewsPostEdit = NonNullable<
+  ResultOf<typeof AdminNewsHistoryQuery>['newsPost']
+>['edits'][number]
+
+/** Field labels that changed between an edit and the next-older revision. */
+export function changedFieldLabels(
+  edit: NewsPostEdit,
+  older: NewsPostEdit | undefined,
+  t: ReturnType<typeof useTranslation>['t'],
+): string[] {
+  if (!older) {
+    return []
+  }
+  const labels: string[] = []
+  if (edit.title !== older.title) {
+    labels.push(t('admin.news.field.title', 'Title'))
+  }
+  if (edit.summary !== older.summary) {
+    labels.push(t('admin.news.field.summary', 'Summary'))
+  }
+  if (edit.content !== older.content) {
+    labels.push(t('admin.news.field.content', 'Content'))
+  }
+  if ((edit.publishedAt ?? null) !== (older.publishedAt ?? null)) {
+    labels.push(t('admin.news.field.publish', 'Publish date'))
+  }
+  if ((edit.coverImagePath ?? null) !== (older.coverImagePath ?? null)) {
+    labels.push(t('admin.news.field.cover', 'Cover image'))
+  }
+  return labels
+}
+
+function publishStateLabel(
+  publishedAt: string | null | undefined,
+  now: number,
+  t: ReturnType<typeof useTranslation>['t'],
+  longTimestampFormat: Intl.DateTimeFormat,
+): string {
+  const status = getPostStatus(publishedAt, now)
+  switch (status.kind) {
+    case 'draft':
+      return t('admin.news.status.draft', 'Draft')
+    case 'scheduled':
+      return t('admin.news.historyScheduled', 'Scheduled for {{date}}', {
+        date: longTimestampFormat.format(status.date),
+      })
+    case 'published':
+      return t('admin.news.historyPublished', 'Published {{date}}', {
+        date: longTimestampFormat.format(status.date),
+      })
+    default:
+      return status satisfies never
+  }
+}
+
+function AdminNewsHistory({ params: { id } }: { params: { id: string } }) {
+  const { t } = useTranslation()
+  const longTimestampFormat = useFormat(longTimestamp)
+  const now = useNow(30_000)
+  const [{ data, fetching, error }] = useQuery({
+    query: AdminNewsHistoryQuery,
+    variables: { id },
+  })
+
+  const post = data?.newsPost
+  const edits = post?.edits ?? []
+
+  return (
+    <CenteredContentContainer>
+      <Root>
+        <HeaderRow>
+          <Title>{t('admin.news.history.title', 'Edit history')}</Title>
+          <HeaderActions>
+            <TextButton
+              label={t('admin.news.editPost', 'Edit post')}
+              onClick={() => push(urlPath`/admin/news/${id}`)}
+            />
+            <TextButton
+              label={t('admin.news.backToList', 'Back to list')}
+              onClick={() => push('/admin/news')}
+            />
+          </HeaderActions>
+        </HeaderRow>
+        {post ? <HistoryEntryMeta>{post.title}</HistoryEntryMeta> : null}
+        {error ? (
+          <ErrorText>
+            {t('admin.news.loadError', 'Error loading news posts:')} {error.message}
+          </ErrorText>
+        ) : null}
+        {fetching && !data ? <LoadingDotsArea /> : null}
+        {!fetching && !error && !post ? (
+          <NotFoundText>
+            {t('admin.news.notFound', 'No news post found with this ID.')}
+          </NotFoundText>
+        ) : null}
+        {post && edits.length === 0 ? (
+          <NotFoundText>
+            {t('admin.news.history.empty', 'No edit history for this post.')}
+          </NotFoundText>
+        ) : null}
+        <HistoryList>
+          {edits.map((edit, i) => {
+            // `edits` is newest-first, so the next-older revision is the following index and the
+            // final entry is the post's creation.
+            const older = edits[i + 1]
+            const isCreation = i === edits.length - 1
+            const changedLabels = changedFieldLabels(edit, older, t)
+
+            return (
+              <HistoryEntryRoot key={i}>
+                <HistoryEntryHeader>
+                  <HistoryEntryWhen>
+                    {longTimestampFormat.format(new Date(edit.editedAt))}
+                  </HistoryEntryWhen>
+                  <HistoryEntryChangeKind>
+                    {isCreation
+                      ? t('admin.news.history.created', 'Created')
+                      : t('admin.news.history.edited', 'Edited')}
+                  </HistoryEntryChangeKind>
+                </HistoryEntryHeader>
+                <HistoryEntryTitle>{edit.title}</HistoryEntryTitle>
+                <HistoryEntryMeta>
+                  {publishStateLabel(edit.publishedAt, now, t, longTimestampFormat)}
+                  {' · '}
+                  {edit.editor ? (
+                    <>
+                      {t('admin.news.history.by', 'by ')}
+                      <ConnectedUsername userId={edit.editor.id} />
+                    </>
+                  ) : (
+                    t('admin.news.history.byUnknown', 'by an unknown user')
+                  )}
+                </HistoryEntryMeta>
+                {!isCreation ? (
+                  <HistoryEntryChanges>
+                    {changedLabels.length > 0
+                      ? t('admin.news.history.changed', 'Changed: {{fields}}', {
+                          fields: changedLabels.join(', '),
+                        })
+                      : t('admin.news.history.noFieldChanges', 'No tracked field changes')}
+                  </HistoryEntryChanges>
+                ) : null}
+              </HistoryEntryRoot>
+            )
+          })}
+        </HistoryList>
+      </Root>
+    </CenteredContentContainer>
+  )
+}

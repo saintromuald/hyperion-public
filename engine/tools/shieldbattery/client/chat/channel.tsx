@@ -1,0 +1,775 @@
+import React, { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
+import styled from 'styled-components'
+import {
+  ChatServiceErrorCode,
+  ClientChatMessageType,
+  SbChannelId,
+  ServerChatMessageType,
+} from '../../common/chat'
+import { SbUserId } from '../../common/users/sb-user-id'
+import { useHasAnyPermission } from '../admin/admin-permissions'
+import { useSelfUser } from '../auth/auth-utils'
+import { useWindowFocus } from '../dom/window-focus'
+import logger from '../logging/logger'
+import { Chat } from '../messaging/chat'
+import { anchorNeedsFetch, chatViewAnchorStore } from '../messaging/chat-view-anchor'
+import { ChannelCommandContext } from '../messaging/commands/command-context'
+import { flushLastRead } from '../messaging/last-read'
+import { MAX_MENTIONED_USERS } from '../messaging/mention-provider'
+import { MESSAGE_LINK_PARAM } from '../messaging/message-link'
+import { MessageComponentProps } from '../messaging/message-list'
+import { MessageLoadErrorRow } from '../messaging/message-load-error-row'
+import { isServerOriginMessage } from '../messaging/message-records'
+import { useLocationSearchParam } from '../navigation/router-hooks'
+import { push } from '../navigation/routing'
+import { describeFetchError, isFetchError } from '../network/fetch-errors'
+import { LoadingDotsArea } from '../progress/dots'
+import { usePrevious, useStableCallback } from '../react/state-hooks'
+import { useAppDispatch, useAppSelector } from '../redux-hooks'
+import { DURATION_LONG } from '../snackbars/snackbar-durations'
+import { useSnackbarController } from '../snackbars/snackbar-overlay'
+import { CenteredContentContainer } from '../styles/centered-container'
+import { bodyLarge, titleLarge } from '../styles/typography'
+import { areUserEntriesEqual, useUserEntriesSelector } from '../users/user-entries'
+import {
+  activateChannel,
+  correctChannelNameForChat,
+  deactivateChannel,
+  getChannelInfo,
+  getChannelLastReadKey,
+  getMessageHistory,
+  getMessagesAround,
+  getMessagesAroundMessage,
+  getNewerMessages,
+  jumpToPresent,
+  leaveChannelWithConfirmation,
+  markChannelRead,
+  markChannelReadNow,
+  markUnreadLineSeen,
+  resetMessageWindow,
+  retrieveUserList,
+  sendMessage,
+  updateChannelAtBottom,
+} from './action-creators'
+import { useChannelActivity } from './channel-activity'
+import { ChannelContext } from './channel-context'
+import { CHANNEL_HEADER_HEIGHT, ChannelHeader } from './channel-header'
+import { ConnectedChannelInfoCard, PrivateChannelNotice } from './channel-info-card'
+import { ChannelMessageMenu, ChannelUserMenu } from './channel-menu-items'
+import { MessageRoleBadge } from './channel-role-badge'
+import { ConnectedChannelSettings } from './channel-settings/channel-settings'
+import { UserList } from './channel-user-list'
+import {
+  BanUserMessage,
+  JoinChannelMessage,
+  KickUserMessage,
+  LeaveChannelMessage,
+  NewChannelOwnerMessage,
+  SelfJoinChannelMessage,
+} from './chat-message-layout'
+
+const MESSAGES_LIMIT = 50
+
+const BACKGROUND_MASK_GRADIENT = `
+  linear-gradient(
+    180deg,
+    #000 52.83%,
+    rgba(0, 0, 0, 0.6) 70.31%,
+    rgba(0, 0, 0, 0.2) 84.37%,
+    rgba(0, 0, 0, 0) 100%
+  )
+`
+
+const Container = styled(CenteredContentContainer).attrs({ $targetHorizontalPadding: 16 })`
+  display: flex;
+  padding-top: 8px;
+  gap: 8px;
+`
+
+const StyledChat = styled(Chat)`
+  flex-grow: 1;
+`
+
+const StyledUserList = styled(UserList)`
+  min-height: 0;
+  margin-bottom: 8px;
+`
+
+/** The channel's user list, with what its members are streaming and playing right now. */
+function ChannelUserList({
+  channelId,
+  ...props
+}: { channelId: SbChannelId } & Omit<React.ComponentProps<typeof UserList>, 'streams' | 'games'>) {
+  const { streams, games } = useChannelActivity(channelId)
+  return <StyledUserList {...props} streams={streams} games={games} />
+}
+
+const BackgroundImage = styled.img`
+  position: absolute;
+  top: ${CHANNEL_HEADER_HEIGHT}px;
+  left: 0;
+  width: 100%;
+  height: 400px;
+
+  opacity: 0.2;
+  object-fit: cover;
+  object-position: top;
+  mask-image: ${BACKGROUND_MASK_GRADIENT};
+  -webkit-mask-image: ${BACKGROUND_MASK_GRADIENT};
+`
+
+export function ChannelMessage({ message }: MessageComponentProps) {
+  switch (message.type) {
+    case ClientChatMessageType.BanUser:
+      return (
+        <BanUserMessage
+          key={message.id}
+          msgId={message.id}
+          time={message.time}
+          userId={message.userId}
+        />
+      )
+    case ClientChatMessageType.KickUser:
+      return (
+        <KickUserMessage
+          key={message.id}
+          msgId={message.id}
+          time={message.time}
+          userId={message.userId}
+        />
+      )
+    case ServerChatMessageType.JoinChannel:
+      return (
+        <JoinChannelMessage
+          key={message.id}
+          msgId={message.id}
+          time={message.time}
+          userId={message.userId}
+        />
+      )
+    case ClientChatMessageType.LeaveChannel:
+      return (
+        <LeaveChannelMessage
+          key={message.id}
+          msgId={message.id}
+          time={message.time}
+          userId={message.userId}
+        />
+      )
+    case ClientChatMessageType.NewChannelOwner:
+      return (
+        <NewChannelOwnerMessage
+          key={message.id}
+          msgId={message.id}
+          time={message.time}
+          newOwnerId={message.newOwnerId}
+        />
+      )
+    case ClientChatMessageType.SelfJoinChannel:
+      return <SelfJoinChannelMessage key={message.id} channelId={message.channelId} />
+    default:
+      return null
+  }
+}
+
+interface ChatChannelProps {
+  channelId: SbChannelId
+  channelName: string
+}
+
+export function ConnectedChatChannel({
+  channelId,
+  channelName: channelNameFromRoute,
+}: ChatChannelProps) {
+  const dispatch = useAppDispatch()
+  const selfUser = useSelfUser()
+  const basicChannelInfo = useAppSelector(s => s.chat.idToBasicInfo.get(channelId))
+  const detailedChannelInfo = useAppSelector(s => s.chat.idToDetailedInfo.get(channelId))
+  const joinedChannelInfo = useAppSelector(s => s.chat.idToJoinedInfo.get(channelId))
+  const selfPermissions = useAppSelector(s => s.chat.idToSelfPermissions.get(channelId))
+  const isServerModerator = useHasAnyPermission('moderateChatChannels')
+  const channelUsers = useAppSelector(s => s.chat.idToUsers.get(channelId))
+  const channelMessages = useAppSelector(s => s.chat.idToMessages.get(channelId))
+  const selfPreferences = useAppSelector(s => s.chat.idToSelfPreferences.get(channelId))
+  const isInChannel = useAppSelector(s => s.chat.joinedChannels.has(channelId))
+  const isActivated = useAppSelector(s => s.chat.activatedChannels.has(channelId))
+  const isAtBottom = useAppSelector(s => s.chat.atBottomChannels.has(channelId))
+  const unreadLineTime = useAppSelector(s => s.chat.idToUnreadLine.get(channelId)?.time)
+  const isWindowFocused = useWindowFocus()
+  const snackbarController = useSnackbarController()
+  const { t } = useTranslation()
+  // A message named by a link the user followed here. It's consumed rather than kept: once the list
+  // has acted on it the param goes away, so reloading the page afterwards is an ordinary visit.
+  const [linkedMessageId, setLinkedMessageId] = useLocationSearchParam(MESSAGE_LINK_PARAM)
+
+  // The message list shows the failure itself, at the edge the request was for; the details only
+  // the developers can act on go to the log.
+  const onMessageLoadError = (err: Error) => {
+    logger.error(
+      `Error loading message history for channel ${channelId}: ${describeFetchError(err)}`,
+    )
+  }
+
+  const onUserListLoadError = (err: Error) => {
+    logger.error(`Error loading user list for channel ${channelId}: ${describeFetchError(err)}`)
+  }
+
+  const onRetryUserList = () => {
+    dispatch(retrieveUserList(channelId, { onSuccess: () => {}, onError: onUserListLoadError }))
+  }
+
+  // NOTE(2Pac): When user types the single @ character in chat, we show the ten most recent
+  // chatters in the channel as an option to mention.
+  const recentChatters = useMemo(() => {
+    const chattersSet = new Set<SbUserId>()
+    const reversedMessages = channelMessages?.messages.toReversed() ?? []
+    for (const message of reversedMessages) {
+      if (chattersSet.size >= MAX_MENTIONED_USERS) {
+        break
+      }
+
+      if (message.type === ServerChatMessageType.TextMessage) {
+        chattersSet.add(message.from)
+      }
+    }
+
+    return Array.from(chattersSet)
+  }, [channelMessages])
+
+  // We map the user IDs to their usernames so we can sort them by their name without pulling all of
+  // the users from the store and depending on any of their changes.
+  const sortedActiveUserEntries = useAppSelector(
+    useUserEntriesSelector(channelUsers?.active),
+    areUserEntriesEqual,
+  )
+  const sortedOfflineUserEntries = useAppSelector(
+    useUserEntriesSelector(channelUsers?.offline),
+    areUserEntriesEqual,
+  )
+  const sortedRecentChattersEntries = useAppSelector(
+    useUserEntriesSelector(recentChatters),
+    areUserEntriesEqual,
+  )
+
+  const mentionableUsers = useMemo(() => {
+    const onlineUsers = sortedActiveUserEntries
+      .filter(([_, username]) => username !== undefined)
+      .map(([id, username]) => ({ id, name: username!, online: true }))
+    const offlineUsers = sortedOfflineUserEntries
+      .filter(([_, username]) => username !== undefined)
+      .map(([id, username]) => ({ id, name: username!, online: false }))
+
+    return onlineUsers.concat(offlineUsers)
+  }, [sortedActiveUserEntries, sortedOfflineUserEntries])
+
+  const baseMentionableUsers = useMemo(() => {
+    const onlineRecentChatters = sortedRecentChattersEntries
+      .filter(([id]) => channelUsers?.active.has(id))
+      .filter(([_, username]) => username !== undefined)
+      .map(([id, username]) => ({ id, name: username!, online: true }))
+    const offlineRecentChatters = sortedRecentChattersEntries
+      .filter(([id]) => channelUsers?.offline.has(id))
+      .filter(([_, username]) => username !== undefined)
+      .map(([id, username]) => ({ id, name: username!, online: false }))
+
+    return onlineRecentChatters.concat(offlineRecentChatters)
+  }, [channelUsers?.active, channelUsers?.offline, sortedRecentChattersEntries])
+
+  // Mirrors when the member list offers an enabled Kick or Ban action: the channel owner and server
+  // moderators can always use them, and everyone else needs the matching channel permission.
+  const isSelfChannelOwner = selfUser !== undefined && joinedChannelInfo?.ownerId === selfUser.id
+  const canModerateChannel = isSelfChannelOwner || isServerModerator
+  const commandContext: ChannelCommandContext | undefined = selfUser
+    ? {
+        surface: 'channel',
+        channelId,
+        selfUserId: selfUser.id,
+        members: mentionableUsers,
+        canKick:
+          canModerateChannel || !!(selfPermissions?.editPermissions || selfPermissions?.kick),
+        canBan: canModerateChannel || !!(selfPermissions?.editPermissions || selfPermissions?.ban),
+        canEditChannel: canModerateChannel,
+      }
+    : undefined
+
+  const sortedActiveUserIds = useMemo(
+    () => sortedActiveUserEntries.map(([id]) => id),
+    [sortedActiveUserEntries],
+  )
+  const sortedOfflineUserIds = useMemo(
+    () => sortedOfflineUserEntries.map(([id]) => id),
+    [sortedOfflineUserEntries],
+  )
+
+  const prevIsInChannel = usePrevious(isInChannel)
+  const prevChannelId = usePrevious(channelId)
+  const isLeavingChannel = !isInChannel && prevIsInChannel && prevChannelId === channelId
+
+  // TODO(2Pac): Pull this out into some kind of "isLeaving" hook and share with whispers/lobby?
+  useEffect(() => {
+    if (isLeavingChannel) {
+      push('/')
+    }
+  }, [isLeavingChannel])
+
+  const viewStateKey = `chat.${channelId}`
+
+  const onActivate = useEffectEvent(() => {
+    dispatch(retrieveUserList(channelId, { onSuccess: () => {}, onError: onUserListLoadError }))
+
+    const anchor = chatViewAnchorStore.get(viewStateKey)
+    dispatch(activateChannel(channelId))
+
+    if (linkedMessageId) {
+      // A link names the window this activation needs, which the effect below requests. The
+      // position the user left behind is where they were, not where they just asked to go.
+      return
+    }
+
+    if (anchor && anchorNeedsFetch(channelMessages?.messages ?? [], anchor)) {
+      // Getting back to where the user was reading takes a window the client doesn't hold, so that
+      // window is this activation's history request instead of the newest page the list would
+      // otherwise ask for. Whatever window is still loaded doesn't contain the position either and
+      // is about to be replaced anyway, so it's dropped up front rather than left on screen: leaving
+      // it in place would show the user a spot they weren't (its bottom) only to yank them away once
+      // the requested window lands, whereas an empty window renders as loading for that same wait.
+      dispatch(resetMessageWindow(channelId))
+      dispatch(
+        getMessagesAround(channelId, MESSAGES_LIMIT, anchor.sentTime, {
+          onSuccess: () => {},
+          onError: onMessageLoadError,
+        }),
+      )
+    }
+  })
+
+  useEffect(() => {
+    if (isInChannel) {
+      onActivate()
+    }
+
+    return () => {
+      dispatch(deactivateChannel(channelId))
+    }
+  }, [isInChannel, channelId, dispatch])
+
+  const onLinkedMessage = useEffectEvent((messageId: string, signal: AbortSignal) => {
+    // The window that's loaded doesn't hold the message; the request below replaces it with one that
+    // does, showing the current messages under a loading indicator until it lands. The window isn't
+    // dropped up front: an abandoned request (the user leaving, or a development remount) would
+    // otherwise leave it empty with nothing to refill it.
+    dispatch(
+      getMessagesAroundMessage(channelId, MESSAGES_LIMIT, messageId, {
+        signal,
+        onSuccess: () => {},
+        onError: err => {
+          if (isFetchError(err) && err.code === ChatServiceErrorCode.MessageNotFound) {
+            snackbarController.showSnackbar(
+              t(
+                'chat.errors.messageNotFound',
+                "That message couldn't be found. It may have been deleted.",
+              ),
+              DURATION_LONG,
+            )
+          } else {
+            onMessageLoadError(err)
+          }
+
+          // The window was dropped to make room for one that can't be had, so the channel goes back
+          // to the newest messages rather than being left empty.
+          setLinkedMessageId('')
+          dispatch(
+            jumpToPresent(channelId, MESSAGES_LIMIT, {
+              onSuccess: () => {},
+              onError: onMessageLoadError,
+            }),
+          )
+        },
+      }),
+    )
+  })
+
+  // Holds the request for the window a linked message sits in, so it's made once for a given link
+  // and abandoned only when the link or channel changes — not on the message updates that settling
+  // the channel's own window brings.
+  const linkFetchRef = useRef<AbortController | undefined>(undefined)
+  useEffect(() => {
+    return () => {
+      linkFetchRef.current?.abort()
+      linkFetchRef.current = undefined
+    }
+  }, [channelId, linkedMessageId])
+
+  // A link into a channel is reached by loading the window its message sits in, but only once the
+  // channel's own window has settled. A message already loaded there is placed by the list with no
+  // fetch at all; a fetch made before the entry even exists, or against the empty window a channel
+  // starts with, would either be dropped or race the channel's initial load. So this waits for the
+  // window to hold messages (or to have run out of history) and to be idle, then loads around the
+  // message if it isn't already on screen. The reading position the user left behind gives way to
+  // it: a link names where they just asked to go.
+  useEffect(() => {
+    if (!isInChannel || !linkedMessageId || !channelMessages || linkFetchRef.current) {
+      return
+    }
+    if (channelMessages.messages.some(m => m.id === linkedMessageId)) {
+      return
+    }
+    if (channelMessages.loadingHistory) {
+      return
+    }
+    if (channelMessages.messages.length === 0 && channelMessages.hasHistory) {
+      return
+    }
+
+    const abortController = new AbortController()
+    linkFetchRef.current = abortController
+    onLinkedMessage(linkedMessageId, abortController.signal)
+  }, [isInChannel, channelId, linkedMessageId, channelMessages])
+
+  const onLinkedMessageSettled = () => {
+    // However the move came out, the link has been acted on and shouldn't move the list again.
+    setLinkedMessageId('')
+  }
+
+  // The newest server-recorded message time: only messages the server stored for this channel carry
+  // one, and a read position must never be reported from a locally-stamped time.
+  let newestMessageTime: number | undefined
+  if (channelMessages) {
+    for (let i = channelMessages.messages.length - 1; i >= 0; i--) {
+      const message = channelMessages.messages[i]
+      if (isServerOriginMessage(message)) {
+        newestMessageTime = message.time
+        break
+      }
+    }
+  }
+
+  // Reports the read position whenever the channel is open, scrolled to the bottom, and the app
+  // window is focused, so arriving at a channel already at the bottom (or scrolling back down to
+  // it) reports the newest message just as much as a message arriving while already there does.
+  // The read position never advances while the window is unfocused: messages landing in a channel
+  // that's open and at the bottom while the user is off in another window stay unread until they
+  // come back, at which point this re-runs and reports the newest one. Refocusing with nothing new
+  // to report costs no request — the coalescer drops a position it has already sent.
+  useEffect(() => {
+    if (isActivated && isAtBottom && isWindowFocused && newestMessageTime !== undefined) {
+      dispatch(markChannelRead(channelId, newestMessageTime))
+    }
+  }, [isActivated, isAtBottom, isWindowFocused, newestMessageTime, channelId, dispatch])
+
+  useEffect(() => () => flushLastRead(getChannelLastReadKey(channelId)), [channelId])
+
+  useEffect(() => {
+    if (basicChannelInfo && channelNameFromRoute !== basicChannelInfo.name) {
+      correctChannelNameForChat(basicChannelInfo.id, basicChannelInfo.name)
+    }
+  }, [basicChannelInfo, channelNameFromRoute])
+
+  const onLoadMoreMessages = useStableCallback(() =>
+    dispatch(
+      getMessageHistory(channelId, MESSAGES_LIMIT, {
+        onSuccess: () => {},
+        onError: onMessageLoadError,
+      }),
+    ),
+  )
+
+  const onLoadNewerMessages = useStableCallback(() => {
+    dispatch(
+      getNewerMessages(channelId, MESSAGES_LIMIT, {
+        onSuccess: () => {},
+        onError: onMessageLoadError,
+      }),
+    )
+  })
+
+  // Asks again for whatever the older edge failed at, which is what takes the error off it and lets
+  // the list resume requesting that edge on its own.
+  const onRetryHistory = () => {
+    const historyError = channelMessages?.historyError
+    if (historyError?.kind === 'around') {
+      if (historyError.aroundTime !== undefined) {
+        dispatch(
+          getMessagesAround(channelId, MESSAGES_LIMIT, historyError.aroundTime, {
+            onSuccess: () => {},
+            onError: onMessageLoadError,
+          }),
+        )
+      } else {
+        // A replacement window with no time to ask for again can only be re-established from the
+        // present.
+        dispatch(
+          jumpToPresent(channelId, MESSAGES_LIMIT, {
+            onSuccess: () => {},
+            onError: onMessageLoadError,
+          }),
+        )
+      }
+    } else {
+      dispatch(
+        getMessageHistory(channelId, MESSAGES_LIMIT, {
+          onSuccess: () => {},
+          onError: onMessageLoadError,
+        }),
+      )
+    }
+  }
+
+  const onJumpToPresent = () => {
+    dispatch(
+      jumpToPresent(channelId, MESSAGES_LIMIT, {
+        onSuccess: () => {},
+        onError: onMessageLoadError,
+      }),
+    )
+  }
+
+  const onSeekToUnread = () => {
+    if (unreadLineTime !== undefined) {
+      dispatch(
+        getMessagesAround(channelId, MESSAGES_LIMIT, unreadLineTime, {
+          onSuccess: () => {},
+          onError: onMessageLoadError,
+        }),
+      )
+    }
+  }
+
+  const onMarkRead = () => {
+    dispatch(markChannelReadNow(channelId))
+  }
+
+  const onAtBottomChange = (atBottom: boolean) => {
+    dispatch(updateChannelAtBottom(channelId, atBottom))
+  }
+
+  const onUnreadLineSeen = (time: number) => {
+    dispatch(markUnreadLineSeen(channelId, time))
+  }
+
+  const onSendChatMessage = useStableCallback((msg: string) =>
+    dispatch(
+      sendMessage(channelId, msg, {
+        onSuccess: () => {},
+        onError: err => {
+          logger.error(`Error sending a chat message: ${describeFetchError(err)}`)
+        },
+      }),
+    ),
+  )
+
+  const onLeaveChannel = useStableCallback((channelId: SbChannelId) => {
+    dispatch(leaveChannelWithConfirmation(channelId))
+  })
+
+  return (
+    <Container>
+      <ChannelContext.Provider value={{ channelId }}>
+        {isInChannel || isLeavingChannel ? (
+          <StyledChat
+            listProps={{
+              messages: channelMessages?.messages ?? [],
+              loading: channelMessages?.loadingHistory,
+              hasMoreHistory: channelMessages?.hasHistory,
+              loadingNewer: channelMessages?.loadingNewer,
+              hasNewerMessages: channelMessages?.hasNewer,
+              historyError: channelMessages?.historyError ? (
+                <MessageLoadErrorRow
+                  kind={channelMessages.historyError.kind}
+                  onRetry={onRetryHistory}
+                />
+              ) : undefined,
+              newerError: channelMessages?.newerError ? (
+                <MessageLoadErrorRow kind='newer' onRetry={onLoadNewerMessages} />
+              ) : undefined,
+              windowGeneration: channelMessages?.windowGen,
+              refreshToken: channelId,
+              viewStateKey,
+              MessageComponent: ChannelMessage,
+              onLoadMoreMessages,
+              onLoadNewerMessages,
+              unreadLineTime,
+            }}
+            inputProps={{
+              onSendChatMessage,
+              storageKey: viewStateKey,
+              mentionableUsers,
+              baseMentionableUsers,
+            }}
+            commandContext={commandContext}
+            linkedMessageId={linkedMessageId || undefined}
+            onLinkedMessageSettled={onLinkedMessageSettled}
+            onAtBottomChange={onAtBottomChange}
+            onUnreadLineSeen={onUnreadLineSeen}
+            onJumpToPresent={onJumpToPresent}
+            onSeekToUnread={onSeekToUnread}
+            onMarkRead={onMarkRead}
+            escapeJumpsToBottom
+            jumpToBottomOnSend
+            header={
+              // These are basically guaranteed to be defined here, but still doing the check instead
+              // of asserting them with ! because better to be safe than sorry, or something.
+              basicChannelInfo && detailedChannelInfo && joinedChannelInfo && selfPreferences ? (
+                <ChannelHeader
+                  key={basicChannelInfo.id}
+                  basicChannelInfo={basicChannelInfo}
+                  detailedChannelInfo={detailedChannelInfo}
+                  joinedChannelInfo={joinedChannelInfo}
+                  selfPreferences={selfPreferences}
+                  onLeaveChannel={onLeaveChannel}
+                />
+              ) : null
+            }
+            backgroundContent={
+              !selfPreferences?.hideBanner && detailedChannelInfo?.bannerPath ? (
+                <BackgroundImage src={detailedChannelInfo.bannerPath} draggable={false} />
+              ) : undefined
+            }
+            extraContent={
+              <ChannelUserList
+                // Its collapsed sections, expanded games and filter belong to one channel.
+                key={channelId}
+                channelId={channelId}
+                active={sortedActiveUserIds}
+                offline={sortedOfflineUserIds}
+                loadError={channelUsers?.userListError ?? false}
+                onRetryLoad={onRetryUserList}
+              />
+            }
+            UserMenu={ChannelUserMenu}
+            MessageMenu={ChannelMessageMenu}
+            NameBadge={MessageRoleBadge}
+          />
+        ) : (
+          <ChannelInfoPage channelId={channelId} channelName={channelNameFromRoute} />
+        )}
+
+        <React.Suspense fallback={<LoadingDotsArea />}>
+          <ConnectedChannelSettings channelId={channelId} />
+        </React.Suspense>
+      </ChannelContext.Provider>
+    </Container>
+  )
+}
+
+const ChannelInfoContainer = styled.div`
+  width: 100%;
+  height: 100%;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+`
+
+const ErrorContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  max-width: 480px;
+  margin: 0 32px;
+`
+
+const ChannelName = styled.div`
+  ${titleLarge};
+  margin-bottom: 8px;
+`
+
+const ErrorText = styled.div`
+  ${bodyLarge};
+  color: var(--theme-error);
+`
+
+function ChannelInfoPage({
+  channelId,
+  channelName,
+}: {
+  channelId: SbChannelId
+  channelName: string
+}) {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const basicChannelInfo = useAppSelector(s => s.chat.idToBasicInfo.get(channelId))
+
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<Error>()
+
+  useEffect(() => {
+    const abortController = new AbortController()
+
+    dispatch(
+      getChannelInfo(channelId, {
+        signal: abortController.signal,
+        onStart: () => {
+          setIsLoading(true)
+        },
+        onSuccess: () => {
+          setIsLoading(false)
+          setError(undefined)
+        },
+        onError: err => {
+          setIsLoading(false)
+          setError(err)
+        },
+      }),
+    )
+
+    return () => {
+      abortController.abort()
+    }
+  }, [channelId, dispatch])
+
+  let contents
+  if (isLoading) {
+    contents = <LoadingDotsArea />
+  } else if (error && isFetchError(error) && error.code === ChatServiceErrorCode.ChannelPrivate) {
+    // A private channel's name is only for its members and server moderators, so a requester
+    // who is neither doesn't get the URL's name segment echoed back to them either.
+    contents = <PrivateChannelNotice />
+  } else if (error) {
+    let errorText
+    if (isFetchError(error)) {
+      if (error.code === ChatServiceErrorCode.ChannelNotFound) {
+        errorText = (
+          <ErrorText>
+            {t(
+              'chat.channelInfo.notFound',
+              'This channel could not be found. It might not exist, or it may have been ' +
+                're-created by someone else.',
+            )}
+          </ErrorText>
+        )
+      } else {
+        errorText = (
+          <ErrorText>
+            <Trans t={t} i18nKey='chat.channelInfo.defaultError'>
+              An error occurred: {{ statusText: error.statusText }}
+            </Trans>
+          </ErrorText>
+        )
+      }
+    } else {
+      errorText = (
+        <ErrorText>
+          <Trans t={t} i18nKey='chat.channelInfo.genericError'>
+            Error getting channel info for #{{ channelName }}: {{ errorMessage: error.message }}
+          </Trans>
+        </ErrorText>
+      )
+    }
+    contents = (
+      <ErrorContainer>
+        <ChannelName>{channelName}</ChannelName>
+        {errorText}
+      </ErrorContainer>
+    )
+  } else if (basicChannelInfo) {
+    contents = (
+      <ConnectedChannelInfoCard
+        channelId={basicChannelInfo.id}
+        channelName={basicChannelInfo.name}
+      />
+    )
+  }
+
+  return <ChannelInfoContainer>{contents}</ChannelInfoContainer>
+}

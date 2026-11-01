@@ -1,0 +1,504 @@
+import { atom, useAtom, useAtomValue } from 'jotai'
+import { AnimatePresence } from 'motion/react'
+import * as m from 'motion/react-m'
+import React, { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import styled, { css } from 'styled-components'
+import { Except } from 'type-fest'
+import { useRoute } from 'wouter'
+import { slotCount, takenSlotCount } from '../../common/lobbies'
+import { urlForLobby } from '../../common/lobbies/lobby-url'
+import { useObservedDimensions } from '../dom/dimension-hooks'
+import { MaterialIcon } from '../icons/material/material-icon'
+import { isInLobby } from '../lobbies/lobby-reducer'
+import { cancelFindMatch, openAcceptMatchDialog } from '../matchmaking/action-creators'
+import { isInDraftAtom } from '../matchmaking/draft-atoms'
+import { ElapsedTime } from '../matchmaking/elapsed-time'
+import {
+  currentSearchInfoAtom,
+  foundMatchAtom,
+  hasAcceptedAtom,
+  isMatchmakingAtom,
+  matchLaunchingAtom,
+} from '../matchmaking/matchmaking-atoms'
+import { useAcceptCountdown } from '../matchmaking/use-accept-countdown'
+import { useAcceptMatch } from '../matchmaking/use-accept-match'
+import { FilledButton, IconButton, OutlinedButton } from '../material/button'
+import { Portal } from '../material/portal'
+import { elevationPlus2 } from '../material/shadows'
+import { zIndexDialogScrim } from '../material/zindex'
+import { MessagePreviewLine } from '../messaging/message-preview-line'
+import { CommonMessageType, CommonTextMessage } from '../messaging/message-records'
+import { push } from '../navigation/routing'
+import { isConnectedAtom } from '../network/network-atoms'
+import { useMultiplexRef } from '../react/refs'
+import { useAppDispatch, useAppSelector } from '../redux-hooks'
+import { ContainerLevel, containerStyles } from '../styles/colors'
+import { styledWithAttrs } from '../styles/styled-with-attrs'
+import {
+  BodyLarge,
+  BodyMedium,
+  LabelMedium,
+  singleLine,
+  titleLarge,
+  titleMedium,
+} from '../styles/typography'
+
+const widgetXAtom = atom(0)
+const widgetYAtom = atom(0)
+
+const PositioningArea = styled.div`
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  top: calc(var(--sb-system-bar-height, 0) + 72px);
+  bottom: 8px;
+
+  contain: layout;
+  pointer-events: none;
+  z-index: ${zIndexDialogScrim - 1};
+`
+
+export function GameplayActivityWidget() {
+  const inLobby = useAppSelector(s => isInLobby(s.lobby))
+  const isMatchmaking = useAtomValue(isMatchmakingAtom)
+  const inDraft = useAtomValue(isInDraftAtom)
+  const isConnected = useAtomValue(isConnectedAtom)
+  const isMatchLaunching = useAtomValue(matchLaunchingAtom)
+
+  const [onLobbyRoute] = useRoute('/lobbies/:lobbyId/*?')
+
+  const positioningAreaRef = useRef<HTMLDivElement>(null)
+  const widgetRef = useRef<HTMLDivElement>(null)
+  const [x, setX] = useAtom(widgetXAtom)
+  const [y, setY] = useAtom(widgetYAtom)
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
+
+  const onDragStart = (e: React.MouseEvent) => {
+    if (e.button !== 0) return
+    const widget = widgetRef.current
+    if (!widget) return
+    const widgetRect = widget.getBoundingClientRect()
+    setDragOffset({
+      x: e.clientX - widgetRect.left,
+      y: e.clientY - widgetRect.top,
+    })
+    setDragging(true)
+    e.preventDefault()
+  }
+
+  useEffect(() => {
+    if (!dragging) {
+      return () => {}
+    }
+
+    function onMouseMove(e: MouseEvent) {
+      if (!positioningAreaRef.current) return
+      const areaRect = positioningAreaRef.current.getBoundingClientRect()
+      const x = e.clientX - areaRect.left - (dragOffset?.x ?? 0)
+      const y = e.clientY - areaRect.top - (dragOffset?.y ?? 0)
+      setX(x)
+      setY(y)
+    }
+    function onMouseUp() {
+      setDragging(false)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [dragging, dragOffset, setX, setY])
+
+  let widget: React.ReactNode | undefined
+  if (isConnected && inLobby && !onLobbyRoute) {
+    widget = <LobbyWidget key='lobby' ref={widgetRef} onDragStart={onDragStart} />
+  } else if (isConnected && isMatchmaking && !inDraft && !isMatchLaunching) {
+    widget = <MatchmakingWidget key='matchmaking' ref={widgetRef} onDragStart={onDragStart} />
+  }
+
+  return (
+    <Portal open={!!widget}>
+      <PositioningArea
+        ref={positioningAreaRef}
+        style={
+          {
+            '--widget-left': `${x}px`,
+            '--widget-top': `${y}px`,
+          } as React.CSSProperties
+        }>
+        <AnimatePresence>{widget}</AnimatePresence>
+      </PositioningArea>
+    </Portal>
+  )
+}
+
+const WidgetRoot = styled(m.div)`
+  ${containerStyles(ContainerLevel.High)};
+  ${elevationPlus2};
+
+  position: absolute;
+  left: clamp(0px, var(--widget-left, 0px), calc(100% - var(--_width, 0px)));
+  top: clamp(0px, var(--widget-top, 0px), calc(100% - var(--_height, 0px)));
+  max-width: 280px;
+
+  padding-block: 8px;
+  display: inline-block;
+  border-radius: 8px;
+  pointer-events: auto;
+`
+
+const WidgetTitleArea = styled(m.div)<{ $hasPip?: boolean }>`
+  position: relative;
+  height: 24px;
+  margin-bottom: 8px;
+  padding-inline: 2px 12px;
+
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  cursor: move;
+
+  ${props => {
+    if (props.$hasPip) {
+      return css`
+        &::after {
+          content: '';
+          position: absolute;
+          width: 8px;
+          height: 8px;
+          right: 4px;
+          top: 0px;
+
+          background-color: var(--theme-amber);
+          border-radius: 50%;
+        }
+      `
+    } else {
+      return css``
+    }
+  }}
+`
+
+const InitialWash = styled(m.div)`
+  position: absolute;
+  inset: 0;
+
+  background-color: var(--theme-primary);
+  pointer-events: none;
+  z-index: 1;
+`
+
+const WidgetTitle = styled.div`
+  ${titleMedium};
+  ${singleLine};
+`
+
+const WidgetChildren = styled(m.div)`
+  padding-inline: 8px;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 12px;
+`
+
+const DragHandle = styledWithAttrs(MaterialIcon, { icon: 'drag_indicator' })``
+
+const TitleActionButton = styled(IconButton)`
+  flex-shrink: 0;
+  margin-left: auto;
+  width: 24px;
+  min-height: 24px;
+`
+
+interface WidgetProps {
+  ref: React.Ref<HTMLDivElement>
+  title: string
+  hasTitlePip?: boolean
+  /** An optional icon button rendered at the end of the title bar (e.g. to reopen a dialog). */
+  titleAction?: React.ReactNode
+  onDragStart: (e: React.MouseEvent) => void
+  children: React.ReactNode
+}
+
+function Widget({
+  ref,
+  title,
+  hasTitlePip = false,
+  titleAction,
+  onDragStart,
+  children,
+  ...rest
+}: WidgetProps) {
+  const [sizeRef, contentRect] = useObservedDimensions<HTMLDivElement>()
+  const composedRef = useMultiplexRef(ref, sizeRef)
+
+  const width = contentRect?.width ?? 0
+  const height = contentRect?.height ?? 0
+
+  return (
+    <WidgetRoot
+      {...rest}
+      ref={composedRef}
+      style={
+        {
+          '--_width': `${width}px`,
+          '--_height': `${height}px`,
+        } as React.CSSProperties
+      }
+      layout='size'
+      initial='initial'
+      animate='animate'
+      exit='exit'
+      variants={{
+        initial: { clipPath: 'circle(0% at center center)', opacity: 1, pointerEvents: 'none' },
+        animate: {
+          clipPath: 'circle(100% at center center)',
+          opacity: 1,
+          pointerEvents: 'auto',
+          transition: {
+            type: 'spring',
+            duration: 0.6,
+            bounce: 0,
+          },
+        },
+        exit: {
+          clipPath: 'circle(100% at center center)',
+          opacity: 0,
+          pointerEvents: 'none',
+          transition: { type: 'spring', duration: 0.3, bounce: 0 },
+        },
+      }}>
+      <WidgetTitleArea
+        layout='size'
+        onMouseDown={onDragStart}
+        style={{ cursor: 'move' }}
+        $hasPip={hasTitlePip}>
+        <DragHandle />
+        <WidgetTitle>{title}</WidgetTitle>
+        {titleAction}
+      </WidgetTitleArea>
+      <WidgetChildren layout='size'>{children}</WidgetChildren>
+      <InitialWash
+        variants={{ initial: { opacity: 1 }, animate: { opacity: 0 } }}
+        transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
+      />
+    </WidgetRoot>
+  )
+}
+
+type WidgetContainerProps = Except<WidgetProps, 'children' | 'title'>
+
+const LobbyInfo = styled.div`
+  display: grid;
+  grid-template-columns: auto minmax(auto, 1fr);
+
+  align-items: baseline;
+  column-gap: 8px;
+  row-gap: 4px;
+`
+
+const CountdownText = styled.span<{ $low: boolean }>`
+  ${titleLarge};
+
+  margin-top: 4px;
+
+  display: block;
+  font-feature-settings: 'tnum' on;
+  text-align: center;
+  color: ${props => (props.$low ? 'var(--theme-error)' : 'inherit')};
+`
+
+const LobbyCountdown = styled.div`
+  display: flex;
+  flex-direction: column;
+`
+
+const LobbyStatusText = styled(BodyMedium)`
+  text-align: center;
+  color: var(--theme-on-surface-variant);
+`
+
+export function LobbyWidget(props: WidgetContainerProps) {
+  const { t } = useTranslation()
+  const lobbyName = useAppSelector(s => s.lobby.info.name)
+  const lobbyId = useAppSelector(s => s.lobby.info.id)
+  const hasUnread = useAppSelector(s => s.lobby.hasUnread)
+  const lobbyInfo = useAppSelector(s => s.lobby.info)
+  const { isCountingDown, countdownTimer, isLoading } = useAppSelector(s => s.lobby.loadingState)
+  // System lines (joins, countdown ticks, etc.) are left out: the preview is for what people said.
+  const latestMessage = useAppSelector(s =>
+    s.lobby.chat.findLast(
+      (message): message is CommonTextMessage =>
+        message.type === CommonMessageType.TextMessage && !s.relationships.blocks.has(message.from),
+    ),
+  )
+  const totalSlots = slotCount(lobbyInfo)
+  const takenSlots = takenSlotCount(lobbyInfo)
+
+  let statusContent: React.ReactNode
+  if (isLoading) {
+    statusContent = (
+      <LobbyStatusText>
+        {t('gameplayActivity.lobby.gameStarting', 'Game starting…')}
+      </LobbyStatusText>
+    )
+  } else if (isCountingDown) {
+    statusContent = (
+      <LobbyCountdown>
+        <LobbyStatusText>
+          {t('gameplayActivity.lobby.startingIn', 'Game starts in')}
+        </LobbyStatusText>
+        <CountdownText $low={false}>{Math.max(countdownTimer, 0)}</CountdownText>
+      </LobbyCountdown>
+    )
+  } else {
+    statusContent = (
+      <LobbyInfo>
+        <LabelMedium>{t('gameplayActivity.lobby.slotsLabel', 'Slots:')}</LabelMedium>
+        <BodyMedium>
+          {t('gameplayActivity.lobby.slotCount', {
+            defaultValue: '{{takenSlots}} / {{totalSlots}}',
+            takenSlots,
+            totalSlots,
+          })}
+        </BodyMedium>
+      </LobbyInfo>
+    )
+  }
+
+  return (
+    <Widget {...props} title={lobbyName} hasTitlePip={hasUnread}>
+      {statusContent}
+      {latestMessage ? <MessagePreviewLine message={latestMessage} /> : null}
+      <OutlinedButton
+        iconStart='arrow_forward'
+        label={t('gameplayActivity.lobby.viewLobby', 'View lobby')}
+        onClick={() => push(urlForLobby(lobbyId, lobbyName))}
+      />
+    </Widget>
+  )
+}
+
+const StyledElapsedTime = styled(ElapsedTime)`
+  ${titleLarge};
+
+  margin-top: 4px;
+
+  font-feature-settings: 'tnum' on;
+  text-align: center;
+`
+
+/**
+ * How often the widget's accept countdown re-renders. Unlike the accept-match dialog's animated
+ * countdown, the widget only displays whole seconds, so a coarser tick is enough to keep it
+ * accurate.
+ */
+const WIDGET_COUNTDOWN_TICK_MS = 1000
+
+const AcceptProgressText = styled(BodyMedium)`
+  text-align: center;
+  color: var(--theme-on-surface-variant);
+`
+
+export function MatchmakingWidget(props: WidgetContainerProps) {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const foundMatch = useAtomValue(foundMatchAtom)
+  const isMatched = !!foundMatch
+  const hasAccepted = useAtomValue(hasAcceptedAtom)
+  const startTime = useAtomValue(currentSearchInfoAtom)?.startTime
+
+  const [isCancelling, setIsCancelling] = useState(false)
+  const { acceptInProgress, triggerAccept } = useAcceptMatch()
+
+  const { secondsLeft, lowTime } = useAcceptCountdown(foundMatch, WIDGET_COUNTDOWN_TICK_MS)
+
+  let bodyContent: React.ReactNode
+  if (foundMatch) {
+    let readyAction: React.ReactNode
+    if (!hasAccepted) {
+      readyAction = (
+        <FilledButton
+          label={t('matchmaking.acceptMatch.readyUp', 'Ready up')}
+          disabled={acceptInProgress}
+          onClick={() => triggerAccept()}
+        />
+      )
+    } else {
+      readyAction = (
+        <BodyMedium>
+          {t('gameplayActivity.matchmaking.waitingForPlayers', 'Waiting for other players…')}
+        </BodyMedium>
+      )
+    }
+
+    bodyContent = (
+      <>
+        <CountdownText $low={lowTime}>
+          {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')}
+        </CountdownText>
+        <AcceptProgressText>
+          {t('gameplayActivity.matchmaking.acceptedCount', {
+            defaultValue: '{{accepted}} / {{total}} ready',
+            accepted: foundMatch.acceptedPlayers,
+            total: foundMatch.numPlayers,
+          })}
+        </AcceptProgressText>
+        {readyAction}
+      </>
+    )
+  } else if (startTime === undefined) {
+    bodyContent = <BodyLarge>…</BodyLarge>
+  } else {
+    bodyContent = <StyledElapsedTime startTimeMs={startTime} />
+  }
+
+  const reopenDialogLabel = t(
+    'gameplayActivity.matchmaking.reopenAcceptDialog',
+    'Reopen match dialog',
+  )
+
+  return (
+    <Widget
+      {...props}
+      title={
+        isMatched
+          ? t('gameplayActivity.matchmaking.matchFound', 'Match found!')
+          : t('gameplayActivity.matchmaking.searching', 'Searching for a match…')
+      }
+      titleAction={
+        isMatched ? (
+          <TitleActionButton
+            icon={<MaterialIcon icon='open_in_new' size={16} />}
+            onMouseDown={event => event.stopPropagation()}
+            onClick={() => dispatch(openAcceptMatchDialog())}
+            title={reopenDialogLabel}
+            ariaLabel={reopenDialogLabel}
+          />
+        ) : undefined
+      }>
+      {bodyContent}
+      {!isMatched ? (
+        <OutlinedButton
+          iconStart='close'
+          label={t('common.actions.cancel', 'Cancel')}
+          disabled={isCancelling}
+          onClick={() => {
+            setIsCancelling(true)
+            dispatch(
+              cancelFindMatch({
+                onSuccess: () => setIsCancelling(false),
+                onError: () => setIsCancelling(false),
+              }),
+            )
+          }}
+        />
+      ) : null}
+    </Widget>
+  )
+}

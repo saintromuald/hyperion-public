@@ -1,0 +1,947 @@
+import keycode from 'keycode'
+import { AnimatePresence } from 'motion/react'
+import * as m from 'motion/react-m'
+import * as React from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import styled, { css } from 'styled-components'
+import { Link } from 'wouter'
+import { usePathname } from 'wouter/use-browser-location'
+import { SbChannelId } from '../../common/chat'
+
+import { getErrorStack } from '../../common/errors'
+import { urlPath } from '../../common/urls'
+import { FriendActivityStatus } from '../../common/users/relationships'
+import { SbUserId } from '../../common/users/sb-user-id'
+import { ConnectedAvatar } from '../avatars/avatar'
+import {
+  getBatchChannelInfo,
+  getJoinedChannels,
+  leaveChannelWithConfirmation,
+  markChannelReadNow,
+  updateChannelOrder,
+} from '../chat/action-creators'
+import { ConnectedChannelBadge } from '../chat/channel-badge'
+import { useChannelNotificationMenuItems } from '../chat/channel-notification-menu-items'
+import {
+  channelHasUnreadMention,
+  channelNeedsAttention,
+  isChannelMuted,
+} from '../chat/chat-reducer'
+import { copyChannelLink } from '../chat/copy-channel-link'
+
+import { useWindowSize } from '../dom/dimension-hooks'
+import { FocusTrap } from '../dom/focus-trap'
+import { useOverflowingElement } from '../dom/overflowing-element'
+import { useContextMenu } from '../dom/use-context-menu'
+import { MaterialIcon } from '../icons/material/material-icon'
+import { useKeyListener } from '../keyboard/key-listener'
+import { LoadErrorRow } from '../lists/load-error-row'
+import logger from '../logging/logger'
+import { IconButton, keyEventMatches, OutlinedButton, useButtonState } from '../material/button'
+import { Divider } from '../material/menu/divider'
+import { DestructiveMenuItem, MenuItem } from '../material/menu/item'
+import { MenuList } from '../material/menu/menu'
+import { Popover } from '../material/popover'
+import { Ripple } from '../material/ripple'
+import { ScrollDivider, useScrollIndicatorState } from '../material/scroll-indicator'
+import { elevationPlus1 } from '../material/shadows'
+import { TabItem, Tabs } from '../material/tabs'
+import { Tooltip } from '../material/tooltip'
+import { zIndexMenu, zIndexMenuBackdrop } from '../material/zindex'
+import { NavigationTrackerProvider, useNavigationTracker } from '../navigation/navigation-tracker'
+import { push } from '../navigation/routing'
+import { LoadingDotsArea } from '../progress/dots'
+import { useAppDispatch, useAppSelector } from '../redux-hooks'
+import { DURATION_LONG } from '../snackbars/snackbar-durations'
+import { useSnackbarController } from '../snackbars/snackbar-overlay'
+import { dialogScrimOpacity } from '../styles/colors'
+import { labelMedium, singleLine, titleSmall } from '../styles/typography'
+import { getBatchUserInfo } from '../users/action-creators'
+import { ConnectedUserContextMenu } from '../users/user-context-menu'
+import { useUserOverlays } from '../users/user-overlays'
+import { closeWhisperSession, getWhisperSessions } from '../whispers/action-creators'
+import { WhisperConversationUserMenu } from '../whispers/whisper-menu-items'
+import { urlForWhisper } from '../whispers/whisper-url'
+import { ChannelReorderList } from './channel-reorder-list'
+import { FriendActivityStatusGlyph } from './friend-activity-status'
+import { FriendsList, useRelationshipsLoader } from './friends-list'
+
+/** The width the window must be greater than for pinning to be enabled. */
+export const CAN_PIN_WIDTH = 1280
+
+const ALT_E = { keyCode: keycode('e'), altKey: true }
+const ALT_H = { keyCode: keycode('h'), altKey: true }
+
+enum SocialTab {
+  Chat = 'chat',
+  Friends = 'friends',
+}
+
+const Scrim = styled(m.div)`
+  position: fixed;
+  left: 0;
+  top: var(--sb-system-bar-height, 0);
+  right: 0;
+  bottom: 0;
+  background-color: var(--theme-dialog-scrim);
+  opacity: var(--theme-dialog-scrim-opacity);
+  z-index: ${zIndexMenuBackdrop};
+`
+
+const rootCss = css`
+  ${elevationPlus1};
+
+  width: 100%;
+  min-width: var(--sb-sidebar-width);
+  height: 100%;
+
+  display: flex;
+  flex-direction: column;
+
+  background-color: var(--theme-container-lowest);
+  --availability-dot-ring: var(--theme-container-lowest);
+  border-radius: 12px 0 0 12px;
+  overflow-x: hidden;
+`
+
+const RootPinned = styled.div<{ $visible: boolean }>`
+  ${rootCss};
+
+  position: relative;
+  grid-area: sidebar;
+
+  /*
+    Ensure that shadows, etc. don't bleed into the main content area when the sidebar is not
+    visible, since when pinned it will still be rendered + have normal width even when collapsed.
+  */
+  transition: ${props => (props.$visible ? 'unset' : 'visibility 200ms linear')};
+  visibility: ${props => (props.$visible ? 'visible' : 'hidden')};
+`
+
+const RootOverlay = styled(m.div)`
+  ${rootCss};
+  position: fixed;
+  right: 0;
+  width: var(--sb-sidebar-width);
+  top: var(--sb-system-bar-height, 0);
+  height: calc(100vh - var(--sb-system-bar-height, 0));
+  z-index: ${zIndexMenu};
+`
+
+const SectionSpacer = styled.hr`
+  border: none;
+  margin-block: 16px 8px;
+`
+
+const TabsAndPin = styled.div`
+  position: relative;
+  margin: 8px 0 0;
+  padding-inline: 8px;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const PinButton = styled(IconButton)`
+  border: 1px solid var(--theme-outline-variant);
+`
+
+const TabsContainer = styled.div`
+  flex-grow: 0;
+  flex-shrink: 0;
+
+  width: min-content;
+  margin: 0 auto;
+  padding: 8px 0;
+`
+
+const ChatContainer = styled(m.div)`
+  flex-basis: 0;
+  flex-grow: 1;
+  min-height: 0;
+  height: 0;
+  width: 100%;
+  padding-block: 16px;
+
+  overflow-y: auto;
+`
+
+const FriendsListContainer = styled.div`
+  flex-grow: 1;
+
+  display: flex;
+  flex-direction: column;
+`
+
+export function SocialSidebar({
+  className,
+  visible,
+  pinned,
+  onVisibilityChange,
+  onPinnedChange,
+}: {
+  className?: string
+  visible: boolean
+  pinned: boolean
+  onVisibilityChange: (visible: boolean) => void
+  onPinnedChange: (pinned: boolean) => void
+}) {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const [activeTab, setActiveTab] = useState(SocialTab.Chat)
+  const [windowWidth] = useWindowSize()
+
+  const [focusableElem, setFocusableElem] = useState<HTMLSpanElement | null>(null)
+
+  const friendActivityStatus = useAppSelector(s => s.relationships.friendActivityStatus)
+  const friendCount = useMemo(() => {
+    return Array.from(friendActivityStatus.values()).filter(
+      status => status !== FriendActivityStatus.Offline,
+    ).length
+  }, [friendActivityStatus])
+
+  const canPin = !windowWidth || windowWidth > CAN_PIN_WIDTH
+  const actuallyPinned = pinned && canPin
+
+  const [doInitialAnim, setDoInitialAnim] = useState(actuallyPinned)
+
+  useEffect(() => {
+    // TODO(tec27): Figure out a better way to do this
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDoInitialAnim(!actuallyPinned && !visible)
+  }, [actuallyPinned, visible])
+
+  useKeyListener({
+    onKeyDown: (event: KeyboardEvent) => {
+      if (keyEventMatches(event, ALT_H)) {
+        if (!visible) {
+          setActiveTab(SocialTab.Chat)
+          onVisibilityChange(true)
+        } else if (activeTab !== SocialTab.Chat) {
+          setActiveTab(SocialTab.Chat)
+        } else {
+          onVisibilityChange(false)
+        }
+        return true
+      } else if (keyEventMatches(event, ALT_E)) {
+        if (!visible) {
+          setActiveTab(SocialTab.Friends)
+          onVisibilityChange(true)
+        } else if (activeTab !== SocialTab.Friends) {
+          setActiveTab(SocialTab.Friends)
+        } else {
+          onVisibilityChange(false)
+        }
+        return true
+      }
+
+      return false
+    },
+  })
+
+  const [isLoadingJoinedChannels, setIsLoadingJoinedChannels] = useState(false)
+  const [isLoadingWhisperSessions, setIsLoadingWhisperSessions] = useState(false)
+  const [loadingJoinedChannelsError, setLoadingJoinedChannelsError] = useState<Error>()
+  const [loadingWhisperSessionsError, setLoadingWhisperSessionsError] = useState<Error>()
+  // Bumped by a Retry to run the matching load effect again without waiting for a reconnect
+  const [joinedChannelsAttempt, setJoinedChannelsAttempt] = useState(0)
+  const [whisperSessionsAttempt, setWhisperSessionsAttempt] = useState(0)
+
+  // Chat channels/whispers get cleared out on reconnect, so we need to reload them whenever that
+  // happens
+  const isConnected = useAppSelector(s => s.network.isConnected)
+  useEffect(() => {
+    if (!isConnected) {
+      return () => {}
+    }
+
+    const abortController = new AbortController()
+
+    dispatch(
+      getJoinedChannels({
+        signal: abortController.signal,
+        onStart: () => {
+          setIsLoadingJoinedChannels(true)
+        },
+        onSuccess: () => {
+          setIsLoadingJoinedChannels(false)
+          setLoadingJoinedChannelsError(undefined)
+        },
+        onError: err => {
+          setIsLoadingJoinedChannels(false)
+          setLoadingJoinedChannelsError(err)
+          logger.error(`Error loading chat channels: ${getErrorStack(err)}`)
+        },
+      }),
+    )
+
+    return () => {
+      abortController.abort()
+    }
+  }, [dispatch, isConnected, joinedChannelsAttempt])
+
+  useEffect(() => {
+    if (!isConnected) {
+      return () => {}
+    }
+
+    const abortController = new AbortController()
+
+    dispatch(
+      getWhisperSessions({
+        signal: abortController.signal,
+        onStart: () => {
+          setIsLoadingWhisperSessions(true)
+        },
+        onSuccess: () => {
+          setIsLoadingWhisperSessions(false)
+          setLoadingWhisperSessionsError(undefined)
+        },
+        onError: err => {
+          setIsLoadingWhisperSessions(false)
+          setLoadingWhisperSessionsError(err)
+          logger.error(`Error loading whisper sessions: ${getErrorStack(err)}`)
+        },
+      }),
+    )
+
+    return () => {
+      abortController.abort()
+    }
+  }, [dispatch, isConnected, whisperSessionsAttempt])
+
+  useRelationshipsLoader()
+
+  const [isAtTop, _, topElem, bottomElem] = useScrollIndicatorState()
+
+  const content = (
+    <NavigationTrackerProvider
+      onNavigation={() => {
+        if (!actuallyPinned) {
+          onVisibilityChange(false)
+        }
+      }}>
+      <TabsAndPin>
+        {canPin ? (
+          <Tooltip
+            text={
+              pinned
+                ? t('social.sidebar.unpinTooltip', 'Unpin sidebar')
+                : t('social.sidebar.pinTooltip', 'Pin sidebar')
+            }
+            position='left'
+            tabIndex={-1}>
+            <PinButton
+              icon={<MaterialIcon icon='keep' filled={pinned} />}
+              onClick={() => onPinnedChange(!pinned)}
+            />
+          </Tooltip>
+        ) : null}
+        <TabsContainer>
+          <Tabs activeTab={activeTab} onChange={setActiveTab}>
+            <TabItem value={SocialTab.Chat} text={t('social.chat.label', 'Chat')} />
+            <TabItem
+              value={SocialTab.Friends}
+              text={t('social.friends.label', {
+                defaultValue: 'Friends ({{friendCount}})',
+                friendCount,
+              })}
+            />
+          </Tabs>
+        </TabsContainer>
+        <ScrollDivider $showAt='bottom' $show={!isAtTop} />
+      </TabsAndPin>
+      <span ref={setFocusableElem} tabIndex={-1} />
+      {activeTab === SocialTab.Chat ? (
+        <ChatContainer layoutScroll={true}>
+          {topElem}
+          <ChatContent
+            isLoadingJoinedChannels={isLoadingJoinedChannels}
+            loadingJoinedChannelsError={loadingJoinedChannelsError}
+            isLoadingWhisperSessions={isLoadingWhisperSessions}
+            loadingWhisperSessionsError={loadingWhisperSessionsError}
+            onRetryJoinedChannels={() => setJoinedChannelsAttempt(a => a + 1)}
+            onRetryWhisperSessions={() => setWhisperSessionsAttempt(a => a + 1)}
+          />
+          {bottomElem}
+        </ChatContainer>
+      ) : (
+        <FriendsListContainer>
+          {topElem}
+          <FriendsList />
+          {bottomElem}
+        </FriendsListContainer>
+      )}
+    </NavigationTrackerProvider>
+  )
+
+  if (actuallyPinned) {
+    return (
+      <RootPinned className={className} $visible={visible} data-testid='social-sidebar'>
+        {content}
+      </RootPinned>
+    )
+  } else {
+    return (
+      <AnimatePresence>
+        {visible ? (
+          <>
+            <Scrim
+              key='scrim'
+              onClick={() => onVisibilityChange(false)}
+              variants={{
+                initial: { opacity: 0 },
+                animate: { opacity: dialogScrimOpacity },
+                exit: { opacity: 0 },
+              }}
+              initial='initial'
+              animate='animate'
+              exit='exit'
+              transition={{
+                type: 'spring',
+                duration: 0.3,
+                bounce: 0,
+              }}
+            />
+            <RootOverlay
+              key='sidebar'
+              className={className}
+              data-testid='social-sidebar'
+              variants={{
+                initial: { x: '100%' },
+                animate: { x: '0%' },
+                exit: { x: '200%' },
+              }}
+              initial={doInitialAnim ? 'initial' : false}
+              animate='animate'
+              exit='exit'
+              transition={{
+                type: 'spring',
+                duration: 0.4,
+                bounce: 0,
+              }}>
+              <FocusTrap focusableElem={focusableElem}>{content}</FocusTrap>
+            </RootOverlay>
+          </>
+        ) : null}
+      </AnimatePresence>
+    )
+  }
+}
+
+const Subheader = styled.div`
+  ${labelMedium};
+  ${singleLine};
+  padding-inline: 16px 8px;
+
+  color: var(--theme-on-surface-variant);
+  line-height: 24px;
+`
+
+const ChatListButton = styled(OutlinedButton)`
+  display: block;
+  margin: 8px auto 0;
+`
+
+const LoadErrorContainer = styled.div`
+  padding: 8px;
+`
+
+function ChatContent({
+  isLoadingJoinedChannels,
+  loadingJoinedChannelsError,
+  isLoadingWhisperSessions,
+  loadingWhisperSessionsError,
+  onRetryJoinedChannels,
+  onRetryWhisperSessions,
+}: {
+  isLoadingJoinedChannels: boolean
+  loadingJoinedChannelsError?: Error
+  isLoadingWhisperSessions: boolean
+  loadingWhisperSessionsError?: Error
+  onRetryJoinedChannels: () => void
+  onRetryWhisperSessions: () => void
+}) {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const chatChannels = useAppSelector(s => s.chat.joinedChannels)
+  const whisperSessions = useAppSelector(s => s.whispers.sessions)
+  const { onNavigation } = useNavigationTracker()
+  const snackbarController = useSnackbarController()
+
+  const onReorderChannels = (next: SbChannelId[]) => {
+    dispatch(
+      updateChannelOrder(next, {
+        onSuccess: () => {},
+        onError: err => {
+          snackbarController.showSnackbar(
+            t('social.chat.reorderChannelsError', {
+              defaultValue: 'Error saving the channel order: {{errorMessage}}',
+              errorMessage: err.message,
+            }),
+            DURATION_LONG,
+          )
+        },
+      }),
+    )
+  }
+
+  let chatChannelsList: React.ReactNode
+  if (isLoadingJoinedChannels) {
+    chatChannelsList = <LoadingDotsArea />
+  } else if (loadingJoinedChannelsError) {
+    chatChannelsList = (
+      <LoadErrorContainer>
+        <LoadErrorRow
+          message={t('social.chat.loadingChannelsError', 'Error loading chat channels')}
+          onRetry={onRetryJoinedChannels}
+        />
+      </LoadErrorContainer>
+    )
+  } else {
+    chatChannelsList = (
+      <ChannelReorderList
+        channelIds={Array.from(chatChannels)}
+        onReorder={onReorderChannels}
+        renderChannel={c => (
+          <ChannelEntry
+            channelId={c}
+            onLeave={(channelId: SbChannelId) => {
+              dispatch(leaveChannelWithConfirmation(channelId))
+            }}
+          />
+        )}
+      />
+    )
+  }
+
+  let whisperSessionsList: React.ReactNode
+  if (isLoadingWhisperSessions) {
+    whisperSessionsList = <LoadingDotsArea />
+  } else if (loadingWhisperSessionsError) {
+    whisperSessionsList = (
+      <LoadErrorContainer>
+        <LoadErrorRow
+          message={t('social.chat.loadingWhispersError', 'Error loading whispers')}
+          onRetry={onRetryWhisperSessions}
+        />
+      </LoadErrorContainer>
+    )
+  } else {
+    whisperSessionsList = Array.from(whisperSessions.values(), w => (
+      <WhisperEntry key={w} userId={w} />
+    ))
+  }
+
+  return (
+    <>
+      <Subheader>{t('navigation.leftNav.chatChannels', 'Chat channels')}</Subheader>
+      {chatChannelsList}
+      <ChatListButton
+        onClick={() => {
+          if (location.pathname !== '/chat/list') {
+            push('/chat/list')
+          }
+          onNavigation()
+        }}
+        label={t('chat.channelList.browseChannels', 'Browse channels')}
+        iconStart='add'
+      />
+      <SectionSpacer />
+      <Subheader>{t('navigation.leftNav.whispers', 'Whispers')}</Subheader>
+      {whisperSessionsList}
+      <ChatListButton
+        onClick={() => {
+          if (location.pathname !== '/whispers') {
+            push('/whispers')
+          }
+          onNavigation()
+        }}
+        label={t('chat.whispers.startWhisperButton', 'Start a whisper')}
+        iconStart='add'
+      />
+    </>
+  )
+}
+
+function ChannelEntry({
+  channelId,
+  onLeave,
+}: {
+  channelId: SbChannelId
+  onLeave: (channelId: SbChannelId) => void
+}) {
+  const { t } = useTranslation()
+  const dispatch = useAppDispatch()
+  const basicInfo = useAppSelector(s => s.chat.idToBasicInfo.get(channelId))
+  const hasUnread = useAppSelector(s => s.chat.unreadChannels.has(channelId))
+  const hasUnreadMention = useAppSelector(s => channelHasUnreadMention(s.chat, channelId))
+  const hasUnreadLine = useAppSelector(s => s.chat.idToUnreadLine.has(channelId))
+  const needsAttention = useAppSelector(s => channelNeedsAttention(s.chat, channelId))
+  const isMuted = useAppSelector(s => isChannelMuted(s.chat, channelId))
+  const canMarkRead = hasUnread || hasUnreadMention || hasUnreadLine
+  const { onNavigation } = useNavigationTracker()
+  const { onContextMenu, contextMenuPopoverProps } = useContextMenu()
+  const notificationMenuItems = useChannelNotificationMenuItems(
+    channelId,
+    contextMenuPopoverProps.onDismiss,
+    { dense: true },
+  )
+
+  useEffect(() => {
+    dispatch(getBatchChannelInfo(channelId))
+  }, [dispatch, channelId])
+
+  const button = (
+    <IconButton
+      icon={<MaterialIcon icon='close' />}
+      title={t('chat.navEntry.leaveChannel', 'Leave channel')}
+      onClick={event => {
+        event.preventDefault()
+        onLeave(channelId)
+      }}
+    />
+  )
+
+  const displayName = basicInfo?.name ? (
+    <ChannelNameText $muted={isMuted}>#{basicInfo.name}</ChannelNameText>
+  ) : (
+    <LoadingName aria-label={t('common.loading.channelName', 'Channel name loading…')}>
+      &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
+    </LoadingName>
+  )
+
+  return (
+    <>
+      <Popover {...contextMenuPopoverProps}>
+        <MenuList dense={true}>
+          <MenuItem
+            text={t('common.actions.markAsRead', 'Mark as read')}
+            disabled={!canMarkRead}
+            onClick={() => {
+              contextMenuPopoverProps.onDismiss()
+              dispatch(markChannelReadNow(channelId))
+            }}
+          />
+          {basicInfo && !basicInfo.private ? (
+            <MenuItem
+              text={t('chat.navEntry.copyChannelLink', 'Copy channel link')}
+              onClick={() => {
+                contextMenuPopoverProps.onDismiss()
+                copyChannelLink(channelId, basicInfo.name)
+              }}
+            />
+          ) : null}
+          {notificationMenuItems}
+          <Divider $dense={true} />
+          <DestructiveMenuItem
+            text={t('chat.navEntry.leaveChannel', 'Leave channel')}
+            onClick={() => {
+              contextMenuPopoverProps.onDismiss()
+              onLeave(channelId)
+            }}
+          />
+        </MenuList>
+      </Popover>
+
+      <Entry
+        link={urlPath`/chat/${channelId}/${basicInfo?.name}`}
+        needsAttention={needsAttention}
+        urgentAttention={hasUnreadMention}
+        title={basicInfo ? `#${basicInfo.name}` : undefined}
+        button={button}
+        icon={<ConnectedChannelBadge channelId={channelId} />}
+        trailing={
+          basicInfo?.private || isMuted ? (
+            <>
+              {basicInfo?.private ? (
+                <Tooltip
+                  text={t('chat.privateChannelTitle', 'Private channel')}
+                  position='top'
+                  tabIndex={-1}>
+                  <TrailingGlyph>
+                    <MaterialIcon icon='lock' size={20} />
+                  </TrailingGlyph>
+                </Tooltip>
+              ) : null}
+              {isMuted ? (
+                <Tooltip
+                  text={t('chat.notifications.mutedTitle', 'Muted')}
+                  position='top'
+                  tabIndex={-1}>
+                  <TrailingGlyph>
+                    <MaterialIcon icon='notifications_off' size={20} />
+                  </TrailingGlyph>
+                </Tooltip>
+              ) : null}
+            </>
+          ) : undefined
+        }
+        isActive={contextMenuPopoverProps.open}
+        onContextMenu={onContextMenu}
+        onClick={event => {
+          if (!event.defaultPrevented) {
+            onNavigation()
+          }
+        }}>
+        {displayName}
+      </Entry>
+    </>
+  )
+}
+
+function WhisperEntry({ userId }: { userId: SbUserId }) {
+  const { t } = useTranslation()
+  const snackbarController = useSnackbarController()
+  const dispatch = useAppDispatch()
+  const username = useAppSelector(s => s.users.byId.get(userId)?.name)
+  const hasUnread = useAppSelector(s => s.whispers.byId.get(userId)?.hasUnread ?? false)
+  const isBlocked = useAppSelector(s => s.relationships.blocks.has(userId))
+  const { onNavigation } = useNavigationTracker()
+
+  const { isOverlayOpen, contextMenuProps, onContextMenu } = useUserOverlays({
+    userId,
+    UserMenu: WhisperConversationUserMenu,
+  })
+
+  useEffect(() => {
+    dispatch(getBatchUserInfo(userId))
+  }, [dispatch, userId])
+
+  const button = (
+    <IconButton
+      icon={<MaterialIcon icon='close' />}
+      title={t('whispers.navEntry.closeWhisper', 'Close whisper')}
+      onClick={event => {
+        event.preventDefault()
+        dispatch(
+          closeWhisperSession(userId, {
+            onSuccess: () => {},
+            onError: err => {
+              snackbarController.showSnackbar(
+                t('navigation.leftNav.whisperCloseError', {
+                  defaultValue: 'Error closing whisper session: {{errorMessage}}',
+                  errorMessage: err.message,
+                }),
+                DURATION_LONG,
+              )
+            },
+          }),
+        )
+      }}
+    />
+  )
+
+  const usernameElem = username ?? (
+    <LoadingName aria-label={t('common.loading.username', 'Username loading…')}>
+      &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
+    </LoadingName>
+  )
+
+  return isBlocked ? null : (
+    <>
+      <ConnectedUserContextMenu {...contextMenuProps} />
+
+      <Entry
+        link={urlForWhisper(userId, username ?? '')}
+        button={button}
+        icon={<ConnectedAvatar userId={userId} showAvailability={true} showOffline={true} />}
+        trailing={<WhisperActivityGlyph userId={userId} />}
+        needsAttention={hasUnread}
+        urgentAttention={hasUnread}
+        isActive={isOverlayOpen}
+        onContextMenu={onContextMenu}
+        onClick={event => {
+          if (!event.defaultPrevented) {
+            onNavigation()
+          }
+        }}>
+        {usernameElem}
+      </Entry>
+    </>
+  )
+}
+
+const LoadingName = styled.span`
+  margin-right: 0.25em;
+  background-color: var(--theme-skeleton);
+  border-radius: 4px;
+`
+
+const WhisperActivityGlyph = styled(FriendActivityStatusGlyph)`
+  margin-left: 8px;
+`
+
+const TrailingGlyph = styled.div`
+  margin-left: 8px;
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+
+  color: var(--theme-on-surface-variant);
+`
+
+const ChannelNameText = styled.span<{ $muted?: boolean }>`
+  opacity: ${props => (props.$muted ? 0.6 : 1)};
+`
+
+const EntryRoot = styled(Link)<{ $isCurrentPath: boolean; $isActive?: boolean }>`
+  position: relative;
+  height: 56px;
+  margin: 0;
+  padding-inline: 16px 4px;
+
+  display: flex;
+  align-items: center;
+
+  --_state-bg: ${props =>
+    props.$isCurrentPath || props.$isActive ? 'var(--theme-grey-blue-container)' : 'transparent'};
+  --_color: ${props => (props.$isCurrentPath ? 'var(--color-amber80)' : 'currentColor')};
+  --sb-ripple-color: var(--theme-on-grey-blue-container);
+
+  &:link,
+  &:visited,
+  &:hover,
+  &:active {
+    color: var(--_color);
+    text-decoration: none;
+  }
+
+  &:before {
+    position: absolute;
+    left: 8px;
+    right: 4px;
+    height: 100%;
+
+    background-color: var(--_state-bg);
+    border-radius: 4px;
+    content: '';
+    pointer-events: none;
+    z-index: -1;
+  }
+`
+
+const EntryText = styled.span`
+  ${titleSmall};
+  ${singleLine};
+
+  flex-grow: 1;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const EntryButton = styled.div`
+  flex-shrink: 0;
+  height: 100%;
+  margin-left: 8px;
+
+  display: flex;
+  align-items: center;
+
+  opacity: 0;
+
+  ${EntryRoot}:hover &,
+  ${EntryRoot}:focus-visible &,
+  ${EntryRoot}:has(:focus-visible) & {
+    opacity: 1;
+  }
+`
+
+const AttentionIndicator = styled.div<{ $urgent?: boolean }>`
+  width: 8px;
+  height: 8px;
+  position: absolute;
+  left: -3px;
+  top: calc(50% - 4px);
+
+  border-radius: 50%;
+  background-color: ${props => (props.$urgent ? 'var(--theme-error)' : 'var(--color-amber80)')};
+`
+
+const EntryIcon = styled.div`
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  margin-right: 16px;
+`
+
+const EntryRipple = styled(Ripple)`
+  position: absolute;
+  left: 8px;
+  right: 4px;
+  height: 100%;
+
+  border-radius: 4px;
+`
+
+interface EntryProps {
+  link: string
+  children: React.ReactNode
+  title?: string
+  button?: React.ReactNode
+  icon?: React.ReactNode
+  /** Content rendered between the entry's text and its button, e.g. a friend activity glyph. */
+  trailing?: React.ReactNode
+  needsAttention?: boolean
+  /**
+   * Whether the attention indicator should render in its urgent color, e.g. for a channel message
+   * that mentions the current user or a whisper (which is inherently directed at them).
+   */
+  urgentAttention?: boolean
+  isActive?: boolean
+  className?: string
+  onContextMenu?: (event: React.MouseEvent) => void
+  onClick?: (event: React.MouseEvent) => void
+}
+
+function Entry({
+  link,
+  title,
+  button,
+  icon,
+  trailing,
+  needsAttention,
+  urgentAttention,
+  isActive,
+  className,
+  children,
+  onContextMenu,
+  onClick,
+}: EntryProps) {
+  // Subscribe to the pathname through a hook instead of reading location.pathname during render:
+  // React Compiler treats render-time reads of mutable globals as stable and would cache the
+  // first render's value forever. usePathname also returns the raw pathname, avoiding the
+  // unescaping that wouter's useLocation() applies.
+  const currentPath = usePathname()
+
+  const [buttonProps, rippleRef] = useButtonState({ onClick })
+  // TODO(tec27): Would probably be better to pass a route string and do `useRoute` so we can handle
+  // having the incorrect name of the entity we're linking to
+  const isCurrentPath = link.toLowerCase() === currentPath.toLowerCase()
+  const [textRef, isOverflowing] = useOverflowingElement()
+
+  return (
+    <EntryRoot
+      {...buttonProps}
+      to={link}
+      $isCurrentPath={isCurrentPath}
+      $isActive={isActive}
+      className={className}
+      onContextMenu={onContextMenu}>
+      {icon ? <EntryIcon>{icon}</EntryIcon> : null}
+      {needsAttention ? <AttentionIndicator $urgent={urgentAttention} /> : null}
+      <EntryText ref={textRef} title={isOverflowing ? title : undefined} data-testid='entry-text'>
+        {children}
+      </EntryText>
+      {trailing}
+      {button ? <EntryButton>{button}</EntryButton> : null}
+
+      <EntryRipple ref={rippleRef} />
+    </EntryRoot>
+  )
+}

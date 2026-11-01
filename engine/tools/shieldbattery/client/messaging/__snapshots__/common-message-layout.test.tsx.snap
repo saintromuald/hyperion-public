@@ -1,0 +1,1316 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`client/messaging/common-message-layout/TextMessage > cozy layouts > continuation with an emoji-only message 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW sc-iQQMgC bcdnFX"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      class="sc-fnWakf fLWUMy sc-ekA-dab gjwivB sc-aimud dyyBpC"
+      tabindex="0"
+    >
+      <span
+        class="sc-btlcnm hJZmPj"
+      >
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          [
+        </i>
+        12:00 AM
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          ] 
+        </i>
+      </span>
+    </div>
+    <span
+      class="sc-gLMfLD sc-eSoVms cdqnCS dPEnjN"
+    >
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz kazaXM"
+        >
+          🔥
+        </span>
+      </div>
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz kazaXM"
+        >
+          🔥
+        </span>
+      </div>
+       
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz kazaXM"
+        >
+          🎉
+        </span>
+      </div>
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > cozy layouts > continuation with plain text 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW sc-iQQMgC bcdnFX"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      class="sc-fnWakf fLWUMy sc-ekA-dab gjwivB sc-aimud dyyBpC"
+      tabindex="0"
+    >
+      <span
+        class="sc-btlcnm hJZmPj"
+      >
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          [
+        </i>
+        12:00 AM
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          ] 
+        </i>
+      </span>
+    </div>
+    <span
+      class="sc-gLMfLD sc-eSoVms cdqnCS dPEnjN"
+    >
+      This is test message
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > cozy layouts > header whose text mentions the self user 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN eZKmoR sc-fvNjCw hksUqC"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      aria-hidden="true"
+      class="sc-ihRHdn juMqHf"
+    >
+      <div
+        class="sc-jlZHyJ iyZBRB sc-jdXJqO bKkdoX"
+      >
+        <div
+          class="sc-gsWeWL joWoQv sc-dTSwuc gRBTqP"
+        />
+      </div>
+    </div>
+    <div>
+      <span
+        class="sc-kmINVu kLhGFm sc-iKUTxF lexbdk"
+        tabindex="0"
+      >
+        <span
+          aria-label="Username loading…"
+          class="sc-cwivMP joMOvB"
+        >
+                     
+        </span>
+      </span>
+      <div
+        class="sc-fnWakf fLWUMy sc-jNjyOX cmNJBo"
+        tabindex="0"
+      >
+        <span
+          class="sc-cpUyiq bGoMAR"
+        >
+          <i
+            aria-hidden="true"
+            class="sc-bwcYpM cQyjbK"
+          >
+             [
+          </i>
+          12:00 AM
+          <i
+            aria-hidden="true"
+            class="sc-bwcYpM cQyjbK"
+          >
+            ]
+          </i>
+        </span>
+      </div>
+    </div>
+    <span
+      class="sc-gLMfLD sc-eSoVms cdqnCS dPEnjN"
+    >
+      Hey
+       
+      <span
+        class="sc-kmINVu kLhGFm sc-hHShZe jdfeNk"
+        tabindex="0"
+      >
+        @
+        <span
+          aria-label="Username loading…"
+          class="sc-cwivMP joMOvB"
+        >
+                     
+        </span>
+      </span>
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > cozy layouts > header with a message-link chip 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW sc-fvNjCw hksUqC"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      aria-hidden="true"
+      class="sc-ihRHdn juMqHf"
+    >
+      <div
+        class="sc-jlZHyJ iyZBRB sc-jdXJqO bKkdoX"
+      >
+        <div
+          class="sc-gsWeWL joWoQv sc-dTSwuc gRBTqP"
+        />
+      </div>
+    </div>
+    <div>
+      <span
+        class="sc-kmINVu kLhGFm sc-iKUTxF lexbdk"
+        tabindex="0"
+      >
+        <span
+          aria-label="Username loading…"
+          class="sc-cwivMP joMOvB"
+        >
+                     
+        </span>
+      </span>
+      <div
+        class="sc-fnWakf fLWUMy sc-jNjyOX cmNJBo"
+        tabindex="0"
+      >
+        <span
+          class="sc-cpUyiq bGoMAR"
+        >
+          <i
+            aria-hidden="true"
+            class="sc-bwcYpM cQyjbK"
+          >
+             [
+          </i>
+          12:00 AM
+          <i
+            aria-hidden="true"
+            class="sc-bwcYpM cQyjbK"
+          >
+            ]
+          </i>
+        </span>
+      </div>
+    </div>
+    <span
+      class="sc-gLMfLD sc-eSoVms cdqnCS dPEnjN"
+    >
+      see this: 
+      <a
+        class="sc-hlXwdv fZqlrP"
+        href="https://shieldbattery.net/chat/1/some-channel?m=9b2e8d0e-5f3a-4a2b-8c1d-6f5e4d3c2b1a"
+        rel="nofollow noreferrer noopener"
+        target="_blank"
+      >
+        <span
+          aria-hidden="true"
+          class="sc-hiKgKF dseapH sc-gswFxA TBTGQ"
+        >
+          chat
+        </span>
+        <span
+          aria-label="Channel name loading…"
+          class="sc-bKoKeS oEBwc"
+        >
+                     
+        </span>
+        <span
+          class="sc-gpEJva dWPfPL"
+        >
+          ›
+        </span>
+        <span
+          class="sc-cxyaCL fuuTEI"
+        >
+          message
+        </span>
+      </a>
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > cozy layouts > header with plain text 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW sc-fvNjCw hksUqC"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      aria-hidden="true"
+      class="sc-ihRHdn juMqHf"
+    >
+      <div
+        class="sc-jlZHyJ iyZBRB sc-jdXJqO bKkdoX"
+      >
+        <div
+          class="sc-gsWeWL joWoQv sc-dTSwuc gRBTqP"
+        />
+      </div>
+    </div>
+    <div>
+      <span
+        class="sc-kmINVu kLhGFm sc-iKUTxF lexbdk"
+        tabindex="0"
+      >
+        <span
+          aria-label="Username loading…"
+          class="sc-cwivMP joMOvB"
+        >
+                     
+        </span>
+      </span>
+      <div
+        class="sc-fnWakf fLWUMy sc-jNjyOX cmNJBo"
+        tabindex="0"
+      >
+        <span
+          class="sc-cpUyiq bGoMAR"
+        >
+          <i
+            aria-hidden="true"
+            class="sc-bwcYpM cQyjbK"
+          >
+             [
+          </i>
+          12:00 AM
+          <i
+            aria-hidden="true"
+            class="sc-bwcYpM cQyjbK"
+          >
+            ]
+          </i>
+        </span>
+      </div>
+    </div>
+    <span
+      class="sc-gLMfLD sc-eSoVms cdqnCS dPEnjN"
+    >
+      This is test message
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > message as a normal text 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      class="sc-fnWakf fLWUMy sc-ekA-dab gjwivB"
+      tabindex="0"
+    >
+      <span
+        class="sc-btlcnm hJZmPj"
+      >
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          [
+        </i>
+        12:00 AM
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          ] 
+        </i>
+      </span>
+    </div>
+    <span
+      class="sc-kmINVu kLhGFm sc-iKUTxF lexbdk"
+      tabindex="0"
+    >
+      <span
+        aria-label="Username loading…"
+        class="sc-cwivMP joMOvB"
+      >
+                   
+      </span>
+    </span>
+    <i
+      aria-hidden="true"
+      class="sc-bwcYpM cQyjbK"
+    >
+      : 
+    </i>
+    <span
+      class="sc-gLMfLD cdqnCS"
+    >
+      This is test message
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > message mixing emoji and text renders them inline-sized 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      class="sc-fnWakf fLWUMy sc-ekA-dab gjwivB"
+      tabindex="0"
+    >
+      <span
+        class="sc-btlcnm hJZmPj"
+      >
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          [
+        </i>
+        12:00 AM
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          ] 
+        </i>
+      </span>
+    </div>
+    <span
+      class="sc-kmINVu kLhGFm sc-iKUTxF lexbdk"
+      tabindex="0"
+    >
+      <span
+        aria-label="Username loading…"
+        class="sc-cwivMP joMOvB"
+      >
+                   
+      </span>
+    </span>
+    <i
+      aria-hidden="true"
+      class="sc-bwcYpM cQyjbK"
+    >
+      : 
+    </i>
+    <span
+      class="sc-gLMfLD cdqnCS"
+    >
+      nice game 
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz ihddXT"
+        >
+          🔥
+        </span>
+      </div>
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > message sent as an emote reads as an action line 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      class="sc-fnWakf fLWUMy sc-ekA-dab gjwivB"
+      tabindex="0"
+    >
+      <span
+        class="sc-btlcnm hJZmPj"
+      >
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          [
+        </i>
+        12:00 AM
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          ] 
+        </i>
+      </span>
+    </div>
+    <span
+      class="sc-kkmFdg hXYIPZ"
+    >
+      * 
+    </span>
+    <span
+      class="sc-kmINVu kLhGFm sc-iKUTxF sc-bXmKkT lexbdk kXVrbs"
+      tabindex="0"
+    >
+      <span
+        aria-label="Username loading…"
+        class="sc-cwivMP joMOvB"
+      >
+                   
+      </span>
+    </span>
+     
+    <span
+      class="sc-gLMfLD sc-cTsMyu cdqnCS imYBmY"
+    >
+      waves at everyone
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > message with a link 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      class="sc-fnWakf fLWUMy sc-ekA-dab gjwivB"
+      tabindex="0"
+    >
+      <span
+        class="sc-btlcnm hJZmPj"
+      >
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          [
+        </i>
+        12:00 AM
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          ] 
+        </i>
+      </span>
+    </div>
+    <span
+      class="sc-kmINVu kLhGFm sc-iKUTxF lexbdk"
+      tabindex="0"
+    >
+      <span
+        aria-label="Username loading…"
+        class="sc-cwivMP joMOvB"
+      >
+                   
+      </span>
+    </span>
+    <i
+      aria-hidden="true"
+      class="sc-bwcYpM cQyjbK"
+    >
+      : 
+    </i>
+    <span
+      class="sc-gLMfLD cdqnCS"
+    >
+      here is a link 
+      <a
+        href="http://www.example.com"
+        rel="nofollow noreferrer noopener"
+        target="_blank"
+      >
+        http://www.example.com
+      </a>
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > message with a link before a mention 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      class="sc-fnWakf fLWUMy sc-ekA-dab gjwivB"
+      tabindex="0"
+    >
+      <span
+        class="sc-btlcnm hJZmPj"
+      >
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          [
+        </i>
+        12:00 AM
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          ] 
+        </i>
+      </span>
+    </div>
+    <span
+      class="sc-kmINVu kLhGFm sc-iKUTxF lexbdk"
+      tabindex="0"
+    >
+      <span
+        aria-label="Username loading…"
+        class="sc-cwivMP joMOvB"
+      >
+                   
+      </span>
+    </span>
+    <i
+      aria-hidden="true"
+      class="sc-bwcYpM cQyjbK"
+    >
+      : 
+    </i>
+    <span
+      class="sc-gLMfLD cdqnCS"
+    >
+      <a
+        href="http://www.example.com"
+        rel="nofollow noreferrer noopener"
+        target="_blank"
+      >
+        http://www.example.com
+      </a>
+       go here
+       
+      <span
+        class="sc-kmINVu kLhGFm sc-hHShZe jdfeNk"
+        tabindex="0"
+      >
+        @
+        <span
+          aria-label="Username loading…"
+          class="sc-cwivMP joMOvB"
+        >
+                     
+        </span>
+      </span>
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > message with a link between mentions 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      class="sc-fnWakf fLWUMy sc-ekA-dab gjwivB"
+      tabindex="0"
+    >
+      <span
+        class="sc-btlcnm hJZmPj"
+      >
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          [
+        </i>
+        12:00 AM
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          ] 
+        </i>
+      </span>
+    </div>
+    <span
+      class="sc-kmINVu kLhGFm sc-iKUTxF lexbdk"
+      tabindex="0"
+    >
+      <span
+        aria-label="Username loading…"
+        class="sc-cwivMP joMOvB"
+      >
+                   
+      </span>
+    </span>
+    <i
+      aria-hidden="true"
+      class="sc-bwcYpM cQyjbK"
+    >
+      : 
+    </i>
+    <span
+      class="sc-gLMfLD cdqnCS"
+    >
+      hey
+       
+      <span
+        class="sc-kmINVu kLhGFm sc-hHShZe jdfeNk"
+        tabindex="0"
+      >
+        @
+        <span
+          aria-label="Username loading…"
+          class="sc-cwivMP joMOvB"
+        >
+                     
+        </span>
+      </span>
+       see 
+      <a
+        href="http://www.example.com"
+        rel="nofollow noreferrer noopener"
+        target="_blank"
+      >
+        http://www.example.com
+      </a>
+       go here
+       
+      <span
+        class="sc-kmINVu kLhGFm sc-hHShZe jdfeNk"
+        tabindex="0"
+      >
+        @
+        <span
+          aria-label="Username loading…"
+          class="sc-cwivMP joMOvB"
+        >
+                     
+        </span>
+      </span>
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > message with a mention 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      class="sc-fnWakf fLWUMy sc-ekA-dab gjwivB"
+      tabindex="0"
+    >
+      <span
+        class="sc-btlcnm hJZmPj"
+      >
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          [
+        </i>
+        12:00 AM
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          ] 
+        </i>
+      </span>
+    </div>
+    <span
+      class="sc-kmINVu kLhGFm sc-iKUTxF lexbdk"
+      tabindex="0"
+    >
+      <span
+        aria-label="Username loading…"
+        class="sc-cwivMP joMOvB"
+      >
+                   
+      </span>
+    </span>
+    <i
+      aria-hidden="true"
+      class="sc-bwcYpM cQyjbK"
+    >
+      : 
+    </i>
+    <span
+      class="sc-gLMfLD cdqnCS"
+    >
+      hey
+       
+      <span
+        class="sc-kmINVu kLhGFm sc-hHShZe jdfeNk"
+        tabindex="0"
+      >
+        @
+        <span
+          aria-label="Username loading…"
+          class="sc-cwivMP joMOvB"
+        >
+                     
+        </span>
+      </span>
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > message with a mention before a link 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      class="sc-fnWakf fLWUMy sc-ekA-dab gjwivB"
+      tabindex="0"
+    >
+      <span
+        class="sc-btlcnm hJZmPj"
+      >
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          [
+        </i>
+        12:00 AM
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          ] 
+        </i>
+      </span>
+    </div>
+    <span
+      class="sc-kmINVu kLhGFm sc-iKUTxF lexbdk"
+      tabindex="0"
+    >
+      <span
+        aria-label="Username loading…"
+        class="sc-cwivMP joMOvB"
+      >
+                   
+      </span>
+    </span>
+    <i
+      aria-hidden="true"
+      class="sc-bwcYpM cQyjbK"
+    >
+      : 
+    </i>
+    <span
+      class="sc-gLMfLD cdqnCS"
+    >
+      <span
+        class="sc-kmINVu kLhGFm sc-hHShZe jdfeNk"
+        tabindex="0"
+      >
+        @
+        <span
+          aria-label="Username loading…"
+          class="sc-cwivMP joMOvB"
+        >
+                     
+        </span>
+      </span>
+       go to 
+      <a
+        href="http://www.example.com"
+        rel="nofollow noreferrer noopener"
+        target="_blank"
+      >
+        http://www.example.com
+      </a>
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > message with a mention between links 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      class="sc-fnWakf fLWUMy sc-ekA-dab gjwivB"
+      tabindex="0"
+    >
+      <span
+        class="sc-btlcnm hJZmPj"
+      >
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          [
+        </i>
+        12:00 AM
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          ] 
+        </i>
+      </span>
+    </div>
+    <span
+      class="sc-kmINVu kLhGFm sc-iKUTxF lexbdk"
+      tabindex="0"
+    >
+      <span
+        aria-label="Username loading…"
+        class="sc-cwivMP joMOvB"
+      >
+                   
+      </span>
+    </span>
+    <i
+      aria-hidden="true"
+      class="sc-bwcYpM cQyjbK"
+    >
+      : 
+    </i>
+    <span
+      class="sc-gLMfLD cdqnCS"
+    >
+      <a
+        href="http://www.example.com"
+        rel="nofollow noreferrer noopener"
+        target="_blank"
+      >
+        http://www.example.com
+      </a>
+       go here
+       
+      <span
+        class="sc-kmINVu kLhGFm sc-hHShZe jdfeNk"
+        tabindex="0"
+      >
+        @
+        <span
+          aria-label="Username loading…"
+          class="sc-cwivMP joMOvB"
+        >
+                     
+        </span>
+      </span>
+       or here 
+      <a
+        href="http://www.example.com"
+        rel="nofollow noreferrer noopener"
+        target="_blank"
+      >
+        http://www.example.com
+      </a>
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > message with a mention of self user 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN eZKmoR"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      class="sc-fnWakf fLWUMy sc-ekA-dab gjwivB"
+      tabindex="0"
+    >
+      <span
+        class="sc-btlcnm hJZmPj"
+      >
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          [
+        </i>
+        12:00 AM
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          ] 
+        </i>
+      </span>
+    </div>
+    <span
+      class="sc-kmINVu kLhGFm sc-iKUTxF lexbdk"
+      tabindex="0"
+    >
+      <span
+        aria-label="Username loading…"
+        class="sc-cwivMP joMOvB"
+      >
+                   
+      </span>
+    </span>
+    <i
+      aria-hidden="true"
+      class="sc-bwcYpM cQyjbK"
+    >
+      : 
+    </i>
+    <span
+      class="sc-gLMfLD cdqnCS"
+    >
+      Hey
+       
+      <span
+        class="sc-kmINVu kLhGFm sc-hHShZe jdfeNk"
+        tabindex="0"
+      >
+        @
+        <span
+          aria-label="Username loading…"
+          class="sc-cwivMP joMOvB"
+        >
+                     
+        </span>
+      </span>
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > message with only emoji renders them jumbo-sized 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      class="sc-fnWakf fLWUMy sc-ekA-dab gjwivB"
+      tabindex="0"
+    >
+      <span
+        class="sc-btlcnm hJZmPj"
+      >
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          [
+        </i>
+        12:00 AM
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          ] 
+        </i>
+      </span>
+    </div>
+    <span
+      class="sc-kmINVu kLhGFm sc-iKUTxF lexbdk"
+      tabindex="0"
+    >
+      <span
+        aria-label="Username loading…"
+        class="sc-cwivMP joMOvB"
+      >
+                   
+      </span>
+    </span>
+    <i
+      aria-hidden="true"
+      class="sc-bwcYpM cQyjbK"
+    >
+      : 
+    </i>
+    <span
+      class="sc-gLMfLD cdqnCS"
+    >
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz kazaXM"
+        >
+          🔥
+        </span>
+      </div>
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz kazaXM"
+        >
+          🔥
+        </span>
+      </div>
+       
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz kazaXM"
+        >
+          🎉
+        </span>
+      </div>
+    </span>
+  </div>
+</div>
+`;
+
+exports[`client/messaging/common-message-layout/TextMessage > message with too many emoji for jumbo stays inline-sized 1`] = `
+<div
+  data-testid="message-container"
+>
+  <div
+    class="sc-kOonaN kGRyvW"
+    data-message-id="MESSAGE_ID"
+    role="document"
+  >
+    <div
+      class="sc-fnWakf fLWUMy sc-ekA-dab gjwivB"
+      tabindex="0"
+    >
+      <span
+        class="sc-btlcnm hJZmPj"
+      >
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          [
+        </i>
+        12:00 AM
+        <i
+          aria-hidden="true"
+          class="sc-bwcYpM cQyjbK"
+        >
+          ] 
+        </i>
+      </span>
+    </div>
+    <span
+      class="sc-kmINVu kLhGFm sc-iKUTxF lexbdk"
+      tabindex="0"
+    >
+      <span
+        aria-label="Username loading…"
+        class="sc-cwivMP joMOvB"
+      >
+                   
+      </span>
+    </span>
+    <i
+      aria-hidden="true"
+      class="sc-bwcYpM cQyjbK"
+    >
+      : 
+    </i>
+    <span
+      class="sc-gLMfLD cdqnCS"
+    >
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz ihddXT"
+        >
+          😀
+        </span>
+      </div>
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz ihddXT"
+        >
+          😀
+        </span>
+      </div>
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz ihddXT"
+        >
+          😀
+        </span>
+      </div>
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz ihddXT"
+        >
+          😀
+        </span>
+      </div>
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz ihddXT"
+        >
+          😀
+        </span>
+      </div>
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz ihddXT"
+        >
+          😀
+        </span>
+      </div>
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz ihddXT"
+        >
+          😀
+        </span>
+      </div>
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz ihddXT"
+        >
+          😀
+        </span>
+      </div>
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz ihddXT"
+        >
+          😀
+        </span>
+      </div>
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz ihddXT"
+        >
+          😀
+        </span>
+      </div>
+      <div
+        class="sc-fnWakf fLWUMy sc-enrZcB hxnTpC"
+        tabindex="-1"
+      >
+        <span
+          class="sc-jhDKLz ihddXT"
+        >
+          😀
+        </span>
+      </div>
+    </span>
+  </div>
+</div>
+`;

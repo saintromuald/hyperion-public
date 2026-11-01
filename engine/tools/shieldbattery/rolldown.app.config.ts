@@ -1,0 +1,113 @@
+import path from 'node:path'
+import { defineConfig, type OutputOptions, type RolldownOptions } from 'rolldown'
+import { readEnvFile } from './build-plugins/env-file'
+import { nativeAddons } from './build-plugins/native-addons'
+import { securityImpl } from './build-plugins/security-impl'
+import { sidecarAssets } from './build-plugins/sidecar-assets'
+import { thirdPartyLicenses } from './build-plugins/third-party-licenses'
+
+const ROOT = import.meta.dirname
+/**
+ * Everything the packaged app runs, in one directory. The renderer build writes here too (see
+ * vite.electron.config.ts), and the packager copies the directory whole, so `__dirname` means the
+ * same thing during development as it does once installed.
+ */
+const OUT_DIR = path.join(ROOT, 'app', 'dist')
+
+/**
+ * Production unless development is asked for explicitly.
+ *
+ * This decides the `process.env.NODE_ENV` baked into the bundle, which `common/flags.ts` turns into
+ * real behaviour — a client that believes it is in development keeps its developer-only settings
+ * live. A build that forgot to say which it wanted must therefore come out as the shippable one,
+ * which also matches the renderer, where `vite build` is production and `vite` is not.
+ */
+const isProd = process.env.NODE_ENV !== 'development'
+
+/**
+ * Release-build settings, read into a scratch object rather than `process.env`: these belong to the
+ * build, not to the process running it. Development builds ignore the file, so they bundle the
+ * stubs unless the environment asks for something else.
+ */
+const buildEnv: Record<string, string> = isProd ? readEnvFile(path.join(ROOT, '.env-build')) : {}
+
+const analyticsId = process.env.SB_ANALYTICS_ID ?? buildEnv.SB_ANALYTICS_ID ?? ''
+const securityImplPath = process.env.SB_PREBUILD ?? buildEnv.SB_PREBUILD
+
+const output: OutputOptions = {
+  dir: OUT_DIR,
+  format: 'cjs',
+  entryFileNames: '[name].js',
+  // Distinct from the renderer's `.chunk.js`, so the two builds sharing this directory can't
+  // collide and it stays obvious which side of the app a file belongs to.
+  chunkFileNames: '[name].appchunk.js',
+  // 'hidden' rather than true: the packaged app excludes *.map, so a sourceMappingURL comment
+  // would point every chunk at a file that isn't there.
+  sourcemap: 'hidden',
+  // Production bundles are minified like the renderer's; the hidden source maps still map their
+  // stack traces back.
+  minify: isProd,
+}
+
+const shared: RolldownOptions = {
+  platform: 'node',
+  // Electron's own modules come from the runtime, not from the bundle.
+  external: ['electron'],
+  // Dynamic imports in this code defer evaluation of modules whose top level needs a real
+  // Electron process (so they can still load under plain Node for unit tests) -- they aren't
+  // chunk-split requests, and splitting buys nothing for local CJS files. The "also statically
+  // imported" warning therefore doesn't indicate a problem in this bundle.
+  checks: { ineffectiveDynamicImport: false },
+  transform: {
+    // Legacy decorators and their metadata, which tsyringe resolves constructor dependencies from,
+    // are picked up from tsconfig's `experimentalDecorators`/`emitDecoratorMetadata`. Setting them
+    // here as well only earns a warning that the two disagree about who owns the setting.
+    define: {
+      IS_ELECTRON: 'true',
+      SB_ANALYTICS_ID: JSON.stringify(analyticsId),
+      // Only the exact member, so the rest of `process.env` stays readable at runtime.
+      'process.env.NODE_ENV': JSON.stringify(isProd ? 'production' : 'development'),
+    },
+  },
+  output,
+}
+
+const mainAddons = nativeAddons()
+
+export default defineConfig([
+  {
+    ...shared,
+    input: {
+      index: path.join(ROOT, 'app/startup.js'),
+      // The replay library's DB, watcher and parser run in a worker thread; this is its entry,
+      // loaded via `new Worker(...)` from the main bundle.
+      'db-worker': path.join(ROOT, 'app/replay-library/worker/db-worker.ts'),
+    },
+    plugins: [
+      mainAddons,
+      securityImpl(securityImplPath),
+      thirdPartyLicenses({
+        build: 'app-main',
+        destination: path.join(OUT_DIR, 'third-party-licenses', 'app-main.json'),
+        unpackagedAddons: () => mainAddons.unpackagedAddons(),
+      }),
+      sidecarAssets([
+        // The replay parser is compiled to WebAssembly, which its Node entry loads by reading the
+        // file next to itself.
+        { test: /broodrep[\\/]pkg-node[\\/]broodrep_wasm\.js$/, files: ['broodrep_wasm_bg.wasm'] },
+      ]),
+    ],
+  },
+  {
+    ...shared,
+    input: { preload: path.join(ROOT, 'app/preload.js') },
+    // Deliberately its own build rather than a third entry above: a sandboxed preload has no
+    // `require` for sibling files, so it cannot be allowed to share a chunk with anything.
+    plugins: [
+      thirdPartyLicenses({
+        build: 'app-preload',
+        destination: path.join(OUT_DIR, 'third-party-licenses', 'app-preload.json'),
+      }),
+    ],
+  },
+])

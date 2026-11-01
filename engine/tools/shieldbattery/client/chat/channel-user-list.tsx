@@ -1,0 +1,687 @@
+import { TFunction } from 'i18next'
+import * as React from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Virtuoso } from 'react-virtuoso'
+import styled, { css } from 'styled-components'
+import { SbUserId } from '../../common/users/sb-user-id'
+import { MaterialIcon } from '../icons/material/material-icon'
+import { eatVirtuosoContext } from '../lists/eat-virtuoso-context'
+import { LoadErrorRow } from '../lists/load-error-row'
+import { JsonLocalStorageValue } from '../local-storage'
+import { buttonReset } from '../material/button-reset'
+import { ChatContext } from '../messaging/chat-context'
+import { useMentionFilterClick } from '../messaging/mention-hooks'
+import { useAppSelector } from '../redux-hooks'
+import { SearchInput } from '../search/search-input'
+import { FriendActivityStatusLine, NameBlock, NameLine } from '../social/friend-activity-status'
+import {
+  bodyMedium,
+  bodySmall,
+  labelLarge,
+  labelMedium,
+  singleLine,
+  titleSmall,
+} from '../styles/typography'
+import { LiveLabel } from '../twitch/live-indicators'
+import { useLiveUserIds } from '../twitch/live-state'
+import { MiniLiveStreamEntry } from '../twitch/live-stream-entry'
+import { StaffBadgedAvatar } from '../users/staff-badge'
+import { ConnectedUserContextMenu } from '../users/user-context-menu'
+import { useUserOverlays } from '../users/user-overlays'
+import { ConnectedUserProfileOverlay } from '../users/user-profile-overlay'
+import { ActivityGameEntry, GameActivityEntry, LiveStreamItem } from './channel-activity'
+import { ChannelRoleBadge } from './channel-role-badge'
+
+const UserListContainer = styled.div`
+  width: 256px;
+  flex-grow: 0;
+  flex-shrink: 0;
+
+  display: flex;
+  flex-direction: column;
+  contain: content;
+
+  background-color: var(--theme-container-low);
+  --availability-dot-ring: var(--theme-container-low);
+  border-radius: 8px;
+`
+
+const ErrorContainer = styled.div`
+  flex-shrink: 0;
+  padding: 16px 8px 8px;
+`
+
+/** Gives the virtualized roster a definite height to fill inside the column above. */
+const RosterContainer = styled.div`
+  flex: 1 1 0;
+  min-height: 0;
+`
+
+/**
+ * How far past the visible edges the roster keeps rows rendered. Tab can only move focus to a row
+ * that's in the DOM, so the row after (or before) the focused one has to already exist even when
+ * focusing has just scrolled the focused row flush with the edge.
+ */
+const ROSTER_TAB_LOOKAHEAD_PX = 240
+
+const PaddingHeader = eatVirtuosoContext(/* */ styled.div<{ context?: unknown }>`
+  width: 100%;
+  height: 8px;
+`)
+
+const PaddingFooter = eatVirtuosoContext(/* */ styled.div<{ context?: unknown }>`
+  width: 100%;
+  height: 8px;
+`)
+
+const userListRow = css`
+  ${singleLine};
+
+  margin: 0 8px;
+  padding: 0 8px;
+`
+
+const StyledAvatar = styled(StaffBadgedAvatar)`
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin: 2px 16px 2px 0;
+`
+
+const EntryLiveLabel = styled(LiveLabel)`
+  flex-shrink: 0;
+  margin-left: 8px;
+`
+
+/** Lays the roster's name line out as a row so a role badge can sit beside the name. */
+const RosterNameLine = styled(NameLine)`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`
+
+/** Takes the ellipsizing, so a long name shortens rather than pushing the badge out of the row. */
+const RosterName = styled.span`
+  ${singleLine};
+  min-width: 0;
+`
+
+const RosterRoleBadge = styled(ChannelRoleBadge)`
+  flex-shrink: 0;
+`
+
+const LoadingName = styled.div`
+  width: 64px;
+  height: 20px;
+  margin: 8px 0;
+  display: inline-block;
+
+  background-color: var(--theme-skeleton);
+  border-radius: 4px;
+`
+
+const fadedCss = css`
+  color: var(--theme-on-surface-variant);
+  ${StyledAvatar}, ${LoadingName} {
+    opacity: var(--theme-disabled-opacity);
+  }
+`
+
+interface UserListEntryItemProps {
+  $isOverlayOpen?: boolean
+  $faded?: boolean
+}
+
+const UserListEntryItem = styled.div<UserListEntryItemProps>`
+  ${titleSmall};
+  ${userListRow};
+  height: 44px;
+  border-radius: 4px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+
+  display: flex;
+  align-items: center;
+
+  &:hover {
+    cursor: pointer;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background-color: rgb(from var(--theme-on-surface) r g b / 0.08);
+    outline: none;
+  }
+
+  ${props => {
+    if (props.$isOverlayOpen) {
+      return 'background-color: rgb(from var(--theme-on-surface) r g b / 0.08);'
+    }
+    return ''
+  }}
+
+  ${props => {
+    if (props.$faded) {
+      return fadedCss
+    }
+    return ''
+  }}
+`
+
+/** The element directly under `<body>` that holds `elem`: the app root, or a popover's portal. */
+function topLevelAncestorOf(elem: Element): Element {
+  let current = elem
+  while (current.parentElement && current.parentElement !== current.ownerDocument.body) {
+    current = current.parentElement
+  }
+  return current
+}
+
+interface UserListEntryProps {
+  userId: SbUserId
+  faded?: boolean
+  isLive?: boolean
+  style?: React.CSSProperties
+}
+
+const ConnectedUserListEntry = React.memo<UserListEntryProps>(props => {
+  const { t } = useTranslation()
+  const user = useAppSelector(s => s.users.byId.get(props.userId))
+  const filterClick = useMentionFilterClick()
+  const { UserMenu } = useContext(ChatContext)
+
+  const { profileOverlayProps, contextMenuProps, onClick, onContextMenu, isOverlayOpen } =
+    useUserOverlays({
+      userId: props.userId,
+      profileAnchorX: 'left',
+      profileAnchorY: 'top',
+      profileOriginX: 'right',
+      profileOriginY: 'top',
+      profileOffsetX: -4,
+      filterClick,
+      UserMenu,
+    })
+
+  const rowRef = useRef<HTMLDivElement>(null)
+  const overlayWasOpenRef = useRef(false)
+  useEffect(() => {
+    if (isOverlayOpen) {
+      overlayWasOpenRef.current = true
+      return
+    }
+    if (!overlayWasOpenRef.current) {
+      return
+    }
+    overlayWasOpenRef.current = false
+
+    // Focus that was left inside the closing overlay (or dropped to the body) goes back to the row
+    // that opened it, so the keyboard picks up where it was. Focus the dismissing click moved to
+    // something else in the app stays there.
+    const row = rowRef.current
+    const active = row?.ownerDocument.activeElement
+    if (
+      row &&
+      (!active || active === row.ownerDocument.body || !topLevelAncestorOf(row).contains(active))
+    ) {
+      row.focus()
+    }
+  }, [isOverlayOpen])
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault()
+      onClick(e)
+    }
+  }
+
+  return (
+    <div style={props.style}>
+      <ConnectedUserProfileOverlay {...profileOverlayProps} />
+      <ConnectedUserContextMenu {...contextMenuProps} />
+
+      <UserListEntryItem
+        key='entry'
+        ref={rowRef}
+        role='button'
+        aria-haspopup='dialog'
+        aria-expanded={isOverlayOpen}
+        tabIndex={0}
+        $faded={!!props.faded}
+        $isOverlayOpen={isOverlayOpen}
+        onClick={onClick}
+        onContextMenu={onContextMenu}
+        onKeyDown={onKeyDown}>
+        <StyledAvatar userId={props.userId} showAvailability={true} />
+        {user ? (
+          <NameBlock>
+            <RosterNameLine>
+              <RosterName>{user.name}</RosterName>
+              <RosterRoleBadge userId={props.userId} />
+            </RosterNameLine>
+            <FriendActivityStatusLine userId={props.userId} />
+          </NameBlock>
+        ) : (
+          <LoadingName aria-label={t('common.loading.username', 'Username loading…')} />
+        )}
+        {props.isLive ? <EntryLiveLabel /> : null}
+      </UserListEntryItem>
+    </div>
+  )
+})
+
+const SECTION_KEYS = ['live', 'games', 'active', 'offline'] as const
+type SectionKey = (typeof SECTION_KEYS)[number]
+/** The sections whose entries fold behind a "Show N more" button past the first few. */
+type FoldableSectionKey = 'live' | 'games'
+
+/** How many entries a foldable section shows before the rest fold away. */
+const FOLDED_ENTRIES_SHOWN = 3
+
+enum UserListRowType {
+  Header,
+  Stream,
+  Game,
+  More,
+  Active,
+  Faded,
+  NoMatches,
+}
+
+interface HeaderRowData {
+  type: UserListRowType.Header
+  section: SectionKey
+  label: string
+  count: number
+  collapsed: boolean
+}
+
+interface StreamRowData {
+  type: UserListRowType.Stream
+  stream: LiveStreamItem
+}
+
+interface GameRowData {
+  type: UserListRowType.Game
+  entry: GameActivityEntry
+}
+
+interface MoreRowData {
+  type: UserListRowType.More
+  section: FoldableSectionKey
+  /** How many entries are folded away, or 0 when every entry shows and the button folds them. */
+  hidden: number
+}
+
+interface ActiveRowData {
+  type: UserListRowType.Active
+  userId: SbUserId
+  isLive: boolean
+}
+
+interface FadedRowData {
+  type: UserListRowType.Faded
+  userId: SbUserId
+  isLive: boolean
+}
+
+interface NoMatchesRowData {
+  type: UserListRowType.NoMatches
+}
+
+type UserListRowData =
+  | HeaderRowData
+  | StreamRowData
+  | GameRowData
+  | MoreRowData
+  | ActiveRowData
+  | FadedRowData
+  | NoMatchesRowData
+
+/**
+ * Identifies a row by what it holds rather than by where it sits, so that entries keep their
+ * component state (an open profile overlay, say) when the roster reorders around them.
+ */
+function computeRowKey(_index: number, row: UserListRowData): React.Key {
+  switch (row.type) {
+    case UserListRowType.Header:
+      return `header:${row.section}`
+    case UserListRowType.Stream:
+      return `stream:${row.stream.id}`
+    case UserListRowType.Game:
+      return `game:${row.entry.gameId}`
+    case UserListRowType.More:
+      return `more:${row.section}`
+    case UserListRowType.NoMatches:
+      return 'no-matches'
+    default:
+      return `user:${row.userId}`
+  }
+}
+
+const FilterContainer = styled.div`
+  flex-shrink: 0;
+  padding: 8px 8px 0;
+`
+
+const SectionHeader = styled.div<{ $first: boolean }>`
+  margin: 0 8px;
+  padding-top: ${props => (props.$first ? '0' : '16px')};
+`
+
+const SectionToggle = styled.button`
+  ${buttonReset};
+  width: 100%;
+  height: 36px;
+  padding: 0 8px 0 4px;
+
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  border-radius: 4px;
+  color: var(--theme-on-surface-variant);
+  text-align: left;
+
+  &:hover,
+  &:focus-visible {
+    background-color: rgb(from var(--theme-on-surface) r g b / 0.08);
+    outline: none;
+  }
+`
+
+const SectionLabel = styled.span`
+  ${labelMedium};
+  ${singleLine};
+  flex: 1;
+  min-width: 0;
+`
+
+const SectionCount = styled.span`
+  ${bodySmall};
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+`
+
+const StreamSlot = styled.div`
+  margin: 0 8px;
+`
+
+const MoreButton = styled.button`
+  ${buttonReset};
+  ${labelLarge};
+  height: 32px;
+  margin: 2px 8px 0;
+  padding: 0 8px;
+
+  border-radius: 4px;
+  color: var(--theme-amber);
+
+  &:hover,
+  &:focus-visible {
+    background-color: rgb(from var(--theme-amber) r g b / 0.08);
+    outline: none;
+  }
+`
+
+const NoMatches = styled.div`
+  ${bodyMedium};
+  padding: 16px;
+  color: var(--theme-on-surface-variant);
+`
+
+function moreButtonLabel(row: MoreRowData, t: TFunction): string {
+  if (row.section === 'live') {
+    return row.hidden
+      ? t('chat.userList.showMoreStreams', {
+          defaultValue_one: 'Show {{count}} more stream',
+          defaultValue_other: 'Show {{count}} more streams',
+          count: row.hidden,
+        })
+      : t('chat.userList.showFewerStreams', 'Show fewer streams')
+  }
+
+  return row.hidden
+    ? t('chat.userList.showMoreGames', {
+        defaultValue_one: 'Show {{count}} more game',
+        defaultValue_other: 'Show {{count}} more games',
+        count: row.hidden,
+      })
+    : t('chat.userList.showFewerGames', 'Show fewer games')
+}
+
+function toggled<T>(set: ReadonlySet<T>, value: T): ReadonlySet<T> {
+  const result = new Set(set)
+  if (!result.delete(value)) {
+    result.add(value)
+  }
+  return result
+}
+
+/** The sections the user has collapsed, shared by every channel's list. */
+const savedCollapsedSections = new JsonLocalStorageValue<SectionKey[]>('channelUserListCollapsed')
+
+function loadCollapsedSections(): ReadonlySet<SectionKey> {
+  const saved: unknown = savedCollapsedSections.getValue()
+  return new Set(
+    Array.isArray(saved) ? SECTION_KEYS.filter(section => saved.includes(section)) : [],
+  )
+}
+
+interface UserListProps {
+  active: SbUserId[]
+  offline: SbUserId[]
+  /** Members' live streams, shown in a section above the roster. */
+  streams?: ReadonlyArray<LiveStreamItem>
+  /** Live games with members in them, shown in a section above the roster. */
+  games?: ReadonlyArray<GameActivityEntry>
+  /**
+   * Whether the last request for the channel's members failed. What the roster below the error row
+   * lists is then only whoever this client already knew about rather than everyone in the channel,
+   * which is why the failure is said out loud instead of passing for a quiet channel.
+   */
+  loadError?: boolean
+  /** Asks for the member list again. */
+  onRetryLoad?: () => void
+  className?: string
+}
+
+const NO_STREAMS: ReadonlyArray<LiveStreamItem> = []
+const NO_GAMES: ReadonlyArray<GameActivityEntry> = []
+
+/**
+ * The channel's people as one list: members who are live, games members are playing, then the
+ * active and offline roster. Each section collapses, and the filter narrows every section by name.
+ */
+export const UserList = React.memo((props: UserListProps) => {
+  const {
+    active,
+    offline,
+    streams = NO_STREAMS,
+    games = NO_GAMES,
+    loadError,
+    onRetryLoad,
+    className,
+  } = props
+  const { t } = useTranslation()
+  const liveUserIds = useLiveUserIds()
+  const [filter, setFilter] = useState('')
+  const [collapsed, setCollapsed] = useState(loadCollapsedSections)
+  const [expandedGames, setExpandedGames] = useState<ReadonlySet<string>>(() => new Set())
+  const [unfolded, setUnfolded] = useState<ReadonlySet<FoldableSectionKey>>(() => new Set())
+  const needle = filter.trim().toLowerCase()
+  const filtering = needle.length > 0
+  const matches = (name: string | undefined) => !!name && name.toLowerCase().includes(needle)
+  // Only read while filtering: the map changes whenever any user becomes known, and rebuilding a
+  // roster that can run to thousands of rows for each of those changes would be wasted work.
+  const usersById = useAppSelector(s => (filtering ? s.users.byId : undefined))
+
+  const shownStreams = filtering
+    ? streams.filter(s => matches(s.user?.name) || matches(s.twitchLogin))
+    : streams
+  const shownGames = filtering
+    ? games.filter(g => g.teams.some(team => team.some(p => matches(p.name))))
+    : games
+  const shownActive = filtering ? active.filter(id => matches(usersById?.get(id)?.name)) : active
+  const shownOffline = filtering ? offline.filter(id => matches(usersById?.get(id)?.name)) : offline
+
+  // While filtering, every match shows: a collapsed section or folded entry would hide the very
+  // thing being looked for.
+  const isCollapsed = (section: SectionKey) => !filtering && collapsed.has(section)
+
+  const rowData: UserListRowData[] = []
+  const pushHeader = (section: SectionKey, label: string, count: number) => {
+    rowData.push({
+      type: UserListRowType.Header,
+      section,
+      label,
+      count,
+      collapsed: isCollapsed(section),
+    })
+  }
+
+  /** The entries of a foldable section to show, pushing its "Show N more" row when it folds. */
+  const unfoldedEntries = <T,>(section: FoldableSectionKey, entries: ReadonlyArray<T>) => {
+    if (filtering || entries.length <= FOLDED_ENTRIES_SHOWN) {
+      return { visible: entries, pushMore: () => {} }
+    }
+    const visible = unfolded.has(section) ? entries : entries.slice(0, FOLDED_ENTRIES_SHOWN)
+    return {
+      visible,
+      pushMore: () => {
+        rowData.push({
+          type: UserListRowType.More,
+          section,
+          hidden: entries.length - visible.length,
+        })
+      },
+    }
+  }
+
+  if (shownStreams.length) {
+    pushHeader('live', t('chat.userList.liveNow', 'Live now'), shownStreams.length)
+    if (!isCollapsed('live')) {
+      const { visible, pushMore } = unfoldedEntries('live', shownStreams)
+      for (const stream of visible) {
+        rowData.push({ type: UserListRowType.Stream, stream })
+      }
+      pushMore()
+    }
+  }
+
+  if (shownGames.length) {
+    pushHeader('games', t('chat.userList.inGame', 'In game'), shownGames.length)
+    if (!isCollapsed('games')) {
+      const { visible, pushMore } = unfoldedEntries('games', shownGames)
+      for (const entry of visible) {
+        rowData.push({ type: UserListRowType.Game, entry })
+      }
+      pushMore()
+    }
+  }
+
+  if (!filtering || shownActive.length) {
+    pushHeader('active', t('chat.userList.online', 'Online'), shownActive.length)
+    if (!isCollapsed('active')) {
+      for (const userId of shownActive) {
+        rowData.push({ type: UserListRowType.Active, userId, isLive: liveUserIds.has(userId) })
+      }
+    }
+  }
+
+  if (shownOffline.length) {
+    pushHeader('offline', t('chat.userList.offline', 'Offline'), shownOffline.length)
+    if (!isCollapsed('offline')) {
+      for (const userId of shownOffline) {
+        rowData.push({ type: UserListRowType.Faded, userId, isLive: liveUserIds.has(userId) })
+      }
+    }
+  }
+
+  if (!rowData.length) {
+    rowData.push({ type: UserListRowType.NoMatches })
+  }
+
+  const renderRow = (index: number, row: UserListRowData) => {
+    switch (row.type) {
+      case UserListRowType.Header:
+        return (
+          <SectionHeader $first={index === 0}>
+            <SectionToggle
+              type='button'
+              aria-expanded={!row.collapsed}
+              onClick={() => {
+                const updated = toggled(collapsed, row.section)
+                setCollapsed(updated)
+                savedCollapsedSections.setValue(Array.from(updated))
+              }}>
+              <MaterialIcon icon={row.collapsed ? 'chevron_right' : 'expand_more'} size={20} />
+              <SectionLabel>{row.label}</SectionLabel>
+              <SectionCount>{row.count}</SectionCount>
+            </SectionToggle>
+          </SectionHeader>
+        )
+      case UserListRowType.Stream:
+        return (
+          <StreamSlot>
+            <MiniLiveStreamEntry query={row.stream} />
+          </StreamSlot>
+        )
+      case UserListRowType.Game:
+        return (
+          <ActivityGameEntry
+            entry={row.entry}
+            expanded={expandedGames.has(row.entry.gameId)}
+            onToggle={() => setExpandedGames(g => toggled(g, row.entry.gameId))}
+          />
+        )
+      case UserListRowType.More:
+        return (
+          <MoreButton type='button' onClick={() => setUnfolded(u => toggled(u, row.section))}>
+            {moreButtonLabel(row, t)}
+          </MoreButton>
+        )
+      case UserListRowType.NoMatches:
+        return (
+          <NoMatches>{t('chat.userList.noMatches', 'Nobody here matches that name.')}</NoMatches>
+        )
+      default:
+        return (
+          <ConnectedUserListEntry
+            userId={row.userId}
+            faded={row.type === UserListRowType.Faded}
+            isLive={row.isLive}
+          />
+        )
+    }
+  }
+
+  return (
+    <UserListContainer className={className}>
+      <FilterContainer>
+        <SearchInput
+          searchQuery={filter}
+          onSearchChange={setFilter}
+          label={t('chat.userList.filter', 'Filter people')}
+        />
+      </FilterContainer>
+      {loadError ? (
+        <ErrorContainer>
+          <LoadErrorRow
+            message={t('chat.userList.loadFailed', "Couldn't load the user list")}
+            onRetry={onRetryLoad ?? (() => {})}
+          />
+        </ErrorContainer>
+      ) : null}
+      <RosterContainer>
+        <Virtuoso
+          components={{ Header: PaddingHeader, Footer: PaddingFooter }}
+          computeItemKey={computeRowKey}
+          data={rowData}
+          itemContent={renderRow}
+          increaseViewportBy={ROSTER_TAB_LOOKAHEAD_PX}
+        />
+      </RosterContainer>
+    </UserListContainer>
+  )
+})

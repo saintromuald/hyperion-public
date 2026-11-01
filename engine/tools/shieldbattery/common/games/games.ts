@@ -1,0 +1,324 @@
+import type { TFunction } from 'i18next'
+import { Immutable } from 'immer'
+import { assertUnreachable } from '../assert-unreachable'
+import { Jsonify } from '../json'
+import { ClientLeagueUserChangeJson, LeagueJson } from '../leagues/leagues'
+import { MapInfoJson, SbMapId } from '../maps'
+import {
+  MatchmakingSeasonJson,
+  matchmakingTypeToLabel,
+  PublicMatchmakingRatingChangeJson,
+} from '../matchmaking'
+import { SbUser } from '../users/sb-user'
+import { SbUserId } from '../users/sb-user-id'
+import { GameConfig, GameSource } from './configuration'
+import {
+  EncodedMatchupString,
+  GameDurationFilter,
+  GameFormat,
+  GameSortOption,
+  GameSourceFilter,
+} from './game-filters'
+import { MatchupString } from './matchups'
+import { NetcodeV2RelayEvent, NetcodeV2RequestedRegion } from './netcode-v2'
+import { GameClientPlayerResult, ReconciledPlayerResult } from './results'
+
+export const GET_GAMES_LIMIT = 40
+
+/**
+ * The maximum `offset` accepted by the paginated games list endpoints. Offset-based pagination has
+ * to produce and sort every row up to the offset, so we cap it to keep a hand-crafted request from
+ * forcing an unbounded amount of work (especially on the public games list). At `GET_GAMES_LIMIT`
+ * per page this is still hundreds of pages deep, far past where anyone realistically scrolls.
+ */
+export const MAX_GAMES_OFFSET = 10000
+
+/** Why a game record was cancelled before it completed normally. */
+export type GameCancellationReason =
+  | 'canceled'
+  | 'internal'
+  | 'playerFailed'
+  | 'timeout'
+  | 'gameAnomaly'
+
+export interface GameRecord {
+  id: string
+  startTime: Date
+  mapId: SbMapId
+  config: GameConfig
+  disputable: boolean
+  disputeRequested: boolean
+  disputeReviewed: boolean
+  gameLength: number | null
+  results: [SbUserId, ReconciledPlayerResult][] | null
+  selectedMatchup: MatchupString | null
+  assignedMatchup: MatchupString | null
+  /** When set, this game ended before normal result reconciliation. */
+  canceledAt?: Date | null
+  /** The reason the game was cancelled, when it was recorded. */
+  cancellationReason?: GameCancellationReason | null
+  /**
+   * Whether an admin hand-assigned this game's outcomes instead of them coming purely from
+   * reconciled player reports. Who did it and when is kept server-side only.
+   */
+  manuallyResolved: boolean
+}
+
+export type GameRecordJson = Jsonify<GameRecord>
+
+export interface GameDebugInfo {
+  reportedResults: Array<{
+    userId: SbUserId
+    reportedAt?: Date
+    reportedResults?: {
+      time: number
+      playerResults: Array<[SbUserId, GameClientPlayerResult]>
+    }
+  }>
+  /** All replays uploaded for this game. */
+  replays?: GameReplayDebugInfo[]
+  /** The netcode-v2 (rally-point2) coordinator session and relay-serving history, if any. */
+  netcodeV2: {
+    /** The coordinator session id persisted for this game, or `null` if it never had one. */
+    session: number | null
+    relays: NetcodeV2RelayEvent[]
+    /**
+     * What each session slot asked for at queue/join time. Empty for a game that never got as far
+     * as a session create.
+     */
+    requestedRegions: NetcodeV2RequestedRegion[]
+  }
+}
+
+export interface GameReplayDebugInfo {
+  /** The replay file ID. */
+  id: string
+  /** The user who uploaded this replay (from games_users, not replay_files.uploaded_by). */
+  uploadedByUserId: SbUserId
+  /** Signed URL for downloading this replay. */
+  url: string
+  /** SHA-256 hash of the replay file (hex-encoded), used for cache verification. */
+  hash: string
+  /** Duration in frames from replay header. */
+  frames: number | null
+}
+
+export type GameDebugInfoJson = Jsonify<GameDebugInfo>
+
+export function toGameDebugInfoJson(debugInfo: GameDebugInfo): GameDebugInfoJson {
+  return {
+    reportedResults: debugInfo.reportedResults.map(result => ({
+      userId: result.userId,
+      reportedAt: result.reportedAt ? Number(result.reportedAt) : undefined,
+      reportedResults: result.reportedResults,
+    })),
+    replays: debugInfo.replays,
+    netcodeV2: debugInfo.netcodeV2,
+  }
+}
+
+export function toGameRecordJson(game: GameRecord): GameRecordJson {
+  return {
+    id: game.id,
+    startTime: Number(game.startTime),
+    mapId: game.mapId,
+    config: game.config,
+    disputable: game.disputable,
+    disputeRequested: game.disputeRequested,
+    disputeReviewed: game.disputeReviewed,
+    gameLength: game.gameLength,
+    results: game.results,
+    selectedMatchup: game.selectedMatchup,
+    assignedMatchup: game.assignedMatchup,
+    canceledAt: game.canceledAt ? Number(game.canceledAt) : game.canceledAt,
+    cancellationReason: game.cancellationReason,
+    manuallyResolved: game.manuallyResolved,
+  }
+}
+
+export function getGameTypeLabel(game: Immutable<GameRecordJson>, t: TFunction): string {
+  // TODO(tec27): show mode (UMS, Top v Bottom, etc.?)
+  if (game.config.gameSource === GameSource.Lobby) {
+    return t('game.gameSource.custom', 'Custom game')
+  } else if (game.config.gameSource === GameSource.Matchmaking) {
+    return t('game.gameSource.ranked', {
+      defaultValue: `Ranked {{matchmakingType}}`,
+      matchmakingType: matchmakingTypeToLabel(game.config.gameSourceExtra.type, t),
+    })
+  }
+
+  return assertUnreachable(game.config)
+}
+
+/** Info about a replay file available for download/watching. */
+export interface GameReplayInfo {
+  /** The ID of the game this replay belongs to. */
+  gameId: string
+  /** Unique replay file ID, used as the cache key. */
+  id: string
+  /** Signed URL for downloading the replay. */
+  url: string
+  /** SHA-256 hash of the replay file (hex-encoded), used for cache verification. */
+  hash: string
+  /** The replay's generated base filename (from `generateReplayFilename`), without extension. */
+  filename: string
+}
+
+export interface GetGameResponse {
+  game: GameRecordJson
+  /** Can be undefined if the map could not be found (e.g. if it has been deleted). */
+  map: MapInfoJson | undefined
+  users: SbUser[]
+  mmrChanges: PublicMatchmakingRatingChangeJson[]
+  /** Replay info for the best replay (if available and user has access). */
+  replay?: GameReplayInfo
+  debugInfo?: GameDebugInfoJson
+  /**
+   * Whether the requesting user can ask an admin to review this game's disputed results right now.
+   */
+  canRequestReview: boolean
+}
+
+export interface GetGamesQueryParams {
+  /** Which game sources to include: Ranked = matchmaking, Custom = public lobby games, absent = all. */
+  source?: GameSourceFilter
+  duration?: GameDurationFilter
+  mapName?: string
+  playerName?: string
+  format?: GameFormat
+  matchup?: EncodedMatchupString
+  sort?: GameSortOption
+  offset?: number
+  /** Inclusive lower bound (unix ms) on the game's start time. */
+  startDate?: number
+  /** Inclusive upper bound (unix ms) on the game's start time. */
+  endDate?: number
+  /** When true, includes games shorter than `MIN_GAME_LENGTH_MS` (hidden by default). */
+  includeShort?: boolean
+}
+
+export interface GetGamesResponse {
+  games: GameRecordJson[]
+  maps: MapInfoJson[]
+  users: SbUser[]
+  hasMoreGames: boolean
+  replays: GameReplayInfo[]
+}
+
+/** Events that can be sent when subscribed to changes to a particular game record. */
+export type GameSubscriptionEvent = GameRecordUpdate
+
+export interface GameRecordUpdate {
+  type: 'update'
+  game: GameRecordJson
+  mmrChanges: PublicMatchmakingRatingChangeJson[]
+}
+
+export interface MatchmakingResultsEvent {
+  userId: SbUserId
+  game: GameRecordJson
+  mmrChange: PublicMatchmakingRatingChangeJson
+  leagueChanges: ClientLeagueUserChangeJson[]
+  leagues: LeagueJson[]
+  season: MatchmakingSeasonJson
+}
+
+/**
+ * Request to nullify the matchmaking/league points for a game (an admin action taken after an
+ * actioned game report). Refunds points lost by everyone who played *except* the punished
+ * player(s), for the current season only.
+ */
+export interface NullifyGamePointsRequest {
+  /** The players to exclude from the refund (i.e. the punished player(s)). */
+  punishedUserIds: SbUserId[]
+}
+
+export interface NullifyGamePointsResponse {
+  /**
+   * The players whose points were restored (matchmaking and/or league). Per-player amounts aren't
+   * included since matchmaking and league points are separate currencies; the authoritative
+   * breakdown lives in the `game_points_refunds` audit row.
+   */
+  refundedUsers: SbUserId[]
+}
+
+/**
+ * Request to hand-assign the outcomes of a disputed game (an admin action). Every player with a
+ * stored result must be given an outcome; the submitted outcomes replace the disputed ones and the
+ * side effects the disputed reconciliation skipped (win/loss counters, and ratings/points for
+ * matchmaking games) are applied.
+ */
+export interface ManuallyResolveGameRequest {
+  results: Array<{ userId: SbUserId; result: 'win' | 'loss' | 'draw' }>
+}
+
+export interface ManuallyResolveGameResponse {
+  game: GameRecordJson
+  /**
+   * Whether matchmaking rating/points changes were applied. This is false for custom games (which
+   * have no ratings) and for matchmaking games whose season is already finalized — the resolution
+   * is still recorded in those cases.
+   */
+  ratingsApplied: boolean
+}
+
+export enum ReviewRequestErrorCode {
+  /** The specified game record could not be found. */
+  NotFound = 'NotFound',
+  /** Only the human players of a game can request a review of it. */
+  NotParticipant = 'NotParticipant',
+  /** Reviews can only be requested for matchmaking games. */
+  NotMatchmaking = 'NotMatchmaking',
+  /** The game's results aren't disputed (they never were, or an admin has resolved them). */
+  NotDisputed = 'NotDisputed',
+  /** A review has already been requested for this game. */
+  AlreadyRequested = 'AlreadyRequested',
+  /**
+   * The game's season has been finalized, so resolving it could no longer apply rating, points or
+   * ladder win/loss changes.
+   */
+  SeasonFinalized = 'SeasonFinalized',
+  /** The game has no review request awaiting an admin. */
+  NoPendingRequest = 'NoPendingRequest',
+}
+
+/** Returned after a game's review request is made or dismissed. */
+export interface ReviewRequestResponse {
+  game: GameRecordJson
+}
+
+/** A disputed game whose players asked for an admin to review its results. */
+export interface PendingReviewRequest {
+  game: GameRecord
+  requestedAt: Date
+}
+
+export type PendingReviewRequestJson = Jsonify<PendingReviewRequest>
+
+export function toPendingReviewRequestJson(
+  request: PendingReviewRequest,
+): PendingReviewRequestJson {
+  return {
+    game: toGameRecordJson(request.game),
+    requestedAt: Number(request.requestedAt),
+  }
+}
+
+export interface GetPendingReviewRequestsResponse {
+  /** Newest request first. */
+  requests: PendingReviewRequestJson[]
+  /** The maps of the listed games, for the ones that still exist. */
+  maps: MapInfoJson[]
+}
+
+export function getGameDurationString(durationMs: number): string {
+  const timeSec = Math.floor(durationMs / 1000)
+  const hours = Math.floor(timeSec / 3600)
+  const minutes = Math.floor(timeSec / 60) % 60
+  const seconds = timeSec % 60
+
+  return [hours, minutes, seconds]
+    .map(v => ('' + v).padStart(2, '0'))
+    .filter((v, i) => v !== '00' || i > 0)
+    .join(':')
+}

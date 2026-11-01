@@ -1,0 +1,1080 @@
+import { castDraft, Immutable } from 'immer'
+import { SbUserId } from '../../common/users/sb-user-id'
+import { WhisperMessage } from '../../common/whispers'
+import type { HistoryLoadError } from '../messaging/message-load-error'
+import {
+  CommonMessageType,
+  CommonTextMessage,
+  isServerOriginMessage,
+  LocalMessage,
+} from '../messaging/message-records'
+import { isUnreadLineSpent, placeUnreadLine, UnreadLine } from '../messaging/unread-line'
+import { immerKeyedReducer } from '../reducers/keyed-reducer'
+
+// How many messages should be kept for inactive channels
+const INACTIVE_SESSION_MAX_HISTORY = 150
+
+// How many client-only messages (command output, echoed whispers) a session keeps waiting for a
+// loaded window that covers their time, once the window they were loaded in has been dropped or
+// replaced. These messages exist nowhere but this session's memory, so this bounds how much of a
+// long session's history of detours it can carry rather than dropping any of it.
+const MAX_CARRIED_CLIENT_MESSAGES = 50
+
+/**
+ * Everything a whisper session's message list can hold: the whispers the server stores for the
+ * conversation, plus the ones this client puts there itself (the answers to the commands run in it,
+ * and whispers with someone else echoed into it).
+ */
+export type WhisperSessionMessage = CommonTextMessage | LocalMessage
+
+export interface WhisperSession {
+  target: SbUserId
+  messages: WhisperSessionMessage[]
+
+  loadingHistory: boolean
+  hasHistory: boolean
+  loadingNewer: boolean
+  /**
+   * Whether messages newer than the loaded window exist on the server, i.e. the window is detached
+   * from the present. While this is set, live messages are not appended (they belong on the far
+   * side of the gap), and the window is never trimmed.
+   */
+  hasNewer: boolean
+  /**
+   * The newest time (epoch ms) of a message that arrived live while the window was detached and so
+   * was not appended to it. The window has caught back up to the present only once it has loaded at
+   * least this far, which closes the race where a message arrives between the server running the
+   * last page's query and this client applying its response.
+   */
+  detachedNewestTime?: number
+  /**
+   * Counts how many times the loaded window has been replaced or dropped. Every history request
+   * carries the generation it was issued for, and the reducer discards responses that no longer
+   * match, since a page has no boundary in common with a window it wasn't fetched for.
+   */
+  windowGen: number
+  /**
+   * Client-only messages that were in a window dropped or replaced wholesale, held here until a
+   * loaded window's covered time range reaches where they happened, at which point they're spliced
+   * back into `messages`. These messages are never persisted anywhere but this session's memory, so
+   * this is the only thing standing between a window drop and losing them for good.
+   */
+  carriedClientMessages: LocalMessage[]
+  /**
+   * The failed request the older edge of the window is showing an error for, if any. While it's
+   * set, the older edge shows an error row instead of a loading indicator and isn't requested
+   * automatically; it's cleared when a request for that edge starts or succeeds, when the window is
+   * replaced or dropped, and when the session is deactivated, so a fresh visit makes a fresh
+   * attempt.
+   */
+  historyError?: HistoryLoadError
+  /**
+   * Whether the newer edge of the window is showing an error for a failed request. Cleared under
+   * exactly the same conditions as `historyError`.
+   */
+  newerError: boolean
+
+  activated: boolean
+  /** Whether this session's message list is scrolled to the bottom. */
+  atBottom: boolean
+  /**
+   * Whether this session is unread: a message from the other user is newer than the session's read
+   * position. Being on screen is no exemption — a message that arrives while the view is scrolled
+   * up, its window is detached from the present, or the app window is unfocused is unread until the
+   * read position covers it.
+   */
+  hasUnread: boolean
+  /**
+   * The client's view of the server-recorded read position (epoch ms) for this session. Seeded
+   * from the server at init, advanced optimistically whenever the client reports a mark-read for
+   * the session, and advanced over a message that lands in front of the user's eyes (see
+   * `recordLiveArrival`), ahead of the view reporting that same position.
+   */
+  lastReadTime?: number
+  /**
+   * The server's word (epoch ms) on how far this session's unread messages ran when the client last
+   * initialized it. Seeded at init, where the session holds no messages and nothing else would say
+   * that anything past the read position exists; without it a read position arriving from another
+   * of the user's sessions would look like it covered a conversation this client knows nothing
+   * about, and clear the badge over messages nobody has seen.
+   *
+   * Never cleared: it is a message time like any other, and `newestKnownWhisperTime` only ever
+   * compares it against the read position, so it stops mattering the moment that position passes
+   * it.
+   */
+  latestUnreadTime?: number
+  /**
+   * The unread divider for the session's current activation. Captured when an unread session
+   * activates, or when a message goes unseen in an activated session (its view scrolled up, its
+   * window detached from the present, or the app window unfocused) that either has no divider or
+   * has one the read position has already moved past. It then holds still while the user reads
+   * through it, so it doesn't chase `lastReadTime` as that keeps advancing underneath it, and is
+   * dropped when the user sends a message, explicitly marks the session read, leaves it from the
+   * bottom having read past the divider, or has looked at the divider, gone away from the bottom
+   * and come back to it with the read position past the divider.
+   */
+  unreadLine?: UnreadLine
+}
+
+function defaultWhisperSession(target: SbUserId): WhisperSession {
+  return {
+    target,
+    messages: [],
+    loadingHistory: false,
+    hasHistory: true,
+    loadingNewer: false,
+    hasNewer: false,
+    detachedNewestTime: undefined,
+    windowGen: 0,
+    carriedClientMessages: [],
+    historyError: undefined,
+    newerError: false,
+    activated: false,
+    atBottom: false,
+    hasUnread: false,
+    lastReadTime: undefined,
+    latestUnreadTime: undefined,
+    unreadLine: undefined,
+  }
+}
+
+export interface WhisperState {
+  sessions: Set<SbUserId>
+  byId: Map<SbUserId, WhisperSession>
+  /**
+   * The newest message known for each conversation the user has had, open or closed, as loaded
+   * for the whispers page's conversation list and kept current by the messages that arrive after.
+   * Closing a session leaves its entry in place, since the conversation still exists.
+   */
+  lastMessages: Map<SbUserId, CommonTextMessage>
+  /** Whether a page of the conversation list has loaded since connecting. */
+  conversationsLoaded: boolean
+}
+
+const DEFAULT_STATE: Immutable<WhisperState> = {
+  sessions: new Set(),
+  byId: new Map(),
+  lastMessages: new Map(),
+  conversationsLoaded: false,
+}
+
+/** Records `message` as the newest one in its conversation with `target`, unless it's older. */
+function recordLastMessage(state: WhisperState, target: SbUserId, message: CommonTextMessage) {
+  const known = state.lastMessages.get(target)
+  if (!known || message.time >= known.time) {
+    state.lastMessages.set(target, message)
+  }
+}
+
+/** Converts messages as the server sends them into the shape the message list renders. */
+function toTextMessages(messages: WhisperMessage[]): CommonTextMessage[] {
+  return messages.map<CommonTextMessage>(msg => ({
+    id: msg.id,
+    type: CommonMessageType.TextMessage,
+    time: msg.time,
+    from: msg.from,
+    text: msg.text,
+    ...(msg.emote ? { emote: true } : {}),
+    ...(msg.outcome ? { outcome: msg.outcome } : {}),
+  }))
+}
+
+/**
+ * Returns the time (epoch ms) of the newest message in `messages` that carries a server-recorded
+ * timestamp, or `undefined` if there is none. Only such times can be compared against or handed
+ * back to the server.
+ */
+export function newestServerOriginTime(
+  messages: readonly WhisperSessionMessage[],
+): number | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (isServerOriginMessage(messages[i])) {
+      return messages[i].time
+    }
+  }
+
+  return undefined
+}
+
+/**
+ * Returns the time (epoch ms) of the oldest message in `messages` that carries a server-recorded
+ * timestamp, or `undefined` if there is none. See `newestServerOriginTime` for why client-only
+ * messages are excluded: a window can open with one at its head (all that's left after a drop
+ * leaves only carried messages behind), and such a message's time is meaningless as a server
+ * request cursor or a window boundary.
+ */
+export function oldestServerOriginTime(
+  messages: readonly WhisperSessionMessage[],
+): number | undefined {
+  for (const message of messages) {
+    if (isServerOriginMessage(message)) {
+      return message.time
+    }
+  }
+
+  return undefined
+}
+
+/**
+ * Returns whether a loaded message is one this client put in the session itself rather than one the
+ * server stored for the conversation, narrowing it to the types that can be carried.
+ */
+function isLocalMessage(message: WhisperSessionMessage): message is LocalMessage {
+  return !isServerOriginMessage(message)
+}
+
+/**
+ * The newest time (epoch ms) of anything known to exist in a whisper session: the newest loaded
+ * server-origin message, the present of a detached window, and the extent of the unread backlog the
+ * server reported at init. A read position covering this covers everything the client knows about.
+ *
+ * The init-reported extent is what makes this answer the same question whether or not any history
+ * has been loaded: a session initialized but never opened has no messages of its own to speak for
+ * the backlog behind it.
+ */
+export function newestKnownWhisperTime(session: Immutable<WhisperSession>): number | undefined {
+  const knownTimes = [
+    newestServerOriginTime(session.messages),
+    session.detachedNewestTime,
+    session.latestUnreadTime,
+  ].filter(t => t !== undefined)
+
+  return knownTimes.length ? Math.max(...knownTimes) : undefined
+}
+
+/**
+ * Returns whether any whisper conversation has unread messages that should draw the user's
+ * attention. A blocked user's whispers are still stored and still unread, but they're silent: they
+ * don't raise any unread indicator until the user is unblocked.
+ */
+export function hasAttentionWorthyWhisper(
+  whisperState: Immutable<WhisperState>,
+  blocks: ReadonlyMap<SbUserId, unknown>,
+): boolean {
+  // Not using iterator helpers (`entries().some(...)`), they're missing from Safari before 18.4
+  for (const [userId, w] of whisperState.byId) {
+    if (w.hasUnread && !blocks.has(userId)) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * Returns `incoming` with every message already present in `existing` removed. The history
+ * endpoints seek by millisecond-precision time, so a page boundary landing inside a group of
+ * messages that share a timestamp can hand back messages the window already holds.
+ */
+function dedupeAgainst(
+  incoming: WhisperSessionMessage[],
+  existing: readonly WhisperSessionMessage[],
+): WhisperSessionMessage[] {
+  if (!existing.length) {
+    return incoming
+  }
+
+  const existingIds = new Set(existing.map(m => m.id))
+  return incoming.filter(m => !existingIds.has(m.id))
+}
+
+/**
+ * Whether a session's view sits at the newest message: at the bottom of a window attached to the
+ * present. The bottom of a detached window is only the end of what's loaded rather than the newest
+ * message, so a view there is still mid-backlog no matter what the at-bottom flag says.
+ */
+function isAtPresentBottom(session: WhisperSession): boolean {
+  return session.atBottom && !session.hasNewer
+}
+
+/**
+ * Records that a live message reached a whisper session. It either counts as read on arrival — the
+ * session is being viewed at the bottom of a window attached to the present with the app window
+ * focused, the one combination that puts the message in front of the user's eyes — in which case
+ * the read position advances over it here, ahead of the view reporting that same position, so the
+ * session never reads as unread for even a frame; or it went unseen, and the unread flag goes up.
+ * A session being viewed also freezes its unread divider at the read position whenever a new run of
+ * unread messages starts, so the divider marks where the user left off instead of chasing the read
+ * position as it keeps advancing underneath it.
+ *
+ * Kept separate from `updateMessages` because a message arriving while the loaded window is
+ * detached from the present isn't added to the window at all, yet counts as unread exactly the same.
+ */
+function recordLiveArrival(session: WhisperSession, arrival: LiveArrival) {
+  const readOnArrival = session.activated && isAtPresentBottom(session) && arrival.windowFocused
+
+  if (readOnArrival) {
+    if (arrival.time !== undefined) {
+      session.lastReadTime = Math.max(session.lastReadTime ?? -Infinity, arrival.time)
+    }
+    return
+  }
+
+  session.hasUnread = true
+
+  if (session.activated) {
+    // A new run of unread messages starts both where there is no divider yet and where the read
+    // position has moved past the one that is there: the user read through that divider and then
+    // looked away, scrolled up, or paged into history, so it no longer marks anything they haven't
+    // seen and this message is where what they haven't seen begins. A divider the read position has
+    // not passed marks a run that is still growing, and stays where it is.
+    const { lastReadTime, unreadLine } = session
+    if (
+      lastReadTime !== undefined &&
+      (unreadLine === undefined || lastReadTime > unreadLine.time)
+    ) {
+      session.unreadLine = placeUnreadLine(lastReadTime, isAtPresentBottom(session))
+    }
+  }
+}
+
+/**
+ * Advances a session's read position to `time`, never backwards, and lowers the unread flag once the
+ * position in effect covers everything the client knows exists. Returns that effective position.
+ *
+ * A detached window's present has run ahead of what's loaded, so the newest loaded message isn't the
+ * newest one known to exist; the helper covers that. Clearing the flag against the loaded window
+ * alone would call the session read on the strength of a position that only covers that window.
+ */
+function advanceReadPosition(session: WhisperSession, time: number): number {
+  if (session.lastReadTime === undefined || time > session.lastReadTime) {
+    session.lastReadTime = time
+  }
+  const effective = session.lastReadTime!
+
+  const newestKnownTime = newestKnownWhisperTime(session)
+  if (newestKnownTime === undefined || newestKnownTime <= effective) {
+    session.hasUnread = false
+  }
+
+  return effective
+}
+
+/**
+ * Records that a message the user sent reached the session. Having just spoken, the user is caught
+ * up: the read position advances over their own message, which lowers the unread flag once it covers
+ * everything known, and the unread divider is dropped, since nothing that came before their own
+ * message is news to them. This holds whether the message was sent from this client or from another
+ * of the user's, since the read position is per user, and regardless of whether the whisper session
+ * is activated or where its view sits. The server records the same position when it stores the
+ * message and publishes it back to the user's sessions, so the advance taken here is persisted
+ * whether or not any view reports it; the view still moves to the bottom on send separately.
+ */
+function recordSelfMessage(session: WhisperSession, time: number) {
+  advanceReadPosition(session, time)
+  session.unreadLine = undefined
+}
+
+/**
+ * Puts one client-only message on a session's carry list, for a message that has no window to live
+ * in right now. Unlike a whisper the server stored it can never be re-fetched, so the carry list is
+ * the only thing standing between that and losing it for good; `mergeCarriedMessages` is what
+ * eventually gives it back a home. Idempotent against a message already carried (deduped by id),
+ * and caps the list at `MAX_CARRIED_CLIENT_MESSAGES`, evicting the oldest by time.
+ */
+function carryClientMessage(session: WhisperSession, message: LocalMessage) {
+  if (session.carriedClientMessages.some(m => m.id === message.id)) {
+    return
+  }
+
+  session.carriedClientMessages.push(message)
+
+  if (session.carriedClientMessages.length > MAX_CARRIED_CLIENT_MESSAGES) {
+    session.carriedClientMessages.sort((a, b) => a.time - b.time)
+    session.carriedClientMessages = session.carriedClientMessages.slice(
+      -MAX_CARRIED_CLIENT_MESSAGES,
+    )
+  }
+}
+
+/**
+ * Moves every client-only message out of `session.messages` and into its carry list, ahead of the
+ * window being dropped or replaced wholesale.
+ */
+function carryClientMessages(session: WhisperSession) {
+  for (const message of session.messages) {
+    if (isLocalMessage(message)) {
+      carryClientMessage(session, message)
+    }
+  }
+}
+
+/**
+ * Splices carried client-only messages (see `carryClientMessage`) back into the loaded window
+ * wherever the window now covers the moment they happened, removing them from the carry list so a
+ * later call can't merge the same message twice. Must run after anything that changes what time
+ * range the window covers — a fetched page or a reattach — since that's the only way a carried
+ * message's moment can come back into view.
+ *
+ * The covered range runs from the oldest server-origin message's time to the newest, extended to
+ * unbounded-older when `hasHistory` is false (nothing precedes what's loaded) and to
+ * unbounded-newer when `hasNewer` is false (the window is attached to the present, so it covers
+ * everything from here on, same as a live message keeps appending to it). A bound whose flag says
+ * it's *not* unbounded but which has no server-origin message to anchor to (an empty or
+ * all-client-only window) covers nothing on that side.
+ */
+function mergeCarriedMessages(session: WhisperSession) {
+  if (!session.carriedClientMessages.length) {
+    return
+  }
+
+  const lowerBound = session.hasHistory
+    ? (oldestServerOriginTime(session.messages) ?? Infinity)
+    : -Infinity
+  const upperBound = session.hasNewer
+    ? (newestServerOriginTime(session.messages) ?? -Infinity)
+    : Infinity
+
+  const stillCarried: LocalMessage[] = []
+  const reclaimed: LocalMessage[] = []
+  for (const message of session.carriedClientMessages) {
+    if (message.time >= lowerBound && message.time <= upperBound) {
+      reclaimed.push(message)
+    } else {
+      stillCarried.push(message)
+    }
+  }
+
+  if (!reclaimed.length) {
+    return
+  }
+
+  session.carriedClientMessages = stillCarried
+  session.messages = session.messages.concat(reclaimed).sort((a, b) => a.time - b.time)
+}
+
+/**
+ * Discards everything loaded for a session, returning it to the shape a freshly-opened session has:
+ * nothing loaded, older history assumed to exist, attached to the present. Advancing the generation
+ * makes the reducer discard any page still in flight for the window that was just dropped.
+ */
+function dropMessageWindow(session: WhisperSession) {
+  carryClientMessages(session)
+  session.messages = []
+  session.hasHistory = true
+  session.hasNewer = false
+  session.detachedNewestTime = undefined
+  // In-flight requests for the dropped window will be discarded by the generation check when they
+  // land, so their loading flags have to be lowered here or they'd stay raised forever.
+  session.loadingHistory = false
+  session.loadingNewer = false
+  // Nothing of the window an error was recorded against survives this, so neither does the error.
+  session.historyError = undefined
+  session.newerError = false
+  session.windowGen += 1
+}
+
+/**
+ * The conditions a message arrived under when it reached the session live. Pages of history carry no
+ * arrival and do no unread bookkeeping, and neither does the sender's echoed message, whose
+ * bookkeeping is `recordSelfMessage`'s instead; other live messages can go unseen.
+ */
+interface LiveArrival {
+  /** Whether the app window was focused at the moment the message arrived. */
+  windowFocused: boolean
+  /**
+   * The server-recorded time (epoch ms) of the arriving message: a message read on arrival advances
+   * the read position over it. Optional only to mirror the chat reducer's arrivals, whose
+   * client-only banners carry no server time; every whisper message has one.
+   */
+  time?: number
+}
+
+/**
+ * Update the messages field for a whisper, keeping the `hasUnread` flag in proper sync. `arrival`
+ * carries the conditions a live message arrived under, and is `undefined` when this isn't a live
+ * arrival and so nothing can have gone unread.
+ */
+function updateMessages(
+  state: WhisperState,
+  target: SbUserId,
+  arrival: LiveArrival | undefined,
+  updateFn: (messages: WhisperSessionMessage[]) => WhisperSessionMessage[],
+) {
+  const session = state.byId.get(target)
+  if (!session) {
+    return
+  }
+
+  session.messages = updateFn(session.messages)
+
+  // Trimming is safe when nobody is reading scrollback: either the session isn't being viewed, or
+  // the viewer is pinned to the bottom, where auto-scroll makes removing top messages invisible. A
+  // detached window is never trimmed: the user is paging through it in both directions, and there's
+  // no scroll compensation for messages disappearing off its top. Nor is a window with an older
+  // page in flight: that page was fetched against the window's current oldest message, and dropping
+  // messages from the top before it lands would leave a gap between the two.
+  const canTrim =
+    !session.hasNewer && !session.loadingHistory && (!session.activated || session.atBottom)
+
+  let sliced = false
+  if (canTrim && session.messages.length > INACTIVE_SESSION_MAX_HISTORY) {
+    session.messages = session.messages.slice(-INACTIVE_SESSION_MAX_HISTORY)
+    sliced = true
+  }
+
+  if (arrival) {
+    recordLiveArrival(session, arrival)
+  }
+
+  session.hasHistory = session.hasHistory || sliced
+}
+
+export default immerKeyedReducer(DEFAULT_STATE, {
+  ['@whispers/getWhisperSessions'](state, action) {
+    state.sessions = new Set(action.payload.sessions)
+
+    for (const session of action.payload.sessions) {
+      if (state.byId.has(session)) {
+        continue
+      }
+
+      state.byId.set(session, defaultWhisperSession(session))
+    }
+
+    // Seeds each session's read position from the server, so the unread divider has somewhere to
+    // freeze at even before any local mark-read report has happened this session, along with the
+    // unread badge and the extent of the backlog behind it, so both survive a restart instead of
+    // resetting to "read" until the next message arrives. Whether the session is on screen doesn't
+    // enter into it: the badge follows the read position either way, and a read report lowers it
+    // once that position covers the extent seeded here.
+    //
+    // The read position is merged rather than installed, and the badge derived from whichever
+    // position is newer: a mark-read made in another of the user's sessions can arrive ahead of
+    // this response, and is as authoritative as the position the response carries.
+    for (const { targetId, lastReadTime, latestUnreadTime } of action.payload.lastReadTimes ?? []) {
+      const session = state.byId.get(targetId)
+      if (session) {
+        if (latestUnreadTime !== undefined) {
+          session.latestUnreadTime = Math.max(
+            session.latestUnreadTime ?? -Infinity,
+            latestUnreadTime,
+          )
+          session.hasUnread = true
+        }
+        advanceReadPosition(session, lastReadTime)
+      }
+    }
+  },
+
+  ['@whispers/getConversations'](state, action) {
+    state.conversationsLoaded = true
+    const { conversations } = action.payload
+    const lastMessages = toTextMessages(conversations.map(c => c.lastMessage))
+    for (const [i, { target }] of conversations.entries()) {
+      recordLastMessage(state, target, lastMessages[i])
+    }
+  },
+
+  ['@whispers/initSession'](state, action) {
+    const { target } = action.payload
+    state.byId.set(target, defaultWhisperSession(target))
+    state.sessions = new Set([target, ...state.sessions])
+  },
+
+  ['@whispers/closeSession'](state, action) {
+    const { target } = action.payload
+
+    state.sessions.delete(target)
+    state.byId.delete(target)
+  },
+
+  ['@whispers/updateMessage'](
+    state,
+    {
+      payload: {
+        message: { id, time, from, text, emote, outcome },
+      },
+      meta: { target, isSelfMessage, windowFocused },
+    },
+  ) {
+    const newMessage: CommonTextMessage = {
+      id,
+      type: CommonMessageType.TextMessage,
+      time,
+      from,
+      text,
+      ...(emote ? { emote: true } : {}),
+      ...(outcome ? { outcome } : {}),
+    }
+
+    // Reorder the sessions to put the one that got the message on top of the list
+    state.sessions = new Set([target, ...state.sessions])
+    recordLastMessage(state, target, newMessage)
+
+    const session = state.byId.get(target)
+    if (session?.hasNewer) {
+      // The loaded window sits behind the present, so this message belongs past the gap at its far
+      // end rather than at the end of what's loaded. Remembering how far the present has run ahead
+      // is what lets the window tell, once it has paged forward, that it has actually caught up.
+      session.detachedNewestTime = Math.max(
+        session.detachedNewestTime ?? -Infinity,
+        newMessage.time,
+      )
+      if (isSelfMessage) {
+        recordSelfMessage(session, newMessage.time)
+      } else {
+        recordLiveArrival(session, { windowFocused, time: newMessage.time })
+      }
+    } else {
+      updateMessages(
+        state,
+        target,
+        isSelfMessage ? undefined : { windowFocused, time: newMessage.time },
+        m => {
+          m.push(newMessage)
+          return m
+        },
+      )
+      if (isSelfMessage && session) {
+        recordSelfMessage(session, newMessage.time)
+      }
+    }
+  },
+
+  // A message this client puts in a session itself: the answer to a command run there, or a whisper
+  // with someone else echoed into it. It goes in with no arrival, so neither the read position nor
+  // the unread flag moves for it — nothing the server knows about has happened, and someone else's
+  // whisper shown here is not this conversation being read.
+  ['@messaging/appendLocalMessage'](state, action) {
+    const { target, message } = action.payload
+    if (target.surface !== 'whisper') {
+      return
+    }
+
+    const session = state.byId.get(target.userId)
+    if (!session) {
+      return
+    }
+
+    if (session.hasNewer) {
+      // The loaded window sits behind the present, and the message was produced now, so it belongs
+      // past the gap at the window's far end. Carrying it holds it until the window is back at the
+      // present, which is the only place it can be shown.
+      carryClientMessage(session, castDraft(message))
+      return
+    }
+
+    updateMessages(state, target.userId, undefined, m => {
+      m.push(castDraft(message))
+      return m
+    })
+  },
+
+  ['@whispers/loadMessageHistoryBegin'](state, action) {
+    const { target } = action.payload
+
+    const session = state.byId.get(target)
+    if (!session) {
+      return
+    }
+
+    session.loadingHistory = true
+    session.historyError = undefined
+  },
+
+  ['@whispers/loadMessageHistory'](state, action) {
+    const { target, windowGen } = action.meta
+
+    const session = state.byId.get(target)
+    if (!session || session.windowGen !== windowGen) {
+      return
+    }
+
+    session.loadingHistory = false
+
+    if (action.error) {
+      session.historyError = { kind: 'history' }
+      return
+    }
+
+    // The edge just settled successfully, so any error a request that failed in the meantime
+    // recorded against it (one issued before this one, landing after it began) is stale.
+    session.historyError = undefined
+
+    const newMessages = toTextMessages(action.payload.messages)
+
+    session.hasHistory = action.payload.hasMoreBefore
+
+    updateMessages(state, target, undefined, messages =>
+      dedupeAgainst(newMessages, messages).concat(messages),
+    )
+    // The older edge just moved (or, for a window left holding only carried messages by a prior
+    // drop, was established for the first time), so re-check whether it now reaches any of them.
+    mergeCarriedMessages(session)
+  },
+
+  ['@whispers/loadNewerMessagesBegin'](state, action) {
+    const { target } = action.payload
+
+    const session = state.byId.get(target)
+    if (!session) {
+      return
+    }
+
+    session.loadingNewer = true
+    session.newerError = false
+  },
+
+  ['@whispers/loadNewerMessages'](state, action) {
+    const { target, windowGen } = action.meta
+
+    const session = state.byId.get(target)
+    if (!session || session.windowGen !== windowGen) {
+      return
+    }
+
+    session.loadingNewer = false
+
+    if (action.error) {
+      session.newerError = true
+      return
+    }
+
+    // The edge just settled successfully, so any error a request that failed in the meantime
+    // recorded against it (one issued before this one, landing after it began) is stale.
+    session.newerError = false
+
+    const newMessages = toTextMessages(action.payload.messages)
+
+    updateMessages(state, target, undefined, messages =>
+      messages.concat(dedupeAgainst(newMessages, messages)),
+    )
+
+    // Rejoining the present takes both the server saying nothing is newer and the window having
+    // reached everything that arrived live while it was detached. A message sent between the server
+    // running this page's query and this response landing leaves the window one page short, so
+    // `hasNewer` stays set and the list's next-edge sentinel asks again until it converges. The
+    // exception is a request issued when this client already knew of the messages it's waiting on:
+    // live messages are only announced after they're stored, so such a request's query ran late
+    // enough to see them, and them being absent from the response means they've since been deleted.
+    // Attaching then (rather than holding out for a time no remaining message will ever reach)
+    // keeps a deletion from turning the sentinel's retries into an endless loop.
+    if (!action.payload.hasMoreAfter) {
+      const newestLoadedTime = newestServerOriginTime(session.messages)
+      const { detachedNewestTime } = session
+      if (
+        detachedNewestTime === undefined ||
+        (newestLoadedTime !== undefined && newestLoadedTime >= detachedNewestTime) ||
+        detachedNewestTime <= action.meta.knownNewestTime
+      ) {
+        session.hasNewer = false
+        session.detachedNewestTime = undefined
+      }
+    }
+
+    // The newer edge just moved, and reattaching extends coverage all the way to the present, so
+    // re-check whether the window now reaches any carried message.
+    mergeCarriedMessages(session)
+  },
+
+  ['@whispers/loadMessagesAroundBegin'](state, action) {
+    const { target } = action.payload
+
+    const session = state.byId.get(target)
+    if (!session) {
+      return
+    }
+
+    // The whole window is about to be replaced, so there's no one edge the wait belongs to; the
+    // older edge's affordance stands in for both.
+    session.loadingHistory = true
+    session.historyError = undefined
+  },
+
+  ['@whispers/loadMessagesAround'](state, action) {
+    const { target, windowGen } = action.meta
+
+    const session = state.byId.get(target)
+    if (!session || session.windowGen !== windowGen) {
+      return
+    }
+
+    session.loadingHistory = false
+    session.loadingNewer = false
+
+    if (action.error) {
+      session.historyError = { kind: 'around', aroundTime: action.meta.aroundTime }
+      return
+    }
+
+    // The window below is replaced wholesale, so the newer edge's error belongs to messages that
+    // are no longer loaded, and an older-edge error recorded by an earlier replacement request
+    // that failed after this one began is stale too.
+    session.newerError = false
+    session.historyError = undefined
+
+    // Everything this client knows the present ran at least as far as: the newest message it had
+    // loaded (live messages keep appending to an attached window while the request is in flight)
+    // and the newest it observed while detached. The replacement window has caught up to the
+    // present only if it reaches this far.
+    const knownNewest = Math.max(
+      newestServerOriginTime(session.messages) ?? -Infinity,
+      session.detachedNewestTime ?? -Infinity,
+    )
+
+    // The fetched range doesn't have to touch what was loaded, so there may be no seam to splice
+    // them together at and the window is replaced outright. A client-only message can't be
+    // refetched at the new range even if it belongs there, so it's carried instead of discarded;
+    // `mergeCarriedMessages` below gives it back a home if the replacement window covers it.
+    carryClientMessages(session)
+    session.messages = toTextMessages(action.payload.messages)
+    session.hasHistory = action.payload.hasMoreBefore
+    session.windowGen += 1
+
+    if (action.payload.hasMoreAfter) {
+      session.hasNewer = true
+      session.detachedNewestTime = knownNewest === -Infinity ? undefined : knownNewest
+    } else {
+      // The server saw nothing newer than the replacement window, but a message that arrived
+      // between its query running and this response landing exists only past the window's newer
+      // edge, so the window must stay detached and page forward to it. A message this client
+      // already knew of when the request was issued is the exception: the query ran late enough to
+      // have seen it, so its absence means it's been deleted (see the matching reasoning where
+      // newer pages land).
+      const newestLoadedTime = newestServerOriginTime(session.messages) ?? -Infinity
+      const knownNewestAtDispatch = action.meta.knownNewestTime ?? -Infinity
+      if (newestLoadedTime < knownNewest && knownNewest > knownNewestAtDispatch) {
+        session.hasNewer = true
+        session.detachedNewestTime = knownNewest
+      } else {
+        session.hasNewer = false
+        session.detachedNewestTime = undefined
+      }
+    }
+
+    // The window's coverage was just established from scratch, so check it against everything
+    // still carried rather than just what changed.
+    mergeCarriedMessages(session)
+  },
+
+  ['@whispers/resetMessageWindow'](state, action) {
+    const { target } = action.payload
+
+    const session = state.byId.get(target)
+    if (!session) {
+      return
+    }
+
+    dropMessageWindow(session)
+  },
+
+  ['@whispers/activateWhisperSession'](state, action) {
+    const { target } = action.payload
+    if (!state.byId.has(target)) {
+      return
+    }
+
+    const session = state.byId.get(target)!
+
+    // Whether the view is opening at the newest messages. The view reports where its viewport
+    // settles (`updateSessionAtBottom`) ahead of this dispatch, so the current flag reflects this
+    // activation's viewport; a view still on its way back to a saved reading position hasn't
+    // reported yet and counts as away from the bottom, which is where it's headed.
+    const atBottom = session.atBottom
+
+    // Freeze the unread divider at the read position, so it marks where the user left off instead
+    // of where the read position ends up after the eager mark-read opening at the newest messages
+    // triggers. Activation itself never lowers the unread flag: the flag follows the read position,
+    // and `@whispers/updateLastReadTime` lowers it once the view's read report covers every known
+    // message.
+    if (
+      session.hasUnread &&
+      session.unreadLine === undefined &&
+      session.lastReadTime !== undefined
+    ) {
+      session.unreadLine = placeUnreadLine(session.lastReadTime, atBottom)
+    }
+
+    // A divider the read position has already moved past outlives that only for as long as the
+    // view keeps returning to where the user stopped reading; opening at the newest messages means
+    // they're caught up and the divider has served its purpose.
+    if (
+      atBottom &&
+      session.unreadLine !== undefined &&
+      session.lastReadTime !== undefined &&
+      session.lastReadTime > session.unreadLine.time
+    ) {
+      session.unreadLine = undefined
+    }
+
+    session.activated = true
+  },
+
+  ['@whispers/deactivateWhisperSession'](state, action) {
+    const { target } = action.payload
+    if (!state.byId.has(target)) {
+      return
+    }
+
+    const session = state.byId.get(target)!
+
+    // The unread divider is only consumed once the read position has actually moved past it *and*
+    // the user was looking at the newest messages when they left. A deactivation where they never
+    // read anything new (including the mount/cleanup/remount cycle React's StrictMode runs in
+    // development) leaves the still-unread divider in place, and so does one from the middle of the
+    // backlog, where the read position running ahead is an artifact of having passed the bottom on
+    // the way in rather than of having caught up. The bottom of a detached window is only the end
+    // of what's loaded rather than the newest message, so leaving from there is such a mid-backlog
+    // leave no matter what the at-bottom flag says.
+    if (
+      session.atBottom &&
+      !session.hasNewer &&
+      session.unreadLine !== undefined &&
+      session.lastReadTime !== undefined &&
+      session.lastReadTime > session.unreadLine.time
+    ) {
+      session.unreadLine = undefined
+    }
+
+    session.activated = false
+    session.atBottom = false
+
+    if (session.hasNewer) {
+      // Keeping a window that sits mid-history would put the user back where they were reading with
+      // no indication that the conversation has run on past it, so a detached window is dropped
+      // whole and the next visit starts from the present like any other fresh open.
+      dropMessageWindow(session)
+    } else {
+      const hasHistory = session.messages.length > INACTIVE_SESSION_MAX_HISTORY
+
+      if (session.loadingHistory || session.loadingNewer) {
+        // A page in flight was fetched against the window's edges, which the trim below moves;
+        // applying it afterwards would splice it in ahead of a gap in the middle of the history.
+        // Advancing the generation makes it be discarded when it lands, which costs nothing with
+        // the view gone. Lowering the flags then has to happen here too, since the discarded page
+        // no longer lowers them itself and a request that never settles never would.
+        session.windowGen += 1
+      }
+      session.loadingHistory = false
+      session.loadingNewer = false
+      // An error row is only worth showing to someone looking at the conversation, and the next
+      // visit deserves a fresh attempt rather than the last visit's failure.
+      session.historyError = undefined
+      session.newerError = false
+
+      session.messages = session.messages.slice(-INACTIVE_SESSION_MAX_HISTORY)
+      session.hasHistory = session.hasHistory || hasHistory
+    }
+  },
+
+  ['@whispers/updateSessionAtBottom'](state, action) {
+    const { target, atBottom } = action.payload
+    const session = state.byId.get(target)
+    if (!session) {
+      return
+    }
+
+    const wasAtBottom = session.atBottom
+    session.atBottom = atBottom
+
+    if (!atBottom && session.unreadLine !== undefined) {
+      session.unreadLine.leftBottom = true
+    }
+
+    if (atBottom && !wasAtBottom) {
+      // Coming back to the bottom is what retires a divider the user has already laid eyes on: they
+      // went and looked at where they left off, and have now caught up. A view that arrives at the
+      // bottom without ever having reported leaving it — a session opened there, or the
+      // mount/cleanup/remount cycle React's StrictMode runs in development — has no such trip
+      // behind it, so its divider stays put even though the read report on arrival immediately
+      // moves the position past it.
+      if (
+        session.unreadLine !== undefined &&
+        isUnreadLineSpent(session.unreadLine, isAtPresentBottom(session), session.lastReadTime)
+      ) {
+        session.unreadLine = undefined
+      }
+
+      if (!session.hasNewer && !session.loadingHistory) {
+        // The user returned to the bottom after reading scrollback that accumulated past the cap;
+        // drop it now, where the removal is invisible. For a detached window the bottom is only the
+        // end of what's loaded rather than the newest message, and the user is still paging through
+        // it, so nothing is dropped there. An older page in flight was fetched against the window's
+        // current oldest message, so trimming past it would leave that page splicing in ahead of a
+        // gap; the trim waits for the page instead, since the list is on screen and discarding the
+        // page by advancing the generation would read as the window being replaced under the user.
+        const hasHistory = session.messages.length > INACTIVE_SESSION_MAX_HISTORY
+
+        session.messages = session.messages.slice(-INACTIVE_SESSION_MAX_HISTORY)
+        session.hasHistory = session.hasHistory || hasHistory
+      }
+    }
+  },
+
+  ['@whispers/unreadLineSeen'](state, action) {
+    const { target, time } = action.payload
+
+    const session = state.byId.get(target)
+    const unreadLine = session?.unreadLine
+    // A divider that has since been re-placed at another time is a different divider, and the view
+    // hasn't reported laying eyes on that one.
+    if (!session || unreadLine === undefined || unreadLine.time !== time) {
+      return
+    }
+
+    unreadLine.seen = true
+
+    // A move straight to the bottom from above the divider can land with the divider still on
+    // screen, and the view reports where it ended up before it reports what's in the viewport, so
+    // the return that retires the divider can already be behind it by the time this arrives.
+    if (isUnreadLineSpent(unreadLine, isAtPresentBottom(session), session.lastReadTime)) {
+      session.unreadLine = undefined
+    }
+  },
+
+  // This arrives both from this session's own optimistic mark-read reports (dispatched only while
+  // the session is activated) and from the socket handler relaying a mark-read made in one of the
+  // user's other sessions (which can arrive for a session this session isn't currently viewing).
+  // The unread flag is re-evaluated either way: an activated session carries the flag whenever a
+  // message arrived that wasn't read on arrival — the view scrolled up, its window detached from
+  // the present, or the app window unfocused — and this is what lowers it once the read position
+  // covers every message known to exist. The frozen divider goes as soon as the position passes it
+  // for a session that isn't activated, since nobody is reading through it there. For an activated
+  // one it goes only once the user has looked at the divider, been away from the bottom, and come
+  // back to the bottom with the position past it, so it holds still in front of them while they
+  // read through it. Re-evaluating that here, and not only where the view reports its position, is
+  // what retires a divider whose consuming return to the bottom happened before the read report
+  // that finally moves the position past it. An explicit mark-read carries `dismissUnreadLine`,
+  // which drops the divider whether or not the session is activated, because the user asked for the
+  // unread state to go rather than merely scrolling past it.
+  ['@whispers/updateLastReadTime'](state, action) {
+    const { targetId, lastReadTime, dismissUnreadLine } = action.payload
+
+    // A mark-read can arrive for a session this client holds no state for at all: the server
+    // publishes to the user's own path from the moment they connect, ahead of the session list it
+    // answers with, so a reconnect leaves a window with nothing here to record the position on.
+    // Recording it against a session created on the spot is what carries it across that window,
+    // since the session list preserves a session already present. Such a session stays out of
+    // `sessions` until the list names it — it holds no messages and has nothing to show — and a
+    // read position can only ever lower an unread flag, never raise one, so it cannot put a badge
+    // on a conversation nobody has heard from.
+    if (!state.byId.has(targetId)) {
+      state.byId.set(targetId, defaultWhisperSession(targetId))
+    }
+    const session = state.byId.get(targetId)!
+
+    const effective = advanceReadPosition(session, lastReadTime)
+
+    if (dismissUnreadLine) {
+      session.unreadLine = undefined
+      return
+    }
+
+    const unreadLine = session.unreadLine
+    if (unreadLine === undefined) {
+      return
+    }
+
+    if (!session.activated) {
+      if (effective > unreadLine.time) {
+        session.unreadLine = undefined
+      }
+    } else if (isUnreadLineSpent(unreadLine, isAtPresentBottom(session), effective)) {
+      session.unreadLine = undefined
+    }
+  },
+
+  ['@network/connect']() {
+    return DEFAULT_STATE
+  },
+})

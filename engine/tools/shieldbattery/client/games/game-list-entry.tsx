@@ -1,0 +1,363 @@
+import * as React from 'react'
+import { useTranslation } from 'react-i18next'
+import styled from 'styled-components'
+import { ReadonlyDeep } from 'type-fest'
+import { GameRecordJson, getGameDurationString, getGameTypeLabel } from '../../common/games/games'
+import { SbUserId } from '../../common/users/sb-user-id'
+import { longTimestamp, narrowDuration } from '../i18n/date-formats'
+import { useFormat } from '../i18n/locale-formats'
+import { ButtonStateStyleProps, useButtonState } from '../material/button'
+import { Ripple } from '../material/ripple'
+import { Tooltip } from '../material/tooltip'
+import { useCurrentMinuteMs } from '../react/date-hooks'
+import { useAppSelector } from '../redux-hooks'
+import { bodyMedium, singleLine, titleMedium, titleSmall } from '../styles/typography'
+import { GamePlayersDisplay } from './game-players-display'
+
+// The row's cells respond to the `game-list-rows` container established around the scrolling list
+// in `GameListView` and the replay library (its inline size tracks the actual row width, unlike
+// the page width, which also has to fit the side detail panel). Thresholds come from the cells'
+// widths (players' 328px basis, duration's fixed 96px, map's 196px, this file's own 100px time
+// column, gaps, and row padding). Below that, a phone-width compact step drops the bookmark column
+// and lets the duration cell shrink to content.
+/** Row width below which the relative-time cell is dropped first. */
+const HIDE_RELATIVE_TIME_BELOW_PX = 880
+/** Row width below which the map + game type cell is also dropped, to stop clipping. */
+const HIDE_MAP_AND_GAME_TYPE_BELOW_PX = 640
+/**
+ * Row width below which the row goes compact for phone-width layouts: the bookmark column is
+ * dropped, the duration cell shrinks to its content instead of reserving its desktop width, and the
+ * row's own padding and gaps tighten, leaving the players cell as much of the row as possible.
+ */
+const COMPACT_ROW_BELOW_PX = 480
+
+const GameListEntryRoot = styled.div<{ $hasLeadingAction?: boolean }>`
+  width: 100%;
+  /*
+    Keeps a single-team (e.g. 1v1) row from collapsing to nothing; taller multi-team rows exceed it
+    and drive their own height, so team matchups still read as taller.
+  */
+  min-height: 52px;
+  padding: 8px 16px;
+  /*
+    The leading action cell (e.g. a bookmark toggle) already provides breathing room, so the row's
+    own left padding shrinks to keep the icon optically aligned with content above/below.
+  */
+  padding-left: ${props => (props.$hasLeadingAction ? '6px' : '16px')};
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  @container game-list-rows (width < ${COMPACT_ROW_BELOW_PX}px) {
+    /* The bookmark column is hidden at this width, so there's no leading action to align to. */
+    padding: 8px 12px;
+    gap: 12px;
+  }
+`
+
+const BaseCell = styled.div`
+  height: 100%;
+  flex-grow: 0;
+  flex-shrink: 1;
+  flex-basis: auto;
+`
+
+/**
+ * A fixed-width, non-growing column reserved for a single leading action (e.g. a replay's star /
+ * bookmark toggle), kept narrow so it reads as its own column rather than part of the players cell.
+ */
+const BookmarkCell = styled.div`
+  flex: 0 0 auto;
+  width: 48px;
+  height: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  @container game-list-rows (width < ${COMPACT_ROW_BELOW_PX}px) {
+    display: none;
+  }
+`
+
+const PlayersCell = styled(BaseCell)`
+  width: 328px;
+  flex-grow: 1;
+
+  & > * {
+    /*
+     * Caps the team columns' spread: in a wide row the players cell absorbs all the slack, and
+     * without a cap the evenly-split team columns would push the second team toward the middle
+     * of the row, far from the first. The cap keeps opposing teams reading as one matchup and
+     * gives the second column a stable position to scan down the list.
+     */
+    max-width: 480px;
+  }
+
+  @container game-list-rows (width < ${COMPACT_ROW_BELOW_PX}px) {
+    /*
+      Lets the cell shrink below its longest name so the team columns truncate instead of pushing
+      the duration cell out of the row.
+    */
+    min-width: 0;
+  }
+`
+
+const RelativeTimeCell = styled(BaseCell)`
+  ${bodyMedium};
+  ${singleLine};
+  width: 100px;
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+
+  color: var(--theme-on-surface-variant);
+
+  @container game-list-rows (width < ${HIDE_RELATIVE_TIME_BELOW_PX}px) {
+    display: none;
+  }
+`
+
+const GameLengthCell = styled(BaseCell)`
+  ${titleMedium};
+  font-variant-numeric: tabular-nums;
+  width: 96px;
+  /*
+    The duration is the one cell that must never truncate — narrow rows collapse the map cell and
+    squeeze player names instead.
+  */
+  flex-shrink: 0;
+
+  display: flex;
+  justify-content: flex-end;
+
+  @container game-list-rows (width < ${COMPACT_ROW_BELOW_PX}px) {
+    width: auto;
+  }
+`
+
+const MapAndGameTypeCell = styled(BaseCell)`
+  width: 196px;
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+
+  @container game-list-rows (width < ${HIDE_MAP_AND_GAME_TYPE_BELOW_PX}px) {
+    display: none;
+  }
+`
+
+const MapNameAndGameTypeContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+`
+
+const MapName = styled.div`
+  ${titleSmall};
+  ${singleLine};
+
+  min-width: 0;
+  width: 100%;
+  text-align: right;
+`
+
+const GameType = styled.div`
+  ${bodyMedium};
+  ${singleLine};
+  color: var(--theme-on-surface-variant);
+
+  min-width: 0;
+  width: 100%;
+  text-align: right;
+`
+
+export interface GameListEntryLayoutProps {
+  /**
+   * Content of a narrow, dedicated leading action column (e.g. a replay's star / bookmark toggle).
+   * When omitted, the column isn't rendered.
+   */
+  bookmark?: React.ReactNode
+  /** Content of the players cell (a players/teams display). */
+  players: React.ReactNode
+  /**
+   * Content of the relative-time cell (e.g. a `GameRelativeTime`), shown between the players and
+   * duration cells. Pass an empty node rather than omitting it to keep the column's width reserved
+   * for a row with nothing to show (e.g. an unparseable replay).
+   */
+  relativeTime?: React.ReactNode
+  /** Preformatted game duration text (e.g. `12:34`, or `—` when unknown). */
+  duration: string
+  /** Map name text (already color-code-stripped). */
+  mapName: string
+  /** Game type / mode label. */
+  gameTypeLabel: string
+  className?: string
+  /** Extra content rendered inside the row root after the cells (e.g. a `Ripple`). */
+  children?: React.ReactNode
+}
+
+/**
+ * The purely presentational layout for a game/replay list row: the row root plus its cells (an
+ * optional bookmark column, then players, duration, and map + game type). Carries no data
+ * dependencies so it can back both real games (see `GameListEntry`) and local replay files.
+ */
+export function GameListEntryLayout({
+  bookmark,
+  players,
+  relativeTime,
+  duration,
+  mapName,
+  gameTypeLabel,
+  className,
+  children,
+}: GameListEntryLayoutProps) {
+  return (
+    <GameListEntryRoot className={className} $hasLeadingAction={bookmark !== undefined}>
+      {bookmark !== undefined ? <BookmarkCell>{bookmark}</BookmarkCell> : null}
+
+      <PlayersCell>{players}</PlayersCell>
+
+      {relativeTime !== undefined ? <RelativeTimeCell>{relativeTime}</RelativeTimeCell> : null}
+
+      <GameLengthCell>{duration}</GameLengthCell>
+
+      <MapAndGameTypeCell>
+        <MapNameAndGameTypeContainer>
+          <MapName title={mapName}>{mapName}</MapName>
+          <GameType>{gameTypeLabel}</GameType>
+        </MapNameAndGameTypeContainer>
+      </MapAndGameTypeCell>
+
+      {children}
+    </GameListEntryRoot>
+  )
+}
+
+export interface GameRelativeTimeProps {
+  /** Unix ms when the game/replay started. */
+  timestampMs: number
+  className?: string
+}
+
+/**
+ * A game/replay row's relative-time cell content: a narrow label (e.g. "18h ago") that refreshes
+ * as real time crosses each minute boundary, backed by the shared minute clock rather than a timer
+ * of its own. Hovering reveals the absolute date and time.
+ */
+export function GameRelativeTime({ timestampMs, className }: GameRelativeTimeProps) {
+  const { t } = useTranslation()
+  const narrowDurationFormat = useFormat(narrowDuration)
+  const longTimestampFormat = useFormat(longTimestamp)
+  const currentMinuteMs = useCurrentMinuteMs()
+
+  // Intl's relative-time units bottom out at seconds, which reads as false precision when the
+  // display itself only ever refreshes once a minute.
+  const label =
+    currentMinuteMs - timestampMs < 60_000
+      ? t('game.time.justNow', 'Just now')
+      : narrowDurationFormat.format(timestampMs, currentMinuteMs)
+
+  return (
+    <Tooltip text={longTimestampFormat.format(timestampMs)} className={className}>
+      {label}
+    </Tooltip>
+  )
+}
+
+/**
+ * A selectable row container matching the replay library's row, for pages that let a game row be
+ * clicked to show its details in a side panel rather than navigating straight to its results page.
+ */
+export const SelectableRowContainer = styled.div<ButtonStateStyleProps & { $selected: boolean }>`
+  position: relative;
+  width: 100%;
+
+  border-radius: 8px;
+  contain: content;
+  cursor: pointer;
+
+  background-color: ${props =>
+    props.$selected ? 'rgb(from var(--theme-on-surface) r g b / 0.1)' : 'transparent'};
+
+  &:hover {
+    background-color: ${props =>
+      props.$selected
+        ? 'rgb(from var(--theme-on-surface) r g b / 0.12)'
+        : 'rgb(from var(--theme-on-surface) r g b / 0.06)'};
+  }
+`
+
+export interface GameListEntryProps {
+  game: ReadonlyDeep<GameRecordJson>
+  /** Shows each human player's own reconciled result as a compact chip beside their name. */
+  showResult?: boolean
+  /** Whose perspective the row is ordered from: this user's team (or the user) is listed first. */
+  forUserId?: SbUserId
+  /**
+   * Hides the game length and, when results are shown, the players' result chips — both spoilers
+   * for someone rewatching their games.
+   */
+  spoilerFree?: boolean
+  /** Shows the row in its selected state. */
+  selected?: boolean
+  onClick?: (gameId: string) => void
+  onDoubleClick?: (gameId: string) => void
+  onContextMenu?: (gameId: string, event: React.MouseEvent) => void
+}
+
+export function GameListEntry({
+  game,
+  showResult = false,
+  forUserId,
+  spoilerFree = false,
+  selected = false,
+  onClick,
+  onDoubleClick,
+  onContextMenu,
+}: GameListEntryProps) {
+  const { t } = useTranslation()
+  const map = useAppSelector(s => s.maps.byId.get(game.mapId))
+
+  const [buttonProps, rippleRef] = useButtonState({
+    onClick: onClick ? () => onClick(game.id) : undefined,
+    onDoubleClick: onDoubleClick ? () => onDoubleClick(game.id) : undefined,
+  })
+
+  const gameType = getGameTypeLabel(game, t)
+  const mapName = map?.name ?? t('game.mapName.unknown', 'Unknown map')
+
+  const layoutProps: GameListEntryLayoutProps = {
+    players: (
+      <GamePlayersDisplay
+        game={game}
+        forUserId={forUserId}
+        showTeamLabels={false}
+        showPlayerResults={showResult && !spoilerFree}
+      />
+    ),
+    relativeTime: <GameRelativeTime timestampMs={game.startTime} />,
+    duration: spoilerFree || !game.gameLength ? '—' : getGameDurationString(game.gameLength),
+    mapName,
+    gameTypeLabel: gameType,
+  }
+
+  return (
+    <SelectableRowContainer
+      {...buttonProps}
+      $selected={selected}
+      onContextMenu={onContextMenu ? e => onContextMenu(game.id, e) : undefined}>
+      <GameListEntryLayout {...layoutProps} />
+      <Ripple ref={rippleRef} />
+    </SelectableRowContainer>
+  )
+}

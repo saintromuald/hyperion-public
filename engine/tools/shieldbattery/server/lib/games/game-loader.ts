@@ -1,0 +1,1481 @@
+import { Counter } from '@prometheus-io/client'
+import { Map as IMap, Set as ISet, Record } from 'immutable'
+import { container, singleton } from 'tsyringe'
+import { AsyncResult, Result } from 'typescript-result'
+import createDeferred, { Deferred } from '../../../common/async/deferred'
+import { extendableDeadline } from '../../../common/async/extendable-deadline'
+import { timeoutPromise } from '../../../common/async/timeout-promise'
+import { GameServerRegionId } from '../../../common/game-server-regions'
+import { GameConfig, GameSource } from '../../../common/games/configuration'
+import { GamePlayerRank, GameSetup, PlayerInfo } from '../../../common/games/game-launch-config'
+import { GameLoaderEvent } from '../../../common/games/game-loader-network'
+import { GameType } from '../../../common/games/game-type'
+import { MapInfo, SbMapId, toMapInfoJson } from '../../../common/maps'
+import { BwTurnRate, BwUserLatency } from '../../../common/network'
+import { urlPath } from '../../../common/urls'
+import { RestrictionKind } from '../../../common/users/restrictions'
+import { SbUser } from '../../../common/users/sb-user'
+import { SbUserId } from '../../../common/users/sb-user-id'
+import { CodedError } from '../errors/coded-error'
+import log from '../logging/logger'
+import { getMapInfos } from '../maps/map-models'
+import { NetcodeV2Service, NetcodeV2SessionLoadState } from '../netcode-v2/netcode-v2-service'
+import { monotonicNow } from '../time/monotonic-now'
+import { ActivityStatusService } from '../users/activity-status-service'
+import { RestrictionService } from '../users/restriction-service'
+import { findUsersById } from '../users/user-model'
+import { TypedPublisher } from '../websockets/typed-publisher'
+import { cancelGame, finalizeGameSetupCancellation, updateGameConfig } from './game-models'
+import { GameplayActivityRegistry } from './gameplay-activity-registry'
+import { registerGame } from './registration'
+
+const GAME_LOAD_TIMEOUT = 75 * 1000
+
+/**
+ * Extra time added once to a load's deadline when the coordinator reports it's still provisioning a
+ * game server. The base timeout matches the coordinator's provisioning-hold cap, so a load that
+ * waits out a full provision would otherwise trip the timeout before the game itself begins loading.
+ */
+const PROVISIONING_LOAD_TIMEOUT_EXTENSION_MS = 90 * 1000
+
+/**
+ * Maximum resolution time after a setup failure or load deadline. Relay pulls and evidence staging
+ * share this budget; a missing final verdict releases the load without assigning ordinary blame.
+ */
+const LOAD_STATE_ATTEST_BUDGET_MS = 20 * 1000
+
+/** How long to wait between load-state pulls when the last one wasn't fully attested. */
+const LOAD_STATE_POLL_INTERVAL_MS = 2 * 1000
+
+/** Delays before each retry of a failed cancellation-marker write; it's given up on after these. */
+const CANCELLATION_WRITE_RETRY_DELAYS_MS = [5 * 1000, 30 * 1000, 2 * 60 * 1000]
+
+/**
+ * The most one load-state pull may take. The coordinator itself waits a couple of seconds for the
+ * serving relays to answer, so this leaves room for that plus the round trip and no more.
+ */
+const LOAD_STATE_REQUEST_TIMEOUT_MS = 6 * 1000
+
+export enum GameLoadErrorType {
+  /** The game load request was canceled before it completed. */
+  Canceled = 'canceled',
+  /** An internal error occurred while trying to load the game. */
+  Internal = 'internal',
+  /** A specific player failed to load. */
+  PlayerFailed = 'playerFailed',
+  /** Loading the game timed out before it finished. */
+  Timeout = 'timeout',
+  /** A relay detected an unauthorized lobby command during setup. */
+  GameAnomaly = 'gameAnomaly',
+}
+
+type GameLoadErrorTypeToData = {
+  [GameLoadErrorType.GameAnomaly]: { userId: SbUserId }
+  [GameLoadErrorType.PlayerFailed]: {
+    userId: SbUserId
+  }
+  [GameLoadErrorType.Timeout]: {
+    unloaded: SbUserId[]
+  }
+
+  [GameLoadErrorType.Canceled]: undefined
+  [GameLoadErrorType.Internal]: undefined
+}
+
+export class BaseGameLoaderError<
+  T extends GameLoadErrorType = GameLoadErrorType,
+> extends CodedError<T, GameLoadErrorTypeToData[T]> {}
+
+export type GameLoaderError =
+  | BaseGameLoaderError<GameLoadErrorType.GameAnomaly>
+  | BaseGameLoaderError<GameLoadErrorType.Canceled>
+  | BaseGameLoaderError<GameLoadErrorType.Internal>
+  | BaseGameLoaderError<GameLoadErrorType.PlayerFailed>
+  | BaseGameLoaderError<GameLoadErrorType.Timeout>
+
+export function isGameLoaderError(err: unknown): err is GameLoaderError {
+  return err instanceof BaseGameLoaderError
+}
+
+function generateSeed() {
+  // BWChart and some other replay sites/libraries utilize the random seed as the date the game was
+  // played, so we match BW's random seed method (time()) here
+  return (Date.now() / 1000) >>> 0
+}
+
+/** Resolved value of a successful `GameLoader.loadGame`. */
+export interface GameLoadResult {
+  /** The ID of the game record that was created and successfully loaded. */
+  gameId: string
+}
+
+/**
+ * A human participant in a game being loaded. This is everything the loader itself needs to know
+ * about a player; whatever richer model a caller has (lobby slots, matchmaking entities, ...) is
+ * mapped into this at the call site. Per-slot data the game process needs but the loader only
+ * passes through lives on `GameLoadRequest.playerInfos` instead.
+ */
+export interface GameLoadPlayer {
+  /** The user occupying this spot in the game. */
+  readonly userId: SbUserId
+  /**
+   * Whether this player watches rather than plays. Observers load the game and get a netcode v2
+   * slot like anyone else, but are excluded from the relay's desync comparison.
+   */
+  readonly isObserver: boolean
+  /**
+   * The home game-server region this player selected, if any. Forwarded to the coordinator to home
+   * this player's netcode v2 relay; a player with none is placed region-blind.
+   */
+  readonly region?: GameServerRegionId
+  /**
+   * This player's measured round-trip time (ms) to their home region, if recorded. Read when
+   * building the netcode v2 session-create roster, alongside `region`. A player with no value is
+   * forwarded to the coordinator without a latency sample.
+   */
+  readonly rttMs?: number
+  /**
+   * Whether `region` came from this player's manual server-region setting rather than the auto
+   * (lowest-RTT) resolution. Recorded onto the game's netcode debug record and never sent to the
+   * coordinator: it explains how a placement was asked for, it doesn't influence one.
+   */
+  readonly regionManual?: boolean
+  /**
+   * This player's per-session netcode v2 public key (base64), submitted at queue/lobby-join time.
+   * Threaded per-slot into the netcode v2 session-create request. Required for every human slot of
+   * a multi-human (netcode v2) game — a missing value fails the load fast rather than waiting.
+   */
+  readonly netcodeV2Pubkey?: string
+}
+
+const createLoadingData = Record({
+  gameSource: GameSource.Lobby,
+  players: [] as ReadonlyArray<GameLoadPlayer>,
+  /**
+   * The players whose game loop is reported running. This is what completes a load: once every
+   * player is in here, the game is loaded. For a networked game each entry is the player's own
+   * client reporting its start, as recorded by its relay, so it says nothing about whether that
+   * player's game ever reached anyone else (see `forwardedPlayers`).
+   */
+  finishedPlayers: ISet<SbUserId>(),
+  /**
+   * The players whose relay forwarded at least one of their game turns, which a client sends only
+   * once its own loading has finished. Unlike `finishedPlayers`, this is observed by the relay rather
+   * than reported by the client.
+   */
+  forwardedPlayers: ISet<SbUserId>(),
+  /**
+   * Whether a coordinator pull vouched for `forwardedPlayers` being complete, so a player's absence
+   * from it means none of their turns were ever forwarded. Never true with a coordinator or relay
+   * that doesn't track forwarded turns.
+   */
+  turnsKnown: false,
+  /**
+   * Whether this game has no network session at all — a lone human playing against the map or
+   * computers. Such a game is the only kind that reports its own load completion, since there's no
+   * network to observe it from; everything else is a networked game whose progress the relay
+   * infrastructure watches directly.
+   */
+  localOnly: false,
+  /**
+   * The coordinator's id for this game's relay session, once one has been created. Never set for a
+   * `localOnly` load, and for any other only after the session-create round trip returns.
+   */
+  netcodeV2Session: undefined as number | undefined,
+  /** Which relay slot each player occupies, for translating the coordinator's slot-keyed reports. */
+  slotByUserId: IMap<SbUserId, number>(),
+  /** The players whose client is known to have reached its relay. */
+  connectedPlayers: ISet<SbUserId>(),
+  /**
+   * How many coordinator pulls this load has merged, which numbers them: each pull's relay snapshots
+   * are all taken after every snapshot of the pulls before it (see `closedPlayersAtFault`).
+   */
+  loadStatePulls: 0,
+  /**
+   * The players whose client reached its relay and is disconnected again without its game loop
+   * having started, as of the latest coordinator pull, each with the disconnection it's in (see
+   * `ClosedRun`). Unlike the sets above this is the session as it stands rather than an
+   * accumulation, so each pull replaces it: a player who dials back in is no longer closed. Empty
+   * unless that pull vouched for its closed set being complete (`closedKnown`).
+   */
+  closedPlayers: IMap<SbUserId, ClosedRun>(),
+  /**
+   * The players whose client was connected to its relay as of the latest coordinator pull. Replaced
+   * on every pull like `closedPlayers`, and empty unless that pull was `closedKnown`. A player who
+   * reported starting and then disconnected is in neither set.
+   */
+  livePlayers: ISet<SbUserId>(),
+  /** Whether every slot connected and the session was released to run. */
+  sessionStarted: false,
+  /** Holds the failure decision open while relays settle setup and evidence is staged. */
+  failureResolution: undefined as { startedAt: number; controller: AbortController } | undefined,
+  /** Claims cancellation before asynchronous penalty persistence can race a load completion. */
+  lobbyViolation: undefined as { userId: SbUserId; detectedAt: Date } | undefined,
+  abortController: null as unknown as AbortController,
+  deferred: null as unknown as Deferred<Result<GameLoadResult, GameLoaderError>>,
+  signal: null as unknown as AbortSignal,
+  /** Pushes the load's timeout deadline further out. Defaults to a no-op until a deadline is armed. */
+  extendDeadline: ((_ms: number) => {}) as (ms: number) => void,
+})
+
+type LoadingData = ReturnType<typeof createLoadingData>
+
+/**
+ * One closed player's current disconnection: the relay connection epoch of the link whose closure
+ * began it, and the number of the first pull that reported the player closed on that link. A pull
+ * reporting the player closed on a different link starts a new run, since the player reconnected
+ * in between. A run without an epoch can't be told apart from a later disconnection, so it never
+ * counts as having lasted from one pull to the next.
+ */
+interface ClosedRun {
+  readonly epoch: string | undefined
+  readonly firstPull: number
+}
+
+const LoadingDatas = {
+  /**
+   * Whether every player reported its game loop running. Reported starts are enough to let a load
+   * succeed, since that penalizes nobody; deciding who failed one takes more (see `playersAtFault`).
+   */
+  isAllFinished(loadingData: LoadingData) {
+    return loadingData.players.every(p => loadingData.finishedPlayers.has(p.userId))
+  },
+
+  /** The players that aren't in `set`, in the load's player order. */
+  playersMissingFrom(loadingData: LoadingData, set: ISet<SbUserId>): SbUserId[] {
+    return loadingData.players.filter(p => !set.has(p.userId)).map(p => p.userId)
+  },
+
+  /**
+   * Which players a networked load that failed is at fault for, in the load's player order. Two
+   * kinds of evidence count: how far the session got, and who left it.
+   *
+   * The first is how far the session got: a missing game loop once some are running, or a missing
+   * connection while the session was still waiting for everyone. On its own it blames nobody when
+   * nothing distinguishes the players from each other — nobody connected at all, or everybody did
+   * and the session ran but no game loop ever started.
+   *
+   * A client's report of its own start never by itself blames someone else. A player whose loop
+   * runs but whose link to the relay is cut can start, report that start once it reconnects, and
+   * still never deliver its game init or a single turn to its peers, who then wait and never start
+   * through no fault of their own. So when the coordinator vouches for forwarded turns
+   * (`turnsKnown`), the missing game loops are only held against anyone once a relay has forwarded
+   * turns from at least one player who reported starting; with no start so backed, nobody is
+   * blamed. Without that evidence, the reported starts are the only evidence and are used as is.
+   *
+   * The second is a player who left: one in `closedPlayers`, whose client reached its relay and then
+   * disconnected before its game loop started, whether before or after the session was released to
+   * run. That is added to whatever the first names, but only while the rest of the game stayed:
+   * another player was still connected to its relay after this one had left, and the closed players
+   * are at most half of the players (see `closedPlayersAtFault`). Many players leaving together looks
+   * more like a network failure than a choice, so then none of them is blamed. A closed player's own
+   * start may still be held by its client, so how far the session got says nothing reliable about
+   * them, and leaving is the only thing they're judged on. Observers never count toward either check
+   * and are never blamed for leaving; how far the session got blames them as it does anyone.
+   *
+   * Only meaningful against a record known to be complete, since every answer here is drawn from a
+   * player's absence from one of the sets. `closedPlayers` and `livePlayers` are only filled from a
+   * pull that vouched for them.
+   */
+  playersAtFault(loadingData: LoadingData): SbUserId[] {
+    const { players, closedPlayers } = loadingData
+    const leavers = ISet(LoadingDatas.closedPlayersAtFault(loadingData))
+    const closedPlaying = players
+      .filter(p => !p.isObserver && closedPlayers.has(p.userId))
+      .map(p => p.userId)
+    const stalled = ISet(LoadingDatas.playersAtFaultForProgress(loadingData)).subtract(
+      closedPlaying,
+    )
+    return players.filter(p => leavers.has(p.userId) || stalled.has(p.userId)).map(p => p.userId)
+  },
+
+  /**
+   * The closed players blamed for leaving (see `playersAtFault`). Empty when the closed
+   * non-observers are more than half of the non-observers; otherwise each closed non-observer whose
+   * current disconnection was already reported by an earlier pull than the latest, provided some
+   * other non-observer is live and not closed in the latest pull.
+   *
+   * The pulls are what order one player's leaving against another's staying. A single pull can't:
+   * the coordinator asks each serving relay separately and each snapshots at its own moment, so one
+   * relay can report its player live and then lose them, after which another relay reports its own
+   * player closed, and the pull shows a leaver beside someone who had in fact already gone. Across
+   * pulls the order holds. Pulls are made one after another, and the coordinator answers a pull only
+   * from a round of relay questions that began after the pull arrived, so every snapshot behind a
+   * pull is taken after every snapshot behind the pulls before it.
+   *
+   * Seeing a player closed in two pulls isn't enough by itself, since they may have reconnected and
+   * left again in between. Each closure names the relay link whose closure began it, and a link's
+   * epoch is a random 64-bit value, so a reconnect repeating it is vanishingly unlikely: the same
+   * epoch in both pulls means one disconnection that began before the earlier pull's snapshots and
+   * lasted through the later pull's. Another player live in the
+   * later pull was still there after that disconnection began, so after this leaver had gone.
+   * Having ever connected isn't staying, and neither is having started: a player who reported
+   * starting and then disconnected is neither live nor closed, and never counts as someone who
+   * stayed.
+   */
+  closedPlayersAtFault(loadingData: LoadingData): SbUserId[] {
+    const { players, livePlayers, closedPlayers, loadStatePulls } = loadingData
+    const someoneStayed = players.some(
+      p => !p.isObserver && livePlayers.has(p.userId) && !closedPlayers.has(p.userId),
+    )
+    if (!someoneStayed) {
+      return []
+    }
+    return LoadingDatas.blamableClosedPlayers(loadingData).filter(userId => {
+      const run = closedPlayers.get(userId)!
+      return run.epoch !== undefined && run.firstPull < loadStatePulls
+    })
+  },
+
+  /**
+   * The closed non-observers, or none when they are more than half of the non-observers and so
+   * can't be blamed for leaving whoever stayed.
+   */
+  blamableClosedPlayers(loadingData: LoadingData): SbUserId[] {
+    const playing = loadingData.players.filter(p => !p.isObserver)
+    const closed = playing.filter(p => loadingData.closedPlayers.has(p.userId))
+    return closed.length * 2 > playing.length ? [] : closed.map(p => p.userId)
+  },
+
+  /**
+   * Whether some closed player who could be blamed for leaving began their current disconnection
+   * in the latest pull's view, so only a later pull can show whether anyone stayed after they left
+   * (see `closedPlayersAtFault`).
+   */
+  hasClosedPlayerAwaitingWitness(loadingData: LoadingData): boolean {
+    return LoadingDatas.blamableClosedPlayers(loadingData).some(userId => {
+      const run = loadingData.closedPlayers.get(userId)!
+      return run.epoch !== undefined && run.firstPull === loadingData.loadStatePulls
+    })
+  },
+
+  /** The players at fault for how far the session got (see `playersAtFault`). */
+  playersAtFaultForProgress(loadingData: LoadingData): SbUserId[] {
+    const { finishedPlayers, forwardedPlayers, turnsKnown } = loadingData
+    if (!finishedPlayers.isEmpty()) {
+      if (!turnsKnown) {
+        return LoadingDatas.playersMissingFrom(loadingData, finishedPlayers)
+      }
+      if (finishedPlayers.intersect(forwardedPlayers).isEmpty()) {
+        return []
+      }
+      // A player whose turns the relay forwarded finished loading whether or not its start report
+      // arrived.
+      return LoadingDatas.playersMissingFrom(loadingData, finishedPlayers.union(forwardedPlayers))
+    } else if (!loadingData.sessionStarted && !loadingData.connectedPlayers.isEmpty()) {
+      return LoadingDatas.playersMissingFrom(loadingData, loadingData.connectedPlayers)
+    } else {
+      return []
+    }
+  },
+}
+
+/**
+ * Parameters to `GameLoader.loadGame`.
+ */
+export interface GameLoadRequest {
+  /** Associates the registered game with the caller before any setup events are delivered. */
+  onGameRegistered?: (gameId: string) => void
+  /**
+   * The players that should be created as human (or observer) type slots. At least one player
+   * should be present for things to work properly. The order is preserved when assigning netcode v2
+   * slots (aside from the host, who is always moved to slot 0).
+   */
+  players: ReadonlyArray<GameLoadPlayer>
+  /**
+   * A list of the info about each slot in the map/lobby. This is only really useful data for UMS
+   * lobbies, where slots may have different types, there might be hidden computer slots, etc. For
+   * a lobby, see `getPlayerInfos(Lobby)`. A caller with a richer player model (e.g. matchmaking's
+   * team assignments) builds `players` and `playerInfos` side by side from it.
+   */
+  playerInfos: PlayerInfo[]
+  /**
+   * The ID of the map that the game will be played on.
+   */
+  mapId: SbMapId
+  /**
+   * Configuration info for the game.
+   */
+  gameConfig: GameConfig
+  /**
+   * Each player's standing in the match's mode, shown on the loading screen. Only provided for
+   * matchmaking games.
+   */
+  ranks?: GamePlayerRank[]
+  /** An `AbortSignal` that can be used to cancel the loading process midway through. */
+  signal?: AbortSignal
+}
+
+function gameUserPath(gameId: string, userId: SbUserId) {
+  return urlPath`/gameLoader/${gameId}/${userId}`
+}
+
+/** Returns the `GameSetup` for a game without any user-specific data. */
+function getGeneralGameSetup({
+  gameConfig,
+  playerInfos,
+  users,
+  ranks,
+  map,
+  gameId,
+  seed,
+  turnRate,
+  userLatency,
+}: {
+  gameConfig: GameConfig
+  playerInfos: PlayerInfo[]
+  users: SbUser[]
+  ranks?: GamePlayerRank[]
+  map: MapInfo
+  gameId: string
+  seed: number
+  turnRate: BwTurnRate | 0 | undefined
+  userLatency: BwUserLatency | undefined
+}): Exclude<GameSetup, 'resultCode'> {
+  if (gameConfig.gameSource === GameSource.Lobby) {
+    // NOTE(tec27): For launching lobbies this should now always be set (the optional bit is just
+    // for DB-stored configs), but we fall back to the first human player just in case
+    let host: PlayerInfo | undefined
+    if (gameConfig.gameSourceExtra?.host) {
+      host = playerInfos.find(p => p.userId === gameConfig.gameSourceExtra!.host)
+    }
+    if (!host) {
+      host = playerInfos.find(p => p.type === 'human' && p.userId)!
+    }
+
+    return {
+      gameId,
+      name: 'ShieldBattery Lobby',
+      map: toMapInfoJson(map),
+      gameType: gameConfig.gameType,
+      gameSubType: gameConfig.gameSubType,
+      slots: playerInfos,
+      host,
+      users,
+      seed,
+      turnRate,
+      userLatency,
+      useLegacyLimits: gameConfig.gameSourceExtra?.useLegacyLimits,
+      starcraftCompatibleReplays: gameConfig.gameSourceExtra?.starcraftCompatibleReplays,
+      disableAllianceChanges: gameConfig.lockedAlliances,
+    }
+  } else if (gameConfig.gameSource === GameSource.Matchmaking) {
+    return {
+      gameId,
+      name: 'ShieldBattery Matchmaking',
+      map: toMapInfoJson(map),
+      gameType: gameConfig.gameType,
+      gameSubType: gameConfig.gameSubType,
+      slots: playerInfos,
+      host: playerInfos[0],
+      users,
+      ranks,
+      matchmakingType: gameConfig.gameSourceExtra.type,
+      // Matchmaking always locks alliances; fall back to that if a caller ever constructs a
+      // matchmaking config without setting the field explicitly.
+      disableAllianceChanges: gameConfig.lockedAlliances ?? true,
+      // The fixes this turns off are only offered as an opt-in for lobbies.
+      starcraftCompatibleReplays: true,
+      seed,
+      turnRate,
+      userLatency,
+    }
+  } else {
+    return gameConfig satisfies never
+  }
+}
+
+/** Stages durable evidence of a matchmaking lobby-policy violation. */
+export interface LobbyViolationStager {
+  stage(gameId: string, userId: SbUserId, detectedAt: Date): Promise<boolean>
+}
+
+/**
+ * Injection token for the `LobbyViolationStager`. Its implementation depends on matchmaking, which
+ * depends on this module, so it's bound at startup rather than imported here.
+ */
+export const LOBBY_VIOLATION_STAGER = 'LobbyViolationStager'
+
+@singleton()
+export class GameLoader {
+  private pendingCancellations = new Map<
+    string,
+    {
+      reason: GameLoadErrorType
+      pending?: Promise<void>
+    }
+  >()
+
+  /** Waits for a cancellation marker, retrying a failed write when late relay evidence arrives. */
+  async finishCancellation(gameId: string): Promise<void> {
+    const entry = this.pendingCancellations.get(gameId)
+    if (!entry) return
+    entry.pending ??= cancelGame(gameId, entry.reason)
+      .then(() => {
+        this.pendingCancellations.delete(gameId)
+      })
+      .catch(err => {
+        entry.pending = undefined
+        throw err
+      })
+    await entry.pending
+  }
+
+  // Maps game id -> loading data
+  private loadingGames = IMap<string, LoadingData>()
+  private recentlyLoadedGames = new Set<string>()
+
+  private gameLoadRequestsTotalMetric = new Counter({
+    name: 'shieldbattery_game_loader_requests_total',
+    labelNames: ['game_source'],
+    help: 'Total number of game load requests',
+  })
+  private gameLoadFailuresTotalMetric = new Counter({
+    name: 'shieldbattery_game_loader_failures_total',
+    labelNames: ['game_source', 'reason'],
+    help: 'Total number of game load requests that failed, by reason',
+  })
+  private gameLoadSuccessesTotalMetric = new Counter({
+    name: 'shieldbattery_game_loader_successes_total',
+    labelNames: ['game_source'],
+    help: 'Total number of game load requests that succeeded',
+  })
+
+  constructor(
+    private publisher: TypedPublisher<GameLoaderEvent>,
+    private activityRegistry: GameplayActivityRegistry,
+    private restrictionService: RestrictionService,
+    private netcodeV2Service: NetcodeV2Service,
+    private activityStatusService: ActivityStatusService,
+  ) {}
+
+  /**
+   * Starts the process of loading a new game.
+   *
+   * @returns A promise which will resolve with the list of players if the game successfully loaded,
+   *   or be rejected if the load failed.
+   */
+  loadGame({
+    players,
+    playerInfos,
+    mapId,
+    gameConfig,
+    ranks,
+    signal,
+    onGameRegistered,
+  }: GameLoadRequest): AsyncResult<GameLoadResult, GameLoaderError> {
+    const gameLoaded = createDeferred<Result<GameLoadResult, GameLoaderError>>()
+
+    this.gameLoadRequestsTotalMetric.labels(gameConfig.gameSource).inc()
+
+    registerGame(mapId, gameConfig).then(
+      ({ gameId, resultCodes }) => {
+        const abortController = new AbortController()
+        const deadline = extendableDeadline(gameLoaded, GAME_LOAD_TIMEOUT, 'game load timed out')
+        this.loadingGames = this.loadingGames.set(
+          gameId,
+          createLoadingData({
+            gameSource: gameConfig.gameSource,
+            players: [...players],
+            abortController,
+            deferred: gameLoaded,
+            signal: signal
+              ? AbortSignal.any([signal, abortController.signal])
+              : abortController.signal,
+            extendDeadline: deadline.extend,
+          }),
+        )
+
+        onGameRegistered?.(gameId)
+
+        this.doGameLoad({
+          gameId,
+          mapId,
+          gameConfig,
+          resultCodes,
+          playerInfos,
+          ranks,
+        }).onFailure(err => {
+          this.maybeCancelLoadingFromSystem(gameId, err)
+        })
+
+        deadline.expired.catch(() => {
+          this.handleLoadDeadlineExpired(gameId).catch(err => {
+            log.error({ err }, `error handling expired load deadline for ${gameId}`)
+          })
+        })
+      },
+      err => {
+        log.error({ err }, "couldn't register game with database")
+        // NOTE(tec27): We haven't registered the game in `loadingGames` yet by this point so we
+        // can't cancel it that way
+        gameLoaded.resolve(
+          Result.error(
+            new BaseGameLoaderError(
+              GameLoadErrorType.Internal,
+              "Couldn't register game with database",
+            ),
+          ),
+        )
+      },
+    )
+
+    Result.fromAsync(() => gameLoaded)
+      .onSuccess(() => {
+        this.gameLoadSuccessesTotalMetric.labels(gameConfig.gameSource).inc()
+      })
+      .onFailure(err => {
+        const reason = isGameLoaderError(err) ? err.code : 'unknown'
+        this.gameLoadFailuresTotalMetric.labels(gameConfig.gameSource, reason).inc()
+      })
+
+    return Result.fromAsync(() => gameLoaded)
+  }
+
+  /**
+   * The game has successfully loaded for a specific player, meaning their game loop is running.
+   * For a networked game this comes from the coordinator, which watches the session itself; a
+   * local-only game has no network to watch, so its lone player reports it over HTTP. Once the game
+   * is loaded for all players, we clean up any remaining state to prevent it from being canceled.
+   *
+   * Idempotent: this is the single completion path, and both of its sources can deliver the same
+   * player more than once.
+   *
+   * @returns whether the relevant game could be found
+   */
+  registerGameAsLoaded(gameId: string, playerId: SbUserId): boolean {
+    if (this.recentlyLoadedGames.has(gameId)) {
+      // This is just to prevent an erroneous 404/409 resulting from retrying game status updates
+      return true
+    }
+
+    let loadingData = this.loadingGames.get(gameId)
+    if (!loadingData || loadingData.lobbyViolation) {
+      return false
+    }
+    if (!loadingData.players.some(p => p.userId === playerId)) {
+      return false
+    }
+
+    loadingData = loadingData.set('finishedPlayers', loadingData.finishedPlayers.add(playerId))
+    this.loadingGames = this.loadingGames.set(gameId, loadingData)
+
+    if (!loadingData.failureResolution && LoadingDatas.isAllFinished(loadingData)) {
+      this.completeLoad(gameId, loadingData)
+    }
+
+    return true
+  }
+
+  /**
+   * A player's client reached its relay. This is weaker evidence than
+   * {@link GameLoader.registerGameAsLoaded} — it says the client got onto the network, not that its
+   * game loop started — and exists so a load that runs out of time can tell a player who never
+   * showed up apart from one who did.
+   *
+   * @returns whether the relevant game could be found
+   */
+  recordPlayerConnected(gameId: string, playerId: SbUserId): boolean {
+    if (this.recentlyLoadedGames.has(gameId)) {
+      return true
+    }
+
+    const loadingData = this.loadingGames.get(gameId)
+    if (!loadingData) {
+      return false
+    }
+    if (!loadingData.players.some(p => p.userId === playerId)) {
+      return false
+    }
+
+    this.loadingGames = this.loadingGames.set(
+      gameId,
+      loadingData.set('connectedPlayers', loadingData.connectedPlayers.add(playerId)),
+    )
+    return true
+  }
+
+  /**
+   * Every slot of the game's relay session connected and the session was released to run. Past this
+   * point a load that runs out of time can't blame anyone for failing to connect, because everyone
+   * did.
+   *
+   * @returns whether the relevant game could be found
+   */
+  recordSessionStarted(gameId: string): boolean {
+    if (this.recentlyLoadedGames.has(gameId)) {
+      return true
+    }
+
+    const loadingData = this.loadingGames.get(gameId)
+    if (!loadingData) {
+      return false
+    }
+
+    this.loadingGames = this.loadingGames.set(gameId, loadingData.set('sessionStarted', true))
+    return true
+  }
+
+  /**
+   * Whether the game currently loading under `gameId` has no network session, and so is the one
+   * kind of load that takes its completion signal from its own player rather than from the relay
+   * path. False for a game that isn't loading, including one that already finished.
+   */
+  isLocalOnlyLoad(gameId: string): boolean {
+    return this.loadingGames.get(gameId)?.localOnly ?? false
+  }
+
+  /**
+   * Resolves a load as successful: unsubscribes every player from its loading updates, drops the
+   * loading state, and hands the caller its game id. The game id is remembered briefly afterwards so
+   * a status report that races the completion is answered as success rather than as an unknown game.
+   */
+  private completeLoad(gameId: string, loadingData: LoadingData, resolved = false) {
+    if (loadingData.lobbyViolation || (loadingData.failureResolution && !resolved)) {
+      return
+    }
+    const allUserIds = loadingData.players.map(p => p.userId)
+    const activeClients = allUserIds
+      .map(userId => this.activityRegistry.getClientForUser(userId))
+      .filter(c => !!c)
+    for (const client of activeClients) {
+      client.unsubscribe(gameUserPath(gameId, client.userId))
+      // Marking the players as in-game before the load is resolved means the lobby/matchmaking
+      // teardown that follows sees them as playing, and its attempt to clear their lobby/queue
+      // status is a no-op instead of knocking them back to just being online.
+      this.activityStatusService.setInGame(client.userId, gameId, client)
+    }
+
+    this.recentlyLoadedGames.add(gameId)
+    this.loadingGames = this.loadingGames.delete(gameId)
+    // Nothing started on this load's behalf has any use left: a load-state pull still in flight
+    // would answer a question that has been settled, so it's cut off here as it is on cancellation.
+    loadingData.abortController.abort()
+    loadingData.failureResolution?.controller.abort()
+    loadingData.deferred.resolve(Result.ok({ gameId }))
+
+    setTimeout(() => {
+      this.recentlyLoadedGames.delete(gameId)
+    }, 60000)
+  }
+
+  /** Starts one bounded resolution window shared by failures, deadlines, and violation evidence. */
+  private beginFailureResolution(gameId: string): LoadingData | undefined {
+    let data = this.loadingGames.get(gameId)
+    if (!data || data.failureResolution) return data
+    data = data.set('failureResolution', {
+      startedAt: monotonicNow(),
+      controller: new AbortController(),
+    })
+    this.loadingGames = this.loadingGames.set(gameId, data)
+    for (const { userId } of data.players) {
+      this.publisher.publish(gameUserPath(gameId, userId), {
+        type: 'setLoadingStatus',
+        gameId,
+        status: 'resolvingFailure',
+      })
+    }
+    return data
+  }
+
+  private handleLoadDeadlineExpired(gameId: string): Promise<void> {
+    return this.resolveFailedLoad(gameId)
+  }
+
+  /**
+   * Closes the relays' lobby-command epoch before attributing an unsuccessful setup. A complete
+   * snapshot alone cannot exclude a violation admitted immediately after that snapshot. Positive
+   * evidence always counts; absence only counts after every relay settles setup and fences progress.
+   * An unavailable or incomplete verdict releases everyone without a failure penalty.
+   */
+  private async resolveFailedLoad(gameId: string, failedPlayer?: SbUserId): Promise<void> {
+    const initial = this.loadingGames.get(gameId)
+    if (!initial || initial.failureResolution) return
+    const resolving = this.beginFailureResolution(gameId)!
+    const remaining = () =>
+      LOAD_STATE_ATTEST_BUDGET_MS - (monotonicNow() - resolving.failureResolution!.startedAt)
+
+    try {
+      for (;;) {
+        const before = this.loadingGames.get(gameId)
+        if (!before || before.lobbyViolation) return
+        const state = before.localOnly
+          ? undefined
+          : await this.mergeCoordinatorLoadState(
+              gameId,
+              Math.min(LOAD_STATE_REQUEST_TIMEOUT_MS, Math.max(1, remaining())),
+            )
+        const data = this.loadingGames.get(gameId)
+        if (!data || data.lobbyViolation) return
+
+        // A violation takes precedence over start reports: an evicted slot must not turn the
+        // cancellation into success by racing a start report against delivery of its evidence.
+        const violatingSlot = state?.lobbyViolationSlots?.find(slot =>
+          data.slotByUserId.includes(slot),
+        )
+        if (violatingSlot !== undefined) {
+          await this.cancelLoadingForLobbyViolation(
+            gameId,
+            data.netcodeV2Session!,
+            violatingSlot,
+            data.slotByUserId.flip().get(violatingSlot)!,
+            new Date(),
+          )
+          return
+        }
+        if (!data.localOnly && LoadingDatas.isAllFinished(data)) {
+          this.completeLoad(gameId, data, true)
+          return
+        }
+
+        // A record vouched for in whole is final, and so is one vouched for in all but the players
+        // who left, provided the turn evidence that stands in for their unvouched starts is too.
+        const final =
+          data.localOnly ||
+          (state?.setupFinal && (state.known || (state.closedKnown && state.turnsKnown)))
+        // A player who just left can't be weighed against who stayed until a later pull, so ask
+        // again while the budget allows; once it doesn't, they go unblamed.
+        const awaitingWitness =
+          final && !data.localOnly && LoadingDatas.hasClosedPlayerAwaitingWitness(data)
+        if ((!final || awaitingWitness) && remaining() > LOAD_STATE_POLL_INTERVAL_MS) {
+          const [delay] = timeoutPromise(LOAD_STATE_POLL_INTERVAL_MS)
+          await delay
+          continue
+        }
+        let unloaded: SbUserId[] = []
+        if (final) {
+          unloaded = data.localOnly
+            ? LoadingDatas.playersMissingFrom(data, data.finishedPlayers)
+            : LoadingDatas.playersAtFault(data)
+        }
+        let reason =
+          final && failedPlayer !== undefined
+            ? new BaseGameLoaderError(GameLoadErrorType.PlayerFailed, 'Player failed to load', {
+                data: { userId: failedPlayer },
+              })
+            : new BaseGameLoaderError(GameLoadErrorType.Timeout, 'Game setup could not complete', {
+                data: { unloaded },
+              })
+        if (final && !data.localOnly) {
+          const [deadline, clearDeadline] = timeoutPromise(Math.max(1, remaining()))
+          let persisted = false
+          try {
+            persisted = await Promise.race([
+              finalizeGameSetupCancellation(gameId, reason.code),
+              deadline.then(() => false),
+            ])
+          } catch (err) {
+            log.error({ err, gameId }, 'could not persist final setup decision')
+          } finally {
+            clearDeadline()
+          }
+          // The transaction races evidence staging under the game row lock. Evidence that claimed
+          // the live load while this write was pending owns its resolution, whatever this result.
+          if (this.loadingGames.get(gameId)?.lobbyViolation) return
+          if (!persisted) {
+            reason = new BaseGameLoaderError(
+              GameLoadErrorType.Timeout,
+              'Setup decision unavailable',
+              {
+                data: { unloaded: [] },
+              },
+            )
+          }
+        }
+        this.maybeCancelLoadingFromSystem(gameId, reason, true)
+        return
+      }
+    } catch (err) {
+      log.error({ err, gameId }, 'failed to resolve game setup; canceling without blame')
+      this.maybeCancelLoadingFromSystem(
+        gameId,
+        new BaseGameLoaderError(GameLoadErrorType.Internal, 'Could not resolve game setup'),
+        true,
+      )
+    }
+  }
+
+  /**
+   * Folds the coordinator's account of a session's startup into the load's own record, so a
+   * notification dropped after its retries doesn't read as a player who never appeared. Everything
+   * the coordinator holds is merged in regardless of whether it can vouch for the record being
+   * complete: what it saw happened either way. Only a failed request contributes nothing and leaves
+   * the local record untouched.
+   *
+   * @returns the coordinator's answer, so the caller can weigh how complete it is against what it
+   *   needs, or `undefined` when there was none to merge.
+   */
+  private async mergeCoordinatorLoadState(
+    gameId: string,
+    timeoutMs: number,
+  ): Promise<NetcodeV2SessionLoadState | undefined> {
+    const pulling = this.loadingGames.get(gameId)
+    const session = pulling?.netcodeV2Session
+    if (!pulling || session === undefined) {
+      return undefined
+    }
+
+    let loadState: NetcodeV2SessionLoadState
+    try {
+      // The load's own signal aborts the pull if the load completes or is cancelled meanwhile: the
+      // answer would go unused, and the coordinator's work producing it is worth sparing.
+      loadState = await this.netcodeV2Service.fetchSessionLoadState(session, {
+        timeoutMs,
+        signal: pulling.failureResolution?.controller.signal ?? pulling.signal,
+        settleLobby: true,
+      })
+    } catch (err) {
+      if (!pulling.signal.aborted) {
+        log.warn({ err }, `couldn't fetch netcode v2 load state for ${gameId}`)
+      }
+      return undefined
+    }
+
+    const loadingData = this.loadingGames.get(gameId)
+    if (!loadingData) {
+      return loadState
+    }
+
+    const pull = loadingData.loadStatePulls + 1
+    const userBySlot = loadingData.slotByUserId.flip()
+    const usersForSlots = (slots: number[]): SbUserId[] => {
+      const users: SbUserId[] = []
+      for (const slot of slots) {
+        const userId = userBySlot.get(slot)
+        if (userId !== undefined) {
+          users.push(userId)
+        }
+      }
+      return users
+    }
+    // A player still closed on the link a run began with continues that run; any other closure is a
+    // new disconnection, first seen in this pull.
+    let closedRuns = IMap<SbUserId, ClosedRun>()
+    for (const { slot, epoch } of loadState.closedSlots) {
+      const userId = userBySlot.get(slot)
+      if (userId === undefined) continue
+      const previous = loadingData.closedPlayers.get(userId)
+      const continues = epoch !== undefined && previous?.epoch === epoch
+      closedRuns = closedRuns.set(userId, {
+        epoch,
+        firstPull: continues ? previous.firstPull : pull,
+      })
+    }
+
+    this.loadingGames = this.loadingGames.set(
+      gameId,
+      loadingData
+        .set(
+          'connectedPlayers',
+          loadingData.connectedPlayers.union(usersForSlots(loadState.connectedSlots)),
+        )
+        .set(
+          'finishedPlayers',
+          loadingData.finishedPlayers.union(usersForSlots(loadState.startedSlots)),
+        )
+        .set(
+          'forwardedPlayers',
+          loadingData.forwardedPlayers.union(usersForSlots(loadState.forwardedSlots)),
+        )
+        .set('turnsKnown', loadingData.turnsKnown || loadState.turnsKnown)
+        .set('loadStatePulls', pull)
+        .set('closedPlayers', loadState.closedKnown ? closedRuns : IMap<SbUserId, ClosedRun>())
+        .set(
+          'livePlayers',
+          loadState.closedKnown ? ISet(usersForSlots(loadState.liveSlots)) : ISet<SbUserId>(),
+        )
+        .set('sessionStarted', loadingData.sessionStarted || loadState.startedAtMs !== undefined),
+    )
+    return loadState
+  }
+
+  /**
+   * Reports a participant's failed setup and starts bounded resolution before releasing the load.
+   *
+   * @returns whether the report belongs to a load that can still be resolved
+   */
+  maybeCancelLoading(gameId: string, playerId: SbUserId): boolean {
+    if (!this.loadingGames.has(gameId)) {
+      return false
+    }
+
+    const loadingData = this.loadingGames.get(gameId)!
+    const loadingPlayer = loadingData.players.find(p => p.userId === playerId)
+    if (!loadingPlayer) {
+      return false
+    }
+
+    if (loadingData.lobbyViolation) return false
+    this.resolveFailedLoad(gameId, playerId).catch(err => {
+      log.error({ err, gameId }, 'could not resolve failed game setup')
+    })
+    return true
+  }
+
+  /** Cancels a still-loading game when a server decision prevents participation, blaming nobody. */
+  cancelLoadingWithoutBlame(gameId: string): boolean {
+    return this.maybeCancelLoadingFromSystem(
+      gameId,
+      new BaseGameLoaderError(GameLoadErrorType.Canceled, 'Game setup canceled'),
+      true,
+    )
+  }
+
+  private violationCancellations = new Map<string, Promise<boolean>>()
+
+  /**
+   * Claims authenticated evidence before persistence can race success or a failure penalty. Only
+   * durable staging is awaited, within the same bounded failure-resolution budget. A storage outage
+   * releases the load without blame; the evidence service retries staging and effects independently.
+   */
+  cancelLoadingForLobbyViolation(
+    gameId: string,
+    session: number,
+    slot: number,
+    userId: SbUserId,
+    detectedAt: Date,
+    recordViolation: (
+      gameId: string,
+      userId: SbUserId,
+      detectedAt: Date,
+    ) => Promise<boolean | void> = async (...args) =>
+      container.resolve<LobbyViolationStager>(LOBBY_VIOLATION_STAGER).stage(...args),
+  ): Promise<boolean> {
+    let data = this.loadingGames.get(gameId)
+    if (
+      !data ||
+      data.localOnly ||
+      data.netcodeV2Session !== session ||
+      data.slotByUserId.get(userId) !== slot ||
+      (data.lobbyViolation && data.lobbyViolation.userId !== userId)
+    )
+      return Promise.resolve(false)
+    const existing = this.violationCancellations.get(gameId)
+    if (existing) return existing
+    data = this.beginFailureResolution(gameId)!
+    data = data.set('lobbyViolation', { userId, detectedAt })
+    this.loadingGames = this.loadingGames.set(gameId, data)
+    data.abortController.abort()
+    data.failureResolution!.controller.abort()
+
+    const claimed = data
+    const processing = (async () => {
+      let staged = claimed.gameSource !== GameSource.Matchmaking
+      if (!staged) {
+        const remaining = Math.max(
+          1,
+          LOAD_STATE_ATTEST_BUDGET_MS - (monotonicNow() - claimed.failureResolution!.startedAt),
+        )
+        const [deadline, clearDeadline] = timeoutPromise(remaining)
+        try {
+          staged = await Promise.race([
+            recordViolation(gameId, userId, detectedAt).then(accepted => accepted !== false),
+            deadline.then(() => false),
+          ])
+        } catch (err) {
+          log.error(
+            { err, gameId },
+            'could not stage lobby violation; releasing load without blame',
+          )
+        } finally {
+          clearDeadline()
+        }
+      }
+      return this.maybeCancelLoadingFromSystem(
+        gameId,
+        staged
+          ? new BaseGameLoaderError(GameLoadErrorType.GameAnomaly, 'Game anomalies detected', {
+              data: { userId },
+            })
+          : new BaseGameLoaderError(GameLoadErrorType.Internal, 'Could not resolve game setup'),
+        true,
+      )
+    })().finally(() => this.violationCancellations.delete(gameId))
+    this.violationCancellations.set(gameId, processing)
+    return processing
+  }
+
+  private maybeCancelLoadingFromSystem(gameId: string, reason: GameLoaderError, resolved = false) {
+    if (!this.loadingGames.has(gameId)) {
+      return false
+    }
+
+    if (this.loadingGames.get(gameId)!.failureResolution && !resolved) {
+      return false
+    }
+
+    if (!resolved && reason.code === GameLoadErrorType.PlayerFailed) {
+      this.resolveFailedLoad(gameId, reason.data.userId).catch(err => {
+        log.error({ err, gameId }, 'could not resolve failed game setup')
+      })
+      return true
+    }
+
+    log.info({ err: reason }, `cancelling game load for ${gameId}: ${reason.message}`)
+
+    const loadingData = this.loadingGames.get(gameId)!
+
+    const allUserIds = loadingData.players.map(p => p.userId)
+    const activeClients = allUserIds
+      .map(userId => this.activityRegistry.getClientForUser(userId))
+      .filter(c => !!c)
+    for (const userId of allUserIds) {
+      this.publisher.publish(gameUserPath(gameId, userId), {
+        type: 'cancelLoading',
+        gameId,
+      })
+    }
+
+    Promise.resolve()
+      .then(() => {
+        for (const client of activeClients) {
+          client.unsubscribe(gameUserPath(gameId, client.userId))
+        }
+      })
+      .catch(err => {
+        log.error({ err }, 'error unsubscribing client')
+      })
+
+    this.loadingGames = this.loadingGames.delete(gameId)
+    loadingData.abortController.abort()
+    loadingData.failureResolution?.controller.abort()
+    loadingData.deferred.resolve(Result.error(reason))
+
+    this.pendingCancellations.set(gameId, { reason: reason.code })
+    this.persistCancellation(gameId)
+
+    return true
+  }
+
+  /**
+   * Writes a cancelled load's marker, retrying a few times so a brief database outage doesn't
+   * leave the game looking like one that's still waiting on results.
+   */
+  private persistCancellation(gameId: string, attempt = 0) {
+    this.finishCancellation(gameId).catch(err => {
+      const delay = CANCELLATION_WRITE_RETRY_DELAYS_MS[attempt]
+      if (delay === undefined) {
+        this.pendingCancellations.delete(gameId)
+        log.error({ err, gameId }, 'giving up on marking game as canceled')
+        return
+      }
+      log.warn({ err, gameId }, 'error marking game as canceled, retrying')
+      setTimeout(() => this.persistCancellation(gameId, attempt + 1), delay)
+    })
+  }
+
+  /**
+   * Runs once per load, the first time the coordinator reports a game server is still being
+   * provisioned: tells every player a game server is coming up and extends the load deadline so
+   * waiting out the provision doesn't trip the base timeout. The regions being provisioned are
+   * logged but never sent to players — server locations hint at where the other players are, and
+   * exposing that pre-game invites prejudging or dodging the match.
+   */
+  private handleGameServerProvisioning(gameId: string, regions: string[]): void {
+    const loadingData = this.loadingGames.get(gameId)
+    if (!loadingData) {
+      return
+    }
+
+    log.info(`game server still provisioning for ${gameId} in: ${regions.join(', ')}`)
+    for (const player of loadingData.players) {
+      this.publisher.publish(gameUserPath(gameId, player.userId), {
+        type: 'setLoadingStatus',
+        gameId,
+        status: 'provisioningGameServer',
+      })
+    }
+    loadingData.extendDeadline(PROVISIONING_LOAD_TIMEOUT_EXTENSION_MS)
+  }
+
+  /**
+   * Applies `update` to a game's loading state, doing nothing if the game is no longer loading. The
+   * setup work that fills this state in is asynchronous and the load can be cancelled from under it
+   * at any await, so every write goes through here rather than assuming the entry still exists.
+   */
+  private updateLoadingData(gameId: string, update: (data: LoadingData) => LoadingData): void {
+    const loadingData = this.loadingGames.get(gameId)
+    if (!loadingData) {
+      return
+    }
+    this.loadingGames = this.loadingGames.set(gameId, update(loadingData))
+  }
+
+  isLoadingOrRecentlyLoaded(gameId: string) {
+    return this.loadingGames.has(gameId) || this.recentlyLoadedGames.has(gameId)
+  }
+
+  isLoading(gameId: string) {
+    return this.loadingGames.has(gameId)
+  }
+
+  private doGameLoad({
+    gameId,
+    mapId,
+    gameConfig,
+    resultCodes,
+    playerInfos,
+    ranks,
+  }: {
+    gameId: string
+    mapId: SbMapId
+    gameConfig: GameConfig
+    resultCodes: Map<SbUserId, string>
+    playerInfos: PlayerInfo[]
+    ranks?: GamePlayerRank[]
+  }): AsyncResult<void, GameLoaderError> {
+    return Result.fromAsync(async () => {
+      if (!this.loadingGames.has(gameId)) {
+        return Result.error(
+          new BaseGameLoaderError(
+            GameLoadErrorType.Internal,
+            `tried to load a game that doesn't exist: ${gameId}`,
+          ),
+        )
+      }
+
+      const mapPromise = Result.try(() => getMapInfos([mapId]))
+
+      const loadingData = this.loadingGames.get(gameId)!
+      const { players, signal } = loadingData
+      const allUserIds = players.map(p => p.userId)
+
+      const usersResult = Result.try(() => findUsersById(allUserIds))
+      const chatRestrictedResult = Result.try(() =>
+        this.restrictionService.checkMultipleRestrictions(allUserIds, RestrictionKind.Chat),
+      )
+
+      const [activeClients, activeClientsError] = Result.all(
+        ...allUserIds.map(userId => {
+          const client = this.activityRegistry.getClientForUser(userId)
+          if (!client) {
+            return Result.error(
+              new BaseGameLoaderError(
+                GameLoadErrorType.PlayerFailed,
+                'a player had no active client',
+                {
+                  data: { userId },
+                },
+              ),
+            )
+          }
+          return Result.ok(client)
+        }),
+      ).toTuple()
+
+      if (activeClientsError) {
+        return Result.error(activeClientsError)
+      }
+
+      const [users, usersError] = await usersResult.toTuple()
+      if (usersError || users.length !== players.length) {
+        return Result.error(
+          new BaseGameLoaderError(
+            GameLoadErrorType.Internal,
+            "couldn't find all users in the game",
+          ),
+        )
+      }
+
+      // A player's site connection dropping doesn't end their load: once launched, their game talks
+      // to its relay (or, for a local-only game, reports its own completion) without it. If they
+      // really are gone, the load's deadline finds them missing from the relay evidence.
+      for (const client of activeClients) {
+        client.subscribe(gameUserPath(gameId, client.userId))
+      }
+
+      const hasMultipleHumans = players.length > 1
+      if (hasMultipleHumans && !this.netcodeV2Service.isEnabled()) {
+        return Result.error(
+          new BaseGameLoaderError(
+            GameLoadErrorType.Internal,
+            'netcode v2 is not configured on this server; multiplayer games cannot load without it',
+          ),
+        )
+      }
+      const useNetcodeV2 = hasMultipleHumans
+      // A game with a single human has no network session; anything else is networked. Recorded on
+      // the load because it decides where this load's completion signal comes from, and how a load
+      // that runs out of time assigns fault.
+      this.updateLoadingData(gameId, data => data.set('localOnly', !useNetcodeV2))
+      const seed = generateSeed()
+      // Persist the networking mode and initialization seed before distributing setup. A failed
+      // write must fail the load so the recorded config agrees with the setup players receive and
+      // result reconciliation knows whether results must come from the relay.
+      const [, configError] = (
+        await Result.fromAsyncCatching(
+          updateGameConfig(gameId, { ...gameConfig, useNetcodeV2, seed }),
+        )
+      ).toTuple()
+      if (configError) {
+        return Result.error(
+          new BaseGameLoaderError(GameLoadErrorType.Internal, 'error persisting game config', {
+            cause: configError,
+          }),
+        )
+      }
+
+      // The relay resizes its latency buffer on the fly to match live network conditions, and DTR
+      // (turn rate 0) can't work at all since the relay seam strips the turn-rate commands it
+      // relies on — so every game always runs the best turn rate and lets the relay (or, for a
+      // solo game, the lack of any peer at all) absorb latency.
+      const chosenTurnRate: BwTurnRate = 24
+      const chosenUserLatency: BwUserLatency = BwUserLatency.Low
+
+      const [maps, mapError] = await mapPromise.toTuple()
+      if (mapError || !maps.length) {
+        return Result.error(
+          new BaseGameLoaderError(
+            GameLoadErrorType.Internal,
+            `Couldn't find map with ID ${mapId}`,
+            {
+              cause: mapError,
+            },
+          ),
+        )
+      }
+      if (signal.aborted) {
+        return Result.error(
+          new BaseGameLoaderError(GameLoadErrorType.Canceled, 'game load was canceled'),
+        )
+      }
+      const [map] = maps
+
+      const [chatRestrictions, chatRestrictionsError] = await chatRestrictedResult.toTuple()
+      const restrictionsSet = new global.Set<SbUserId>()
+      if (chatRestrictionsError) {
+        log.error({ err: chatRestrictionsError }, 'error checking chat restrictions')
+      } else {
+        for (const u of chatRestrictions) {
+          restrictionsSet.add(u)
+        }
+      }
+
+      const generalSetup = getGeneralGameSetup({
+        gameConfig,
+        playerInfos,
+        users,
+        map,
+        gameId,
+        ranks,
+        seed,
+        turnRate: chosenTurnRate,
+        userLatency: chosenUserLatency,
+      })
+      for (const player of players) {
+        const userId = player.userId
+        this.publisher.publish(gameUserPath(gameId, userId), {
+          type: 'setGameConfig',
+          gameId,
+          setup: {
+            ...generalSetup,
+            useNetcodeV2,
+            resultCode: resultCodes.get(userId)!,
+            isChatRestricted: restrictionsSet.has(userId),
+          },
+        })
+      }
+
+      if (useNetcodeV2) {
+        // Assign each participant a rally-point2 slot, carrying their per-session pubkey (submitted
+        // at queue/lobby-join time), and request the session from the coordinator. Each player gets
+        // their own token plus the relay endpoints and the full slot roster. The game process
+        // consumes this setup when its game init starts, so it must be published to every player
+        // before they can proceed. A slot missing its pubkey fails the session create fast.
+        //
+        // `players` includes observers alongside playing humans (see `GameLoadRequest.players`'s
+        // doc comment), and `GameLoadPlayer.isObserver` distinguishes them, so observer-ness is
+        // known here — mark it so the relay's desync comparator can exclude observers from the
+        // compared slot set.
+        //
+        // The host must land at rp2 slot 0: with native-lobby netcode v2, the host creates the
+        // game's Storm session, and Storm always assigns its creator slot 0. The game DLL maps
+        // BW Storm ids to rp2 slots by identity, so this roster has to agree the host is slot 0 or
+        // that mapping breaks. Reuse the host already resolved for `generalSetup` (the same user
+        // named in the published `GameSetup.host`) rather than re-deriving it here.
+        const hostUserId = generalSetup.host.userId
+        const hostPlayer = players.find(p => p.userId === hostUserId)
+        let orderedPlayers: ReadonlyArray<GameLoadPlayer>
+        if (hostPlayer) {
+          orderedPlayers = [hostPlayer, ...players.filter(p => p !== hostPlayer)]
+        } else {
+          // Shouldn't happen — the host is always a human participant — but don't let it crash the
+          // load, just fall back to the unordered assignment.
+          log.warn(
+            { gameId, hostUserId },
+            'netcode v2: host not found among players, using unordered slot assignment',
+          )
+          orderedPlayers = players
+        }
+        const slots = orderedPlayers.map((p, slot) => ({
+          slot,
+          userId: p.userId,
+          observer: p.isObserver,
+          ...(activeClients.find(c => c.userId === p.userId)?.developmentClient
+            ? { developmentClient: true }
+            : {}),
+          // The region the player selected when they queued/joined, if any. Forwarded to the
+          // coordinator to home this slot's relay; a slot with none falls back region-blind.
+          region: p.region,
+          // The player's measured round-trip time to that region, if recorded. Combined with every
+          // other slot's region/rtt to estimate the session's worst pairwise latency.
+          rttMs: p.rttMs,
+          // Whether that region was hand-picked rather than resolved from measurements. Recorded
+          // onto the game's netcode debug record only.
+          regionManual: p.regionManual,
+          // The player's per-session netcode v2 public key, submitted at queue/lobby-join time. The
+          // coordinator embeds it in this slot's session token; a slot missing it fails create fast.
+          pubkey: p.netcodeV2Pubkey,
+        }))
+        // The coordinator reports load progress by slot, so the assignment has to be kept to map
+        // its reports back onto players.
+        this.updateLoadingData(gameId, data =>
+          data.set('slotByUserId', IMap(slots.map(({ slot, userId }) => [userId, slot]))),
+        )
+        const [created, setupsError] = (
+          await Result.fromAsyncCatching(
+            this.netcodeV2Service.createSessionForGame({
+              gameId,
+              seed: generalSetup.seed,
+              slots,
+              // EUD triggers can write to memory the rollback snapshot doesn't cover. They only run
+              // in UMS games (a melee game on an EUD map runs melee triggers instead).
+              canRollBack: !(gameConfig.gameType === GameType.UseMapSettings && map.mapData.isEud),
+              signal,
+              onProvisioning: regions => this.handleGameServerProvisioning(gameId, regions),
+            }),
+          )
+        ).toTuple()
+        if (setupsError) {
+          return Result.error(
+            new BaseGameLoaderError(
+              GameLoadErrorType.Internal,
+              'error creating netcode v2 session',
+              {
+                cause: setupsError,
+              },
+            ),
+          )
+        }
+
+        this.updateLoadingData(gameId, data => data.set('netcodeV2Session', created.session))
+
+        for (const [userId, setup] of created.setups) {
+          this.publisher.publish(gameUserPath(gameId, userId), {
+            type: 'setNetcodeV2Setup',
+            gameId,
+            setup,
+          })
+        }
+      }
+
+      if (signal.aborted) {
+        return Result.error(
+          new BaseGameLoaderError(GameLoadErrorType.Canceled, 'game load was canceled'),
+        )
+      }
+
+      return Result.ok()
+    })
+  }
+}

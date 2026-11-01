@@ -1,0 +1,71 @@
+import Joi from 'joi'
+import {
+  ALL_MATCHMAKING_TYPES,
+  MatchmakingPreferences,
+  MatchmakingPreferencesData1v1,
+  MatchmakingType,
+  PartialMatchmakingPreferences,
+} from '../../../common/matchmaking'
+import { SbUserId } from '../../../common/users/sb-user-id'
+
+function maybeOptional<T extends { required: () => T }>(optional: boolean, schema: T): T {
+  return optional ? schema : schema.required()
+}
+
+export function matchmakingPreferencesValidator<
+  T extends MatchmakingPreferences | PartialMatchmakingPreferences = PartialMatchmakingPreferences,
+>(forUserId: SbUserId, allowPartial = true): Joi.ObjectSchema<T> {
+  return Joi.object<T>({
+    userId: Joi.number().valid(forUserId).required(),
+    matchmakingType: Joi.valid(...ALL_MATCHMAKING_TYPES).required(),
+    race: maybeOptional(allowPartial, Joi.string().valid('p', 't', 'z', 'r')),
+    mapPoolId: maybeOptional(allowPartial, Joi.number().min(1)),
+    mapSelections: maybeOptional(allowPartial, Joi.array().items(Joi.string()).min(0)),
+    data: maybeOptional(
+      allowPartial,
+      Joi.alternatives()
+        .conditional('matchmakingType', {
+          is: MatchmakingType.Match1v1,
+          then: Joi.object<MatchmakingPreferencesData1v1>({
+            useAlternateRace: Joi.bool(),
+            alternateRace: Joi.string().valid('p', 't', 'z'),
+          }),
+        })
+        .conditional('matchmakingType', {
+          is: MatchmakingType.Match1v1Fastest,
+          then: Joi.object<MatchmakingPreferencesData1v1>({
+            useAlternateRace: Joi.bool(),
+            alternateRace: Joi.string().valid('p', 't', 'z'),
+          }),
+        })
+        .conditional('matchmakingType', {
+          is: MatchmakingType.Match2v2,
+          then: Joi.object<Record<string, never>>(),
+        })
+        .conditional('matchmakingType', {
+          is: MatchmakingType.Match2v2Bgh,
+          then: Joi.object<Record<string, never>>(),
+        })
+        .conditional('matchmakingType', {
+          is: MatchmakingType.Match2v2Hunters,
+          then: Joi.object<Record<string, never>>(),
+        })
+        .conditional('matchmakingType', {
+          is: MatchmakingType.Match2v2Fastest,
+          then: Joi.object<Record<string, never>>(),
+        })
+        .conditional('matchmakingType', {
+          is: MatchmakingType.Match3v3Bgh,
+          then: Joi.object<Record<string, never>>(),
+        })
+        .conditional('matchmakingType', {
+          is: MatchmakingType.Match3v3Hunters,
+          then: Joi.object<Record<string, never>>(),
+        })
+        .conditional('matchmakingType', {
+          is: MatchmakingType.Match3v3Fastest,
+          then: Joi.object<Record<string, never>>(),
+        }),
+    ),
+  })
+}

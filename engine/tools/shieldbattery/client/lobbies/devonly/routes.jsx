@@ -1,0 +1,53 @@
+import { Component } from 'react'
+import { Link, Route, Switch } from 'wouter'
+import { HostGameTest } from './host-game-test'
+import { JoinPreviewTest } from './join-preview-test'
+import { LobbyBrowserTest } from './lobby-browser-test'
+import { LobbyLandingTest } from './lobby-landing-test'
+import { LobbyRoomTest } from './lobby-room-test'
+import RacePickerTest from './race-picker-test'
+
+const BASE_URL = '/dev/lobbies'
+
+class DevLobbiesDashboard extends Component {
+  render() {
+    return (
+      <ul>
+        <li>
+          <Link href={`${BASE_URL}/browser`}>Lobby browser</Link>
+        </li>
+        <li>
+          <Link href={`${BASE_URL}/room`}>Lobby room</Link>
+        </li>
+        <li>
+          <Link href={`${BASE_URL}/host-game`}>Host a game</Link>
+        </li>
+        <li>
+          <Link href={`${BASE_URL}/race-picker`}>Race picker component</Link>
+        </li>
+        <li>
+          <Link href={`${BASE_URL}/lobby-landing`}>Lobby landing page</Link>
+        </li>
+        <li>
+          <Link href={`${BASE_URL}/join-preview`}>Lobby join preview</Link>
+        </li>
+      </ul>
+    )
+  }
+}
+
+export default () => {
+  return (
+    <Switch>
+      <Route path={`${BASE_URL}/browser`} component={LobbyBrowserTest} />
+      <Route path={`${BASE_URL}/room`} component={LobbyRoomTest} />
+      <Route path={`${BASE_URL}/host-game`} component={HostGameTest} />
+      <Route path={`${BASE_URL}/race-picker`} component={RacePickerTest} />
+      <Route path={`${BASE_URL}/lobby-landing`} component={LobbyLandingTest} />
+      <Route path={`${BASE_URL}/join-preview`} component={JoinPreviewTest} />
+      <Route>
+        <DevLobbiesDashboard />
+      </Route>
+    </Switch>
+  )
+}

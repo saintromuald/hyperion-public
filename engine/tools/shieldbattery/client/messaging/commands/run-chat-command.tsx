@@ -1,0 +1,114 @@
+import { TFunction } from 'i18next'
+import { CHAT_MESSAGE_MAXLENGTH } from '../../../common/constants'
+import { getErrorStack } from '../../../common/errors'
+import { ReduxAction } from '../../action-types'
+import { DispatchFunction } from '../../dispatch-registry'
+import logger from '../../logging/logger'
+import { CommandContext } from './command-context'
+import {
+  argumentFailureLine,
+  commandFailedLine,
+  transformTooLongLine,
+  unknownCommandLine,
+  wrongSurfaceLine,
+} from './command-lines'
+import { parseArgs, splitCommandInput } from './command-parser'
+import { ALL_COMMANDS, findCommand } from './command-registry'
+import { ChatCommand, getCommandUsage, ReplyTarget } from './command-schema'
+import { LocalLineEmitter } from './local-output'
+
+/** What the command layer needs from the surface an input was submitted in. */
+export interface CommandRunDeps {
+  context: CommandContext
+  dispatch: DispatchFunction<ReduxAction>
+  t: TFunction
+  emit: LocalLineEmitter
+  /**
+   * Puts the input the command was submitted from into reply mode. Left out by a caller that has
+   * no input to put into it, which makes a command that would have used it do nothing instead.
+   */
+  enterReplyMode?: (target: ReplyTarget) => void
+}
+
+export type CommandRunResult =
+  /**
+   * The text to send: either the input with the `//` escape reduced, or a command's rewrite of it.
+   */
+  | { kind: 'text'; text: string }
+  /** The input was a command: it ran, or it was rejected with a local error line. Nothing is sent. */
+  | { kind: 'command' }
+
+/**
+ * Runs the command a submitted input names, if it names one. Only a `/` at the very start of the
+ * (trimmed) input starts a command; `//` escapes to a literal leading slash.
+ */
+export function runChatCommand(input: string, deps: CommandRunDeps): CommandRunResult {
+  return runChatCommandWith(ALL_COMMANDS, input, deps)
+}
+
+/**
+ * Runs an input against a given set of commands rather than every command there is, so that a
+ * caller (such as a test) can decide exactly what exists.
+ */
+export function runChatCommandWith(
+  commands: ReadonlyArray<ChatCommand>,
+  input: string,
+  deps: CommandRunDeps,
+): CommandRunResult {
+  const { context, dispatch, t, emit, enterReplyMode } = deps
+
+  const split = splitCommandInput(input)
+  if (split.kind === 'text') {
+    return { kind: 'text', text: split.text }
+  }
+
+  const command = findCommand(split.name, commands)
+  if (!command) {
+    emit({ kind: 'error', content: unknownCommandLine(split.name, t) })
+    return { kind: 'command' }
+  }
+
+  if (!command.surfaces.includes(context.surface)) {
+    emit({ kind: 'error', content: wrongSurfaceLine(command, t) })
+    return { kind: 'command' }
+  }
+
+  const unavailableReason = command.getUnavailableReason?.(context, t)
+  if (unavailableReason !== undefined) {
+    emit({ kind: 'error', content: unavailableReason })
+    return { kind: 'command' }
+  }
+
+  const parsed = parseArgs(command, split.argText)
+  if (!parsed.ok) {
+    emit({ kind: 'error', content: argumentFailureLine(parsed, getCommandUsage(command), t) })
+    return { kind: 'command' }
+  }
+
+  try {
+    const transform = command.run({
+      args: parsed.args,
+      context,
+      dispatch,
+      t,
+      emit,
+      commands,
+      enterReplyMode,
+    })
+
+    if (transform) {
+      if (transform.text.length > CHAT_MESSAGE_MAXLENGTH) {
+        emit({ kind: 'error', content: transformTooLongLine(transform.text.length, t) })
+        return { kind: 'command' }
+      }
+      return { kind: 'text', text: transform.text }
+    }
+  } catch (err) {
+    // A command that fell over has already cost the user their input, so it owes them an answer
+    // rather than silence.
+    logger.error(`Error running the /${command.name} chat command: ${getErrorStack(err)}`)
+    emit({ kind: 'error', content: commandFailedLine(command.name, t) })
+  }
+
+  return { kind: 'command' }
+}

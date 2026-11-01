@@ -1,0 +1,1197 @@
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import styled from 'styled-components'
+import { useMutation, useQuery } from 'urql'
+import {
+  EMAIL_MAXLENGTH,
+  EMAIL_MINLENGTH,
+  EMAIL_PATTERN,
+  PASSWORD_MINLENGTH,
+} from '../../../common/constants'
+import { getErrorStack } from '../../../common/errors'
+import { MAX_IMAGE_SIZE_BYTES } from '../../../common/images'
+import { RestrictionKind } from '../../../common/users/restrictions'
+import { LOGIN_NAME_CHANGE_COOLDOWN_MS } from '../../../common/users/sb-user'
+import { UserErrorCode } from '../../../common/users/user-network'
+import { removeUserAvatar, uploadUserAvatar } from '../../auth/action-creators'
+import {
+  createUsernameAvailabilityValidator,
+  usernameValidator,
+} from '../../auth/auth-form-validators'
+import { useSelfUser } from '../../auth/auth-utils'
+import { RevealEmailLink, useRevealableEmail } from '../../auth/email-masking'
+import { Avatar } from '../../avatars/avatar'
+import { openDialog } from '../../dialogs/action-creators'
+import { CommonDialogProps } from '../../dialogs/common-dialog-props'
+import { DialogType } from '../../dialogs/dialog-type'
+import { useForm, useFormCallbacks } from '../../forms/form-hook'
+import { SubmitOnEnter } from '../../forms/submit-on-enter'
+import {
+  composeValidators,
+  matchesOther,
+  maxLength,
+  minLength,
+  regex,
+  required,
+} from '../../forms/validators'
+import { graphql, useFragment } from '../../gql'
+import { longTimestamp } from '../../i18n/date-formats'
+import { useFormat } from '../../i18n/locale-formats'
+import { MaterialIcon } from '../../icons/material/material-icon'
+import logger from '../../logging/logger'
+import { useAutoFocusRef } from '../../material/auto-focus'
+import { FilledButton, TextButton } from '../../material/button'
+import { Card } from '../../material/card'
+import { Dialog } from '../../material/dialog'
+import { PasswordTextField } from '../../material/password-text-field'
+import { TextField } from '../../material/text-field'
+import { Tooltip } from '../../material/tooltip'
+import { isFetchError } from '../../network/fetch-errors'
+import { useNow } from '../../react/date-hooks'
+import { useAppDispatch, useAppSelector } from '../../redux-hooks'
+import { useSnackbarController } from '../../snackbars/snackbar-overlay'
+import { styledWithAttrs } from '../../styles/styled-with-attrs'
+import {
+  BodyLarge,
+  bodyLarge,
+  BodyMedium,
+  bodyMedium,
+  labelMedium,
+  titleLarge,
+  TitleMedium,
+} from '../../styles/typography'
+
+const Root = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+`
+
+const Section = styled.div``
+
+const SectionHeader = styled.div`
+  ${titleLarge};
+  margin-bottom: 16px;
+`
+
+const UserCard = styled(Card)`
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+`
+
+const EditableItem = styled.div`
+  height: 48px;
+  display: flex;
+  align-items: center;
+`
+
+const EditableOverline = styled.div`
+  ${labelMedium};
+  color: var(--theme-on-surface-variant);
+`
+
+const EditableContent = styled.div`
+  flex-grow: 1;
+`
+
+const EmailItem = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+`
+
+const EmailItemAndIcon = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`
+
+const MultiButtons = styled.div`
+  display: flex;
+  gap: 8px;
+`
+
+const VerifiedIcon = styledWithAttrs(MaterialIcon, { icon: 'check_circle', size: 24 })`
+  color: var(--theme-success);
+`
+
+const UnverifiedIcon = styledWithAttrs(MaterialIcon, { icon: 'error', size: 24 })`
+  color: var(--theme-amber);
+`
+
+const AvatarCard = styled(Card)`
+  display: flex;
+  align-items: center;
+  gap: 24px;
+`
+
+const AvatarPreview = styled(Avatar)`
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+`
+
+const AvatarActions = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+`
+
+const AvatarRestrictionText = styled.div`
+  ${bodyMedium};
+  color: var(--theme-error);
+`
+
+const HiddenFileInput = styled.input`
+  display: none;
+`
+
+const CurrentUserFragment = graphql(/* GraphQL */ `
+  fragment AccountSettings_CurrentUser on CurrentUser {
+    id
+    name
+    loginName
+    email
+    emailVerified
+    lastLoginNameChange
+    lastNameChange
+    nameChangeTokens
+    canChangeDisplayName
+    nextDisplayNameChangeAllowedAt
+  }
+`)
+
+const AccountSettingsQuery = graphql(/* GraphQL */ `
+  query AccountSettings {
+    currentUser {
+      ...AccountSettings_CurrentUser
+    }
+  }
+`)
+
+export function UserAccountSettings() {
+  const { t } = useTranslation()
+  const longTimestampFormat = useFormat(longTimestamp)
+  const dispatch = useAppDispatch()
+  const [{ data }, refreshQuery] = useQuery({
+    query: AccountSettingsQuery,
+  })
+  const currentUser = useFragment(CurrentUserFragment, data?.currentUser)
+  const { emailText, revealed, toggleRevealed } = useRevealableEmail(currentUser?.email)
+  const selfUser = useSelfUser()
+  const reduxEmailVerified = selfUser?.emailVerified
+
+  const snackbarController = useSnackbarController()
+  const avatarFileInputRef = useRef<HTMLInputElement>(null)
+  const [avatarUpdating, setAvatarUpdating] = useState(false)
+  const avatarRestriction = useAppSelector(s =>
+    s.auth.self?.restrictions.get(RestrictionKind.AvatarUpload),
+  )
+
+  useEffect(() => {
+    if (currentUser && reduxEmailVerified !== currentUser.emailVerified) {
+      // Refresh the user information from gql since it's out of date from what the redux store has
+      refreshQuery({ requestPolicy: 'network-only' })
+    }
+  }, [refreshQuery, reduxEmailVerified, currentUser])
+
+  const onAvatarFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    // Reset the input so selecting the same file again still fires a change event.
+    event.target.value = ''
+    if (!file || !selfUser) {
+      return
+    }
+
+    if (!file.type.startsWith('image/')) {
+      snackbarController.showSnackbar(
+        t('settings.user.account.avatar.invalidType', 'Please choose an image file.'),
+      )
+      return
+    }
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      snackbarController.showSnackbar(
+        t('settings.user.account.avatar.tooLarge', 'That image is too large (max 5 MB).'),
+      )
+      return
+    }
+
+    setAvatarUpdating(true)
+    dispatch(
+      uploadUserAvatar(selfUser.id, file, {
+        onSuccess: () => {
+          setAvatarUpdating(false)
+          snackbarController.showSnackbar(
+            t('settings.user.account.avatar.uploadSuccess', 'Avatar updated.'),
+          )
+        },
+        onError: err => {
+          setAvatarUpdating(false)
+          let message: string
+          if (isFetchError(err) && err.code === UserErrorCode.InappropriateImage) {
+            message = t(
+              'settings.user.account.avatar.inappropriate',
+              'That image was flagged as inappropriate. Please choose a different one.',
+            )
+          } else if (isFetchError(err) && err.code === UserErrorCode.AvatarUploadRestricted) {
+            message = t(
+              'settings.user.account.avatar.uploadRestrictedError',
+              'You are currently restricted from uploading avatars.',
+            )
+          } else {
+            message = t(
+              'settings.user.account.avatar.uploadError',
+              'Something went wrong updating your avatar.',
+            )
+          }
+          snackbarController.showSnackbar(message)
+          logger.error(`Error uploading avatar: ${getErrorStack(err)}`)
+        },
+      }),
+    )
+  }
+
+  const onRemoveAvatar = () => {
+    if (!selfUser) {
+      return
+    }
+
+    setAvatarUpdating(true)
+    dispatch(
+      removeUserAvatar(selfUser.id, {
+        onSuccess: () => {
+          setAvatarUpdating(false)
+          snackbarController.showSnackbar(
+            t('settings.user.account.avatar.removeSuccess', 'Avatar removed.'),
+          )
+        },
+        onError: err => {
+          setAvatarUpdating(false)
+          snackbarController.showSnackbar(
+            t(
+              'settings.user.account.avatar.removeError',
+              'Something went wrong removing your avatar.',
+            ),
+          )
+          logger.error(`Error removing avatar: ${getErrorStack(err)}`)
+        },
+      }),
+    )
+  }
+
+  if (!currentUser) {
+    return (
+      <div>
+        {t('settings.user.account.error', 'There was a problem retrieving your user information.')}
+      </div>
+    )
+  }
+
+  return (
+    <Root>
+      <Section>
+        <SectionHeader>{t('settings.user.account.avatar.header', 'Avatar')}</SectionHeader>
+        <AvatarCard>
+          <AvatarPreview user={selfUser?.name} image={selfUser?.avatarUrl} />
+          <AvatarActions>
+            <HiddenFileInput
+              ref={avatarFileInputRef}
+              type='file'
+              accept='image/*'
+              onChange={onAvatarFileSelected}
+              data-testid='avatar-file-input'
+            />
+            <FilledButton
+              label={
+                selfUser?.avatarUrl
+                  ? t('settings.user.account.avatar.change', 'Change avatar')
+                  : t('settings.user.account.avatar.upload', 'Upload avatar')
+              }
+              disabled={avatarUpdating || !!avatarRestriction}
+              onClick={() => avatarFileInputRef.current?.click()}
+              testName='upload-avatar-button'
+            />
+            {avatarRestriction ? (
+              <AvatarRestrictionText data-testid='avatar-upload-restricted-text'>
+                {t('settings.user.account.avatar.uploadRestricted', {
+                  defaultValue: 'Restricted from uploading avatars until {{date}}',
+                  date: longTimestampFormat.format(avatarRestriction.endTime),
+                })}
+              </AvatarRestrictionText>
+            ) : null}
+            {selfUser?.avatarUrl ? (
+              <TextButton
+                label={t('common.actions.remove', 'Remove')}
+                disabled={avatarUpdating}
+                onClick={onRemoveAvatar}
+                testName='remove-avatar-button'
+              />
+            ) : null}
+          </AvatarActions>
+        </AvatarCard>
+      </Section>
+
+      <Section>
+        <UserCard>
+          <EditableItem>
+            <EditableContent>
+              <EditableOverline>
+                {t('settings.user.account.displayName', 'Display name')}
+              </EditableOverline>
+              <TitleMedium>{currentUser.name}</TitleMedium>
+            </EditableContent>
+            <FilledButton
+              label={t('common.actions.edit', 'Edit')}
+              onClick={() => {
+                dispatch(
+                  openDialog({
+                    type: DialogType.ChangeDisplayName,
+                    initData: {
+                      currentName: currentUser.name ?? '',
+                      lastChange: currentUser.lastNameChange
+                        ? new Date(currentUser.lastNameChange)
+                        : undefined,
+                      canChangeDisplayName: currentUser.canChangeDisplayName ?? false,
+                      nextDisplayNameChangeAllowedAt: currentUser.nextDisplayNameChangeAllowedAt
+                        ? new Date(currentUser.nextDisplayNameChangeAllowedAt)
+                        : undefined,
+                    },
+                  }),
+                )
+              }}
+              testName='edit-display-name-button'
+            />
+          </EditableItem>
+
+          <EditableItem>
+            <EditableContent>
+              <EditableOverline>
+                {t('settings.user.account.loginName', 'Login name')}
+              </EditableOverline>
+              <TitleMedium>{currentUser.loginName}</TitleMedium>
+            </EditableContent>
+            <FilledButton
+              label={t('common.actions.edit', 'Edit')}
+              onClick={() => {
+                dispatch(
+                  openDialog({
+                    type: DialogType.ChangeLoginName,
+                    initData: {
+                      currentLoginName: currentUser.loginName ?? '',
+                      lastChange: currentUser.lastLoginNameChange
+                        ? new Date(currentUser.lastLoginNameChange)
+                        : undefined,
+                    },
+                  }),
+                )
+              }}
+              testName='edit-login-name-button'
+            />
+          </EditableItem>
+
+          <EditableItem>
+            <EditableContent>
+              <EditableOverline>{t('settings.user.account.email', 'Email')}</EditableOverline>
+
+              <EmailItemAndIcon>
+                {currentUser.emailVerified ? (
+                  <Tooltip
+                    text={t('settings.user.account.emailVerified', 'Verified')}
+                    position='bottom'>
+                    <VerifiedIcon data-testid='email-verified-icon' />
+                  </Tooltip>
+                ) : (
+                  <Tooltip
+                    text={t('settings.user.account.emailUnverified', 'Unverified')}
+                    position='bottom'>
+                    <UnverifiedIcon data-testid='email-unverified-icon' />
+                  </Tooltip>
+                )}
+                <EmailItem>
+                  <BodyLarge data-testid='account-email-text'>{emailText}</BodyLarge>
+                  <BodyMedium>
+                    <RevealEmailLink revealed={revealed} onClick={toggleRevealed} />
+                  </BodyMedium>
+                </EmailItem>
+              </EmailItemAndIcon>
+            </EditableContent>
+            <MultiButtons>
+              {!currentUser.emailVerified ? (
+                <FilledButton
+                  label={t('auth.emailVerification.verify', 'Verify')}
+                  testName='verify-email-button'
+                  onClick={() => {
+                    dispatch(
+                      openDialog({
+                        type: DialogType.EmailVerification,
+                      }),
+                    )
+                  }}
+                />
+              ) : null}
+              <FilledButton
+                label={t('common.actions.edit', 'Edit')}
+                onClick={() => {
+                  dispatch(
+                    openDialog({
+                      type: DialogType.ChangeEmail,
+                      initData: { currentEmail: currentUser?.email ?? '' },
+                    }),
+                  )
+                }}
+                testName='edit-email-button'
+              />
+            </MultiButtons>
+          </EditableItem>
+        </UserCard>
+      </Section>
+
+      <Section>
+        <SectionHeader>
+          {t('settings.user.account.authenticationHeader', 'Authentication')}
+        </SectionHeader>
+        <FilledButton
+          label={t('settings.user.account.changePasswordButton', 'Change password')}
+          onClick={() => {
+            dispatch(
+              openDialog({
+                type: DialogType.ChangePassword,
+              }),
+            )
+          }}
+          testName='change-password-button'
+        />
+      </Section>
+    </Root>
+  )
+}
+
+const StyledDialog = styled(Dialog)`
+  max-width: 480px;
+`
+
+const FormSpacer = styled.div`
+  height: 16px;
+`
+
+const ErrorMessage = styled.div`
+  ${bodyLarge};
+  color: var(--theme-error);
+  padding-bottom: 16px;
+`
+
+const currentPasswordValidator = composeValidators(
+  required(t =>
+    t('settings.user.account.passwordValidator.current', 'Enter your current password'),
+  ),
+  minLength(PASSWORD_MINLENGTH),
+)
+const newPasswordValidator = composeValidators(
+  required(t => t('settings.user.account.passwordValidator.new', 'Enter a new password')),
+  minLength(PASSWORD_MINLENGTH),
+)
+const confirmNewPasswordValidator = composeValidators(
+  matchesOther<string, ChangePasswordFormModel>('newPassword', t =>
+    t('settings.user.account.passwordValidator.confirm', 'Enter a matching password'),
+  ),
+)
+
+const TEXT_INPUT_PROPS = {
+  autoCapitalize: 'off',
+  autoCorrect: 'off',
+  spellCheck: false,
+  tabIndex: 0,
+}
+
+const ChangePasswordMutation = graphql(/* GraphQL */ `
+  mutation AccountSettingsChangePassword($currentPassword: String!, $newPassword: String!) {
+    userUpdateCurrent(currentPassword: $currentPassword, changes: { newPassword: $newPassword }) {
+      ...AccountSettings_CurrentUser
+    }
+  }
+`)
+
+interface ChangePasswordFormModel {
+  currentPassword: string
+  newPassword: string
+  confirmNewPassword: string
+}
+
+export function ChangePasswordDialog(props: CommonDialogProps) {
+  const snackbarController = useSnackbarController()
+  const { t } = useTranslation()
+  const [{ fetching }, changePassword] = useMutation(ChangePasswordMutation)
+  const [errorMessage, setErrorMessage] = useState<string>()
+  const autoFocusRef = useAutoFocusRef<HTMLInputElement>()
+
+  const { onCancel } = props
+
+  const { submit, bindInput, setInputError, form } = useForm<ChangePasswordFormModel>(
+    { currentPassword: '', newPassword: '', confirmNewPassword: '' },
+    {
+      currentPassword: currentPasswordValidator,
+      newPassword: newPasswordValidator,
+      confirmNewPassword: confirmNewPasswordValidator,
+    },
+  )
+
+  useFormCallbacks(form, {
+    onSubmit: model => {
+      setErrorMessage(undefined)
+      changePassword({
+        currentPassword: model.currentPassword,
+        newPassword: model.newPassword,
+      })
+        .then(result => {
+          if (result.error) {
+            if (result.error.networkError) {
+              setErrorMessage(
+                t('settings.user.account.networkError', 'Network error: {{errorMessage}}', {
+                  errorMessage: result.error.networkError.message,
+                }),
+              )
+            } else if (result.error.graphQLErrors?.length) {
+              for (const error of result.error.graphQLErrors) {
+                if (error.extensions?.code === 'INVALID_PASSWORD') {
+                  setInputError(
+                    'currentPassword',
+                    t(
+                      'settings.user.account.invalidCurrentPassword',
+                      'Current password is incorrect',
+                    ),
+                  )
+                  return
+                }
+              }
+
+              setErrorMessage(
+                t(
+                  'settings.user.account.unknownError',
+                  'Something went wrong, please try again later.',
+                ),
+              )
+            }
+          } else {
+            snackbarController.showSnackbar(
+              t('settings.user.account.changePassword.success', 'Password changed successfully.'),
+            )
+            onCancel()
+          }
+        })
+        .catch(err => {
+          logger.error(`Error changing password: ${err.stack ?? err}`)
+        })
+    },
+  })
+
+  const buttons = [
+    <TextButton
+      label={t('common.actions.cancel', 'Cancel')}
+      key='cancel'
+      onClick={onCancel}
+      disabled={fetching}
+    />,
+    <TextButton
+      label={t('common.actions.save', 'Save')}
+      key='save'
+      onClick={submit}
+      disabled={fetching}
+      testName='save-button'
+    />,
+  ]
+
+  return (
+    <StyledDialog
+      title={t('settings.user.account.changePassword.dialogTitle', 'Change password')}
+      onCancel={onCancel}
+      showCloseButton={true}
+      buttons={buttons}
+      testName='change-password-dialog'>
+      {errorMessage ? <ErrorMessage>{errorMessage}</ErrorMessage> : null}
+      <form noValidate={true} onSubmit={submit}>
+        <SubmitOnEnter disabled={fetching} />
+        <PasswordTextField
+          {...bindInput('currentPassword')}
+          ref={autoFocusRef}
+          label={t('settings.user.account.currentPassword', 'Current password')}
+          inputProps={TEXT_INPUT_PROPS}
+          floatingLabel={true}
+          disabled={fetching}
+        />
+
+        <FormSpacer />
+
+        <PasswordTextField
+          {...bindInput('newPassword')}
+          label={t('settings.user.account.newPassword', 'New password')}
+          inputProps={TEXT_INPUT_PROPS}
+          floatingLabel={true}
+          disabled={fetching}
+        />
+        <PasswordTextField
+          {...bindInput('confirmNewPassword')}
+          label={t('settings.user.account.confirmNewPassword', 'Confirm new password')}
+          inputProps={TEXT_INPUT_PROPS}
+          floatingLabel={true}
+          disabled={fetching}
+        />
+      </form>
+    </StyledDialog>
+  )
+}
+
+const emailValidator = composeValidators(
+  required(t => t('settings.user.account.changeEmail.requiredError', 'Enter an email address')),
+  minLength(EMAIL_MINLENGTH),
+  maxLength(EMAIL_MAXLENGTH),
+  regex(EMAIL_PATTERN, t =>
+    t('settings.user.account.changeEmail.patternError', 'Enter a valid email address'),
+  ),
+)
+
+const ChangeEmailMutation = graphql(/* GraphQL */ `
+  mutation AccountSettingsChangeEmail($currentPassword: String!, $email: String!) {
+    userUpdateCurrent(currentPassword: $currentPassword, changes: { email: $email }) {
+      ...AccountSettings_CurrentUser
+    }
+  }
+`)
+
+interface ChangeEmailFormModel {
+  currentPassword: string
+  email: string
+}
+
+export interface ChangeEmailDialogProps extends CommonDialogProps {
+  currentEmail: string
+}
+
+export function ChangeEmailDialog(props: ChangeEmailDialogProps) {
+  const snackbarController = useSnackbarController()
+  const { t } = useTranslation()
+  const [{ fetching }, changeEmail] = useMutation(ChangeEmailMutation)
+  const [errorMessage, setErrorMessage] = useState<string>()
+  const autoFocusRef = useAutoFocusRef<HTMLInputElement>()
+
+  const { onCancel } = props
+
+  const { submit, bindInput, setInputError, form } = useForm<ChangeEmailFormModel>(
+    { currentPassword: '', email: props.currentEmail },
+    {
+      currentPassword: currentPasswordValidator,
+      email: emailValidator,
+    },
+  )
+
+  useFormCallbacks(form, {
+    onSubmit: model => {
+      setErrorMessage(undefined)
+      changeEmail({
+        currentPassword: model.currentPassword,
+        email: model.email,
+      })
+        .then(result => {
+          if (result.error) {
+            if (result.error.networkError) {
+              setErrorMessage(
+                t('settings.user.account.networkError', 'Network error: {{errorMessage}}', {
+                  errorMessage: result.error.networkError.message,
+                }),
+              )
+            } else if (result.error.graphQLErrors?.length) {
+              for (const error of result.error.graphQLErrors) {
+                if (error.extensions?.code === 'INVALID_PASSWORD') {
+                  setInputError(
+                    'currentPassword',
+                    t(
+                      'settings.user.account.invalidCurrentPassword',
+                      'Current password is incorrect',
+                    ),
+                  )
+                  return
+                }
+              }
+
+              setErrorMessage(
+                t(
+                  'settings.user.account.unknownError',
+                  'Something went wrong, please try again later.',
+                ),
+              )
+            }
+          } else {
+            snackbarController.showSnackbar(
+              t('settings.user.account.changeEmail.success', 'Email changed successfully.'),
+            )
+            onCancel()
+          }
+        })
+        .catch(err => {
+          logger.error(`Error changing password: ${err.stack ?? err}`)
+        })
+    },
+  })
+
+  const buttons = [
+    <TextButton
+      label={t('common.actions.cancel', 'Cancel')}
+      key='cancel'
+      onClick={onCancel}
+      disabled={fetching}
+    />,
+    <TextButton
+      label={t('common.actions.save', 'Save')}
+      key='save'
+      onClick={submit}
+      disabled={fetching}
+      testName='save-button'
+    />,
+  ]
+
+  return (
+    <StyledDialog
+      title={t('settings.user.account.changeEmail.dialogTitle', 'Change email')}
+      onCancel={onCancel}
+      showCloseButton={true}
+      buttons={buttons}
+      testName='change-email-dialog'>
+      {errorMessage ? <ErrorMessage>{errorMessage}</ErrorMessage> : null}
+      <form noValidate={true} onSubmit={submit}>
+        <SubmitOnEnter disabled={fetching} />
+        <PasswordTextField
+          {...bindInput('currentPassword')}
+          ref={autoFocusRef}
+          label={t('settings.user.account.currentPassword', 'Current password')}
+          inputProps={TEXT_INPUT_PROPS}
+          floatingLabel={true}
+          disabled={fetching}
+        />
+
+        <FormSpacer />
+
+        <TextField
+          {...bindInput('email')}
+          label={t('settings.user.account.email', 'Email')}
+          inputProps={TEXT_INPUT_PROPS}
+          floatingLabel={true}
+          disabled={fetching}
+        />
+      </form>
+    </StyledDialog>
+  )
+}
+
+const ChangeDisplayNameMutation = graphql(/* GraphQL */ `
+  mutation AccountSettingsChangeDisplayName($currentPassword: String!, $name: String!) {
+    userUpdateCurrent(currentPassword: $currentPassword, changes: { name: $name }) {
+      ...AccountSettings_CurrentUser
+    }
+  }
+`)
+
+interface ChangeDisplayNameFormModel {
+  currentPassword: string
+  name: string
+}
+
+export interface ChangeDisplayNameDialogProps extends CommonDialogProps {
+  currentName: string
+  lastChange?: Date
+  canChangeDisplayName: boolean
+  nextDisplayNameChangeAllowedAt?: Date
+}
+
+export function ChangeDisplayNameDialog({
+  onCancel,
+  currentName,
+  canChangeDisplayName,
+  nextDisplayNameChangeAllowedAt,
+}: ChangeDisplayNameDialogProps) {
+  const dispatch = useAppDispatch()
+  const selfUser = useSelfUser()!
+  const snackbarController = useSnackbarController()
+  const { t } = useTranslation()
+  const [{ fetching }, changeDisplayName] = useMutation(ChangeDisplayNameMutation)
+  const [errorMessage, setErrorMessage] = useState<string>()
+  const autoFocusRef = useAutoFocusRef<HTMLInputElement>()
+
+  const now = useNow(60_000)
+
+  const nameAvailable = useMemo(
+    () =>
+      createUsernameAvailabilityValidator<ChangeDisplayNameFormModel>({
+        type: 'display',
+        ignoreName: currentName,
+      }),
+    [currentName],
+  )
+
+  const { submit, bindInput, setInputError, form } = useForm<ChangeDisplayNameFormModel>(
+    { currentPassword: '', name: currentName },
+    {
+      currentPassword: currentPasswordValidator,
+      name: composeValidators(usernameValidator, nameAvailable),
+    },
+  )
+
+  const daysRemaining =
+    nextDisplayNameChangeAllowedAt && !canChangeDisplayName
+      ? Math.max(
+          0,
+          Math.ceil((Number(nextDisplayNameChangeAllowedAt) - now) / (24 * 60 * 60 * 1000)),
+        )
+      : 0
+
+  useFormCallbacks(form, {
+    onSubmit: model => {
+      setErrorMessage(undefined)
+      changeDisplayName({
+        currentPassword: model.currentPassword,
+        name: model.name,
+      })
+        .then(result => {
+          if (result.error) {
+            if (result.error.networkError) {
+              setErrorMessage(
+                t('settings.user.account.networkError', 'Network error: {{errorMessage}}', {
+                  errorMessage: result.error.networkError.message,
+                }),
+              )
+            } else if (result.error.graphQLErrors?.length) {
+              for (const error of result.error.graphQLErrors) {
+                if (error.extensions?.code === 'INVALID_PASSWORD') {
+                  setInputError(
+                    'currentPassword',
+                    t(
+                      'settings.user.account.invalidCurrentPassword',
+                      'Current password is incorrect',
+                    ),
+                  )
+                  return
+                } else if (error.extensions?.code === 'DISPLAY_NAME_UNAVAILABLE') {
+                  setInputError(
+                    'name',
+                    t(
+                      'settings.user.account.displayNameUnavailable',
+                      'Display name is not available',
+                    ),
+                  )
+                  return
+                } else if (error.extensions?.code === 'RATE_LIMITED') {
+                  setErrorMessage(error.message)
+                  setErrorMessage(
+                    t('settings.user.account.displayNameCooldown', {
+                      defaultValue_one:
+                        'You have changed your display name too recently. You can change your display name again in {{count}} day.',
+                      defaultValue:
+                        'You have changed your display name too recently. You can change your display name again in {{count}} days.',
+                      count: daysRemaining,
+                    }),
+                  )
+
+                  return
+                }
+              }
+
+              setErrorMessage(
+                t(
+                  'settings.user.account.unknownError',
+                  'Something went wrong, please try again later.',
+                ),
+              )
+            }
+          } else {
+            snackbarController.showSnackbar(
+              t(
+                'settings.user.account.changeDisplayName.success',
+                'Display name changed successfully.',
+              ),
+            )
+            onCancel()
+            dispatch({
+              type: '@auth/displayNameChanged',
+              payload: {
+                userId: selfUser.id,
+                newDisplayName: model.name,
+              },
+            })
+          }
+        })
+        .catch(err => {
+          logger.error(`Error changing display name: ${getErrorStack(err)}`)
+        })
+    },
+  })
+
+  const buttons = [
+    <TextButton
+      label={t('common.actions.cancel', 'Cancel')}
+      key='cancel'
+      onClick={onCancel}
+      disabled={fetching}
+    />,
+    <TextButton
+      label={t('common.actions.save', 'Save')}
+      key='save'
+      onClick={submit}
+      disabled={fetching}
+      testName='save-button'
+    />,
+  ]
+
+  return (
+    <StyledDialog
+      title={t('settings.user.account.changeDisplayName.dialogTitle', 'Change display name')}
+      onCancel={onCancel}
+      showCloseButton={true}
+      buttons={buttons}
+      testName='change-display-name-dialog'>
+      <BodyMedium>
+        {t(
+          'settings.user.account.displayNameChangeInfo',
+          'Display names can be changed once every 60 days. Capitalization changes are not ' +
+            'affected by name change limits.',
+        )}
+      </BodyMedium>
+      <FormSpacer />
+
+      {errorMessage ? (
+        <>
+          <ErrorMessage>{errorMessage}</ErrorMessage>
+          <FormSpacer />
+        </>
+      ) : null}
+      {!fetching && !errorMessage && !canChangeDisplayName && daysRemaining ? (
+        <>
+          <ErrorMessage>
+            {t('settings.user.account.displayNameCooldown', {
+              defaultValue_one:
+                'You have changed your display name too recently. You can change your display name again in {{count}} day.',
+              defaultValue:
+                'You have changed your display name too recently. You can change your display name again in {{count}} days.',
+              count: daysRemaining,
+            })}
+          </ErrorMessage>
+          <FormSpacer />
+        </>
+      ) : null}
+      <form noValidate={true} onSubmit={submit}>
+        <SubmitOnEnter disabled={fetching} />
+        <PasswordTextField
+          {...bindInput('currentPassword')}
+          ref={autoFocusRef}
+          label={t('settings.user.account.currentPassword', 'Current password')}
+          inputProps={TEXT_INPUT_PROPS}
+          floatingLabel={true}
+          disabled={fetching}
+        />
+
+        <FormSpacer />
+
+        <TextField
+          {...bindInput('name')}
+          label={t('settings.user.account.displayName', 'Display name')}
+          inputProps={TEXT_INPUT_PROPS}
+          floatingLabel={true}
+          disabled={fetching}
+        />
+      </form>
+    </StyledDialog>
+  )
+}
+
+const ChangeLoginNameMutation = graphql(/* GraphQL */ `
+  mutation AccountSettingsChangeLoginName($currentPassword: String!, $loginName: String!) {
+    userUpdateCurrent(currentPassword: $currentPassword, changes: { loginName: $loginName }) {
+      ...AccountSettings_CurrentUser
+    }
+  }
+`)
+
+interface ChangeLoginNameFormModel {
+  currentPassword: string
+  loginName: string
+}
+
+export interface ChangeLoginNameDialogProps extends CommonDialogProps {
+  currentLoginName: string
+  lastChange?: Date
+}
+
+export function ChangeLoginNameDialog(props: ChangeLoginNameDialogProps) {
+  const snackbarController = useSnackbarController()
+  const { t } = useTranslation()
+  const [{ fetching }, changeLoginName] = useMutation(ChangeLoginNameMutation)
+  const [errorMessage, setErrorMessage] = useState<string>()
+  const autoFocusRef = useAutoFocusRef<HTMLInputElement>()
+
+  const { onCancel, lastChange } = props
+
+  const now = useNow(60_000)
+
+  const isChangeAllowed = !lastChange || now - Number(lastChange) >= LOGIN_NAME_CHANGE_COOLDOWN_MS
+  const daysRemaining = lastChange
+    ? Math.max(
+        0,
+        Math.ceil(
+          (LOGIN_NAME_CHANGE_COOLDOWN_MS - (now - Number(lastChange))) / (24 * 60 * 60 * 1000),
+        ),
+      )
+    : 0
+
+  const nameAvailable = useMemo(
+    () => createUsernameAvailabilityValidator<ChangeLoginNameFormModel>({ type: 'login' }),
+    [],
+  )
+
+  const { submit, bindInput, setInputError, form } = useForm<ChangeLoginNameFormModel>(
+    { currentPassword: '', loginName: props.currentLoginName },
+    {
+      currentPassword: currentPasswordValidator,
+      loginName: composeValidators(usernameValidator, nameAvailable),
+    },
+  )
+
+  useFormCallbacks(form, {
+    onSubmit: model => {
+      setErrorMessage(undefined)
+      changeLoginName({
+        currentPassword: model.currentPassword,
+        loginName: model.loginName,
+      })
+        .then(result => {
+          if (result.error) {
+            if (result.error.networkError) {
+              setErrorMessage(
+                t('settings.user.account.networkError', 'Network error: {{errorMessage}}', {
+                  errorMessage: result.error.networkError.message,
+                }),
+              )
+            } else if (result.error.graphQLErrors?.length) {
+              for (const error of result.error.graphQLErrors) {
+                if (error.extensions?.code === 'INVALID_PASSWORD') {
+                  setInputError(
+                    'currentPassword',
+                    t(
+                      'settings.user.account.invalidCurrentPassword',
+                      'Current password is incorrect',
+                    ),
+                  )
+                  return
+                } else if (error.extensions?.code === 'LOGIN_NAME_UNAVAILABLE') {
+                  setInputError(
+                    'loginName',
+                    t('settings.user.account.loginNameUnavailable', 'Login name is not available'),
+                  )
+                  return
+                } else if (error.extensions?.code === 'RATE_LIMITED') {
+                  setErrorMessage(
+                    t(
+                      'settings.user.account.rateLimited',
+                      'You can only change your login name once every 30 days.',
+                    ),
+                  )
+                  return
+                }
+              }
+
+              setErrorMessage(
+                t(
+                  'settings.user.account.unknownError',
+                  'Something went wrong, please try again later.',
+                ),
+              )
+            }
+          } else {
+            snackbarController.showSnackbar(
+              t(
+                'settings.user.account.changeLoginName.success',
+                'Login name changed successfully.',
+              ),
+            )
+            onCancel()
+          }
+        })
+        .catch(err => {
+          logger.error(`Error changing login name: ${getErrorStack(err)}`)
+        })
+    },
+  })
+
+  const buttons = [
+    <TextButton
+      label={t('common.actions.cancel', 'Cancel')}
+      key='cancel'
+      onClick={onCancel}
+      disabled={fetching}
+    />,
+    <TextButton
+      label={t('common.actions.save', 'Save')}
+      key='save'
+      onClick={submit}
+      disabled={fetching}
+      testName='save-button'
+    />,
+  ]
+
+  return (
+    <StyledDialog
+      title={t('settings.user.account.changeLoginName.dialogTitle', 'Change login name')}
+      onCancel={onCancel}
+      showCloseButton={true}
+      buttons={buttons}
+      testName='change-login-name-dialog'>
+      <BodyMedium>
+        {t(
+          'settings.user.account.loginNameChangeInfo',
+          'Login names can be changed once every 30 days.',
+        )}
+      </BodyMedium>
+      <FormSpacer />
+
+      {errorMessage ? (
+        <>
+          <ErrorMessage>{errorMessage}</ErrorMessage>
+          <FormSpacer />
+        </>
+      ) : null}
+      {!errorMessage && !isChangeAllowed && daysRemaining ? (
+        <>
+          <ErrorMessage>
+            {t('settings.user.account.loginNameCooldown', {
+              defaultValue_one:
+                'You have changed your name too recently. You can change your login name again in {{count}} day.',
+              defaultValue:
+                'You have changed your name too recently. You can change your login name again in {{count}} days.',
+              count: daysRemaining,
+            })}
+          </ErrorMessage>
+          <FormSpacer />
+        </>
+      ) : null}
+      <form noValidate={true} onSubmit={submit}>
+        <SubmitOnEnter disabled={fetching} />
+        <PasswordTextField
+          {...bindInput('currentPassword')}
+          ref={autoFocusRef}
+          label={t('settings.user.account.currentPassword', 'Current password')}
+          inputProps={TEXT_INPUT_PROPS}
+          floatingLabel={true}
+          disabled={fetching}
+        />
+
+        <FormSpacer />
+
+        <TextField
+          {...bindInput('loginName')}
+          label={t('settings.user.account.loginName', 'Login name')}
+          inputProps={TEXT_INPUT_PROPS}
+          floatingLabel={true}
+          disabled={fetching}
+        />
+      </form>
+    </StyledDialog>
+  )
+}

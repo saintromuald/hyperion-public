@@ -1,0 +1,1371 @@
+import got, { HTTPError } from 'got'
+import { createPrivateKey, KeyObject, sign, X509Certificate } from 'node:crypto'
+import { isIP } from 'node:net'
+import { singleton } from 'tsyringe'
+import { raceAbort } from '../../../common/async/abort-signals'
+import { timeoutPromise } from '../../../common/async/timeout-promise'
+import { GameServerRegionId } from '../../../common/game-server-regions'
+import {
+  NetcodeV2FlightBlobInfo,
+  NetcodeV2RehomeResponse,
+  NetcodeV2RelayEvent,
+  NetcodeV2RelayInfo,
+  NetcodeV2RosterEntry,
+  NetcodeV2ServerSetup,
+  NetcodeV2SlotEvidence,
+} from '../../../common/games/netcode-v2'
+import { SbUserId } from '../../../common/users/sb-user-id'
+import { GameServerRegionsService } from '../game-server-regions/game-server-regions-service'
+import {
+  addNetcodeV2RelayEvents,
+  setNetcodeV2RequestedRegions,
+  setNetcodeV2Session,
+} from '../games/game-models'
+import log from '../logging/logger'
+import { monotonicNow } from '../time/monotonic-now'
+import { authorizeDevelopmentClients } from '../users/development-clients'
+import { parseSlotEvidenceList } from './evidence-schema'
+import { EvidenceSessionMappingService } from './evidence-session-mapping-service'
+import { worstPairwiseLatencyMs } from './latency-estimate'
+import { ED25519_SEED_HEX_PATTERN, loadConfigFromEnv, NetcodeV2Config } from './netcode-v2-config'
+import { SessionReleaseCatalog } from './session-release-catalog'
+
+export { loadConfigFromEnv }
+export type { NetcodeV2Config }
+
+/**
+ * How many session ids `checkSessionsAlive` will ask about in a single `POST /sessions/alive`
+ * call. The sweep's probe candidate set is expected to be tiny in steady state, but this keeps a
+ * single request bounded regardless.
+ */
+const SESSIONS_ALIVE_CHUNK_SIZE = 512
+
+/**
+ * How long a warm signal for a region suppresses further warm signals for that same region. The
+ * coordinator holds a region warm for several minutes per `POST /regions/warm`, so re-sending inside
+ * this window is wasted traffic; it's chosen well under the coordinator's hold so a region stays warm
+ * across back-to-back debounced signals.
+ */
+const WARM_SIGNAL_DEBOUNCE_MS = 30_000
+
+/**
+ * The total budget for session creation, including provisioning polls and retries while the
+ * coordinator waits for relays to install descriptors or for persistence to recover.
+ */
+const CREATE_RETRY_CEILING_MS = 120_000
+
+export class NetcodeV2ServiceError extends Error {}
+
+/**
+ * Waits `ms` milliseconds, rejecting early with an `AbortError` if `signal` aborts first. The timer
+ * is cleared on either outcome so an aborted wait leaves nothing pending.
+ */
+async function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
+  const [delay, clearDelay] = timeoutPromise(ms)
+  try {
+    await raceAbort(signal, delay)
+  } finally {
+    clearDelay()
+  }
+}
+
+/** How the timestamp + method + path + body are combined into the bytes a request signature covers. */
+const REQUEST_SIGNATURE_MESSAGE_PREFIX = 'rp2-request-v1:'
+
+/**
+ * The fixed 16-byte PKCS#8 v1 DER prefix for an Ed25519 private key; the raw 32-byte seed follows
+ * it to form the 48-byte document Node's `createPrivateKey` accepts. We assemble it by hand because
+ * the interchange format for the client key is the raw seed (hex) — ring (coordinator side) accepts
+ * only PKCS#8 v2 and Node exports only v1, so neither side ships a PKCS#8 document; both derive a
+ * keypair from the same raw seed instead. This mirrors `app/game/netcode-v2-keys.ts`, which
+ * hand-assembles the v2 form for the game process. The RFC 8032 §7.1 test vector pins this layout
+ * byte-for-byte (see the test), so drift breaks a test rather than silently producing a bad key.
+ */
+const PKCS8_V1_ED25519_PREFIX = Buffer.from('302e020100300506032b657004220420', 'hex')
+
+/**
+ * Builds a Node Ed25519 signing `KeyObject` from a raw 32-byte seed given as hex, by wrapping it in
+ * the fixed PKCS#8 v1 DER envelope. Exported for the cross-implementation test vector.
+ */
+export function clientSigningKeyFromSeedHex(seedHex: string): KeyObject {
+  if (!ED25519_SEED_HEX_PATTERN.test(seedHex)) {
+    throw new NetcodeV2ServiceError('SB_RP2_CLIENT_KEY must be 64 hex characters (a 32-byte seed)')
+  }
+  return createPrivateKey({
+    key: Buffer.concat([PKCS8_V1_ED25519_PREFIX, Buffer.from(seedHex, 'hex')]),
+    format: 'der',
+    type: 'pkcs8',
+  })
+}
+
+/**
+ * The client signing key, built from `SB_RP2_CLIENT_KEY` and cached by its seed value. `loadConfig
+ * FromEnv` already fails loudly at config time when the coordinator is configured without a valid
+ * key, so this only builds the `KeyObject` — cached so it's assembled once (a new build only if the
+ * env value changes, which in practice happens only across test cases that stub it). Reading the env
+ * at call time (rather than a module-load constant) matches `loadConfigFromEnv`'s own pattern and
+ * keeps the module testable with `vi.stubEnv`.
+ */
+let cachedClientSigningKey: { seedHex: string; key: KeyObject } | undefined
+
+function getClientSigningKey(): KeyObject {
+  const seedHex = process.env.SB_RP2_CLIENT_KEY
+  if (!seedHex) {
+    throw new NetcodeV2ServiceError('SB_RP2_CLIENT_KEY is not configured')
+  }
+  if (cachedClientSigningKey?.seedHex !== seedHex) {
+    cachedClientSigningKey = { seedHex, key: clientSigningKeyFromSeedHex(seedHex) }
+  }
+  return cachedClientSigningKey.key
+}
+
+/**
+ * The `x-rp2-timestamp` + `x-rp2-signature` header pair authenticating a coordinator-bound request.
+ * Signs `rp2-request-v1:<unix seconds>:<METHOD uppercased>:<path>:<raw body>` with the client key —
+ * the mirror image of the coordinator's webhook signature. Binding the method + path stops a signed
+ * body being replayed against a different endpoint. There is deliberately no nonce: transport is
+ * HTTPS in prod / loopback in dev, and a captured-in-window replay at worst mints a garbage session
+ * that gets reaped.
+ */
+export function signCoordinatorRequest(
+  method: string,
+  path: string,
+  body: string,
+): { 'x-rp2-timestamp': string; 'x-rp2-signature': string } {
+  const timestamp = Math.floor(Date.now() / 1000).toString()
+  const message = Buffer.concat([
+    Buffer.from(
+      `${REQUEST_SIGNATURE_MESSAGE_PREFIX}${timestamp}:${method.toUpperCase()}:${path}:`,
+      'utf8',
+    ),
+    Buffer.from(body, 'utf8'),
+  ])
+  return {
+    'x-rp2-timestamp': timestamp,
+    'x-rp2-signature': sign(null, message, getClientSigningKey()).toString('hex'),
+  }
+}
+
+/**
+ * The path a coordinator request signs into its signature: pathname plus any query string. The
+ * coordinator verifies over `uri.path_and_query()`, so both sides must include the query — today's
+ * endpoints carry none, but signing path-and-query keeps the two implementations from silently
+ * diverging the day one does.
+ */
+function coordinatorRequestPath(url: string): string {
+  const parsed = new URL(url)
+  return parsed.pathname + parsed.search
+}
+
+/**
+ * The wire shapes of the rally-point2 coordinator's `POST /session/create` API. These use the
+ * coordinator's serde defaults: snake_case field names, and byte fields (pubkeys, tokens) encoded
+ * as JSON arrays of numbers.
+ */
+interface CoordinatorSessionRequest {
+  periodic_evidence?: boolean
+  tenant: string
+  evidence_keys?: Array<{ key_id: number; public_key: number[] }>
+  lobby_policy: { allowed: Array<{ slot: number; payload: number[] }> }
+  /** The ShieldBattery `gameId`, echoed back on the coordinator's notification webhooks. */
+  external_id: string
+  players: Array<{
+    slot: number
+    client_pubkey: number[]
+    external_ref: string
+    /** Excludes this slot from the relay's desync sync-checksum comparator (serde-default false). */
+    observer: boolean
+    require_evidence?: false
+    /**
+     * The opaque id of the game-server region this slot asked to home in. Omitted when the player
+     * reported none; the coordinator then places the slot region-blind (global lowest-id relay).
+     * An unknown/unlit region also degrades to that fallback coordinator-side.
+     */
+    region?: string
+  }>
+  /**
+   * The estimated worst pairwise one-way latency (ms) across the session's players, computed from
+   * each slot's region + measured rtt. Omitted when no player pair carries enough signal to compute
+   * it. The coordinator forwards this to relays as a fallback for the initial buffer depth, used
+   * only until a relay's own pre-start observation of its home clients covers the whole session.
+   */
+  latency_estimate_ms?: number
+  /**
+   * Asks for a rollback session. The coordinator grants it only when it can place the session on
+   * relays that all support rollback, and says whether it did on the response.
+   */
+  rollback?: boolean
+}
+
+interface CoordinatorRelayEndpoint {
+  relay_id: number
+  /**
+   * The relay's primary/back-compat address as `ip:port` (IPv6 addresses are bracketed) — used
+   * when `relay_addrs` is absent, and otherwise redundant with (part of) `relay_addrs`.
+   */
+  relay_addr: string
+  /**
+   * The relay's complete advertised address set, in the relay's own preference order (its
+   * `Vec<SocketAddr>`, serialized as an array of the same `ip:port` strings). Serde's
+   * `skip_serializing_if = "Vec::is_empty"` means an absent or empty value is a single-address
+   * relay reachable only at `relay_addr`; a non-empty value is the COMPLETE address set
+   * *including* the primary, not just extra addresses beyond `relay_addr`.
+   */
+  relay_addrs?: string[]
+  /** DER of the TLS leaf certificate the relay serves; clients pin exactly this cert. */
+  cert_der: number[]
+}
+
+/** A per-slot home-relay override: a slot that homes on a relay other than `home_relay`. */
+interface CoordinatorSlotHome {
+  slot: number
+  relay: CoordinatorRelayEndpoint
+}
+
+/**
+ * One serving relay's region, as listed in a `CoordinatorSessionResponse`'s `relay_regions`. Only
+ * relays the coordinator tagged with a region appear; an untagged relay has no entry.
+ */
+interface CoordinatorRelayRegionLabel {
+  relay_id: number
+  region: string
+}
+
+interface CoordinatorSessionResponse {
+  session: number
+  home_relay: CoordinatorRelayEndpoint
+  /**
+   * Per-slot home overrides: slots homed on a relay other than `home_relay`. Empty when every slot
+   * shares one relay; populated for a cross-region session (each slot homes in its requested
+   * region, and the relays mesh).
+   */
+  slot_homes?: CoordinatorSlotHome[]
+  tokens: Array<{ slot: number; token: number[] }>
+  /**
+   * The tenant's configured turn-buffer range. The relay's own buffer law starts every session at
+   * `min` and only sends a resize directive when its computed depth moves off that starting point,
+   * so `min` is also the depth each client must seed its pipe at to agree with the relay from the
+   * first turn.
+   */
+  bounds: { min: number; max: number }
+  /**
+   * Each serving relay's region, separate from `home_relay`/`slot_homes` themselves: the
+   * coordinator deliberately never puts a region on those (their shape rides all the way to the
+   * game process, and a region must not reach a client before its own in-game, gameplay-elapsed
+   * release). This list exists only for our own operator-facing tooling (the admin debug view's
+   * relay-serving history) — look a relay id up here, never thread it into
+   * `NetcodeV2RelayInfo`/`NetcodeV2RosterEntry`. Absent (or missing an entry for a given relay) on
+   * a coordinator with no region catalog, or for an untagged relay.
+   */
+  relay_regions?: CoordinatorRelayRegionLabel[]
+  /** Whether the session was created to roll back. Absent (false) unless the request asked. */
+  rollback?: boolean
+}
+
+/** Looks up `relayId`'s region in a session or rehome response's region label list. */
+function findRelayRegion(
+  relayRegions: CoordinatorRelayRegionLabel[] | undefined,
+  relayId: number,
+): string | undefined {
+  return relayRegions?.find(label => label.relay_id === relayId)?.region
+}
+
+/**
+ * `{ region }` when `region` is known, else an empty object — spread into a relay-event literal so
+ * an unknown region omits the key entirely rather than carrying it as `undefined`.
+ */
+function regionField(region: string | undefined): { region: string } | Record<string, never> {
+  return region !== undefined ? { region } : {}
+}
+
+/**
+ * The wire shapes of the coordinator's `POST /session/rehome` API. Same serde conventions as
+ * `/session/create` (snake_case, byte arrays as JSON number arrays). `dead_relay_id` is the relay
+ * the client believes dead; the coordinator decides whether it's actually gone and, if so, moves
+ * the whole group to a replacement.
+ */
+interface CoordinatorRehomeRequest {
+  tenant: string
+  session: number
+  dead_relay_id: number
+}
+
+interface CoordinatorRehomeResponse {
+  decision: 'stay' | 'unavailable' | 'newTarget'
+  /** Present only for a `newTarget` decision: the replacement relay to dial. */
+  relay?: CoordinatorRelayEndpoint
+  /**
+   * `relay`'s region, present only for a `newTarget` decision with a recorded region. Same
+   * tenant-only, operator-facing purpose as `CoordinatorSessionResponse.relay_regions` — never
+   * carried on `relay` itself, and never to be threaded into anything a game client receives.
+   */
+  relay_region?: string
+}
+
+/**
+ * The wire shape of the coordinator's `POST /flight/blobs` listing response — one entry per relay
+ * that shipped a flight-recorder blob for the session. Unlike the snake_case session control-plane
+ * surface (`/session/create`, `/session/rehome`, and the *request* bodies of the flight endpoints
+ * themselves), this response serializes camelCase — it's the coordinator's tenant-facing forensics
+ * surface, and its field names match ours directly.
+ */
+interface CoordinatorFlightBlobsResponse {
+  blobs: Array<{ relayId: number; pinned: boolean; size: number; lastModifiedMs: number }>
+}
+
+/**
+ * The `202` body `POST /session/create` returns while a requested region has no relay yet. Nothing
+ * is created; the caller re-POSTs the byte-identical request after `retryAfterMs` until it gets a
+ * `200`. `regions` names the regions still being provisioned, for surfacing to players.
+ */
+interface CoordinatorProvisioningResponse {
+  status: 'provisioning'
+  regions: string[]
+  retryAfterMs: number
+}
+
+/**
+ * The `POST /regions/warm` response. `warmed` are the regions the coordinator is now holding warm;
+ * `unknown` are ids it doesn't recognize (a stale region list on our side — an ops signal).
+ */
+interface CoordinatorWarmResponse {
+  warmed: string[]
+  unknown: string[]
+}
+
+/**
+ * How far a session got through starting up, as the coordinator currently sees it. Pulled at the
+ * moment a load needs to decide who (if anyone) is at fault, so it covers the slots whose
+ * connect/start webhooks were dropped after retries.
+ *
+ * Everything the coordinator holds for the session comes back whatever `known` says, and all of it
+ * is positive evidence that can be trusted on its own. `known` is about the opposite reading: only
+ * a known record makes a slot's *absence* mean anything.
+ */
+export interface NetcodeV2SessionLoadState {
+  /**
+   * Whether the coordinator vouches for the record being complete as of this pull: it has held the
+   * session since creation, no relay serving it has been replaced or restarted, and every serving
+   * relay produced a fresh snapshot after this request reached the coordinator — so anything that
+   * happened before the pull was sent is in the sets below, with no clock compared on either side.
+   * False means the record may be missing things that happened (the coordinator restarted, a relay
+   * was unreachable or replaced), so absence from the sets says nothing.
+   */
+  known: boolean
+  /**
+   * Whether `lobbyViolationSlots` is complete and will stay so: every serving relay closed lobby
+   * ingress before answering, and fenced every slot it homes except the ones in `closedSlots`.
+   */
+  setupFinal: boolean
+  /** Authenticated slots evicted for lobby violations, including incomplete records. */
+  lobbyViolationSlots: number[]
+  /** Unix ms when the authority relay released the session to run, absent if it never did. */
+  startedAtMs?: number
+  /** The slots whose home relay activated their link. */
+  connectedSlots: number[]
+  /**
+   * The slots whose game loop began running. Each is the slot's own client reporting its start, as
+   * recorded by its relay, so it can't say whether that slot's game ever reached its peers.
+   */
+  startedSlots: number[]
+  /**
+   * The slots whose home relay forwarded at least one of their game turns, which a client sends only
+   * once its own loading has finished: observed by the relay, not reported by the client.
+   */
+  forwardedSlots: number[]
+  /**
+   * Whether every relay serving the session tracks forwarded turns and answered after this request
+   * reached the coordinator, so a slot's absence from `forwardedSlots` means its turns were never
+   * forwarded. False for a coordinator or relay that doesn't track them.
+   */
+  turnsKnown: boolean
+  /**
+   * The slots that connected to their home relay and are disconnected now without their game loop
+   * having started. Unlike every other set here this is the session as it stands at this pull, not
+   * an accumulation: a slot that dials back in drops out of it. Each names the link whose closure
+   * left it disconnected (see `NetcodeV2ClosedSlot`).
+   */
+  closedSlots: NetcodeV2ClosedSlot[]
+  /**
+   * The slots whose link to their home relay was up as of this pull, read off the same relay answers
+   * as `closedSlots`. Only meaningful when `closedKnown`. A slot that reported its game loop running
+   * and then disconnected is in neither this nor `closedSlots`.
+   */
+  liveSlots: number[]
+  /**
+   * Whether `closedSlots` is the session's whole closed set and every slot outside it is vouched for:
+   * everything `turnsKnown` rests on holds, and every serving relay fenced each slot it homes except
+   * the closed ones. So a slot that connected but isn't closed is live or started, and a live slot's
+   * absence from `startedSlots` means it hadn't started. A closed slot's own start may still be held
+   * by its client, which `forwardedSlots` (needing no fence) is the only word on. False for a
+   * coordinator or relay that doesn't report closed slots.
+   */
+  closedKnown: boolean
+  evidence: NetcodeV2SlotEvidence[]
+}
+
+/**
+ * One closed slot in a load-state pull. `epoch` is the relay connection epoch of the link whose
+ * closure left the slot disconnected, as a decimal string (it's 64 bits wide). Epochs are random
+ * 64-bit values, so a reconnect repeating one is vanishingly unlikely: two pulls naming a slot
+ * closed with the same epoch saw one unbroken disconnection, since a reconnect in between would
+ * have opened a new link with a new epoch. Absent when
+ * the relay recorded none, in which case the closure can't be matched against any other pull's.
+ */
+export interface NetcodeV2ClosedSlot {
+  slot: number
+  epoch?: string
+}
+
+/** Reads the coordinator's closed slots, keeping only well-formed entries. */
+function parseClosedSlots(closedSlots: unknown): NetcodeV2ClosedSlot[] {
+  if (!Array.isArray(closedSlots)) return []
+  const parsed: NetcodeV2ClosedSlot[] = []
+  for (const entry of closedSlots) {
+    if (typeof entry !== 'object' || entry === null || typeof entry.slot !== 'number') continue
+    parsed.push(
+      typeof entry.epoch === 'string' && /^\d+$/.test(entry.epoch)
+        ? { slot: entry.slot, epoch: entry.epoch }
+        : { slot: entry.slot },
+    )
+  }
+  return parsed
+}
+
+/** The wire shape of the coordinator's `POST /session/load-state` response. */
+interface CoordinatorSessionLoadStateResponse {
+  known: boolean
+  setupFinal?: boolean
+  lobbyViolationSlots?: number[]
+  startedAtMs?: number
+  connectedSlots?: number[]
+  startedSlots?: number[]
+  forwardedSlots?: number[]
+  turnsKnown?: boolean
+  closedSlots?: unknown
+  liveSlots?: number[]
+  closedKnown?: boolean
+  evidence?: unknown
+}
+
+/** Malformed observations cannot affect independent load-attribution facts. */
+function parseEvidence(evidence: unknown): NetcodeV2SlotEvidence[] {
+  if (evidence === undefined) return []
+  return parseSlotEvidenceList(evidence) ?? []
+}
+
+/** The session id and per-player handoffs a successful `createSessionForGame` produces. */
+export interface NetcodeV2CreatedSession {
+  /** The coordinator's numeric id for the created session. */
+  session: number
+  setups: Map<SbUserId, NetcodeV2ServerSetup>
+}
+
+/** One address candidate parsed out of a coordinator relay endpoint's `relay_addr`/`relay_addrs`. */
+interface ParsedRelayAddr {
+  host: string
+  port: number
+  family: 4 | 6
+}
+
+/**
+ * Parses a single Rust `SocketAddr` display string (`ip:port`, IPv6 addresses bracketed) into its
+ * host, port, and IP family. Throws a loud `NetcodeV2ServiceError` on anything that doesn't parse
+ * as a valid IP + port — a coordinator handing out a garbage address must surface, not be
+ * silently skipped.
+ */
+function parseCoordinatorRelayAddr(addr: string): ParsedRelayAddr {
+  let host: string
+  let port: number
+  if (addr.startsWith('[')) {
+    const end = addr.indexOf(']')
+    host = addr.slice(1, end)
+    port = Number(addr.slice(end + 2))
+  } else {
+    const colon = addr.lastIndexOf(':')
+    host = addr.slice(0, colon)
+    port = Number(addr.slice(colon + 1))
+  }
+  const family = isIP(host)
+  if (family === 0 || !Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw new NetcodeV2ServiceError(`coordinator returned an unparseable relay address: ${addr}`)
+  }
+  return { host, port, family: family as 4 | 6 }
+}
+
+/**
+ * Converts a coordinator relay endpoint into the relay endpoint shape clients dial. The candidate
+ * address set is `relay_addrs` when the coordinator sent one, else the single back-compat
+ * `relay_addr`, passed through whole and in order: the coordinator's order is the dial preference
+ * (both families on the preferred port, then any extra port), and every candidate is one more way
+ * through a network that filters the others. Each is parsed and re-rendered, so a malformed address
+ * fails loudly here instead of inside every game client.
+ *
+ * Exported for direct unit testing, alongside `clientSigningKeyFromSeedHex` and
+ * `signCoordinatorRequest`.
+ */
+export function relayEndpointToInfo(
+  peer: CoordinatorRelayEndpoint,
+  config: NetcodeV2Config,
+): NetcodeV2RelayInfo {
+  const rawAddrs =
+    peer.relay_addrs && peer.relay_addrs.length > 0 ? peer.relay_addrs : [peer.relay_addr]
+  const addrs = rawAddrs.map(raw => {
+    const { host, port, family } = parseCoordinatorRelayAddr(raw)
+    return family === 6 ? `[${host}]:${port}` : `${host}:${port}`
+  })
+
+  // Parsing through X509Certificate validates the cert here, rather than letting a corrupt one
+  // surface later as TLS pin failures inside every game client
+  const certDer = Buffer.from(peer.cert_der)
+  try {
+    // eslint-disable-next-line no-new
+    new X509Certificate(certDer)
+  } catch (err) {
+    throw new NetcodeV2ServiceError(
+      `coordinator returned an unparseable cert for relay ${peer.relay_id}`,
+      { cause: err },
+    )
+  }
+
+  return {
+    relayId: peer.relay_id,
+    addrs,
+    serverName: config.relayServerName,
+    cert: certDer.toString('base64'),
+  }
+}
+
+/**
+ * Server-side control plane for netcode v2 (rally-point2): takes each player's per-session public
+ * key (submitted at queue/lobby-join time and threaded in on the slots), requests a session from
+ * the coordinator, and produces the per-player handoff (token + relays + roster) the game loader
+ * publishes to clients.
+ *
+ * Enabled by setting `SB_RP2_COORDINATOR_URL` (plus `SB_RP2_TENANT`). The relay certificates
+ * clients pin come from the coordinator's session response, per relay. When disabled, games load
+ * exactly as before.
+ *
+ * Re-home asks are coalesced (see `rehomeInFlight`) but their answers are deliberately never
+ * cached: the coordinator's recorded-rehome path re-checks relay liveness in its registry on every
+ * ask and serves a repeat ask without spending a rate-limit token, so asking again is idempotent,
+ * cheap, and — crucially — always liveness-checked. A cached `newTarget` would go stale the moment
+ * that replacement relay itself dies (a chained relay death): every later survivor would be handed
+ * the now-dead replacement forever, with no coordinator call and no liveness check, livelocking the
+ * client (dial fails -> escalate -> same dead answer). Coalescing alone collapses the simultaneous
+ * burst a single relay death produces, which is the only case the rate limiter cares about.
+ */
+@singleton()
+export class NetcodeV2Service {
+  private config = loadConfigFromEnv()
+
+  /**
+   * Coalesces concurrent re-home asks for the same `(session, deadRelayId)`. Every game client
+   * independently POSTs `netcode-rehome` when its shared home relay dies, so a single relay death
+   * fans in as N near-simultaneous asks for one session. Without coalescing they become N coordinator
+   * round trips against a per-`(tenant, session)` rate-limit bucket, so a large game's tail survivors
+   * get 429'd and dropped despite a healthy replacement. The first ask per key runs the coordinator
+   * call; the rest await its in-flight promise. Cleared when that promise settles.
+   */
+  private rehomeInFlight = new Map<string, Promise<NetcodeV2RehomeResponse>>()
+
+  /**
+   * When each region was last sent in a `POST /regions/warm`, in `Date.now()` ms. Drives the warm
+   * signal debounce so a region posted recently is skipped until the window elapses.
+   */
+  private warmRegionLastSent = new Map<GameServerRegionId, number>()
+
+  constructor(
+    private gameServerRegionsService: GameServerRegionsService,
+    private mappingService: EvidenceSessionMappingService,
+    private releaseCatalog: SessionReleaseCatalog,
+  ) {}
+
+  isEnabled(): boolean {
+    return !!this.config
+  }
+
+  /**
+   * Asks the coordinator to hold the given regions warm (spin up/keep a relay ready), so a session
+   * created for them shortly after can be served without a provisioning wait. Best-effort: never
+   * throws, is a no-op when the service is disabled, and callers do not await it. A region posted
+   * within `WARM_SIGNAL_DEBOUNCE_MS` is skipped; all due regions are batched into one signed POST.
+   */
+  warmRegions(regions: ReadonlyArray<GameServerRegionId>): void {
+    const config = this.config
+    if (!config) {
+      return
+    }
+
+    const now = Date.now()
+    const due: GameServerRegionId[] = []
+    for (const region of regions) {
+      const lastSent = this.warmRegionLastSent.get(region)
+      if (lastSent === undefined || now - lastSent >= WARM_SIGNAL_DEBOUNCE_MS) {
+        // Stamp when the POST is dispatched, not on its success, so a failing coordinator can't turn
+        // the debounce into a hot retry loop.
+        this.warmRegionLastSent.set(region, now)
+        due.push(region)
+      }
+    }
+    if (due.length === 0) {
+      return
+    }
+
+    this.postWarmRegions(config, due).catch(err => {
+      log.warn({ err }, 'netcode v2 warm-regions request failed')
+    })
+  }
+
+  private async postWarmRegions(
+    config: NetcodeV2Config,
+    regions: GameServerRegionId[],
+  ): Promise<void> {
+    const url = `${config.coordinatorUrl}/regions/warm`
+    const bodyStr = JSON.stringify({ tenant: config.tenant, regions })
+    const response = await got
+      .post(url, {
+        body: bodyStr,
+        headers: {
+          'content-type': 'application/json',
+          ...signCoordinatorRequest('POST', coordinatorRequestPath(url), bodyStr),
+        },
+        timeout: { request: 10000 },
+      })
+      .json<CoordinatorWarmResponse>()
+    if (response.unknown.length > 0) {
+      log.warn(
+        { unknownRegions: response.unknown },
+        'netcode v2 coordinator does not recognize some warmed regions',
+      )
+    }
+  }
+
+  /**
+   * Requests a rally-point2 session for a loading game from each participant's slot (its per-session
+   * public key included), asks the coordinator to mint the session, and returns the session id plus
+   * each player's server-side handoff. Fails fast if any slot is missing its public key.
+   *
+   * The session id is returned (not just persisted) because the caller needs it in memory to ask
+   * the coordinator about this session's progress later, without a database round trip on a path
+   * where the persistence write is deliberately best-effort.
+   *
+   * @param slots the rally-point2 slot assignment for every participant, in slot order
+   */
+  async createSessionForGame({
+    gameId,
+    seed,
+    slots,
+    canRollBack = false,
+    signal,
+    onProvisioning,
+  }: {
+    gameId: string
+    seed: number
+    slots: Array<{
+      slot: number
+      userId: SbUserId
+      observer: boolean
+      /** Taken from the authorized active client, never from a game request body. */
+      developmentClient?: boolean
+      /**
+       * The player's chosen home region, forwarded to the coordinator to place this slot's relay.
+       * Omitted from the request when absent; the coordinator then places the slot region-blind.
+       */
+      region?: GameServerRegionId
+      /**
+       * The player's measured round-trip time (ms) to `region`, if recorded. Combined with every
+       * other slot's region/rtt into the session's `latency_estimate_ms` hint; never forwarded to
+       * the coordinator per-slot.
+       */
+      rttMs?: number
+      /**
+       * Whether `region` was hand-picked by the player rather than resolved from their measurements.
+       * Recorded onto the game's requested-region record and never forwarded to the coordinator.
+       */
+      regionManual?: boolean
+      /**
+       * base64 of the player's per-session public key, submitted at queue/lobby-join time. Required
+       * for every slot: a missing key fails create fast (the coordinator embeds it in the slot's
+       * session token). Optional in the type so callers thread it in from a per-user lookup that may
+       * come up empty, which this method then rejects.
+       */
+      pubkey?: string
+    }>
+    /**
+     * Whether this game's simulation can be rolled back. Rollback is only asked for when this and
+     * the server's rollback config are both set; a game that can't roll back runs lockstep.
+     */
+    canRollBack?: boolean
+    signal: AbortSignal
+    /**
+     * Called at most once, the first time the coordinator answers create with `202 provisioning`,
+     * with the regions still being provisioned. Lets the caller extend its load deadline and tell
+     * players a game server is being brought up while the create POST keeps polling.
+     */
+    onProvisioning?: (regions: string[]) => void
+  }): Promise<NetcodeV2CreatedSession> {
+    const config = this.config
+    if (!config) {
+      throw new NetcodeV2ServiceError('netcode v2 is not configured')
+    }
+
+    const evidenceKeys = this.releaseCatalog.getKeys()
+    // A socket can remain connected after its account's permissions have been revoked.
+    await authorizeDevelopmentClients(slots.filter(s => s.developmentClient).map(s => s.userId))
+
+    // A fallback for the relay's own initial buffer computation, covering conditions the
+    // pre-start window can't observe itself (e.g. a multi-relay session, where pre-start traffic
+    // never crosses the mesh). Rounded up so the estimate never under-covers a fractional ms.
+    // `getBackboneRtts` never rejects and resolves immediately once the region list has been
+    // fetched once, so this never fails or blocks session create beyond that first-ever fetch.
+    const servedBackboneRtts = await this.gameServerRegionsService.getBackboneRtts()
+    const latencyEstimateMs = worstPairwiseLatencyMs(
+      slots.map(({ region, rttMs }) => ({ region, rttMs })),
+      servedBackboneRtts,
+    )
+    const latencyEstimateField =
+      latencyEstimateMs !== undefined
+        ? // eslint-disable-next-line eslint-core/camelcase
+          { latency_estimate_ms: Math.ceil(latencyEstimateMs) }
+        : {}
+
+    const request: CoordinatorSessionRequest = {
+      tenant: config.tenant,
+      // eslint-disable-next-line eslint-core/camelcase
+      ...(config.periodicEvidence ? { periodic_evidence: true } : {}),
+      ...(evidenceKeys.length
+        ? {
+            // eslint-disable-next-line eslint-core/camelcase
+            evidence_keys: evidenceKeys.map(({ keyId, publicKey }) => ({
+              // eslint-disable-next-line eslint-core/camelcase
+              key_id: keyId,
+              // eslint-disable-next-line eslint-core/camelcase
+              public_key: Array.from(Buffer.from(publicKey, 'hex')),
+            })),
+          }
+        : {}),
+      // SC:R initializes the server-selected seed and eight slots with this lobby record.
+      // eslint-disable-next-line eslint-core/camelcase
+      lobby_policy: {
+        allowed: [
+          {
+            slot: 0,
+            payload: [
+              0x48,
+              seed & 0xff,
+              (seed >>> 8) & 0xff,
+              (seed >>> 16) & 0xff,
+              (seed >>> 24) & 0xff,
+              ...Array<number>(8).fill(8),
+            ],
+          },
+        ],
+      },
+      // eslint-disable-next-line eslint-core/camelcase
+      external_id: gameId,
+      players: slots.map(({ slot, userId, observer, region, pubkey }) => {
+        if (pubkey === undefined) {
+          // Every slot of a netcode v2 (multi-human) game must carry a public key — it's collected
+          // at queue/lobby-join time. A gap means the join-time submission was lost, so fail the
+          // load fast rather than minting a session a client can't authenticate to.
+          throw new NetcodeV2ServiceError(
+            `no netcode v2 public key for slot ${slot} (user ${userId})`,
+          )
+        }
+        return {
+          slot,
+          // eslint-disable-next-line eslint-core/camelcase
+          client_pubkey: Array.from(Buffer.from(pubkey, 'base64')),
+          // eslint-disable-next-line eslint-core/camelcase
+          external_ref: String(userId),
+          observer,
+          // eslint-disable-next-line eslint-core/camelcase
+          ...(evidenceKeys.length ? { require_evidence: false as const } : {}),
+          ...(region !== undefined ? { region } : {}),
+        }
+      }),
+      ...latencyEstimateField,
+      ...(config.rollback && canRollBack ? { rollback: true } : {}),
+    }
+
+    const requestedRegions = slots.map(
+      ({ slot, userId, observer, region, rttMs, regionManual, developmentClient }) => ({
+        slot,
+        userId,
+        observer,
+        region,
+        rttMs,
+        manual: regionManual,
+        ...(developmentClient ? { developmentClient: true } : {}),
+      }),
+    )
+    // Record requests even when creation fails. A successful evidence-enabled create writes this
+    // roster atomically with its session mapping and repairs a failed write in the background.
+    try {
+      await setNetcodeV2RequestedRegions(gameId, requestedRegions)
+    } catch (err) {
+      log.warn({ err, gameId }, `failed to persist netcode v2 requested regions for game ${gameId}`)
+    }
+
+    const session = await this.createCoordinatorSession(config, request, signal, onProvisioning)
+
+    const rollback = session.rollback === true
+    log.info(
+      `netcode v2 session ${session.session} created for game ${gameId} ` +
+        `(home relay ${session.home_relay.relay_id}${rollback ? ', rollback' : ''})`,
+    )
+    if (config.rollback && canRollBack && !rollback) {
+      log.warn(
+        `netcode v2 session ${session.session} for game ${gameId} was created without rollback, ` +
+          'since no relays that support it could take the session',
+      )
+    }
+
+    // Persisted so the reconciliation sweep can later ask the coordinator whether this session
+    // is still alive instead of blind-forcing on a timeout. Non-fatal: a game whose session id
+    // fails to persist just falls back to the legacy timeout-based sweep for its backstop.
+    try {
+      if (evidenceKeys.length) {
+        await this.mappingService.persist(gameId, session.session, requestedRegions)
+      } else {
+        await setNetcodeV2Session(gameId, session.session)
+      }
+    } catch (err) {
+      log.warn({ err, gameId }, `failed to persist netcode v2 session id for game ${gameId}`)
+    }
+
+    // Records the session's serving relay(s) at create — the home relay, plus any slot-home
+    // override relays (a cross-region session homes slots on different relays) — for the admin
+    // debug view's relay-serving history. One event per distinct relay, naming the slots homed on
+    // it, so the debug view can show which relay each slot was served from (a slot whose requested
+    // region had no live relay lands on a fallback elsewhere). Non-fatal for the same reason as the
+    // session id write above.
+    try {
+      const at = Date.now()
+      // The primary home is always recorded, even when every slot's override moved off it.
+      const homes = new Map<number, { relay: CoordinatorRelayEndpoint; slots: number[] }>([
+        [session.home_relay.relay_id, { relay: session.home_relay, slots: [] }],
+      ])
+      const slotHomeRelays = new Map(
+        (session.slot_homes ?? []).map(({ slot, relay }) => [slot, relay]),
+      )
+      for (const { slot } of slots) {
+        const relay = slotHomeRelays.get(slot) ?? session.home_relay
+        const home = homes.get(relay.relay_id)
+        if (home) {
+          home.slots.push(slot)
+        } else {
+          homes.set(relay.relay_id, { relay, slots: [slot] })
+        }
+      }
+      const homeEvents = Array.from(
+        homes.values(),
+        ({ relay, slots: homedSlots }): NetcodeV2RelayEvent => ({
+          kind: 'home',
+          relayId: relay.relay_id,
+          relayAddr: relay.relay_addr,
+          ...regionField(findRelayRegion(session.relay_regions, relay.relay_id)),
+          slots: homedSlots,
+          at,
+        }),
+      )
+      await addNetcodeV2RelayEvents(gameId, homeEvents)
+    } catch (err) {
+      log.warn({ err, gameId }, `failed to persist netcode v2 relay history for game ${gameId}`)
+    }
+
+    const homeRelay = relayEndpointToInfo(session.home_relay, config)
+    // Per-slot home overrides: each listed slot homes on its own relay instead of the session's
+    // primary home (a cross-region session; the relays mesh). Empty when every slot shares one.
+    const slotHomeBySlot = new Map(
+      (session.slot_homes ?? []).map(({ slot, relay }) => [
+        slot,
+        relayEndpointToInfo(relay, config),
+      ]),
+    )
+    if (slotHomeBySlot.size > 0) {
+      log.info(
+        `netcode v2 cross-relay session for game ${gameId}: slot(s) ` +
+          `${[...slotHomeBySlot.keys()].join(', ')} homing off the primary relay`,
+      )
+    }
+
+    const userBySlot = new Map(slots.map(({ slot, userId }) => [slot, userId]))
+    // Every slot's pubkey was already validated non-undefined while building `request` above (the
+    // `.map` there throws synchronously on a gap), so the `!` here is just narrowing what's already
+    // been checked.
+    const pubkeyByUserId = new Map(slots.map(({ userId, pubkey }) => [userId, pubkey!]))
+
+    // The slot roster, personalized per recipient: who occupies each slot, plus the create-time
+    // home relay the `/netstat` overlay shows per player. `homeRegion` is included only on the
+    // recipient's own entry — a region names where a player physically is, and the handoff reaches
+    // clients before the game starts, so other players' entries carry only the opaque relay id.
+    // (`region` here is what the slot requested, not necessarily where it ended up homed — the
+    // coordinator doesn't echo per-slot serving regions back.)
+    const rosterFor = (ownSlot: number): NetcodeV2RosterEntry[] =>
+      slots.map(({ slot, userId, region }) => ({
+        slot,
+        userId,
+        homeRelayId: (slotHomeBySlot.get(slot) ?? homeRelay).relayId,
+        ...(slot === ownSlot && region !== undefined ? { homeRegion: region } : {}),
+      }))
+
+    const setups = new Map<SbUserId, NetcodeV2ServerSetup>()
+    for (const { slot, token } of session.tokens) {
+      const userId = userBySlot.get(slot)
+      if (userId === undefined) {
+        throw new NetcodeV2ServiceError(`coordinator returned a token for unknown slot ${slot}`)
+      }
+
+      setups.set(userId, {
+        token: Buffer.from(token).toString('base64'),
+        homeRelay: slotHomeBySlot.get(slot) ?? homeRelay,
+        roster: rosterFor(slot),
+        // Floored defensively: a misconfigured or unexpected coordinator bound of 0 would leave
+        // the pipe with no latency at all to absorb the network round-trip.
+        initialBufferTurns: Math.max(1, session.bounds.min),
+        // Lets the app pick the matching private key out of its own outstanding keypairs when it
+        // holds more than one (see `NetcodeV2ServerSetup.clientPubkey`).
+        clientPubkey: pubkeyByUserId.get(userId),
+        rollback,
+      })
+    }
+    if (setups.size !== slots.length) {
+      throw new NetcodeV2ServiceError('coordinator response was missing a token for a player')
+    }
+
+    return { session: session.session, setups }
+  }
+
+  /**
+   * Asks the coordinator how far a session got through starting up: which slots connected to their
+   * relay, which slots' game loops began, and when (if ever) the session was released to run.
+   *
+   * The connect/start webhooks are the fast path for this, but they're at-least-once with a finite
+   * retry budget, so a delivery can be lost outright. This pull is the authoritative account at the
+   * moment a load needs to decide whether anyone is at fault. Answering it, the coordinator
+   * has every relay serving the session snapshot its state afresh, and vouches for completeness
+   * (`known`) only when all of them did; a caller reading absence as fault must have that, and may
+   * pull again when it doesn't.
+   *
+   * Throws `NetcodeV2ServiceError` if netcode v2 isn't configured or the request fails; a caller
+   * that can proceed without the answer decides that for itself.
+   *
+   * @param settleLobby closes lobby command processing on the serving relays so an unsuccessful
+   *   setup can reach a final decision; only request this after deciding the setup needs resolution
+   * @param timeoutMs how long the whole request may take before it fails
+   * @param signal aborts the request early; a load that has completed or been cancelled has no use
+   *   for the answer, and the coordinator's work answering it is worth sparing
+   */
+  async fetchSessionLoadState(
+    session: number,
+    {
+      timeoutMs = 6000,
+      signal,
+      settleLobby = false,
+    }: {
+      timeoutMs?: number
+      signal?: AbortSignal
+      settleLobby?: boolean
+    } = {},
+  ): Promise<NetcodeV2SessionLoadState> {
+    const config = this.config
+    if (!config) {
+      throw new NetcodeV2ServiceError('netcode v2 is not configured')
+    }
+
+    const url = `${config.coordinatorUrl}/session/load-state`
+    const bodyStr = JSON.stringify({ tenant: config.tenant, session, settleLobby })
+    let response: CoordinatorSessionLoadStateResponse
+    try {
+      response = await got
+        .post(url, {
+          body: bodyStr,
+          headers: {
+            'content-type': 'application/json',
+            ...signCoordinatorRequest('POST', coordinatorRequestPath(url), bodyStr),
+          },
+          // The default leaves room for the coordinator's wait on the serving relays plus the
+          // round trip. Load-resolution callers can shorten it to their remaining budget.
+          timeout: { request: timeoutMs },
+          signal,
+        })
+        .json<CoordinatorSessionLoadStateResponse>()
+    } catch (err) {
+      throw new NetcodeV2ServiceError('coordinator session load-state fetch failed', { cause: err })
+    }
+
+    return {
+      evidence: parseEvidence(response.evidence),
+      known: response.known,
+      setupFinal: response.setupFinal === true,
+      lobbyViolationSlots: response.lobbyViolationSlots ?? [],
+      startedAtMs: response.startedAtMs,
+      connectedSlots: response.connectedSlots ?? [],
+      startedSlots: response.startedSlots ?? [],
+      forwardedSlots: response.forwardedSlots ?? [],
+      turnsKnown: response.turnsKnown === true,
+      closedSlots: parseClosedSlots(response.closedSlots),
+      liveSlots: response.liveSlots ?? [],
+      closedKnown: response.closedKnown === true,
+    }
+  }
+
+  /**
+   * Reads retained observations without asking relays to fence clients or spending the
+   * load-attribution budget. Only the latest admission and periodic observations per slot are available; this
+   * is not an archival log. An older coordinator without this endpoint returns undefined.
+   */
+  async fetchSessionEvidence(
+    session: number,
+    { timeoutMs = 6000 }: { timeoutMs?: number } = {},
+  ): Promise<NetcodeV2SlotEvidence[] | undefined> {
+    const config = this.config
+    if (!config) throw new NetcodeV2ServiceError('netcode v2 is not configured')
+    const url = `${config.coordinatorUrl}/session/evidence`
+    const bodyStr = JSON.stringify({ tenant: config.tenant, session })
+    try {
+      const response = await got
+        .post(url, {
+          body: bodyStr,
+          headers: {
+            'content-type': 'application/json',
+            ...signCoordinatorRequest('POST', coordinatorRequestPath(url), bodyStr),
+          },
+          timeout: { request: timeoutMs },
+          retry: { limit: 0 },
+        })
+        .json<{ evidence?: unknown }>()
+      return parseEvidence(response.evidence)
+    } catch (err) {
+      if (err instanceof HTTPError && err.response.statusCode === 404) return undefined
+      throw new NetcodeV2ServiceError('coordinator session evidence fetch failed', { cause: err })
+    }
+  }
+
+  /**
+   * Polls through provisioning replies and retries 503 only with an external id and an integer-second
+   * Retry-After hint from the coordinator. Each attempt signs identical bytes with a fresh timestamp.
+   * Requests and delays share a bounded budget and abort promptly on `signal`.
+   */
+  private async createCoordinatorSession(
+    config: NetcodeV2Config,
+    request: CoordinatorSessionRequest,
+    signal: AbortSignal,
+    onProvisioning?: (regions: string[]) => void,
+  ): Promise<CoordinatorSessionResponse> {
+    const url = `${config.coordinatorUrl}/session/create`
+    // Serialize the body ourselves and sign those exact bytes (rather than handing `got` a `json:`
+    // object) so the signature covers precisely what goes on the wire — the coordinator verifies
+    // over the raw body — and so every poll attempt sends identical bytes.
+    const bodyStr = JSON.stringify(request)
+    const pollDeadline = monotonicNow() + CREATE_RETRY_CEILING_MS
+    let announcedProvisioning = false
+    let retryBackoffMs = 1000
+
+    for (;;) {
+      const remainingMs = pollDeadline - monotonicNow()
+      if (remainingMs <= 0) {
+        throw new NetcodeV2ServiceError(
+          'coordinator session create failed: retry deadline exceeded',
+        )
+      }
+      let response: { statusCode: number; body: string } | undefined
+      let retryMs = retryBackoffMs
+      try {
+        signal.throwIfAborted()
+        response = await got.post(url, {
+          body: bodyStr,
+          headers: {
+            'content-type': 'application/json',
+            ...signCoordinatorRequest('POST', coordinatorRequestPath(url), bodyStr),
+          },
+          timeout: { request: Math.min(10_000, remainingMs) },
+          retry: { limit: 0 },
+          signal,
+        })
+      } catch (err) {
+        const retryAfter =
+          err instanceof HTTPError ? err.response.headers['retry-after'] : undefined
+        const retryAfterMs =
+          typeof retryAfter === 'string' && /^\d+$/.test(retryAfter)
+            ? Number(retryAfter) * 1000
+            : NaN
+        if (
+          !(err instanceof HTTPError && err.response.statusCode === 503 && request.external_id) ||
+          !Number.isFinite(retryAfterMs)
+        ) {
+          throw new NetcodeV2ServiceError('coordinator session create failed', { cause: err })
+        }
+        // Unmarked 503s shed load. For marked failures, respect the coordinator's minimum delay
+        // and spread repeated retries with capped exponential backoff and additive jitter.
+        retryMs = Math.max(retryAfterMs, retryBackoffMs) + Math.random() * 250
+        retryBackoffMs = Math.min(retryBackoffMs * 2, 10_000)
+      }
+
+      if (response && response.statusCode !== 202) {
+        return JSON.parse(response.body) as CoordinatorSessionResponse
+      }
+
+      if (response) {
+        const provisioning = JSON.parse(response.body) as CoordinatorProvisioningResponse
+        if (!announcedProvisioning) {
+          announcedProvisioning = true
+          onProvisioning?.(provisioning.regions ?? [])
+        }
+        retryMs = Math.min(Math.max(provisioning.retryAfterMs ?? 2000, 500), 10_000)
+      }
+
+      const remainingDelayMs = pollDeadline - monotonicNow()
+      if (remainingDelayMs <= 0) {
+        throw new NetcodeV2ServiceError(
+          'coordinator session create failed: retry deadline exceeded',
+        )
+      }
+      try {
+        await abortableDelay(Math.min(retryMs, remainingDelayMs), signal)
+      } catch (err) {
+        // An aborted wait ends the create the same way an aborted request does.
+        throw new NetcodeV2ServiceError('coordinator session create failed', { cause: err })
+      }
+    }
+  }
+
+  /**
+   * Asks the coordinator to re-home an in-flight session off a relay a client reports dead. The
+   * coordinator authoritatively decides whether the named relay is actually gone and, if so, moves
+   * the whole group to a replacement, returning it. `stay` means the relay is in fact still live
+   * (the client's own path is broken, not the relay); `unavailable` means no relay can take the
+   * session over yet. A `newTarget` relay is converted through the same `relayEndpointToInfo` used
+   * at session create, so the game client receives the standard pinned-cert descriptor shape.
+   *
+   * This is a tenant-signed control-plane call (like `/session/create`); the game client never
+   * talks to the coordinator itself — it reaches this via the SB `netcode-rehome` HTTP endpoint.
+   *
+   * @param gameId the game the session belongs to, for recording a `newTarget` decision in the
+   *   game's relay-serving history. Passed by the caller (which already resolved it to look up the
+   *   session) rather than looked up again here.
+   */
+  async rehomeSession(
+    gameId: string,
+    session: number,
+    deadRelayId: number,
+  ): Promise<NetcodeV2RehomeResponse> {
+    const key = `${session}:${deadRelayId}`
+
+    const inFlight = this.rehomeInFlight.get(key)
+    if (inFlight) {
+      return await inFlight
+    }
+
+    const promise = this.requestCoordinatorRehome(gameId, session, deadRelayId)
+    this.rehomeInFlight.set(key, promise)
+    try {
+      return await promise
+    } finally {
+      this.rehomeInFlight.delete(key)
+    }
+  }
+
+  private async requestCoordinatorRehome(
+    gameId: string,
+    session: number,
+    deadRelayId: number,
+  ): Promise<NetcodeV2RehomeResponse> {
+    const config = this.config
+    if (!config) {
+      throw new NetcodeV2ServiceError('netcode v2 is not configured')
+    }
+
+    const request: CoordinatorRehomeRequest = {
+      tenant: config.tenant,
+      session,
+      // eslint-disable-next-line eslint-core/camelcase
+      dead_relay_id: deadRelayId,
+    }
+
+    let response: CoordinatorRehomeResponse
+    try {
+      const url = `${config.coordinatorUrl}/session/rehome`
+      const bodyStr = JSON.stringify(request)
+      response = await got
+        .post(url, {
+          body: bodyStr,
+          headers: {
+            'content-type': 'application/json',
+            ...signCoordinatorRequest('POST', coordinatorRequestPath(url), bodyStr),
+          },
+          timeout: { request: 10000 },
+        })
+        .json<CoordinatorRehomeResponse>()
+    } catch (err) {
+      throw new NetcodeV2ServiceError('coordinator session rehome failed', { cause: err })
+    }
+
+    switch (response.decision) {
+      case 'stay':
+        return { decision: 'stay' }
+      case 'newTarget': {
+        if (!response.relay) {
+          throw new NetcodeV2ServiceError('coordinator returned a newTarget rehome without a relay')
+        }
+        const relay = response.relay
+
+        // Recorded once per coordinator decision (this method is the single-flight path behind
+        // `rehomeSession`'s coalescing, so N survivors asking about the same dead relay at once
+        // still produce one event) for the admin debug view's relay-serving history. Non-fatal —
+        // the rehome itself already succeeded and must reach the caller either way.
+        try {
+          await addNetcodeV2RelayEvents(gameId, [
+            {
+              kind: 'rehome',
+              deadRelayId,
+              newRelayId: relay.relay_id,
+              newRelayAddr: relay.relay_addr,
+              ...(response.relay_region !== undefined
+                ? { newRelayRegion: response.relay_region }
+                : {}),
+              at: Date.now(),
+            },
+          ])
+        } catch (err) {
+          log.warn({ err, gameId }, `failed to persist netcode v2 rehome event for game ${gameId}`)
+        }
+
+        return { decision: 'newTarget', relay: relayEndpointToInfo(relay, config) }
+      }
+      case 'unavailable':
+        return { decision: 'unavailable' }
+      default:
+        // An unrecognized decision is treated as "can't move right now" rather than trusted.
+        return { decision: 'unavailable' }
+    }
+  }
+
+  /**
+   * Lists the flight-recorder blobs the coordinator has stored for a session, for the admin flight
+   * recording fetch tool (`GET /games/:gameId/flight-recordings`). Throws `NetcodeV2ServiceError`
+   * if netcode v2 isn't configured or the coordinator request fails.
+   */
+  async listFlightBlobs(session: number): Promise<NetcodeV2FlightBlobInfo[]> {
+    const config = this.config
+    if (!config) {
+      throw new NetcodeV2ServiceError('netcode v2 is not configured')
+    }
+
+    const url = `${config.coordinatorUrl}/flight/blobs`
+    const bodyStr = JSON.stringify({ tenant: config.tenant, session })
+    let response: CoordinatorFlightBlobsResponse
+    try {
+      response = await got
+        .post(url, {
+          body: bodyStr,
+          headers: {
+            'content-type': 'application/json',
+            ...signCoordinatorRequest('POST', coordinatorRequestPath(url), bodyStr),
+          },
+          timeout: { request: 10000 },
+        })
+        .json<CoordinatorFlightBlobsResponse>()
+    } catch (err) {
+      throw new NetcodeV2ServiceError('coordinator flight blob listing failed', { cause: err })
+    }
+
+    // Mapped field-by-field (rather than passed through) so coordinator-side additions never leak
+    // into our API surface unreviewed.
+    return response.blobs.map(({ relayId, pinned, size, lastModifiedMs }) => ({
+      relayId,
+      pinned,
+      size,
+      lastModifiedMs,
+    }))
+  }
+
+  /**
+   * Fetches one relay's flight-recorder blob for a session, as its JSON text, for the flight
+   * recording download routes (the staff `GET /games/:gameId/flight-recordings/:relayId` and the
+   * internal game-artifacts route) — the server-side replacement for running
+   * `deployment/coordinator/tools/fetch-flight.mjs` with the tenant key copied off the box.
+   * Returns `undefined` when the coordinator has no such blob (a `404`): normal for a relay that
+   * never shipped one, or one whose retention lifecycle already expired it. Throws
+   * `NetcodeV2ServiceError` for anything else, including netcode v2 being unconfigured.
+   */
+  async fetchFlightBlob(session: number, relayId: number): Promise<string | undefined> {
+    const config = this.config
+    if (!config) {
+      throw new NetcodeV2ServiceError('netcode v2 is not configured')
+    }
+
+    const url = `${config.coordinatorUrl}/flight/blob`
+    // eslint-disable-next-line eslint-core/camelcase
+    const bodyStr = JSON.stringify({ tenant: config.tenant, session, relay_id: relayId })
+    try {
+      const response = await got.post(url, {
+        body: bodyStr,
+        headers: {
+          'content-type': 'application/json',
+          ...signCoordinatorRequest('POST', coordinatorRequestPath(url), bodyStr),
+        },
+        timeout: { request: 10000 },
+      })
+      // The coordinator already decompresses a stored blob on read, so this is plain JSON text.
+      // It's returned verbatim rather than parsed: a recording can be tens of MiB, and every caller
+      // just forwards it to a client, so parsing and re-serializing would only cost memory and CPU.
+      return response.body
+    } catch (err) {
+      if (err instanceof HTTPError && err.response.statusCode === 404) {
+        return undefined
+      }
+      throw new NetcodeV2ServiceError('coordinator flight blob fetch failed', { cause: err })
+    }
+  }
+}
+
+interface SessionsAliveResponse {
+  alive: number[]
+}
+
+/**
+ * Asks the rally-point2 coordinator which of the given session ids are still alive, in batches of
+ * at most `SESSIONS_ALIVE_CHUNK_SIZE`. A session id the coordinator omits from its response is
+ * gone or unknown to it — safe to treat as no longer live.
+ *
+ * Exported standalone (rather than a method on `NetcodeV2Service`) alongside `loadConfigFromEnv`,
+ * for the same reason: the reconciliation sweep needs this without going through the game-loading
+ * service's DI lifecycle.
+ *
+ * Throws if netcode v2 isn't configured or a batch request fails; callers decide how to handle
+ * that themselves.
+ */
+export async function checkSessionsAlive(sessions: readonly number[]): Promise<Set<number>> {
+  const config = loadConfigFromEnv()
+  if (!config) {
+    throw new NetcodeV2ServiceError('netcode v2 is not configured')
+  }
+  if (sessions.length === 0) {
+    return new Set()
+  }
+
+  const alive = new Set<number>()
+  for (let i = 0; i < sessions.length; i += SESSIONS_ALIVE_CHUNK_SIZE) {
+    const chunk = sessions.slice(i, i + SESSIONS_ALIVE_CHUNK_SIZE)
+    const url = `${config.coordinatorUrl}/sessions/alive`
+    const bodyStr = JSON.stringify({ tenant: config.tenant, sessions: chunk })
+    const response = await got
+      .post(url, {
+        body: bodyStr,
+        headers: {
+          'content-type': 'application/json',
+          ...signCoordinatorRequest('POST', coordinatorRequestPath(url), bodyStr),
+        },
+        timeout: { request: 10000 },
+      })
+      .json<SessionsAliveResponse>()
+    for (const session of response.alive) {
+      alive.add(session)
+    }
+  }
+
+  return alive
+}

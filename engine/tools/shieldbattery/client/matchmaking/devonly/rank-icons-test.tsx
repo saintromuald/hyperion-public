@@ -1,0 +1,183 @@
+import styled from 'styled-components'
+import {
+  DivisionContext,
+  MatchmakingType,
+  POINTS_FOR_RATING_TARGET_FACTOR,
+} from '../../../common/matchmaking'
+import { RankIcon, UnratedIcon } from '../rank-icon'
+
+const DIVISION_CONTEXT: DivisionContext = { bonusPool: 0 }
+
+const Container = styled.div`
+  display: flex;
+  gap: 40px;
+`
+
+const Column = styled.div``
+
+const Row = styled.div`
+  display: flex;
+  gap: 24px;
+  margin: 16px 24px;
+`
+
+// NOTE(tec27): specificity hack in these is just to deal with issues with hot reloading while
+// changing multiple files
+const SmallIcon = styled(RankIcon)`
+  && {
+    width: 44px;
+    height: 44px;
+  }
+`
+
+const TinyIcon = styled(RankIcon)`
+  && {
+    width: 22px;
+    height: 22px;
+  }
+`
+
+const LargeIcon = styled(RankIcon)`
+  && {
+    width: 176px;
+    height: 176px;
+  }
+`
+
+export function RankIconsTest() {
+  return (
+    <Container>
+      <Column>
+        <Row>
+          <UnratedIcon />
+        </Row>
+
+        <Row>
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={1}
+            divisionContext={DIVISION_CONTEXT}
+          />
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={150 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={300 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={400 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+        </Row>
+
+        <Row>
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={600 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={900 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={1000 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+        </Row>
+
+        <Row>
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={1200 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={1400 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={1600 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+        </Row>
+
+        <Row>
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={1650 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={1750 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={1800 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+        </Row>
+
+        <Row>
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={1850 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={1900 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={1950 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+          <RankIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={2800 * POINTS_FOR_RATING_TARGET_FACTOR}
+            divisionContext={DIVISION_CONTEXT}
+          />
+        </Row>
+      </Column>
+      <Column>
+        <Row>
+          <TinyIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={2500 * POINTS_FOR_RATING_TARGET_FACTOR}
+            size={22}
+            divisionContext={DIVISION_CONTEXT}
+          />
+        </Row>
+        <Row>
+          <SmallIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={2500 * POINTS_FOR_RATING_TARGET_FACTOR}
+            size={44}
+            divisionContext={DIVISION_CONTEXT}
+          />
+        </Row>
+        <Row>
+          <LargeIcon
+            matchmakingType={MatchmakingType.Match1v1}
+            points={2500 * POINTS_FOR_RATING_TARGET_FACTOR}
+            size={176}
+            divisionContext={DIVISION_CONTEXT}
+          />
+        </Row>
+      </Column>
+    </Container>
+  )
+}

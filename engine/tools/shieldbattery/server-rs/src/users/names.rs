@@ -1,0 +1,458 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use async_graphql::dataloader::DataLoader;
+use axum::{
+    Json, Router,
+    extract::{Path, State},
+    routing::post,
+};
+use chrono::{DateTime, Utc};
+use color_eyre::eyre::{self, Context};
+use regex::Regex;
+use reqwest::StatusCode;
+use serde::Serialize;
+use sqlx::PgPool;
+use tokio::sync::RwLock;
+use tracing::error;
+use typeshare::typeshare;
+
+use crate::{async_rayon::spawn_rayon, state::AppState};
+
+use super::{SbUser, UsersLoader, user_id::SbUserId};
+
+pub fn create_names_api() -> Router<AppState> {
+    Router::new().route("/check-allowed/{name}", post(check_allowed))
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, sqlx::Type, async_graphql::Enum)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(type_name = "restricted_name_reason", rename_all = "snake_case")]
+#[typeshare]
+pub enum RestrictedNameReason {
+    Profanity,
+    Reserved,
+}
+
+#[derive(Debug, Copy, Clone, Serialize)]
+#[serde(rename = "CheckAllowedNameResponse", rename_all = "camelCase")]
+#[typeshare]
+pub struct CheckAllowedResponse {
+    pub allowed: bool,
+    pub reason: Option<RestrictedNameReason>,
+}
+
+async fn check_allowed(
+    Path(name): Path<String>,
+    State(name_checker): State<NameChecker>,
+) -> Result<Json<CheckAllowedResponse>, (StatusCode, &'static str)> {
+    let result = if let Some(restriction) = name_checker.check_name(&name).await.map_err(|e| {
+        error!("Failed to check name: {e}");
+        (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
+    })? {
+        Json(CheckAllowedResponse {
+            allowed: false,
+            reason: Some(restriction.reason),
+        })
+    } else {
+        Json(CheckAllowedResponse {
+            allowed: true,
+            reason: None,
+        })
+    };
+
+    Ok(result)
+}
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, sqlx::Type, async_graphql::Enum)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(type_name = "restricted_name_kind", rename_all = "snake_case")]
+pub enum RestrictedNameKind {
+    Exact,
+    Regex,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow, async_graphql::SimpleObject)]
+#[graphql(complex)]
+pub struct NameRestriction {
+    pub id: i32,
+    pub pattern: String,
+    pub kind: RestrictedNameKind,
+    pub reason: RestrictedNameReason,
+    pub created_at: DateTime<Utc>,
+    #[graphql(skip)]
+    pub created_by: SbUserId,
+}
+
+#[async_graphql::ComplexObject]
+impl NameRestriction {
+    async fn created_by(
+        &self,
+        ctx: &async_graphql::Context<'_>,
+    ) -> async_graphql::Result<Option<SbUser>> {
+        ctx.data::<DataLoader<UsersLoader>>()?
+            .load_one(self.created_by)
+            .await
+    }
+}
+
+pub struct RestrictionsCache {
+    exact: HashMap<String, NameRestriction>,
+    regex: Vec<(NameRestriction, Regex)>,
+}
+
+#[derive(Clone)]
+pub struct NameChecker {
+    db_pool: PgPool,
+    restrictions: Arc<RwLock<Option<Arc<RestrictionsCache>>>>,
+}
+
+impl NameChecker {
+    pub fn new(db_pool: PgPool) -> Self {
+        Self {
+            db_pool,
+            restrictions: Arc::new(RwLock::new(None)),
+        }
+    }
+
+    pub async fn check_name(&self, name: &str) -> eyre::Result<Option<NameRestriction>> {
+        let restrictions = self.get_restrictions_cache().await?;
+        let name = name.to_lowercase();
+
+        if let Some(restriction) = restrictions.exact.get(&name) {
+            return Ok(Some(restriction.clone()));
+        }
+        if restrictions.regex.is_empty() {
+            return Ok(None);
+        }
+
+        spawn_rayon(move || {
+            for (restriction, re) in &restrictions.regex {
+                if re.is_match(&name) {
+                    return Ok(Some(restriction.clone()));
+                }
+            }
+
+            Ok(None)
+        })
+        .await
+    }
+
+    pub async fn add_restriction(
+        &self,
+        pattern: String,
+        kind: RestrictedNameKind,
+        reason: RestrictedNameReason,
+        creator: SbUserId,
+    ) -> eyre::Result<NameRestriction> {
+        let pattern = match kind {
+            RestrictedNameKind::Exact => pattern.to_lowercase(),
+            RestrictedNameKind::Regex => pattern,
+        };
+
+        let db = self.db_pool.clone();
+        let restriction = sqlx::query_as!(
+            NameRestriction,
+            r#"
+                INSERT INTO restricted_names (pattern, kind, reason, created_by)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id, pattern, kind as "kind: _", reason as "reason: _", created_at,
+                    created_by
+            "#,
+            pattern,
+            kind as _,
+            reason as _,
+            creator as _,
+        )
+        .fetch_one(&db)
+        .await
+        .wrap_err("failed to add name restriction")?;
+
+        // Add to the cache (copy-on-write)
+        let mut restrictions_lock = self.restrictions.write().await;
+        if let Some(restrictions) = &*restrictions_lock {
+            let mut restrictions_cache = RestrictionsCache {
+                exact: restrictions.exact.clone(),
+                regex: restrictions.regex.clone(),
+            };
+
+            match restriction.kind {
+                RestrictedNameKind::Exact => {
+                    restrictions_cache
+                        .exact
+                        .insert(restriction.pattern.clone(), restriction.clone());
+                }
+                RestrictedNameKind::Regex => {
+                    match create_case_insensitive_regex(&restriction.pattern) {
+                        Ok(re) => {
+                            restrictions_cache.regex.push((restriction.clone(), re));
+                        }
+                        _ => {
+                            error!(
+                                "Invalid regex pattern [{}]: {}",
+                                restriction.id, restriction.pattern
+                            );
+                        }
+                    }
+                }
+            }
+
+            *restrictions_lock = Some(Arc::new(restrictions_cache));
+        }
+
+        Ok(restriction)
+    }
+
+    pub async fn delete_restriction(&self, id: i32) -> eyre::Result<u64> {
+        let db = self.db_pool.clone();
+        let r = sqlx::query!(
+            r#"
+                DELETE FROM restricted_names
+                WHERE id = $1
+            "#,
+            id
+        )
+        .execute(&db)
+        .await
+        .wrap_err("failed to delete name restriction")?;
+
+        // Remove from the cache (copy-on-write)
+        let mut restrictions_lock = self.restrictions.write().await;
+        if let Some(restrictions) = &*restrictions_lock {
+            let mut restrictions_cache = RestrictionsCache {
+                exact: restrictions.exact.clone(),
+                regex: restrictions.regex.clone(),
+            };
+
+            restrictions_cache
+                .exact
+                .retain(|_, restriction| restriction.id != id);
+            restrictions_cache
+                .regex
+                .retain(|(restriction, _)| restriction.id != id);
+
+            *restrictions_lock = Some(Arc::new(restrictions_cache));
+        }
+
+        Ok(r.rows_affected())
+    }
+
+    /// Retrieves all the name restrictions from the database. This is a potentially expensive
+    /// operation and should be limited to administrative tools.
+    pub async fn get_all_restrictions(&self) -> eyre::Result<Vec<NameRestriction>> {
+        let db = self.db_pool.clone();
+        let restrictions = sqlx::query_as!(
+            NameRestriction,
+            r#"
+                SELECT id, pattern, kind as "kind: _", reason as "reason: _", created_at, created_by
+                FROM restricted_names
+                ORDER BY created_at DESC
+            "#
+        )
+        .fetch_all(&db)
+        .await
+        .wrap_err("failed to load name restrictions")?;
+
+        Ok(restrictions)
+    }
+
+    /// Retrieve the restrictions cache, initializing it from the DB if it hasn't been already. The
+    /// cache is copied whenever it is written to, so reads should generally be fast and writes
+    /// will be slower.
+    async fn get_restrictions_cache(&self) -> eyre::Result<Arc<RestrictionsCache>> {
+        let restrictions_read = self.restrictions.read().await;
+        if let Some(restrictions) = &*restrictions_read {
+            // Cache is already initialized so we can simply return it
+            return Ok(restrictions.clone());
+        }
+        drop(restrictions_read);
+
+        // Cache is not initialized
+        let mut restrictions_write = self.restrictions.write().await;
+        // Double-check to ensure it wasn't initialized while we were waiting for the lock
+        if let Some(restrictions) = &*restrictions_write {
+            return Ok(restrictions.clone());
+        }
+
+        let db = self.db_pool.clone();
+        let restrictions = sqlx::query_as!(
+            NameRestriction,
+            r#"
+                SELECT id, pattern, kind as "kind: _", reason as "reason: _", created_at, created_by
+                FROM restricted_names
+            "#
+        )
+        .fetch_all(&db)
+        .await
+        .wrap_err("failed to load name restrictions")?;
+
+        let restrictions_cache = spawn_rayon(|| {
+            let mut exact = HashMap::new();
+            let mut regex = Vec::new();
+            for mut restriction in restrictions.into_iter() {
+                match restriction.kind {
+                    RestrictedNameKind::Exact => {
+                        restriction.pattern = restriction.pattern.to_lowercase();
+                        exact.insert(restriction.pattern.clone(), restriction);
+                    }
+                    RestrictedNameKind::Regex => {
+                        match create_case_insensitive_regex(&restriction.pattern) {
+                            Ok(re) => {
+                                regex.push((restriction, re));
+                            }
+                            _ => {
+                                error!(
+                                    "Invalid regex pattern [{}]: {}",
+                                    restriction.id, restriction.pattern
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            RestrictionsCache { exact, regex }
+        })
+        .await;
+
+        let arc_cache = Arc::new(restrictions_cache);
+        *restrictions_write = Some(arc_cache.clone());
+
+        Ok(arc_cache)
+    }
+}
+
+/// The minimum length (in characters) of a user's display name.
+pub const DISPLAY_NAME_MIN_LENGTH: usize = 1;
+/// The maximum length (in characters) of a user's display name.
+pub const DISPLAY_NAME_MAX_LENGTH: usize = 16;
+
+/// Returns whether `c` is allowed to appear in a user's display name.
+fn is_allowed_display_name_char(c: char) -> bool {
+    c.is_ascii_alphanumeric()
+        || matches!(
+            c,
+            '`' | '~'
+                | '!'
+                | '$'
+                | '^'
+                | '&'
+                | '*'
+                | '('
+                | ')'
+                | '['
+                | ']'
+                | '-'
+                | '_'
+                | '+'
+                | '='
+                | '.'
+                | '{'
+                | '}'
+        )
+}
+
+/// Checks that `name` is a syntactically valid display name, returning a human-readable
+/// description of the problem if it isn't. This only covers the format: whether a name is
+/// restricted or already taken by someone else is checked separately.
+///
+/// This must stay in sync with `USERNAME_ALLOWED_CHARACTERS`, `USERNAME_MINLENGTH` and
+/// `USERNAME_MAXLENGTH` in `common/constants.ts`, which clients validate against before submitting
+/// a name.
+pub fn validate_display_name_format(name: &str) -> Result<(), &'static str> {
+    if !name.chars().all(is_allowed_display_name_char) {
+        return Err("Display name contains invalid characters");
+    }
+    // Every allowed character is single-byte ASCII, so the byte length is also the character count.
+    if name.len() < DISPLAY_NAME_MIN_LENGTH {
+        return Err("Display name must not be empty");
+    }
+    if name.len() > DISPLAY_NAME_MAX_LENGTH {
+        return Err("Display name must be at most 16 characters");
+    }
+
+    Ok(())
+}
+
+pub fn create_case_insensitive_regex(pattern: &str) -> Result<Regex, regex::Error> {
+    let pattern = format!("(?i){pattern}");
+    Regex::new(&pattern)
+}
+
+#[cfg(test)]
+mod tests {
+    use sqlx::postgres::PgPoolOptions;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn exact_restrictions_use_case_insensitive_cache_lookup() {
+        let restriction = NameRestriction {
+            id: 7,
+            pattern: "reserved".to_owned(),
+            kind: RestrictedNameKind::Exact,
+            reason: RestrictedNameReason::Reserved,
+            created_at: Utc::now(),
+            created_by: SbUserId::from(1),
+        };
+        let checker = NameChecker {
+            db_pool: PgPoolOptions::new()
+                .connect_lazy("postgres://unused:unused@localhost/unused")
+                .unwrap(),
+            restrictions: Arc::new(RwLock::new(Some(Arc::new(RestrictionsCache {
+                exact: HashMap::from([(restriction.pattern.clone(), restriction)]),
+                regex: Vec::new(),
+            })))),
+        };
+
+        let matched = checker.check_name("ReSeRvEd").await.unwrap().unwrap();
+
+        assert_eq!(matched.id, 7);
+        assert_eq!(matched.reason, RestrictedNameReason::Reserved);
+    }
+
+    #[test]
+    fn display_name_format_accepts_allowed_names() {
+        for name in [
+            "a",
+            "tec27",
+            "SomeGuy",
+            "[SB]Player",
+            "x_x",
+            "a.b-c+d=e",
+            "`~!$^&*(){}",
+            "SixteenCharsLong",
+        ] {
+            assert_eq!(validate_display_name_format(name), Ok(()), "name: {name}");
+        }
+    }
+
+    #[test]
+    fn display_name_format_rejects_bad_lengths() {
+        assert!(validate_display_name_format("").is_err());
+        assert!(validate_display_name_format("SeventeenCharsLong").is_err());
+        assert!(validate_display_name_format(&"a".repeat(17)).is_err());
+    }
+
+    #[test]
+    fn display_name_format_rejects_disallowed_characters() {
+        for name in [
+            "has space",
+            "at@sign",
+            "hash#tag",
+            "per%cent",
+            "semi;colon",
+            "sla/sh",
+            r"back\slash",
+            "quo\"te",
+            "com,ma",
+            "emoji\u{1f600}",
+            "acc\u{e9}nted",
+            "new\nline",
+        ] {
+            assert!(
+                validate_display_name_format(name).is_err(),
+                "expected rejection for name: {name}"
+            );
+        }
+    }
+}
