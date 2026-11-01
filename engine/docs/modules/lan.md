@@ -37,12 +37,17 @@ What works now:
 - the page the host serves: join, the lobby with race, Ready and chat, and the live matches (R4);
 - streamed seats over WebRTC, playing and watching, H.264 from NVENC or OpenH264 and Opus (R5);
 - Hyperion as WebAssembly, a seat playing and watching in a browser tab, with the 1.17 files from
-  the room or the player's own folder (W1 to W4).
+  the room or the player's own folder (W1 to W4);
+- online play (O1): a match with `"transport":"sb"` in its JSON plays through the rally-point
+  relay stack instead of the room's own relay — see "Online play" below. The room mints the
+  session with the coordinator at its start, every seat's launch carries its setup JSON, and
+  the seats play through a third Storm provider (`port_stormsb.cpp`, the "Online (rally point)"
+  network).
 
 Planned, in order: R6, the host serving each platform's install package and the 1.17 data (the
 join page's install choice is greyed "Not available yet"); then tournaments (the
-console's Tournament tab is greyed), and the gates and the record. Online play over the same
-transport is parked.
+console's Tournament tab is greyed), and the gates and the record. The console's own transport
+toggle for O1 follows the same screens as the rest.
 
 ## Processes and ports
 
@@ -332,6 +337,32 @@ joiners are checked against). `lan_room.json` beside it is the running room's no
 id and console key, so a console restarted in the same data folder takes its room back
 (`TakeBackRoom`) instead of starting a second one that could not have the port.
 
+## Online play
+
+A match with `"transport":"sb"` in its JSON is an online match: instead of the room's own
+relay, the seats play through the rally-point stack (upstream ShieldBattery's netcode,
+`engine/tools/rallypoint2/`, MIT/Apache-2.0, pinned in `PINNED.md`). The room stays the lobby:
+its devices, seating, race and Ready screens, the map it sends every seat, and the feeds the
+watchers and the Wall read are the same for an online match as for a LAN one. Only the match's
+transport differs, and only `port_stormnet.cpp`'s switch knows which provider a seat uses.
+
+Three processes serve an online match:
+
+| Process | Role |
+|---|---|
+| `rally-point-coordinator` | the control plane: relays enroll on it, and the room's mint at a match's start (`POST /session/create`, signed with the tenant's client seed) places the session on a relay and returns one launch JSON per seat |
+| `rally-point-relay` | the session's relay: every seat dials it over QUIC; it orders and validates the turns, runs the latency-buffer decision, and detects desyncs server-side (the 0x37 comparator) |
+| the room | at `Launch`, for an sb match, mints the session (the bridge's `rp_dev_mint` — blocking, launch-time only) and embeds each seat's setup JSON in its launch; the launches all go out at once, and the match goes live once every seat's game has begun its feed |
+
+The room's settings name the coordinator: `sbCoordinator` (its URL), `sbTenant`, `sbKid`,
+`sbClientSeed` (the app-server seed, hex) and `sbServerName` (the relay certificate's name) in
+`lanroom.json`. The seats hand the launch's setup to the provider (`SbSetLaunchJson`) and play
+the same lobby and game as always: the map is the room's file transfer, the turns cross the
+relay, and a seat that drops is removed by the relay's synced drop so the match plays on.
+`../sb-netcode-port.md` is the port's plan and status; `BUILDING.md` has the runbook, and
+`engine/tools/sbtest/` the headless gates (sb_room.sh drives the whole flow above with two
+seats).
+
 ## Testing it
 
 Two or three Hyperions on one machine, each with its own data folder, is the usual check. The
@@ -420,8 +451,9 @@ hold the same commands as each seat's.
   choice is greyed until then, and R8 is to put the third-party notices (MPL-2.0, BSD, Apache-2.0)
   in the packages. R7: tournaments, with the console's Tournament tab greyed meanwhile.
 - A dropped player: the relay waits two minutes, then the seat is lost; the console's other
-  choices (lost at once, pause for everyone) and save and rejoin are not built yet. Online play on the same
-  transport, and SpacetimeDB as a service, are parked.
+  choices (lost at once, pause for everyone) and save and rejoin are not built yet.
+  SpacetimeDB as a service is parked; online play is the "Online play" section above (the console's
+  transport toggle is the piece not built yet).
 - The first H0 game parted once on 1.17's own sync check and has not since; if it comes back,
   `hyperion_lan.log` names the frame and the parts, and `HYPERION_LAN_TRACE=1` writes every step
   each machine read.
