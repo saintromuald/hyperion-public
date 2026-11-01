@@ -2102,6 +2102,18 @@ bool LanFrontFrame(void)
   if (LanClientTakeLaunch(&launch)) {
     FrontLog("lan: the room launched match %d; %s\n", static_cast<int>(launch["match"].Num()),
              launch["role"].Str() == "create" ? "this copy makes the game" : "this copy joins it");
+    // the room's launch says which transport: its own LAN relay, or a relay
+    // session minted through the coordinator (the launch carries the setup)
+    if (launch["sb"].kind == PortJson::BOOL && launch["sb"].b) {
+      if (PortSbLaunchNetGame(launch)) {
+        g_bCameBack = true;
+        return true;
+      }
+      FrontLog("sb: the relay match could not be launched\n");
+      Toast(PortText("The match could not start here"), "");
+      PortLanLobbyEnd();
+      return false;
+    }
     if (PortLaunchNetGame(launch)) {
       g_bCameBack = true;
       return true;

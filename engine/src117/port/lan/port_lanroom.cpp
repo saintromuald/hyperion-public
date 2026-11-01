@@ -18,6 +18,8 @@
 #include "../data/port_stormerr.h"  // NET_CANNOT_JOIN
 #include "../platform/port_util.h"  // PortNowMs
 #include "../gameplay/port_mutators.h"  // MutatorsJson, MutatorsFromJson
+#include "../platform/port_json.h"  // PortJsonParse, PortJsonWrite
+#include "../../../tools/rallypoint2/bridge/ctest/rp_bridge.h"  // rp_dev_mint
 
 namespace LanRoom {
 
@@ -209,6 +211,7 @@ Match &NewMatch(const PortJson &j)
   m.nKey = static_cast<int>(j["key"].Num(m.nKey));
   m.nSpeed = static_cast<int>(j["speedN"].Num(m.nSpeed));
   m.bHyperion = j["rules"].Str() == "hyperion";
+  m.bSb = j["transport"].Str() == "sb";
   m.mut = MutatorsFromJson(j["mutators"]);
   m.nMapPlayers = static_cast<int>(j["players"].Num(8));
   if (m.nMapPlayers < 2 || m.nMapPlayers > kPlayers)
@@ -232,6 +235,65 @@ void Back(Match &m)
       d.dwFrame = 0;
     }
   }
+}
+
+// The coordinator's dev-tenant mint for an sb match: one setup JSON per human
+// seat, signed with the tenant's client seed from the room's settings. The
+// bridge does the POST (blocking; the room's match launch can wait for it).
+bool MintSession(Match &m, std::string *pszWhy)
+{
+  const std::string coordinator = Setting("sbCoordinator", "");
+  if (coordinator.empty()) {
+    if (pszWhy)
+      *pszWhy = "The room has no relay coordinator (sbCoordinator in lanroom.json).";
+    return false;
+  }
+  int nHumans = 0;
+  for (int i = 0; i < kPlayers; ++i)
+    if (m.seats[i].owner == "player")
+      ++nHumans;
+  if (nHumans < 2) {
+    if (pszWhy)
+      *pszWhy = "An online match needs two players or more.";
+    return false;
+  }
+  for (int i = 0; i < kPlayers; ++i)
+    if (m.seats[i].owner == "computer") {
+      if (pszWhy)
+        *pszWhy = "Online matches with computer players are not in yet.";
+      return false;
+    }
+  const std::string tenant = Setting("sbTenant", "hyperion-dev");
+  const std::string kid = Setting("sbKid", "dev-key-1");
+  const std::string seed = Setting("sbClientSeed", "");
+  const std::string serverName = Setting("sbServerName", "localhost");
+  if (seed.empty()) {
+    if (pszWhy)
+      *pszWhy = "The room has no client seed (sbClientSeed in lanroom.json).";
+    return false;
+  }
+  char out[1 << 20];
+  const int n = rp_dev_mint(coordinator.c_str(), tenant.c_str(), kid.c_str(), seed.c_str(),
+                            static_cast<uint32_t>(nHumans), m.name.c_str(), serverName.c_str(),
+                            out, sizeof out);
+  if (n <= 0) {
+    if (pszWhy)
+      *pszWhy = "The coordinator could not mint the session.";
+    return false;
+  }
+  PortJson arr;
+  if (!PortJsonParse(out, &arr) || arr.kind != PortJson::ARRAY) {
+    if (pszWhy)
+      *pszWhy = "The coordinator's reply could not be read.";
+    return false;
+  }
+  m.sbSetups.clear();
+  // each element is a JSON string (the minted setup); the decoded text is what
+  // the seat's provider parses (PortJsonWrite would re-escape it)
+  for (size_t i = 0; i < arr.size(); ++i)
+    m.sbSetups.push_back(arr.At(i).Str());
+  Log("match %d: the coordinator minted a %d-slot session", m.nId, static_cast<int>(m.sbSetups.size()));
+  return true;
 }
 
 // The launch a seat is sent: where the relay is, its token and game, what the game is, and
@@ -261,8 +323,20 @@ std::string LaunchJson(const Match &m, const Device &d, bool bCreate)
     bFirst = false;
   }
   s += "],\"humans\":" + std::to_string(nHumans);
-  if (!bCreate && m.relay)
+  if (m.bSb) {
+    // the match plays online: the launch carries the transport and this seat's
+    // setup (the coordinator minted one per slot); the map the room already
+    // sent every seat (SendLobbyMaps)
+    const char *pszSetup = "";
+    for (int i = 0; i < kPlayers && i < static_cast<int>(m.sbSetups.size()); ++i)
+      if (m.seats[i].nDev == d.nId) {
+        pszSetup = m.sbSetups[i].c_str();
+        break;
+      }
+    s += ",\"sb\":true,\"sbSetup\":" + PortJsonQuote(pszSetup);
+  } else if (!bCreate && m.relay) {
     s += ",\"name\":" + PortJsonQuote(m.relay->Name()) + ",\"stats\":" + PortJsonQuote(m.relay->Stats());
+  }
   return s + "}";
 }
 
@@ -317,7 +391,8 @@ std::string Launch(Match &m, bool bForce)
     m.dwGameId = std::uniform_int_distribution<uint32_t>()(Rng());
   while (m.dwGameId == 0);
   m.token = Token();
-  m.relay.reset(new LanRelay(m.dwGameId, m.token, "match " + std::to_string(m.nId)));
+  if (!m.bSb)
+    m.relay.reset(new LanRelay(m.dwGameId, m.token, "match " + std::to_string(m.nId)));
   m.nCreator = nCreator;
   m.bJoinsSent = false;
   m.state = "starting";
@@ -329,7 +404,25 @@ std::string Launch(Match &m, bool bForce)
   f.S(m.map.substr(m.map.find_last_of("\\/") + 1));
   f.Bytes(map.data(), map.size());
   LanNet::Send(c.nConn, ROOM_FILE, f.v.data(), f.v.size());
-  SendJson(c, LaunchJson(m, w, true));
+  if (m.bSb) {
+    // the online match: mint the session through the coordinator, then send
+    // every seat's launch at once (there is no relay to gate the joiners on)
+    std::string why;
+    if (!MintSession(m, &why)) {
+      Log("match %d: the session could not be minted: %s", m.nId, why.c_str());
+      m.state = "lobby";
+      return why;
+    }
+    SendJson(c, LaunchJson(m, w, true));
+    for (int i = 0; i < kPlayers; ++i)
+      if (m.seats[i].owner == "player" && m.seats[i].nDev != nCreator)
+        if (Device *d = Dev(m.seats[i].nDev))
+          if (Device *g = SeatGame(d->nId))
+            SendJson(*g, LaunchJson(m, *d, false));
+    m.bJoinsSent = true;
+  } else {
+    SendJson(c, LaunchJson(m, w, true));
+  }
   for (int i = 0; i < kPlayers; ++i)
     if (m.seats[i].owner == "player")
       if (Device *d = Dev(m.seats[i].nDev)) {
@@ -400,6 +493,24 @@ void SendLobbyMaps(Match &m)
   }
 }
 
+// The match went live: the watchers may begin, the evening says so.
+void GoLive(Match &m, uint64_t qwNow)
+{
+  m.state = "live";
+  m.qwStarted = qwNow;
+  std::string who;
+  std::vector<int> devs;
+  for (const Seat &t : m.seats)
+    if (t.owner == "player")
+      if (const Device *d = Dev(t.nDev)) {
+        who += std::string(who.empty() ? "" : ", ") + d->name;
+        devs.push_back(d->nId);
+      }
+  Tonight("start", (m.name == m.mapName ? m.name + " started: " : m.name + " started on " + m.mapName + ": ") + who + ".",
+          devs);
+  StartCopy(m);
+}
+
 void PumpMatches(void)
 {
   const uint64_t qwNow = PortNowMs();
@@ -423,8 +534,23 @@ void PumpMatches(void)
         g_bDirty = true;
       }
     }
-    if (!m.relay)
+    if (!m.relay) {
+      // an sb match: its launches all went out at once; it is live once every
+      // seat's game has begun its feed
+      if (m.state == "starting" && m.bJoinsSent) {
+        bool bAll = true, bAny = false;
+        for (int i = 0; i < kPlayers; ++i)
+          if (m.seats[i].owner == "player")
+            if (Device *d = SeatGame(m.seats[i].nDev)) {
+              bAny = true;
+              auto it = m.feeds.find(d->nId);
+              bAll = bAll && it != m.feeds.end() && !it->second.start.empty();
+            }
+        if (bAny && bAll)
+          GoLive(m, qwNow);
+      }
       continue;
+    }
     m.relay->Pump();
     for (auto &h : m.relay->TakeHashes())
       m.hashes[h.first].swap(h.second);
@@ -457,21 +583,8 @@ void PumpMatches(void)
             if (Device *g = SeatGame(d->nId))
               SendJson(*g, LaunchJson(m, *d, false));
     }
-    if (m.state == "starting" && m.relay->UnderWay()) {
-      m.state = "live";
-      m.qwStarted = qwNow;
-      std::string who;
-      std::vector<int> devs;
-      for (const Seat &t : m.seats)
-        if (t.owner == "player")
-          if (const Device *d = Dev(t.nDev)) {
-            who += std::string(who.empty() ? "" : ", ") + d->name;
-            devs.push_back(d->nId);
-          }
-      Tonight("start", (m.name == m.mapName ? m.name + " started: " : m.name + " started on " + m.mapName + ": ") + who + ".",
-              devs);
-      StartCopy(m);
-    }
+    if (m.state == "starting" && m.relay->UnderWay())
+      GoLive(m, qwNow);
     // a player the relay refused for another version never comes, so the match ends now and says
     // why, rather than at the 90 s below
     if (m.state == "starting" && m.relay && !m.relay->Mismatch().empty()) {

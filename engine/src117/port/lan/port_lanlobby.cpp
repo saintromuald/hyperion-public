@@ -237,17 +237,31 @@ bool PortLanLobbyActive(void)
 // lobby command (port_stormsb.cpp), so the game joins as if the room had
 // served it.
 
-bool PortSbLaunchNetGame(void)
+// The SB launch's values: from the command line (--sb-*) or the room's launch.
+struct SbLaunchArgs {
+  bool bCreate = false;
+  const char *pszSetup = NULL;  // the setup JSON rp_start consumes (a string)
+  const char *pszName = "Relay";
+  const char *pszMapPath = NULL;  // this seat's local map file
+  const char *pszType = "melee";  // melee or ffa
+  int nSpeed = 6;
+  const char *pszRules = "classic";
+  bool bMutators = false;
+  MutatorSet mut;
+  int nRace = 6;
+};
+
+// The shared launch: the room's and the command line's differ only in where
+// the values come from.
+bool PortSbLaunchNetGame(const SbLaunchArgs &a)
 {
-  const PortOptions *o = PortCommandOptions();
   g_plan = Plan();
   g_plan.bSb = true;
-  g_plan.bCreator = lstrcmpiA(o->szSbRole, "create") == 0;
+  g_plan.bCreator = a.bCreate;
   const int nRoster = SbRosterCount();
   g_plan.nHumans = nRoster > 0 && nRoster <= 8 ? nRoster : 2;
-  int nRace = atoi(o->szRace);
-  g_plan.nRace = nRace >= 0 && nRace <= 6 ? nRace : 6;
-  const char *pszName = o->szSbName[0] ? o->szSbName : "Relay";
+  g_plan.nRace = a.nRace >= 0 && a.nRace <= 6 ? a.nRace : 6;
+  const char *pszName = a.pszName && a.pszName[0] ? a.pszName : "Relay";
   g_plan.mapName = pszName;
   SStrCopy(gLocalPlayerName, pszName, 25);
   gPlayback = 0;
@@ -255,11 +269,11 @@ bool PortSbLaunchNetGame(void)
   // the rules the players chose, the same on every seat: the game plays by
   // Hyperion's (--rules hyperion) or 1.17's (--rules classic, the default), and
   // a mismatch between seats desyncs, as it must (the sims differ)
-  RulesChooseNext(lstrcmpiA(o->szRules, "hyperion") == 0 ? 1 : 0);
-  // and the mutators (port_mutators.h), the same list on every seat: a seat
-  // with another list plays another game, which desyncs, as it must
-  if (o->szMutators[0] != '\0')
-    MutatorsChooseNetList(o->szMutators);
+  RulesChooseNext(lstrcmpiA(a.pszRules, "hyperion") == 0 ? 1 : 0);
+  // and the mutators (port_mutators.h), the same on every seat: a seat with
+  // another set plays another game, which desyncs, as it must
+  if (a.bMutators)
+    MutatorsChooseNet(a.mut);
   // as the main menu's Multiplayer leaves it (do_main_dlg)
   gbMultiPlayerMode = 1;
   TGAMEPARAMS *pParams = gametype_load_ums();
@@ -269,19 +283,21 @@ bool PortSbLaunchNetGame(void)
   }
   *reinterpret_cast<TGAMEPARAMS *>(&gGameHeader.bGameType) = *pParams;
   SMemFree(pParams, "port_lanlobby.cpp", __LINE__, 0);
+  if (a.pszSetup != NULL)
+    SbSetLaunchJson(a.pszSetup);
   if (!NetInit(SB_PROVIDER)) {
     Log("the network did not start");
     return false;
   }
   if (g_plan.bCreator) {
-    const bool bFfa = lstrcmpiA(o->szSbType, "ffa") == 0;
+    const bool bFfa = lstrcmpiA(a.pszType, "ffa") == 0;
     const int nKey = bFfa ? FFA_KEY : MELEE_KEY;
     if (!IsMeleeTemplate(static_cast<BYTE>(nKey), static_cast<BYTE>(nKey >> 8), static_cast<WORD>(nKey >> 16))) {
       Log("no melee template for the key 0x%X", nKey);
       return false;
     }
     char szPath[MAX_PATH];
-    SStrCopy(szPath, o->szSbMap, MAX_PATH);
+    SStrCopy(szPath, a.pszMapPath ? a.pszMapPath : "", MAX_PATH);
     // the game's file layers want the Windows form: backslashes, and Z: for the
     // root (port_posix.cpp's WinPath); a native path breaks the map session
     // (sub_440AB0 splits the name on a backslash)
@@ -294,8 +310,8 @@ bool PortSbLaunchNetGame(void)
       szPath[1] = ':';
     }
     char szName[0x20];
-    SStrCopy(szName, o->szSbName[0] ? o->szSbName : "Relay", sizeof szName);
-    int nSpeed = atoi(o->szSbSpeed);
+    SStrCopy(szName, pszName, sizeof szName);
+    int nSpeed = a.nSpeed;
     if (nSpeed < 0 || nSpeed > 6)
       nSpeed = 6;
     const int nRes = PortCreateNetGame(szPath, szName, nKey, static_cast<BYTE>(nSpeed));
@@ -355,7 +371,7 @@ bool PortSbLaunchNetGame(void)
     // this the joiner's game start fails its map load (0x61) and the seat
     // drops out right after the lobby.
     char szMapPath[MAX_PATH];
-    SStrCopy(szMapPath, o->szSbMap, MAX_PATH);
+    SStrCopy(szMapPath, a.pszMapPath ? a.pszMapPath : "", MAX_PATH);
     // the game's file layers want the Windows form: backslashes, and Z: for
     // the root (port_posix.cpp's WinPath); a native path breaks the map load
     for (char *p = szMapPath; *p; ++p)
@@ -378,6 +394,72 @@ bool PortSbLaunchNetGame(void)
   if (PortPresentGpu())
     PortMotionCover();
   return true;
+}
+
+// The command line's launch (--sb-setup, --sb-role, --sb-map, ...): the values
+// come from the options, the setup JSON from the file it names.
+bool PortSbLaunchNetGame(void)
+{
+  const PortOptions *o = PortCommandOptions();
+  std::string setup;
+  if (o->szSbSetup[0]) {
+    FILE *f = fopen(o->szSbSetup, "rb");
+    if (f == NULL) {
+      Log("setup file \"%s\" cannot be opened", o->szSbSetup);
+      return false;
+    }
+    fseek(f, 0, SEEK_END);
+    const long n = ftell(f);
+    rewind(f);
+    setup.resize(static_cast<size_t>(n));
+    if (n > 0 && fread(&setup[0], 1, static_cast<size_t>(n), f) != static_cast<size_t>(n)) {
+      fclose(f);
+      Log("setup file \"%s\" cannot be read", o->szSbSetup);
+      return false;
+    }
+    fclose(f);
+  }
+  SbLaunchArgs a;
+  a.bCreate = lstrcmpiA(o->szSbRole, "create") == 0;
+  a.pszSetup = setup.c_str();
+  a.pszName = o->szSbName;
+  a.pszMapPath = o->szSbMap;
+  a.pszType = o->szSbType;
+  a.nSpeed = atoi(o->szSbSpeed);
+  a.pszRules = o->szRules;
+  if (o->szMutators[0] != '\0') {
+    // the list form's parse into the session set, then the net set (the same
+    // two steps MutatorsChooseNetList took)
+    if (MutatorsChooseList(o->szMutators))
+      a.mut = Session().mut;
+    a.bMutators = true;
+  }
+  a.nRace = atoi(o->szRace);
+  return PortSbLaunchNetGame(a);
+}
+
+// The room's launch: the same flow, with the values the room sent (the setup
+// JSON embedded, the map the room's file transfer delivered).
+bool PortSbLaunchNetGame(const PortJson &launch)
+{
+  const std::string setup = launch["sbSetup"].Str();
+  const std::string name = launch["name"].Str();
+  const std::string type = launch["type"].Str("melee");
+  const std::string rules = launch["rules"].Str("classic");
+  const std::string mapPath = LanClientMapPath();
+  SbLaunchArgs a;
+  a.bCreate = launch["role"].Str() == "create";
+  a.pszSetup = setup.c_str();
+  a.pszName = name.c_str();
+  a.pszMapPath = mapPath.c_str();
+  a.pszType = type.c_str();
+  a.nSpeed = static_cast<int>(launch["speedN"].Num(launch["speed"].Str() == "fastest" ? 6 : 4));
+  a.pszRules = rules.c_str();
+  // the room sends the mutators as its JSON object, the same MutatorsJson wrote
+  a.mut = MutatorsFromJson(launch["mutators"]);
+  a.bMutators = !MutatorsStandard(a.mut);
+  a.nRace = static_cast<int>(launch["race"].Num(6));
+  return PortSbLaunchNetGame(a);
 }
 
 // The SB game's chat room, driven as the room's is, minus the room: each seat

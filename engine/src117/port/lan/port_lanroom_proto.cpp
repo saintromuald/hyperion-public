@@ -524,6 +524,7 @@ void Admin(Device &d, const std::string &t, const PortJson &j)
   } else if (t == "start" && m) {
     m->nStarter = d.nId;
     err = Launch(*m, j["force"].b);
+    Log("match %d: the console's start %s", m->nId, err.empty() ? "launched" : ("was refused: " + err).c_str());
   } else if (t == "end" && m) {
     EndMatch(*m, "the host ended it");
   } else if (t == "drop" && m) {

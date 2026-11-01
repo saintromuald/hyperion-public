@@ -90,6 +90,8 @@ struct Match {
   std::vector<int> watchers;
   std::vector<std::pair<std::string, std::string>> chat;  // who (empty for the room), what
   std::unique_ptr<LanRelay> relay;
+  bool bSb = false;             // the match plays online, through the coordinator's relay
+  std::vector<std::string> sbSetups;  // each player seat's setup JSON, in seat order
   uint32_t dwGameId = 0;
   std::string token;
   int nCreator = 0;    // the device that makes the game
@@ -205,6 +207,9 @@ std::mt19937 &Rng(void);
 std::string NewPassword(void);
 std::string Token(void);
 std::string Setting(const char *pszName, const char *pszDefault);
+// The coordinator's dev-tenant mint, for an sb match: each player seat's setup
+// JSON. False (with a reason) when the coordinator cannot be reached.
+bool MintSession(Match &m, std::string *pszWhy);
 bool PasswordOn(void);
 bool BrowserFilesOn(void);
 void ServeGameFiles(void);
