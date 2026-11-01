@@ -39,7 +39,9 @@
 #include "../h/gds_font.h"      // string_width
 #include "../h/Storm.h"        // SStrCopy
 #include "../gen/globals117.h"
+#include "../port/lan/port_lanlobby.h"
 #include "../port/lan/port_lanlobby.h"  // Hyperion: PortChatPress, PortLanLobbyTick, PortLanChatLeft, PortLanChatWhy
+#include "../port/sb/port_stormsb.h"  // Hyperion: SbMapFromLaunch
 #include "../port/data/port_chatfilter.h"  // Hyperion: PortChatClean
 
 // The globals this TU reaches, spelled both ways with one guard per name: a `#define`
@@ -540,7 +542,10 @@ BOOL gluChat_cmd(intptr_t nArg0, int nArg1)
           return TRUE;
         }
       }
-      if (dword_672960 != NULL && !IsSessionComplete(dword_672960)) {
+      // Hyperion: the SB relay launch hands every seat the map out of band, so
+      // the LAN's map-download session never completes there and must not gate
+      // the start.
+      if (dword_672960 != NULL && !IsSessionComplete(dword_672960) && !SbMapFromLaunch()) {
         do_pok_dlg(reinterpret_cast<intptr_t>(glues_get_str(0x73)));
         return TRUE;
       }

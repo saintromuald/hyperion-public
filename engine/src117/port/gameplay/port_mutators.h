@@ -79,6 +79,8 @@ std::string MutatorsList(const MutatorSet &m);
 // A room's match (port_lanlobby.cpp): the launch's set, the same on every seat; forgotten by
 // MutatorsForGame.
 void MutatorsChooseNet(const MutatorSet &m);
+// --mutators for a network game (the SB relay launch): the list parsed, stored in the net set.
+bool MutatorsChooseNetList(const char *pszList);
 // RulesForGame, for a new game: whether it is to have a mutator.
 bool MutatorsChosenThisGame(void);
 // As the game starts (game_init, after RulesForGame): the mutators it plays with, the chosen

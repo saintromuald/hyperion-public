@@ -419,21 +419,38 @@ with no manual steps beyond the toolchain installs.
       `LinkDriver` + `TurnChannels`; `dev-setup/` (`rp_dev_setup`) for
       standalone-relay sessions; `bridge/ctest/` — two C clients exchange
       validated turns through a standalone `rally-point-relay` (the gate).
-- [x] **Phase 2**: `port_stormsb.cpp` — the third Storm provider (`'SBRP'`),
-      wired into `port_stormnet.cpp`; the CLI test-drive (`--sb-setup`,
-      `--sb-role`, `--sb-name`, `--sb-map`, `--sb-speed`, `--sb-type`) and
-      `PortSbLaunchNetGame`/`SbLobbyTick` in `port_lanlobby.cpp`, hooked into
-      the front's frame pump; the intro skip in `main.cpp`; the Linux build's
-      cargo step and link in `build_engine_linux.py`. The init data and the
-      stat string ride relay lobby commands (framed kind+length), so a joiner
-      lists and joins the game as 1.17's Join expects.
-- [x] **The gate**: `tools/sbtest/run_game.sh` — two headless Hyperions on one
-      machine (an SCR install via `HYPERION_REMASTERED`, a shared map file)
-      create/join a game through a standalone relay; both seats read their
-      first step and hold clean lockstep (no drops, no desyncs). PASS.
-- [ ] Phase 3: the command-table conformance test and the desync drill
-- [ ] Phase 4: relay + coordinator bring-up script, WAN test
-- [ ] Phase 5: the room's online launch (the room calls the coordinator, the
-      launch JSON carries the SB transport)
-- [ ] Phase 6: reconnect/leave matrix, buffer-directive drills
-- [ ] Phase 7: pinning, CI, packaging (Windows x64 build hook for the bridge)
+- [x] **Phase 3**: `tools/sbtest/cmdtable.sh` — the command-table conformance
+      check (Hyperion's receive and lobby walkers vs the relay's table) is
+      clean. It caught real gaps, all fixed in the vendored proto: 1.17's
+      pause/resume (0x38/0x39) and voice-squelch (0x3A/0x3B), the whole
+      pre-game lobby command family (0x3C–0x48, 0x54, 0x5B), and Hyperion's
+      wide commands (0x89–0x8C, 0x8D, 0x94–0x98, 0xA9, with the new
+      Variable3 rule for the selection chunk). The ctest exercises the mix.
+- [x] **The lobby handshake** (the heart of Phase 2's gate): the provider now
+      follows the LAN relay's step semantics — the creator's early steps form
+      alone (its own slot commands carry it to lobby state 4), a peer joins
+      the steps from its first turn, and EVENT_JOIN fires after the step that
+      carried it (the LAN relay's JOINED ordering) so 1.17's handshake
+      completes: the joiner is seated, raced, both sides set, Start Game
+      pressed, and the creator's game runs **in-game lockstep through the
+      relay** (sync turns validated server-side). 1.17's binary SNet messages
+      (the 0x4A lobby state, 0x4F fd chunks) ride the relay's binary
+      lobby-command channel; the provider's message cap (16 KB) keeps the
+      chunks under the relay's frame cap. The LAN's map-download session is
+      not part of the SB flow — the map is the launch's — and its three
+      start gates are bypassed under `SbMapFromLaunch()` (gluChat.cpp,
+      uiMulti.cpp, the SB tick).
+- [x] **Phase 4**: `tools/sbtest/up.sh` brings up a dev-tenant coordinator and
+      an enrolled relay; `rp_dev_setup coord-create` mints sessions through
+      the signed `POST /session/create` API. The `--coordinated` game gate
+      passes with the coordinator's decision maker alive (latency-buffer
+      directives now reach the provider and are applied).
+- [ ] **Open**: the joiner's final transition — its game completes the whole
+      handshake, countdown and chat-room close (identical close path to the
+      creator's) but its glue never enters main_game_run; the creator's game
+      runs. A game-front-end integration item (likely the launch's seating
+      data vs the room flow's), not netcode. Tracked here; the desync drill
+      (desync.sh, --coordinated) needs both seats in-game to fire the relay's
+      0x37 comparator.
+- [ ] Phase 5: the room's online launch; Phase 6: reconnect/leave matrix;
+      Phase 7: pinning, CI, packaging.

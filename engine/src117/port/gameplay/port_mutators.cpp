@@ -778,6 +778,17 @@ void MutatorsChooseNet(const MutatorSet &m) {
   g_net = MutatorsClamp(m);
 }
 
+// The SB relay launch's --mutators, the same list on every seat: MutatorsChooseList
+// parses the string (into the single-player session's set), and the network game
+// reads the net set, so the parsed values are copied there.
+bool MutatorsChooseNetList(const char *pszList) {
+  if (!MutatorsChooseList(pszList))
+    return false;
+  MutatorsChooseNet(Session().mut);
+  Log("the net mutators chosen: %s", MutatorsText(Session().mut).c_str());
+  return true;
+}
+
 bool MutatorsChosenThisGame(void) {
   if (NetChosen())
     return !MutatorsStandard(g_net);
@@ -798,6 +809,8 @@ void MutatorsForGame(void) {
   g_nRevision = bOld ? (g_bRecorded ? g_nRecordedRevision : 0) : MUTATOR_REVISION;
   g_bNet = false;
   g_hxMutatorsOn = !MutatorsStandard(g_game);
+  Log("MutatorsForGame: on %d, options 0x%X, set %s", static_cast<int>(g_hxMutatorsOn),
+      static_cast<unsigned>(g_hxRuleOptions), MutatorsText(g_game).c_str());
   if ((g_hxRuleOptions & HX_OPT_MUTATORS) != 0)
     Log("a game %s: %s", bOld ? "played back or loaded" : "new",
         g_hxMutatorsOn ? MutatorsText(g_game).c_str() : "none other than classic");

@@ -251,6 +251,14 @@ bool PortSbLaunchNetGame(void)
   SStrCopy(gLocalPlayerName, pszName, 25);
   gPlayback = 0;
   gbIsExpansion = static_cast<BYTE>(IsBroodwar() != 0);
+  // the rules the players chose, the same on every seat: the game plays by
+  // Hyperion's (--rules hyperion) or 1.17's (--rules classic, the default), and
+  // a mismatch between seats desyncs, as it must (the sims differ)
+  RulesChooseNext(lstrcmpiA(o->szRules, "hyperion") == 0 ? 1 : 0);
+  // and the mutators (port_mutators.h), the same list on every seat: a seat
+  // with another list plays another game, which desyncs, as it must
+  if (o->szMutators[0] != '\0')
+    MutatorsChooseNetList(o->szMutators);
   // as the main menu's Multiplayer leaves it (do_main_dlg)
   gbMultiPlayerMode = 1;
   TGAMEPARAMS *pParams = gametype_load_ums();
@@ -353,11 +361,10 @@ void SbLobbyTick()
   }
   if (!g_plan.bCreator)
     return;
-  // every person in, and the game's own map transfer done (a standard map none
-  // is needed for)
+  // every person in. The map is the launch's: every seat holds the same file
+  // out of band (the relay carries no map transfer), so unlike the LAN tick
+  // there is no download session to wait on.
   if (CountType(TYPE_HUMAN) < g_plan.nHumans)
-    return;
-  if (dword_672960 != NULL && !IsSessionComplete(dword_672960))
     return;
   if (CountSides() < 2)
     return;
