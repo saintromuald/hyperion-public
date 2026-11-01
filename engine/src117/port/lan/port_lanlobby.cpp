@@ -12,6 +12,7 @@
 // would show goes to PortLanChatWhy. A browser's seat, with no GPU presenter, shows 1.17's.
 #include "../platform/port_log.h"  // PortLogger
 #include "../platform/port_util.h"  // PortNowMs
+#include "../platform/port_paths.h"  // PortCommandOptions
 #include <stdio.h>
 #include <string.h>
 #include <string>
@@ -21,6 +22,7 @@
 #include "port_lanlobby.h"
 #include "port_lanstream.h"
 #include "port_stormlan.h"
+#include "../sb/port_stormsb.h"  // SbRosterCount
 #include "Storm.h"            // SStrCopy
 #include "fd_sessn.h"         // IsSessionComplete
 #include "gametype.h"         // IsMeleeTemplate
@@ -63,6 +65,7 @@ enum { RACE_ZERG = 0, RACE_TERRAN = 1, RACE_PROTOSS = 2, RACE_RANDOM = 6, RACE_T
 struct Plan {
   bool bOn = false;
   bool bCreator = false;
+  bool bSb = false;  // the launch is a relay session's (--sb-setup), not the room's
   int nRace = 6;
   int nHumans = 1;
   std::vector<int> computers;  // their races, in the room's seat order
@@ -225,7 +228,146 @@ bool PortLanLobbyActive(void)
   return g_plan.bOn;
 }
 
-// After the game (main.cpp's main_game_run): how it ended for this player, to the room.
+// ---------------------------------------------------------------------------
+// The SB relay launch (--sb-setup, --sb-role): the same flow as the room's, with
+// the launch read from the command line instead of the room, and the provider
+// the rally point's. Both seats hold the same map file and the same launch
+// config; the creator's init data reaches the joiner as the relay's replayed
+// lobby command (port_stormsb.cpp), so the game joins as if the room had
+// served it.
+
+bool PortSbLaunchNetGame(void)
+{
+  const PortOptions *o = PortCommandOptions();
+  g_plan = Plan();
+  g_plan.bSb = true;
+  g_plan.bCreator = lstrcmpiA(o->szSbRole, "create") == 0;
+  const int nRoster = SbRosterCount();
+  g_plan.nHumans = nRoster > 0 && nRoster <= 8 ? nRoster : 2;
+  int nRace = atoi(o->szRace);
+  g_plan.nRace = nRace >= 0 && nRace <= 6 ? nRace : 6;
+  const char *pszName = o->szSbName[0] ? o->szSbName : "Relay";
+  g_plan.mapName = pszName;
+  SStrCopy(gLocalPlayerName, pszName, 25);
+  gPlayback = 0;
+  gbIsExpansion = static_cast<BYTE>(IsBroodwar() != 0);
+  // as the main menu's Multiplayer leaves it (do_main_dlg)
+  gbMultiPlayerMode = 1;
+  TGAMEPARAMS *pParams = gametype_load_ums();
+  if (pParams == NULL) {
+    Log("the game's templates were not read");
+    return false;
+  }
+  *reinterpret_cast<TGAMEPARAMS *>(&gGameHeader.bGameType) = *pParams;
+  SMemFree(pParams, "port_lanlobby.cpp", __LINE__, 0);
+  if (!NetInit(SB_PROVIDER)) {
+    Log("the network did not start");
+    return false;
+  }
+  if (g_plan.bCreator) {
+    const bool bFfa = lstrcmpiA(o->szSbType, "ffa") == 0;
+    const int nKey = bFfa ? FFA_KEY : MELEE_KEY;
+    if (!IsMeleeTemplate(static_cast<BYTE>(nKey), static_cast<BYTE>(nKey >> 8), static_cast<WORD>(nKey >> 16))) {
+      Log("no melee template for the key 0x%X", nKey);
+      return false;
+    }
+    char szPath[MAX_PATH];
+    SStrCopy(szPath, o->szSbMap, MAX_PATH);
+    // the game's file layers want the Windows form: backslashes, and Z: for the
+    // root (port_posix.cpp's WinPath); a native path breaks the map session
+    // (sub_440AB0 splits the name on a backslash)
+    for (char *p = szPath; *p; ++p)
+      if (*p == '/')
+        *p = '\\';
+    if (szPath[0] == '\\') {
+      memmove(szPath + 2, szPath, strlen(szPath) + 1);
+      szPath[0] = 'Z';
+      szPath[1] = ':';
+    }
+    char szName[0x20];
+    SStrCopy(szName, o->szSbName[0] ? o->szSbName : "Relay", sizeof szName);
+    int nSpeed = atoi(o->szSbSpeed);
+    if (nSpeed < 0 || nSpeed > 6)
+      nSpeed = 6;
+    const int nRes = PortCreateNetGame(szPath, szName, nKey, static_cast<BYTE>(nSpeed));
+    if (nRes != 0) {
+      Log("the game was not made from %s (0x%X)", szPath, nRes);
+      return false;
+    }
+    Log("made the relay match %s", szName);
+  } else {
+    // the joiner starts the session first: the creator's stat string must be
+    // here before the game list (whose parser requires it), and SNetJoinGame
+    // (net_glue_OnInitData) finds the session already running
+    if (!SbSessionStart("joiner")) {
+      Log("the relay session could not start");
+      return false;
+    }
+    // the provider lists the session's game alone; it is joined as Join's Ok
+    // joins one (the init data arrived with the session, port_stormsb.cpp)
+    ClearGameHeaders();
+    ListGames(NoList, 0);
+    const intptr_t hdr = LookupGameHdr(1);
+    if (hdr == 0 || !net_glue_OnInitData(hdr)) {
+      Log("the relay match was not joined");
+      return false;
+    }
+    Log("joined the relay match");
+  }
+  g_plan.bOn = true;
+  g_why.clear();
+  // the chat room and the loading under black from here, as a skirmish's start has them
+  if (PortPresentGpu())
+    PortMotionCover();
+  return true;
+}
+
+// The SB game's chat room, driven as the room's is, minus the room: each seat
+// sets its race, and the creator starts once everyone is in and the sides are
+// set. One lobby command a pass, as 1.17 keeps one buffer for each kind.
+void SbLobbyTick()
+{
+  if (g_plan.bStarted)
+    return;
+  const uint64_t qwNow = PortNowMs();
+  if (qwNow - g_plan.qwLastAct < 250)
+    return;
+  g_plan.qwLastAct = qwNow;
+  const int nState = get_lobby_state();
+  if (nState < 4 || g_LocalNationID >= 8) {
+    if (nState != g_plan.nMatch) {
+      g_plan.nMatch = nState;
+      Log("tick: lobby state %d, nation %d", nState, static_cast<int>(g_LocalNationID));
+    }
+    return;
+  }
+  // this player's race, as a player picks it from the slot's list
+  if (gPlayerData[g_LocalNationID].nRace != g_plan.nRace && qwNow - g_plan.qwRaceSent > 1500 &&
+      g_plan.nRaceTries <= RACE_TRIES) {
+    g_plan.qwRaceSent = qwNow;
+    if (++g_plan.nRaceTries > RACE_TRIES)
+      Log("the lobby did not take this seat's race; going on with the one it has");
+    else
+      create_net_cmd_change_race(static_cast<BYTE>(g_LocalNationID), static_cast<BYTE>(g_plan.nRace));
+    return;
+  }
+  if (!g_plan.bCreator)
+    return;
+  // every person in, and the game's own map transfer done (a standard map none
+  // is needed for)
+  if (CountType(TYPE_HUMAN) < g_plan.nHumans)
+    return;
+  if (dword_672960 != NULL && !IsSessionComplete(dword_672960))
+    return;
+  if (CountSides() < 2)
+    return;
+  g_plan.bStarted = true;
+  Log("started the relay match");
+  PortChatPress(7);
+}
+
+// After the game (main.cpp's main_game_run): how it ended for this player. The
+// room's match reports it to the room; the relay session's is logged and done.
 void PortLanAfterGame(void)
 {
   if (!g_plan.bOn)
@@ -233,6 +375,11 @@ void PortLanAfterGame(void)
   const BYTE bState = g_LocalNationID < 8 ? gbVictoryState[g_LocalNationID] : 0;
   const char *pszHow = bState == 3 ? "won" : bState == 2 ? "lost" : bState == 5 ? "drew" : bState == 1 ? "left" : "ended";
   Log("the game ended: %s", pszHow);
+  if (g_plan.bSb) {
+    PortLanLobbyEnd();
+    g_bBackToFront = true;
+    return;
+  }
   LanFeedSeatEnd();
   LanStreamGameEnded();
   LanClientResult((LanPlayerName() + " " + pszHow).c_str());
@@ -276,6 +423,10 @@ void PortLanLobbyTick(void)
 {
   if (!g_plan.bOn)
     return;
+  if (g_plan.bSb) {
+    SbLobbyTick();
+    return;
+  }
   LanClientPump();
   // the room ended the match before it started, in the lobby or its countdown: the chat room's
   // Cancel, which takes the poll off the chat room (gluChat_poll goes no further)

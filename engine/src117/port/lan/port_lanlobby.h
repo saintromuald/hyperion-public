@@ -10,6 +10,9 @@ struct PortJson;  // port_json.h; a plain declaration, so lang/main.cpp can incl
 // or Join would, and its chat room next (PORT_FRONT_LAN). False, with a line in
 // hyperion_lan.log, when it could not be.
 bool PortLaunchNetGame(const PortJson &launch);
+// The SB relay launch (--sb-setup, --sb-role): the same flow, the launch read
+// from the command line and the provider the rally point's.
+bool PortSbLaunchNetGame(void);
 void PortLanLobbyEnd(void);
 
 // A LAN room's match (port_lanlobby.cpp): 1.17's chat room played for its players,

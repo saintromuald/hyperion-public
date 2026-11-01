@@ -511,6 +511,29 @@ def write_resources():
     open(os.path.join(OUT, "resources_posix.cpp"), "w", encoding="utf-8").write("\n".join(c) + "\n")
 
 
+def build_sb(skip):
+    """The rallypoint bridge: the vendored netcode workspace's C ABI staticlib
+    (tools/rallypoint2/bridge), built by cargo into OUT/rallypoint. None of the SB
+    provider's objects are compiled without it (port_stormsb.cpp checks SB_NETCODE_OFF),
+    and the link omits the library when it is skipped."""
+    dest = os.path.join(OUT, "rallypoint")
+    lib = os.path.join(dest, "release", "librally_point_bridge.a")
+    if skip:
+        return None
+    manifest = os.path.join(ENGINE, "tools", "rallypoint2", "Cargo.toml")
+    if not os.path.exists(manifest):
+        raise SystemExit("build_engine_linux: %s is missing (the vendored rallypoint2 workspace)" % manifest)
+    if shutil.which("cargo") is None:
+        raise SystemExit("build_engine_linux: cargo is needed for the SB netcode provider; "
+                         "install Rust or pass --no-sb")
+    run(["cargo", "build", "--release", "-p", "rally-point-bridge", "--lib",
+         "--manifest-path", manifest, "--target-dir", dest], "cargo build (rallypoint bridge)")
+    if not os.path.exists(lib):
+        raise SystemExit("build_engine_linux: cargo did not produce %s" % lib)
+    say("SB netcode: %s" % os.path.relpath(lib, ENGINE))
+    return lib
+
+
 def build_webrtc(again, workers):
     """Mbed TLS (DTLS-SRTP on), libdatachannel against it, Opus, and OpenH264's encoder in C++ alone,
     as tools/build_webrtc.py builds them for Windows, into OUT/webrtc, once."""
@@ -594,6 +617,9 @@ def build(a):
     image = build_image_lib(os.path.join(OUT, "libs"), "clang", AR, THIRD, a.libs, workers)
     dav1d = build_dav1d_lib(os.path.join(OUT, "libs"), "clang", AR, THIRD, a.libs, workers)
     webrtc = build_webrtc(a.webrtc, workers)
+    sb_lib = build_sb(a.no_sb)
+    if sb_lib is None:
+        PORT.append("-DSB_NETCODE_OFF")
 
     jobs = []
     for t in tus("lang"):
@@ -658,6 +684,8 @@ def build(a):
     for_observer = sorted(c_name(n) for n in obs_undef if n in defined and not c_name(n).startswith("_Z"))
     exports += for_observer
     libs = [storm, casc, webm, image, dav1d] + [os.path.join(webrtc, "lib", l) for l in WEBRTC_LIBS]
+    if sb_lib is not None:
+        libs.append(sb_lib)
     if MAC:
         link_mac(objs, libs, exports, obs_obj, len(for_observer))
         return
@@ -761,6 +789,8 @@ def main():
     ap.add_argument("--sdl", action="store_true", help="build SDL3 again")
     ap.add_argument("--libs", action="store_true", help="build StormLib and CascLib again")
     ap.add_argument("--webrtc", action="store_true", help="build the streamed seats' libraries again")
+    ap.add_argument("--no-sb", action="store_true",
+                    help="skip the rallypoint bridge (the online SB relay provider) and link without it")
     ap.add_argument("-j", "--jobs", type=int, default=0)
     ap.add_argument("--check-align", action="store_true",
                     help="after the build, list the game globals declared more aligned than their place")

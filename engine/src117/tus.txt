@@ -329,6 +329,7 @@ port port_stormvid
 port port_smacker
 port port_stormnet
 port port_stormlan
+port port_stormsb
 port port_lannet
 port port_lanrelay
 port port_lanroom

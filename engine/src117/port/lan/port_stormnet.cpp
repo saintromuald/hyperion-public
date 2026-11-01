@@ -16,6 +16,7 @@
 #include <deque>
 #include <vector>
 #include "port_stormlan.h"
+#include "../sb/port_stormsb.h"
 #include "../data/port_stormerr.h"  // NET_*
 #include "port_stormnet.h"
 #include "../data/port_stormapi.h"
@@ -55,8 +56,9 @@ struct NetPlayer {
   std::deque<NetPacket> turns, messages;
 };
 
-static bool g_bNetUp;                // provider 0 started, or the LAN's
+static bool g_bNetUp;                // provider 0 started, or the LAN's, or the SB relay's
 static bool g_bLan;                  // the LAN provider started: the calls are port_stormlan.cpp's
+static bool g_bSb;                   // the SB relay provider started: the calls are port_stormsb.cpp's
 static BYTE g_bLocal = NO_PLAYER;    // the local player's id, or NO_PLAYER outside a game
 static NetPlayer g_player;
 static char g_szGameName[NAME_MAX];
@@ -148,9 +150,18 @@ BOOL __stdcall SNetInitializeProvider(DWORD dwProvider, void *pProgramData, void
     LanDestroy();
     g_bLan = false;
   }
+  if (g_bSb) {
+    SbDestroy();
+    g_bSb = false;
+  }
   if (dwProvider == LAN_PROVIDER) {
     LeaveGame();
     g_bNetUp = g_bLan = LanInitialize() != FALSE;
+    return g_bNetUp ? TRUE : FALSE;
+  }
+  if (dwProvider == SB_PROVIDER) {
+    LeaveGame();
+    g_bNetUp = g_bSb = SbInitialize() != FALSE;
     return g_bNetUp ? TRUE : FALSE;
   }
   g_bNetUp = dwProvider == 0;
@@ -167,6 +178,10 @@ BOOL __stdcall SNetDestroy()
     LanDestroy();
     g_bLan = false;
   }
+  if (g_bSb) {
+    SbDestroy();
+    g_bSb = false;
+  }
   LeaveGame();
   g_nNames = 0;
   g_bNetUp = false;
@@ -178,6 +193,8 @@ BOOL __stdcall SNetGetProviderCaps(DWORD *pdwCaps)
 {
   if (g_bLan)
     return LanGetProviderCaps(pdwCaps);
+  if (g_bSb)
+    return SbGetProviderCaps(pdwCaps);
   if (pdwCaps[0] != sizeof LOOPBACK_CAPS)
     return Fail(NET_INVALID);
   memset(pdwCaps + 1, 0, sizeof LOOPBACK_CAPS - 4);
@@ -192,6 +209,8 @@ BOOL __stdcall SNetGetPlayerCaps(DWORD dwPlayer, DWORD *pdwCaps)
 {
   if (g_bLan)
     return LanGetPlayerCaps(dwPlayer, pdwCaps);
+  if (g_bSb)
+    return SbGetPlayerCaps(dwPlayer, pdwCaps);
   if (pdwCaps[0] != sizeof LOOPBACK_CAPS)
     return Fail(NET_INVALID);
   memset(pdwCaps + 1, 0, sizeof LOOPBACK_CAPS - 4);
@@ -206,16 +225,21 @@ BOOL __stdcall SNetGetPlayerCaps(DWORD dwPlayer, DWORD *pdwCaps)
 // Ordinal 147.
 DWORD __stdcall SNetGetCurrentProviderID()
 {
-  return g_bLan ? LAN_PROVIDER : 0;
+  if (g_bLan)
+    return LAN_PROVIDER;
+  if (g_bSb)
+    return SB_PROVIDER;
+  return 0;
 }
 
-// Ordinal 105. The LAN provider is listed: provider 0 never was, and 1.17's others
-// are gone.
+// Ordinal 105. The LAN and the SB relay providers are listed: provider 0 never
+// was, and 1.17's others are gone.
 BOOL __stdcall SNetEnumProviders(const DWORD *pdwCapsFilter, void *pfnCallback)
 {
   if (!pfnCallback || (pdwCapsFilter && pdwCapsFilter[0] != sizeof LOOPBACK_CAPS))
     return Fail(NET_INVALID);
   LanListProvider(pfnCallback);
+  SbListProvider(pfnCallback);
   return TRUE;
 }
 
@@ -243,6 +267,8 @@ BOOL __stdcall SNetRegisterEventHandler(DWORD dwEvent, void *pfnHandler)
 {
   if (g_bLan)
     return LanRegisterEventHandler(dwEvent, pfnHandler);
+  if (g_bSb)
+    return SbRegisterEventHandler(dwEvent, pfnHandler);
   if (!pfnHandler)
     return Fail(NET_INVALID);
   return TRUE;
@@ -276,6 +302,9 @@ BOOL __stdcall SNetCreateLadderGame(const char *pszGameName, const char *pszPass
   if (g_bLan)
     return LanCreateGame(pszGameName, pszPassword, pszStats, dwMode, pvGameData, cbGameData, dwMaxPlayers,
                          pszPlayerName, pszPlayerDesc, pdwPlayerId);
+  if (g_bSb)
+    return SbCreateGame(pszGameName, pszPassword, pszStats, dwMode, pvGameData, cbGameData, dwMaxPlayers,
+                        pszPlayerName, pszPlayerDesc, pdwPlayerId);
 
   if (g_bLocal != NO_PLAYER)
     LeaveGame();
@@ -318,6 +347,8 @@ BOOL __stdcall SNetLeaveGame(DWORD dwReason)
 {
   if (g_bLan)
     return LanLeaveGame(dwReason);
+  if (g_bSb)
+    return SbLeaveGame(dwReason);
   if (!g_bNetUp)
     return Fail(NET_BAD_PROVIDER);
   LeaveGame();
@@ -329,6 +360,8 @@ BOOL __stdcall SNetDropPlayer(DWORD dwPlayer, DWORD dwFlags)
 {
   if (g_bLan)
     return LanDropPlayer(dwPlayer, dwFlags);
+  if (g_bSb)
+    return SbDropPlayer(dwPlayer, dwFlags);
   if (!g_bNetUp)
     return Fail(NET_BAD_PROVIDER);
   if (dwPlayer == NO_PLAYER || dwPlayer == g_bLocal)
@@ -345,6 +378,8 @@ BOOL __stdcall SNetDisconnectAll(DWORD dwFlags)
 {
   if (g_bLan)
     return LanDisconnectAll(dwFlags);
+  if (g_bSb)
+    return SbDisconnectAll(dwFlags);
   return InGame() ? TRUE : FALSE;
 }
 
@@ -353,6 +388,8 @@ BOOL __stdcall SNetGetNumPlayers(int *pnFirst, int *pnLast, int *pnActive)
 {
   if (g_bLan)
     return LanGetNumPlayers(pnFirst, pnLast, pnActive);
+  if (g_bSb)
+    return SbGetNumPlayers(pnFirst, pnLast, pnActive);
   if (pnFirst)
     *pnFirst = -1;
   if (pnLast)
@@ -375,6 +412,8 @@ BOOL __stdcall SNetGetPlayerName(DWORD dwPlayer, char *pszBuffer, DWORD cchBuffe
 {
   if (g_bLan)
     return LanGetPlayerName(dwPlayer, pszBuffer, cchBuffer);
+  if (g_bSb)
+    return SbGetPlayerName(dwPlayer, pszBuffer, cchBuffer);
   if (!pszBuffer || !cchBuffer)
     return Fail(NET_INVALID);
   pszBuffer[0] = '\0';
@@ -392,6 +431,8 @@ BOOL __stdcall SNetGetPlayerNames(char **ppszNames)
 {
   if (g_bLan)
     return LanGetPlayerNames(ppszNames);
+  if (g_bSb)
+    return SbGetPlayerNames(ppszNames);
   for (DWORD i = 0; i < g_nNames && i < 8; ++i)
     ppszNames[i] = g_aszNames[i];
   return TRUE;
@@ -404,6 +445,8 @@ BOOL __stdcall SNetGetGameInfo(DWORD dwInfo, void *pvBuffer, DWORD cbBuffer, DWO
 {
   if (g_bLan)
     return LanGetGameInfo(dwInfo, pvBuffer, cbBuffer, pcbRead);
+  if (g_bSb)
+    return SbGetGameInfo(dwInfo, pvBuffer, cbBuffer, pcbRead);
   if (pvBuffer && cbBuffer)
     memset(pvBuffer, 0, cbBuffer);
   if (pcbRead)
@@ -440,6 +483,8 @@ BOOL __stdcall SNetSetGameMode(DWORD dwMode, DWORD dwMakePublic)
 {
   if (g_bLan)
     return LanSetGameMode(dwMode, dwMakePublic);
+  if (g_bSb)
+    return SbSetGameMode(dwMode, dwMakePublic);
   // Storm answers this one with 0x57 when no provider is started.
   if (!g_bNetUp)
     return Fail(NET_INVALID);
@@ -460,6 +505,8 @@ BOOL __stdcall SNetGetTurnsInTransit(DWORD *pdwTurns)
 {
   if (g_bLan)
     return LanGetTurnsInTransit(pdwTurns);
+  if (g_bSb)
+    return SbGetTurnsInTransit(pdwTurns);
   if (!pdwTurns)
     return Fail(NET_INVALID);
   *pdwTurns = 0;
@@ -474,6 +521,8 @@ BOOL __stdcall SNetSendTurn(const void *pvData, DWORD cbData)
 {
   if (g_bLan)
     return LanSendTurn(pvData, cbData);
+  if (g_bSb)
+    return SbSendTurn(pvData, cbData);
   if (!pvData || !cbData)
     return Fail(NET_INVALID);
   if (!InGame())
@@ -492,6 +541,8 @@ BOOL __stdcall SNetReceiveTurns(DWORD nFirst, DWORD nPlayers, const void **ppvDa
 {
   if (g_bLan)
     return LanReceiveTurns(nFirst, nPlayers, ppvData, pcbData, pdwFlags);
+  if (g_bSb)
+    return SbReceiveTurns(nFirst, nPlayers, ppvData, pcbData, pdwFlags);
   if (nPlayers) {
     if (ppvData)
       memset(ppvData, 0, nPlayers * sizeof(*ppvData));
@@ -548,6 +599,8 @@ BOOL __stdcall SNetSendMessage(DWORD dwPlayer, const void *pvData, DWORD cbData)
 {
   if (g_bLan)
     return LanSendMessage(dwPlayer, pvData, cbData);
+  if (g_bSb)
+    return SbSendMessage(dwPlayer, pvData, cbData);
   if (!pvData || !cbData)
     return Fail(NET_INVALID);
   if (!InGame())
@@ -566,6 +619,8 @@ BOOL __stdcall SNetReceiveMessage(int *pnPlayer, const void **ppvData, DWORD *pc
 {
   if (g_bLan)
     return LanReceiveMessage(pnPlayer, ppvData, pcbData);
+  if (g_bSb)
+    return SbReceiveMessage(pnPlayer, ppvData, pcbData);
   if (pnPlayer)
     *pnPlayer = -1;
   if (ppvData)
@@ -618,6 +673,8 @@ BOOL __stdcall SNetEnumGamesEx(DWORD dwCategory, DWORD dwMask, void *pfnCallback
 {
   if (g_bLan && pfnCallback)
     return LanEnumGames(pfnCallback, pdwHintNext);
+  if (g_bSb && pfnCallback)
+    return SbEnumGames(pfnCallback, pdwHintNext);
   if (!pfnCallback)
     return Fail(NET_INVALID);
   if (pdwHintNext)
@@ -641,6 +698,8 @@ BOOL __stdcall SNetJoinGame(DWORD dwGameId, const char *pszGameName, const char 
     return Fail(NET_INVALID);
   if (g_bLan)
     return LanJoinGame(dwGameId, pszPassword, pszPlayerName, pszPlayerDesc, pdwPlayerId);
+  if (g_bSb)
+    return SbJoinGame(dwGameId, pszPassword, pszPlayerName, pszPlayerDesc, pdwPlayerId);
   if (g_bLocal != NO_PLAYER)
     LeaveGame();
   ResetPlayer();

@@ -2110,6 +2110,19 @@ bool LanFrontFrame(void)
     Toast(PortText("The match could not start here"), "");
     PortLanLobbyEnd();
   }
+  // a relay session's match (--sb-setup, --sb-role): made or joined once, from
+  // the command line; it wins over a choice already leaving, as the room's does
+  static bool s_bSbDone;
+  if (!s_bSbDone && o->szSbSetup[0] && o->szSbRole[0]) {
+    s_bSbDone = true;
+    if (PortSbLaunchNetGame()) {
+      FrontLog("sb: the relay match launched; %s\n", o->szSbRole);
+      g_bCameBack = true;
+      return true;
+    }
+    FrontLog("sb: the match could not be launched\n");
+    Toast(PortText("The match could not start here"), "");
+  }
   return false;
 }
 

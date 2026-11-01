@@ -172,6 +172,12 @@ void PortPathsSplitCommandLine(const char *pszLine, char *pszGame, size_t cchGam
         PathsOption(szWord, "--lan-copy", &pEnd, pOptions->szLanCopy) ||
         PathsOption(szWord, "--lan-stream", &pEnd, pOptions->szLanStream) ||
         PathsOption(szWord, "--lan-tab", &pEnd, pOptions->szLanTab) ||
+        PathsOption(szWord, "--sb-setup", &pEnd, pOptions->szSbSetup) ||
+        PathsOption(szWord, "--sb-role", &pEnd, pOptions->szSbRole) ||
+        PathsOption(szWord, "--sb-name", &pEnd, pOptions->szSbName) ||
+        PathsOption(szWord, "--sb-map", &pEnd, pOptions->szSbMap) ||
+        PathsOption(szWord, "--sb-speed", &pEnd, pOptions->szSbSpeed) ||
+        PathsOption(szWord, "--sb-type", &pEnd, pOptions->szSbType) ||
         PathsOption(szWord, "--lab-worker", &pEnd, pOptions->szLabWorker) ||
         PathsOption(szWord, "--lab-game", &pEnd, pOptions->szLabGame) ||
         PathsOption(szWord, "--lab-out", &pEnd, pOptions->szLabOut) ||
