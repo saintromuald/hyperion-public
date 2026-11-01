@@ -133,3 +133,17 @@ the obs builder completes and dump/ captures begin.
   ready event path). Next: trace the onFrame's send path (the slot-numbered call log
   plus the fault handler's frame walk), find the gate, satisfy it, then dump/ captures
   the observation per frame and the schema extraction starts.
+
+## State 2026-11-01 (final finding of the session)
+
+- **The shm is the bot's own .data**: the PLO1 header sits at loaded address
+  0x7b190000+0x54080 (found by scanning for the magic; `shm-header-reference.bin` is
+  the first 8KB: magic PLO1, version 4, the -0.9f resign threshold, the section
+  offsets 0xCC/0xA4/0xA8/0xB0/0xB4/0xB8, and the arm-table region). No file mapping
+  named BWRL_SHM exists — the send writes into this in-process region (shared with
+  the engine via a mapping of it).
+- The obs region after the header is byte-static across all 1200 frames: the bot's
+  per-frame obs serializer runs (helpers 0x63fb0130 etc. called each frame) but the
+  commit to the region is gated on the engine's ready-reply pump, which the rig does
+  not yet service. Next: single-step the commit gate (the reply event), then the
+  region fills and the schema extraction is mechanical.
