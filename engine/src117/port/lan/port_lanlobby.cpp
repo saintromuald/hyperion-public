@@ -320,6 +320,20 @@ bool PortSbLaunchNetGame(void)
       Log("the relay match was not joined");
       return false;
     }
+    // 1.17's join adopts the listed game's header, which never carries the
+    // creator's scenario/subcategory flags (the list parses only the stat
+    // string); without them the joiner reads the game as a scenario and its
+    // start routes to the single-player ready screens. The launch blob holds
+    // the creator's header bytes, so the flags are adopted from it now that
+    // OnInitData has overwritten the header.
+    BYTE bSub = 0, bFlag = 0, bLadder = 0;
+    if (SbLaunchHeader(&bSub, &bFlag, &bLadder)) {
+      gGameHeader.bGameSubCategory = bSub;
+      gGameHeader.bScenarioFlag = bFlag;
+      gGameHeader.bLadderGame = bLadder;
+      Log("the creator's header flags are adopted: subcategory %u, scenario %u, ladder %u", static_cast<unsigned>(bSub),
+          static_cast<unsigned>(bFlag), static_cast<unsigned>(bLadder));
+    }
     Log("joined the relay match");
   }
   g_plan.bOn = true;

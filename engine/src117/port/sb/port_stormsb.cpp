@@ -604,6 +604,21 @@ bool SbMapFromLaunch(void)
   return g_launch.bOn;
 }
 
+bool SbLaunchHeader(BYTE *pbSubCategory, BYTE *pbScenarioFlag, BYTE *pbLadderGame)
+{
+  // the blob is the creator's header bytes from bGameType (+0x6D) on: the
+  // subcategory at +8, the scenario flag at +0x0C, the ladder flag at +0x12
+  if (g_gameData.size() < 0x13)
+    return false;
+  if (pbSubCategory)
+    *pbSubCategory = g_gameData[8];
+  if (pbScenarioFlag)
+    *pbScenarioFlag = g_gameData[0x0C];
+  if (pbLadderGame)
+    *pbLadderGame = g_gameData[0x12];
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // The SNet calls.
 
@@ -1093,9 +1108,14 @@ BOOL SbSendMessage(DWORD dwPlayer, const void *pvData, DWORD cbData)
   }
   if (g_session == NULL)
     return TRUE;
-  // 1.17's messages are raw binary packets (the lobby handshake's 0x4A state,
-  // the chat's own framing), so they ride the relay's binary lobby-command
-  // channel, not the text chat channel; the relay fans each to every member.
+  // The LAN's map transfer (opcode 0x4F) has no place in the SB flow: the map
+  // is the launch's, and a partial transfer would leave a partial file that
+  // the game might load. The chunks are dropped; every other message — 1.17's
+  // raw binary packets (the lobby handshake's 0x4A state, the chat's own
+  // framing) — rides the relay's binary lobby-command channel, not the text
+  // chat channel; the relay fans each to every member.
+  if (cbData > 0 && static_cast<const uint8_t *>(pvData)[0] == 0x4F)
+    return TRUE;
   const int rc = rp_lobby_send(g_session, static_cast<const uint8_t *>(pvData), cbData);
   TraceCall("SendMessage", rc == RP_OK || rc == RP_ERR_TURN_FULL, rc != RP_OK && rc != RP_ERR_TURN_FULL);
   return rc == RP_ERR_TURN_ENDED ? FALSE : TRUE;
