@@ -411,6 +411,29 @@ with no manual steps beyond the toolchain installs.
 - [x] SSH to GitHub fixed (dedicated `id_ed25519_github` account key; the
       old `github.com` config pinned the cosmonarchy deploy key, which only
       works for that one repo)
-- [ ] rally-point2 `cargo check --workspace` (running)
-- [ ] Hyperion Linux build (running; `get_libraries.py` has a Linux defect
-      to fix in Phase 0)
+- [x] rally-point2 builds clean on Linux (cargo check --workspace)
+- [x] Hyperion builds on Linux with the SB provider linked (a fetch_spirv_cross
+      Linux fix, committed; `--no-sb` skips the bridge and stubs the provider)
+- [x] **Phase 1**: `rallypoint2/bridge/` — the C ABI shim (`rp_start`,
+      `rp_submit_turn`, `rp_poll`, `rp_lobby_send`, `rp_chat_send`, …) over
+      `LinkDriver` + `TurnChannels`; `dev-setup/` (`rp_dev_setup`) for
+      standalone-relay sessions; `bridge/ctest/` — two C clients exchange
+      validated turns through a standalone `rally-point-relay` (the gate).
+- [x] **Phase 2**: `port_stormsb.cpp` — the third Storm provider (`'SBRP'`),
+      wired into `port_stormnet.cpp`; the CLI test-drive (`--sb-setup`,
+      `--sb-role`, `--sb-name`, `--sb-map`, `--sb-speed`, `--sb-type`) and
+      `PortSbLaunchNetGame`/`SbLobbyTick` in `port_lanlobby.cpp`, hooked into
+      the front's frame pump; the intro skip in `main.cpp`; the Linux build's
+      cargo step and link in `build_engine_linux.py`. The init data and the
+      stat string ride relay lobby commands (framed kind+length), so a joiner
+      lists and joins the game as 1.17's Join expects.
+- [x] **The gate**: `tools/sbtest/run_game.sh` — two headless Hyperions on one
+      machine (an SCR install via `HYPERION_REMASTERED`, a shared map file)
+      create/join a game through a standalone relay; both seats read their
+      first step and hold clean lockstep (no drops, no desyncs). PASS.
+- [ ] Phase 3: the command-table conformance test and the desync drill
+- [ ] Phase 4: relay + coordinator bring-up script, WAN test
+- [ ] Phase 5: the room's online launch (the room calls the coordinator, the
+      launch JSON carries the SB transport)
+- [ ] Phase 6: reconnect/leave matrix, buffer-directive drills
+- [ ] Phase 7: pinning, CI, packaging (Windows x64 build hook for the bridge)

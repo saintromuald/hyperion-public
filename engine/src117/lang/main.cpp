@@ -792,7 +792,7 @@ void RunGame()
     play_flic(atoi(pszCinematic));
   if (pOptions->szMap[0] != '\0' || pOptions->szReplay[0] != '\0' || pOptions->szLoad[0] != '\0' ||
       pOptions->szCanvas[0] != '\0' || pOptions->szControl[0] != '\0' || pOptions->szJoin[0] != '\0' ||
-      PortLabWorker())
+      pOptions->szSbSetup[0] != '\0' || PortLabWorker())
   {
   }
   else if (!HasExpansionCampaign())

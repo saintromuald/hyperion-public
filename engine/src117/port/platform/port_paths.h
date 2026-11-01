@@ -77,6 +77,12 @@ struct PortOptions {
   char szLanCopy[260];  // --lan-copy <match>:<token>: the room's copy of a match
   char szLanStream[260];  // --lan-stream <device>:<token>: a browser's player's seat on the host
   char szLanTab[260];     // --lan-tab <device>:<token>: a browser's player's seat in the browser
+  char szSbSetup[260];    // --sb-setup <file>: the SB relay session's launch JSON (port_stormsb.cpp)
+  char szSbRole[260];     // --sb-role create|join: this seat makes or joins the relay game
+  char szSbName[260];     // --sb-name <name>: the player's name, and the game's
+  char szSbMap[260];      // --sb-map <file>: the map both seats hold (the creator names it)
+  char szSbSpeed[260];    // --sb-speed <n>: 0..6, default 6 (fastest)
+  char szSbType[260];     // --sb-type melee|ffa: the template, default melee
   // the AI lab: --lab-worker <port>:<token>:<worker> makes this a worker of its farm
   // (port_labworker.cpp), playing the game --lab-game numbers into the folder --lab-out names
   char szLabWorker[260];
