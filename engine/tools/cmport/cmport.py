@@ -675,6 +675,246 @@ def button_cards(mod_dir, tables, names, repo, researchable=frozenset()):
     return cards, keep_targets, notes
 
 
+# ---------------------------------------------------------------------------
+# Iscripts: the mod ships complete text scripts (mpq/scripts/iscript_*.txt)
+# in the engine's own format, but split into sections.  An image's script
+# value = (section << 16) | IsId: terran 1, protoss 2, zerg 3, askosi 4,
+# bloodsummon 5; the general and kogri files override the original's scripts
+# in place (section 0, IsId = the vanilla script id).  The assembler appends
+# every section script to the mod's iscript.txt with a Name (the Init
+# label), and the images' script column names them.
+# ---------------------------------------------------------------------------
+
+kIscriptSections = {
+    "iscript_terran.txt": 1,
+    "iscript_protoss.txt": 2,
+    "iscript_zerg.txt": 3,
+    "iscript_askosi.txt": 4,
+    "iscript_bloodsummon.txt": 5,
+}
+
+kIscriptArgTypes = {
+    "playfram": "W", "playframtile": "W", "sethorpos": "B", "setvertpos": "B",
+    "setpos": "BB", "wait": "B", "waitrand": "BB", "goto": "L",
+    "imgol": "IMG BB", "imgul": "IMG BB", "imgolorig": "IMG", "switchul": "IMG",
+    "imgoluselo": "IMG BB", "imguluselo": "IMG BB", "sprol": "SPR BB",
+    "highsprol": "SPR BB", "lowsprul": "SPR BB", "uflunstable": "FLI",
+    "spruluselo": "SPR BB", "sprul": "SPR BB", "sproluselo": "SPR B",
+    "end": "", "setflipstate": "B", "playsnd": "SND", "playsndrand": "SND+",
+    "playsndbtwn": "SND SND", "domissiledmg": "", "attackmelee": "W+",
+    "followmaingraphic": "", "randcondjmp": "B L", "turnccwise": "B",
+    "turncwise": "B", "turn1cwise": "", "turnrand": "B", "setspawnframe": "B",
+    "sigorder": "B", "attackwith": "B", "attack": "", "castspell": "",
+    "useweapon": "WPN", "move": "B", "gotorepeatattk": "", "engframe": "B",
+    "engset": "B", "__2d": "", "nobrkcodestart": "", "nobrkcodeend": "",
+    "ignorerest": "", "attkshiftproj": "B", "tmprmgraphicstart": "",
+    "tmprmgraphicend": "", "setfldirect": "B", "call": "L", "return": "",
+    "setflspeed": "W", "creategasoverlays": "B", "pwrupcondjmp": "L",
+    "trgtrangecondjmp": "W L", "trgtarccondjmp": "W W L",
+    "curdirectcondjmp": "W W L", "imgulnextid": "B B", "liftoffcondjmp": "L",
+    "warpoverlay": "W", "orderdone": "B", "grdsprol": "SPR B B",
+    "dogrddamage": "",
+}
+
+
+def parse_iscript_file(path):
+    """A .txt iscript file: header blocks (.headerstart/.headerend) and label
+    blocks. Returns a list of {is_id, fields, labels: [(name, lines)]}."""
+    headers = []
+    cur = None
+    in_header = False
+    cur_label = None
+    labels = {}
+    for raw in open(path, encoding="utf-8", errors="replace"):
+        line = raw.rstrip("\n")
+        if not line.strip() or line.strip().startswith("#"):
+            continue
+        if line.strip().startswith(".headerstart"):
+            if cur is not None:
+                headers.append(cur)
+            cur = {"is_id": -1, "fields": [], "labels": []}
+            in_header = True
+            cur_label = None
+            continue
+        if line.strip().startswith(".headerend"):
+            in_header = False
+            continue
+        if in_header and cur is not None:
+            m = re.match(r"(\w+)\s+(\S.*)$", line)
+            if m:
+                key, val = m.group(1), m.group(2).strip()
+                if key == "IsId":
+                    cur["is_id"] = int(val)
+                else:
+                    cur["fields"].append((key, val))
+            continue
+        if cur is None:
+            continue
+        m = re.match(r"(\w+):\s*$", line)
+        if m:
+            cur_label = m.group(1)
+            cur["labels"].append((cur_label, []))
+            continue
+        if line[0] in " \t" and cur_label is not None:
+            cur["labels"][-1][1].append(line.strip())
+    if cur is not None:
+        headers.append(cur)
+    return headers
+
+
+def iscript_arg_transforms(names, tables, ref_fn, line):
+    """Rewrite one opcode line's typed arguments to names where they reference
+    extended rows."""
+    parts = line.split(None, 1)
+    if not parts:
+        return line
+    op = parts[0]
+    rest = parts[1] if len(parts) > 1 else ""
+    comment = ""
+    if "#" in rest:
+        rest, comment = rest.split("#", 1)
+        comment = "#" + comment
+    rest = rest.strip()
+    if op == "unused_0c":
+        return None  # 0x0C: the engine's compiler has no form; a no-op anyway
+    sig = kIscriptArgTypes.get(op)
+    if sig is None:
+        return line  # unknown opcode: leave; the compiler reports it
+    kinds = sig.split()
+    vals = rest.split() if rest else []
+    if len(kinds) != len(vals):
+        return line
+    out = []
+    for kind, val in zip(kinds, vals):
+        if kind in ("IMG", "SPR", "FLI", "SND", "WPN"):
+            table_id = {"IMG": "images", "SPR": "sprites", "FLI": "flingy",
+                        "SND": "sounds", "WPN": "weapons"}[kind]
+            v = int(val, 0)
+            if v in kNoneMarkers.get(table_id, ()) or v < kV117[table_id]:
+                out.append(val)
+            elif v < len(names[table_id]):
+                ref_fn(table_id, v)
+                out.append(names[table_id][v])
+            else:
+                out.append(val)
+        else:
+            out.append(val)
+    return "    " + op + (" " + " ".join(out) if out else "") + \
+           ((" " + comment) if comment else "")
+
+
+def _label_opcodes():
+    return {"goto", "call", "randcondjmp", "pwrupcondjmp", "trgtrangecondjmp",
+            "trgtarccondjmp", "curdirectcondjmp", "liftoffcondjmp",
+            "imgolcondjmp", "imgulcondjmp", "overlaycondjmp"}
+
+
+def _emit_script(parts, name, fields, labels, file_index, names, tables, ref_fn):
+    """One script: its header (with label references prefixed) and its blocks."""
+    parts.append(".headerstart")
+    parts.append(f"Name          {name}")
+    for key, val in fields:
+        if key == "Type" and val.isdigit() and int(val) not in (
+                0, 1, 2, 12, 13, 14, 15, 20, 21, 23, 24, 26, 27, 29):
+            val = "2" if int(val) == 3 else "24"  # the mod's classes 3 and 25
+        if key != "Name" and val != "[NONE]" and val in file_index:
+            val = _label_name(file_index[val], val)
+        parts.append(f"{key:<14} {val}")
+    parts.append(".headerend")
+    parts.append("")
+    for label, lines in labels:
+        parts.append(f"{_label_name(name, label)}:")
+        for ln in lines:
+            t = iscript_arg_transforms(names, tables, ref_fn, ln)
+            if t is not None:
+                t = _rewrite_label_args(t, name, file_index)
+                parts.append(t)
+        parts.append("")
+
+
+def _label_name(owner, label):
+    return f"{owner}__{label}"
+
+
+def _rewrite_label_args(line, owner, file_index):
+    line = line.strip()
+    m = re.match(r"(\w+)(.*)$", line)
+    if not m:
+        return line
+    op, rest = m.group(1), m.group(2)
+    if op not in _label_opcodes():
+        return line
+    vals = rest.split()
+    if not vals:
+        return line
+    if vals[-1] in file_index:
+        vals[-1] = _label_name(file_index[vals[-1]], vals[-1])
+    else:
+        vals[-1] = _label_name(owner, vals[-1])
+    return "    " + op + (" " + " ".join(vals) if vals else "")
+
+
+def assemble_iscripts(mod_dir, tables, names, out_path, ref_fn):
+    """Write the mod's iscript.txt; return the script-name maps
+    {section: {IsId: name}} and the section-0 (vanilla rewrite) map."""
+    notes = []
+    script_map = {}  # section -> IsId -> name
+    gen_map = {}     # IsId -> name: the general/kogri rewrites, loaded into
+    #                  every section (and over the vanilla table at section 0)
+    parts = []
+    used = set()
+    # labels are one global namespace across the files (the mod's terran
+    # Minotaur even loops into the zerg Skryrokor's local block), so the
+    # index maps a label to its first definition's final (de-duplicated) name
+    all_headers = []  # (section or None, is_id, fields, labels)
+    for fname, section in sorted(kIscriptSections.items(), key=lambda kv: kv[1]):
+        path = os.path.join(mod_dir, "scripts", fname)
+        if not os.path.exists(path):
+            continue
+        for h in parse_iscript_file(path):
+            if h["is_id"] >= 0 and h["labels"]:
+                all_headers.append((section, h["is_id"], h["fields"], h["labels"]))
+    for fname in ("iscript_general.txt", "iscript_kogri.txt"):
+        path = os.path.join(mod_dir, "scripts", fname)
+        if not os.path.exists(path):
+            continue
+        for h in parse_iscript_file(path):
+            if h["is_id"] >= 0 and h["labels"]:
+                all_headers.append((None, h["is_id"], h["fields"], h["labels"]))
+    # names first, in file order
+    base_of = {}
+    final_names = []
+    for section, is_id, fields, labels in all_headers:
+        base = labels[0][0]
+        name = base
+        i = 2
+        while name in used:
+            name = f"{base}_{i}"
+            i += 1
+        used.add(name)
+        base_of[(section, is_id)] = name
+        final_names.append(name)
+    global_index = {}
+    for (section, is_id, fields, labels), name in zip(all_headers, final_names):
+        for label, _ in labels:
+            global_index.setdefault(label, name)
+    script_map = {}
+    gen_map = {}
+    for (section, is_id, fields, labels), name in zip(all_headers, final_names):
+        if section is None:
+            gen_map[is_id] = name
+        else:
+            script_map.setdefault(section, {})[is_id] = name
+        _emit_script(parts, name, fields, labels, global_index, names, tables,
+                     ref_fn)
+    if out_path:
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(parts) + "\n")
+        print(f"wrote {out_path} ({len(parts)} lines)")
+    return script_map, gen_map, notes
+
+
 def reference_costs(path=None):
     path = path or os.path.expanduser("~/Games/cosmonarchy/CMBW-reference.txt")
     rows = {}
@@ -818,6 +1058,7 @@ def gen_types(tables, out_path, mod_dir):
         t = tables[table_id]
         row = t.row(r)
         out = {}
+        iscript_missing = fields_of.missing
         for (f, _, ref_table) in t.widths:
             v = row[f]
             if table_id == "units" and f == "hit_points":
@@ -840,10 +1081,21 @@ def gen_types(tables, out_path, mod_dir):
                 continue  # the mod's numeric grp index is meaningless to the
                 # loader: an edit keeps its vanilla art, a new record takes
                 # real art files (the art step, not the dat table)
-            if table_id == "images" and f == "script" and v >= 1000:
-                continue  # the mod's extended iscript ids (0x10000-based) need
-                # its iscript table; until the iscript step lands, the record
-                # keeps its base's script, as the loader's fallback provides
+            if table_id == "images" and f == "script":
+                # the mod's script ids: each section's table is the vanilla
+                # scripts plus the section's file and the general file,
+                # addressed as (section << 16) | IsId
+                sec = v >> 16
+                iid = v & 0xFFFF
+                if sec in script_map and iid in script_map[sec]:
+                    out[f] = script_map[sec][iid]
+                elif iid in gen_map:
+                    out[f] = gen_map[iid]
+                elif iid < 1000:
+                    out[f] = iid
+                else:
+                    iscript_missing.append((t.names[r].strip() if r < len(t.names) else r, hex(v)))
+                continue
             if table_id == "images" and f == "draw_function" and v >= 18:
                 continue  # the mod's extended draw functions need engine
                 # support; keep the base's until they are ported
@@ -891,6 +1143,18 @@ def gen_types(tables, out_path, mod_dir):
     researchable = frozenset(r for (t, r, f) in req_map if t == "techs" and f == "requires")
     cards, card_targets, card_notes = button_cards(mod_dir, tables, names, REPO, researchable)
     graft_targets.update(card_targets)
+
+    # The iscripts: assembled beside types.json; images name the scripts.
+    iscript_targets = set()
+
+    def iscript_ref(t_id, v):
+        if v < tables[t_id].rows:
+            iscript_targets.add((t_id, v))
+
+    script_map, gen_map, iscript_notes = assemble_iscripts(
+        mod_dir, tables, names, os.path.join(MOD_DATA, "iscript.txt"), iscript_ref)
+    graft_targets.update(iscript_targets)
+    fields_of.missing = []
 
     def refs_of(table_id, r):
         t = tables[table_id]
@@ -999,6 +1263,9 @@ def gen_types(tables, out_path, mod_dir):
         print(f"graft note: ... {len(graft_notes) - 40} more")
     for note in card_notes:
         print(f"cards note: {note[0]}: {note[1]}")
+    if fields_of.missing:
+        print(f"iscript note: {len(fields_of.missing)} images name scripts with no "
+              f"assembled form (kept their base's): {fields_of.missing[:10]}")
     if cards:
         doc["cards"] = cards
 
