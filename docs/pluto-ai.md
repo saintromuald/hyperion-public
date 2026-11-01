@@ -74,3 +74,22 @@ Transport: shared memory + events, with a pipes fallback.
 - Hyperion-side pieces, all present: full game state for the observation, unit orders for
   the actions, an AI boundary made for another level, and the lab's pattern of starting and
   owning a helper process.
+
+## The rig (tools/pluto-rig) — status 2026-11-01
+
+A Wine-hosted 32-bit harness now runs the real pluto.dll against scripted game state:
+the host compiles BWAPI 4.4.0's client-side GameImpl/PlayerImpl/UnitImpl over a
+GameData block it fills, patches a copy of the DLL so its StarCraft-global writes land
+in stand-in buffers (it writes SC's speed global at 0x5124d8 and friends by absolute
+address), and drives the module through its real vtable ([1] onStart, [2] onEnd(bool),
+[3] onFrame — not BWAPI 4.4.0's AIModule order).
+
+Reached: onStart runs, pluto_infer.exe launches and handshakes over BWRL_SHM
+("inference server up ... shm transport"), the model loads (int8mv, 6 threads,
+768 max_units).
+
+Blocked on: the bot's compiled Game/Player/Unit ABIs differ from the public 4.4.0
+headers, so its state reads hit the wrong vtable slots (own_race reads as -1; crash at
+onStart's tail). Next: align the host's vtables to what the bot calls (trace all
+impl methods / follow the worker), then the shm dumps become meaningful and the
+observation schema extraction begins.
