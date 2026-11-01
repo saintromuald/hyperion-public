@@ -147,3 +147,16 @@ the obs builder completes and dump/ captures begin.
   commit to the region is gated on the engine's ready-reply pump, which the rig does
   not yet service. Next: single-step the commit gate (the reply event), then the
   region fills and the schema extraction is mechanical.
+
+## State 2026-11-01 (session 2, closing)
+
+- The obs-send gate found and opened: the client is a static object at base+0x54160;
+  the handshake leaves its view pointer (+0x18) and send flag (+0x1C) unset in the
+  rig — setting view=0x7b1e4000 (the .data page holding the PLO1 header) and flag=1
+  makes the bot's writer (0x63fb4960) run: it writes the request header at
+  [view+0xC0] (N units) and serializes the obs at [view+0x100].
+- The obs serialization now crashes on the bot's unit-record walk — the last
+  unknown is the fork's per-unit record format (the serializer's node shape
+  {next, a..e} at 0x63fb0130). Next: measure the record format from the serializer's
+  disassembly + the client object, then the schema is complete and the Hyperion-side
+  sender can be written.
