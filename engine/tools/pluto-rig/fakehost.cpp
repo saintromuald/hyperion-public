@@ -265,7 +265,38 @@ static DWORD WINAPI ServePipe(LPVOID p) {  HANDLE hPipe = static_cast<HANDLE>(p)
 static HANDLE s_hShm;
 static void *s_view;
 
+static int s_nScan;
+static void ScanForHeader(int frame) {
+  // The shm header's magic, PLO1, must exist in the bot's mapped view once the
+  // handshake has run. Scan the whole loaded image for it each frame; dump the region
+  // around it when found.
+  unsigned char *base = reinterpret_cast<unsigned char *>(0x7b190000);
+  static void *s_found;
+  if (!s_found) {
+    for (unsigned a = 0x10000; a < 0x74000; a += 4) {
+      if (memcmp(base + a, "PLO1", 4) == 0) {
+        s_found = base + a;
+        FILE *f = fopen("dump/header-at.txt", "w");
+        if (f)
+          fprintf(f, "PLO1 at %p (base+%x) frame %d\n", s_found, a, frame),
+          fclose(f);
+        break;
+      }
+    }
+  }
+  if (s_found && frame % 10 == 0) {
+    char path[64];
+    snprintf(path, sizeof path, "dump/shm-f%05d.bin", frame);
+    FILE *f = fopen(path, "wb");
+    if (f) {
+      fwrite(s_found, 1, 0x20000, f);
+      fclose(f);
+    }
+  }
+}
+
 static void DumpShm(int frame) {
+  ScanForHeader(frame);
   if (!s_hShm) {
     s_hShm = OpenFileMappingA(FILE_MAP_READ, FALSE, "BWRL_SHM");
     if (!s_hShm)
