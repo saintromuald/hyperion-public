@@ -1,6 +1,6 @@
 # Porting ShieldBattery netcode (rally-point2) into Hyperion
 
-Status: **in progress** (Phases 0–4 and 6 done; Phase 5 next) · Branch: `netcode/sb-rally-port` · Owner: saintromuald
+Status: **in progress** (Phases 0–6 done; Phase 7 next) · Branch: `netcode/sb-rally-port` · Owner: saintromuald
 
 This document is the ground-up plan for giving Hyperion internet multiplayer by
 integrating ShieldBattery's netcode v2 ("rally-point2"). It records the
@@ -479,4 +479,20 @@ with no manual steps beyond the toolchain installs.
       survivor keeps playing. `rp_request_drop`, `rp_turn_consumed` and
       `RP_EV_CONNECT` are bridge additions (`saintromuald/rally-point2`
       branch `bridge`), subtree-pulled.
-- [ ] Phase 5: the room's online launch; Phase 7: pinning, CI, packaging.
+- [x] **Phase 5 — the room's online launch**: a match with
+      `"transport":"sb"` in its JSON is an online match. At its start the
+      room mints the session through the coordinator's control API — the
+      bridge's `rp_dev_mint` (blocking, launch-time only) signs the
+      `POST /session/create` with the tenant's client seed from the room's
+      `lanroom.json` settings (`sbCoordinator`, `sbTenant`, `sbKid`,
+      `sbClientSeed`, `sbServerName`) — and embeds each seat's setup JSON in
+      its launch; all the launches go out at once, and the match goes live
+      once every seat's game has begun its feed. The seats hand the launch's
+      setup to the provider (`SbSetLaunchJson`) and play the same path the
+      `--sb-setup` drills take; the map is the room's file transfer.
+      `tools/sbtest/sb_room.sh` passes: the scripted console makes an sb
+      match, the room mints a 2-slot session, and both seats reach in-game
+      lockstep through the relay (the console's `start` now carries the
+      match id — the same fix lands in `lan_ref.sh`).
+- [ ] Phase 7: pinning, CI, packaging (and the console's transport toggle,
+      which today's scripted console sets directly).
