@@ -149,9 +149,15 @@ static LONG CALLBACK VecHandler(EXCEPTION_POINTERS *e) {
   if (e->ExceptionRecord->ExceptionAddress == reinterpret_cast<void *>(0)) {
     static int s_nulls;
     FILE *f = fopen("c:\\fault.log", "a");
-    if (f)
-      fprintf(f, "null-call #%d ret=%p\\n", ++s_nulls, *reinterpret_cast<void **>(e->ContextRecord->Esp)),
+    if (f) {
+      fprintf(f, "null-call #%d ret=%p\\n", ++s_nulls, *reinterpret_cast<void **>(e->ContextRecord->Esp));
+      unsigned char *img = reinterpret_cast<unsigned char *>(0x7b190000);
+      fprintf(f, "d9a0:");
+      for (unsigned a = 0xd9a0; a < 0xd9e0; a += 4)
+        fprintf(f, " %02x%02x%02x%02x", img[a], img[a + 1], img[a + 2], img[a + 3]);
+      fprintf(f, "\\n");
       fclose(f);
+    }
     if (s_nulls < 200) {
       e->ContextRecord->Eip = reinterpret_cast<DWORD>(&NullStub);
       return EXCEPTION_CONTINUE_EXECUTION;
@@ -516,6 +522,14 @@ int main(int argc, char **argv) {
     Sleep(16);
   }
   onEnd(mod, 1);
+  {
+    HANDLE h = OpenFileMappingA(FILE_MAP_READ, FALSE, "BWRL_SHM");
+    printf("[fakehost] BWRL_SHM open: %p err=%lu\n", reinterpret_cast<void *>(h), GetLastError());
+    if (h) {
+      void *v = MapViewOfFile(h, FILE_MAP_READ, 0, 0, 0);
+      printf("[fakehost] BWRL_SHM view: %p\n", v);
+    }
+  }
   printf("[fakehost] done\n");
   return 0;
 }
