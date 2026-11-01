@@ -105,3 +105,19 @@ objects) live in the DLL's data — the spacing between consecutive statics give
 type's size, and the fields follow by diffing against known values. Next: measure the
 type layouts from the DLL's statics, then add shims for every by-value return, then
 the obs builder completes and dump/ captures begin.
+
+## State 2026-11-01 (session 2, fourth pass) — the game loop runs
+
+- The rig now plays a complete 1200-frame game: onStart (race, bandit, engine, chat) and
+  every onFrame, with only one absorbed null-call. The stack corruption was the
+  empty-set shim zeroing 16 bytes where the bot's set is 12 ({begin,end,cap}); fixed.
+- Slot-numbered call tracing confirms the bot calls the host's Unit/Player/Game slots
+  exactly at the 4.4.0 layout (+2 shift from the header order — the CRTP base and the
+  inline destructor), except the known fork slots (Player[4] race getter with an
+  out-param, the set-returning Unit slots, the Game chat slot).
+- Enum id tables found in the bot's .rdata (0x57080 and 0x57160, with the categorized
+  unit-id subtables after them) — the fork's type data lives in the loaded image and
+  is measurable there.
+- Remaining for the obs capture: the one null-call is the bot's shm-send entry
+  (ret=0x7b19d9cd, the wrapper's continuation) — find the gate that initialises its
+  send pointer, then dump/ fills with the observation and the schema extraction starts.
