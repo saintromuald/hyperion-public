@@ -107,6 +107,10 @@ New this session, read from the binaries and the running rig:
   and code, and guard-page taps (PAGE_GUARD + the vectored handler) on the driver,
   walk and writer pages that log every execution with the register context.
 
-Open (next session): pin down the record-head representation (module-owned obs-state,
-module+0x10F4), let the walk complete so the writer fills view+0xC0, then the
-differential scenarios (move a unit, change resources) name every field.
+Open (next session): the module's obs-state (module+0x10F4) is the live one, and its
+record list — a forward_list {head(+0x1E4), size(+0x1E8)} — holds one all-zero record:
+the builder runs but reads zeros from the host's units. The remaining gap is the
+fork-ABI unit getters (the slot audit covered the set-returning slots; the builder's
+type/position/hp getters need the same audit). Once the records fill, the walk
+completes, the writer fills view+0xC0 with N, and the differential scenarios (move a
+unit, change resources) name every field.

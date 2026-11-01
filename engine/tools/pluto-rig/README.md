@@ -199,10 +199,12 @@ The obs path is now mapped end to end; the schema extraction is one gate away.
 
 Open (next session):
 
-- Read the module-owned obs-state (module+0x10F4) instead of the static: its +0x1EC
-  head is the real record list; in the rig the static's head reads 0x0F000009 and the
-  module's walker runs with edi=0x0F000009 without faulting, so the head's
-  representation is the last unknown (a tagged pointer, or a field read one word off).
-- Once the head is pinned down, the walk completes, the writer's header (view+0xC0)
-  fills with N, and dump/ captures the observation; the differential scenarios
-  (move a unit, change resources) then name every field.
+- The module's obs-state is the live one (module+0x10F4, seen at 0x7B203120); its
+  record list is a forward_list {head(+0x1E4), size(+0x1E8)}. In the rig it holds one
+  all-zero record: the builder runs but reads zeros from the host's units, so the
+  remaining gap is the fork-ABI unit getters (the slot audit covered the
+  set-returning ones; the builder's type/position/hp getters need the same audit,
+  via rigtrace.log's slot-numbered calls correlated with the unit fields).
+- Once the records fill, the walk completes, the writer's header (view+0xC0) fills
+  with N, and dump/ captures the observation; the differential scenarios (move a
+  unit, change resources) then name every field.

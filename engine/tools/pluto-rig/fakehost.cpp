@@ -84,6 +84,12 @@ static void AddUnit(UnitTypes::Enum::Enum t, int player, int x, int y, int hp, i
   u.isCompleted = true;
   u.isIdle = true;
   u.exists = true;
+  // The obs holds only what the bot can see (it plays without maphack): mark every
+  // scripted unit visible to both players, or the record builder skips them all and
+  // the record list stays empty.
+  u.isDetected = true;
+  for (int k = 0; k < 9; ++k)
+    u.isVisible[k] = true;
   u.order = Orders::Enum::PlayerGuard;
   g->unitArray[n] = n;
   ++g->initialUnitCount;
@@ -674,6 +680,33 @@ int main(int argc, char **argv) {
                 f, head, *reinterpret_cast<unsigned *>(gates + 0x14),
                 gates[0x18], gates[0x21], gates[0x20],
                 *reinterpret_cast<unsigned *>(c + 0x2A4));
+        // The module owns an obs-state copy (module+0x10F4 = 0x7b203120): its
+        // record list is a forward_list {head(+0x1E4), size(+0x1E8)}.
+        unsigned char *m = reinterpret_cast<unsigned char *>(0x7b203120);
+        MEMORY_BASIC_INFORMATION q;
+        unsigned lhead = 0, lsize = 0;
+        if (VirtualQuery(m, &q, sizeof q) == sizeof q && q.State == MEM_COMMIT &&
+            !(q.Protect & (PAGE_NOACCESS | PAGE_GUARD))) {
+          memcpy(&lhead, m + 0x1E4, 4);
+          memcpy(&lsize, m + 0x1E8, 4);
+        }
+        fprintf(uf, "  module-list head=%08x size=%u\n", lhead, lsize);
+        unsigned lnode = lhead;
+        for (int i = 0; i < 6 && lnode > 0x10000 && lnode < 0x80000000; ++i) {
+          MEMORY_BASIC_INFORMATION nq;
+          unsigned char *n = reinterpret_cast<unsigned char *>(lnode);
+          if (VirtualQuery(n, &nq, sizeof nq) != sizeof nq || nq.State != MEM_COMMIT ||
+              nq.Protect & (PAGE_NOACCESS | PAGE_GUARD))
+            break;
+          fprintf(uf, "    node %d (%p):", i, reinterpret_cast<void *>(lnode));
+          for (int k = 0; k < 28; k += 4) {
+            unsigned v;
+            memcpy(&v, n + k, 4);
+            fprintf(uf, " %08x", v);
+          }
+          fprintf(uf, "\n");
+          memcpy(&lnode, n, 4);
+        }
         unsigned node = head;
         for (int i = 0; i < 8 && node > 0x10000 && node < 0x80000000; ++i) {
           MEMORY_BASIC_INFORMATION mbi;
