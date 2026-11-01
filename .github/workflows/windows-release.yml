@@ -1,0 +1,46 @@
+# Builds the fork's Windows program (with Remastered HD) on a GitHub runner and uploads
+# Hyperion.exe and SDL3.dll as an artifact. Start it by hand with the ref to build.
+name: Windows package
+
+on:
+  push:
+    branches: [remastered-win]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "branch, tag or commit to build"
+        required: true
+        default: "remastered-win"
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Libraries
+        working-directory: engine
+        run: python tools/get_libraries.py
+
+      - name: Build
+        working-directory: engine
+        run: python tools/build_engine_x64.py --no-install
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hyperion-windows
+          path: |
+            engine/src117/build/x64/Hyperion.exe
+            engine/src117/build/x64/SDL3.dll
+          if-no-files-found: error
