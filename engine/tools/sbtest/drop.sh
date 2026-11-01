@@ -124,6 +124,7 @@ done
 
 # the game resumes at the apply frame; wait for its step counter to keep moving
 # past the leave (the relay holds the drop ~30 s, so the stall is expected)
+CONTINUES=0
 for i in $(seq 1 90); do
     sleep 1
     kill -0 "$C0_PID" 2>/dev/null || break
