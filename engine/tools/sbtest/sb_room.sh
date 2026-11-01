@@ -105,7 +105,10 @@ def send(obj):
 send({"t": "hello", "name": "console", "key": "testkey"})
 time.sleep(0.5)
 send({"t": "newmatch", "map": mappath, "mapName": "online", "type": "melee",
-      "speed": "fastest", "rules": "hyperion", "transport": "sb", "players": 2})
+      "speed": "fastest", "rules": "hyperion", "players": 2})
+# the host's lobby toggle (what the console's transport button sends): switch
+# the match from the room's own relay to the online transport
+send({"t": "match", "match": 1, "transport": "sb"})
 for _ in range(30):
     time.sleep(0.5)
     s.settimeout(0.4)
