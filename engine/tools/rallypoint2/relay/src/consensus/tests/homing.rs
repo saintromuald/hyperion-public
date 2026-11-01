@@ -1,0 +1,350 @@
+//! Slot homing, reconnectable departures, the close-report latch, and departure retirement.
+
+use super::*;
+
+/// No maker exists yet for the session — the descriptor-arrival race: a
+/// client can dial before this relay has received any descriptor. Must
+/// admit, exactly like `has_departure`/`is_authority`'s "no maker" default,
+/// so this check introduces no new wait or refusal window.
+#[test]
+fn slot_homed_admits_when_no_maker_exists() {
+    let registry = new_decision_makers();
+    assert!(registry.admits_slot(&key(), SlotId(0)));
+}
+
+/// The admission gate reads an empty homed set as unenforced and admits
+/// everything — a legacy or dev descriptor that never carried the field
+/// must not lock its own clients out — while a non-empty set admits only
+/// the slots it names, the enforcement a production multi-relay descriptor
+/// turns on.
+///
+/// Its fail-closed sibling reads the same empty set the opposite way: it
+/// selects the one relay that answers a `FinalizeDrop`, and an open
+/// fallback would have every session relay finalize with its own
+/// (different) cursor.
+#[test]
+fn an_empty_homed_set_is_unenforced_for_admission_and_fail_closed_for_finalizing() {
+    for homed in [Vec::new(), vec![SlotId(0), SlotId(2)]] {
+        let enforced = !homed.is_empty();
+        let registry = new_decision_makers();
+        let _ = registry.sync_maker(
+            &key(),
+            MakerSync {
+                homed_slots: homed.iter().copied().collect(),
+                ..MakerSync::new(bounds(0, 20), Authority::SelfRelay)
+            },
+        );
+        assert!(
+            registry.admits_slot(&key(), SlotId(0)),
+            "slot 0 is admitted either way (enforced: {enforced})",
+        );
+        assert!(
+            registry.admits_slot(&key(), SlotId(2)),
+            "slot 2 is admitted either way (enforced: {enforced})",
+        );
+        assert_eq!(
+            registry.admits_slot(&key(), SlotId(1)),
+            !enforced,
+            "slot 1 is admitted only where nothing is enforced",
+        );
+        assert_eq!(
+            registry.strictly_homes(&key(), SlotId(0)),
+            enforced,
+            "strict homing never fails open on an empty set",
+        );
+        assert!(
+            !registry.strictly_homes(&key(), SlotId(1)),
+            "and never names a slot the descriptor did not",
+        );
+    }
+
+    assert!(
+        !new_decision_makers().strictly_homes(&key(), SlotId(0)),
+        "nor for a session this relay holds no maker for",
+    );
+}
+
+/// A departure defers the session-emptied close only while it mirrors the
+/// re-register admission gate: recorded, undecided, of a homed slot, and
+/// still held. A peer-homed slot's drop (held purely for authority-handoff
+/// robustness), an unheld departure (a clean leave released its hold), and
+/// a decided one (a peer authority's directive here) all defer nothing.
+#[test]
+fn a_reconnectable_departure_requires_homed_held_and_undecided() {
+    let registry = new_decision_makers();
+    let k = key();
+    let _ = registry.sync_maker(
+        &k,
+        MakerSync {
+            homed_slots: [SlotId(0)].into_iter().collect(),
+            ..MakerSync::new(bounds(0, 20), Authority::Peer)
+        },
+    );
+    let held_both: HashSet<SlotId> = [SlotId(0), SlotId(1)].into_iter().collect();
+
+    // A peer-homed slot drops: undecided session-wide and held, but its
+    // reconnect (if any) lands on its own home relay.
+    registry.record_departure(
+        &k,
+        SlotId(1),
+        DepartureStamps::default(),
+        LEAVE_REASON_DROPPED,
+    );
+    assert!(registry.has_undecided_departure(&k));
+    assert!(!registry.has_reconnectable_departure(&k, &held_both));
+
+    // This relay's own homed slot drops: while held, the close must wait —
+    // but with the hold gone (a clean leave releases it), nothing can be
+    // admitted back, so nothing waits.
+    registry.record_departure(
+        &k,
+        SlotId(0),
+        DepartureStamps::default(),
+        LEAVE_REASON_DROPPED,
+    );
+    assert!(registry.has_reconnectable_departure(&k, &held_both));
+    assert!(!registry.has_reconnectable_departure(&k, &HashSet::new()));
+
+    // The homed slot's leave is decided (a peer authority's directive): a
+    // reconnect is refused terminally now, so even a lingering hold defers
+    // nothing.
+    assert!(registry.observe_leave(&k, &leave(0, LEAVE_REASON_DROPPED, 1, 1)));
+    assert!(!registry.has_reconnectable_departure(&k, &held_both));
+    assert!(
+        registry.has_undecided_departure(&k),
+        "the peer-homed drop is still undecided session-wide",
+    );
+}
+
+/// With an empty homed set (unenforced — a legacy/dev descriptor), every
+/// held undecided slot counts, matching `admits_slot`'s permissive
+/// admission: a relay that would admit any slot's reconnect must also wait
+/// on any slot's held drop.
+#[test]
+fn a_reconnectable_departure_counts_every_held_slot_when_the_homed_set_is_empty() {
+    let registry = new_decision_makers();
+    let k = key();
+    let _ = sync_default(&registry, &k, bounds(0, 20), Authority::Peer);
+    let held: HashSet<SlotId> = [SlotId(3)].into_iter().collect();
+    assert!(!registry.has_reconnectable_departure(&k, &held));
+    registry.record_departure(
+        &k,
+        SlotId(3),
+        DepartureStamps::default(),
+        LEAVE_REASON_DROPPED,
+    );
+    assert!(registry.has_reconnectable_departure(&k, &held));
+}
+
+/// The abandoned-session force-decide commits even before any framed turn
+/// was observed: an abandoned session has no survivors to schedule the
+/// removal, so the apply frame is cosmetic, and holding the decision (as an
+/// ordinary decide does pre-frame) would strand the slot's hold — and the
+/// session close waiting on it — forever.
+#[test]
+fn force_decide_leave_commits_with_no_frame_basis() {
+    let mut maker = peer_maker();
+    maker.record_departure(SlotId(0), DepartureStamps::default(), LEAVE_REASON_DROPPED);
+    assert_eq!(
+        maker.decide_leave(SlotId(0), LEAVE_REASON_DROPPED),
+        None,
+        "an ordinary decide holds without a frame basis (and as a peer)",
+    );
+    let directive = maker
+        .force_decide_leave(SlotId(0), LEAVE_REASON_DROPPED)
+        .expect("the force-decide commits regardless");
+    assert_eq!(directive.apply_at_frame, 0, "cosmetic pre-frame apply");
+    assert_eq!(
+        maker.force_decide_leave(SlotId(0), LEAVE_REASON_DROPPED),
+        None,
+        "a duplicate force-decide dedups",
+    );
+    assert!(!maker.has_undecided_departure());
+}
+
+/// The session-closed report latches once per emptying and reopens when the
+/// relay serves the session again — and reports no verdict at all with no
+/// maker to latch on, leaving that reading to the caller.
+#[test]
+fn claim_close_report_latches_once_until_reopened() {
+    let registry = new_decision_makers();
+    let k = key();
+    assert_eq!(
+        registry.claim_close_report(&k),
+        None,
+        "no maker: nothing to latch, and no verdict",
+    );
+
+    let _ = sync_default(&registry, &k, bounds(0, 20), Authority::SelfRelay);
+    assert_eq!(
+        registry.claim_close_report(&k),
+        Some(true),
+        "the first claim wins",
+    );
+    assert_eq!(
+        registry.claim_close_report(&k),
+        Some(false),
+        "a second evaluation finds the close already reported",
+    );
+    registry.reopen_close_report(&k);
+    assert_eq!(
+        registry.claim_close_report(&k),
+        Some(true),
+        "serving again reopens the latch for the next emptying",
+    );
+}
+
+/// A rehome (or any later descriptor) replaces the homed set wholesale --
+/// a slot moved off this relay stops being admissible, and one moved onto
+/// it starts being admissible, with no accumulation across pushes.
+#[test]
+fn slot_homed_follows_a_later_descriptors_reassignment() {
+    let registry = new_decision_makers();
+    let _ = registry.sync_maker(
+        &key(),
+        MakerSync {
+            homed_slots: [SlotId(0)].into_iter().collect(),
+            ..MakerSync::new(bounds(0, 20), Authority::SelfRelay)
+        },
+    );
+    assert!(registry.admits_slot(&key(), SlotId(0)));
+    assert!(!registry.admits_slot(&key(), SlotId(1)));
+
+    // A later push (e.g. a rehome) moves slot 1 onto this relay and slot 0
+    // off it.
+    let _ = registry.sync_maker(
+        &key(),
+        MakerSync {
+            homed_slots: [SlotId(1)].into_iter().collect(),
+            ..MakerSync::new(bounds(0, 20), Authority::SelfRelay)
+        },
+    );
+    assert!(
+        !registry.admits_slot(&key(), SlotId(0)),
+        "slot 0 moved off this relay",
+    );
+    assert!(
+        registry.admits_slot(&key(), SlotId(1)),
+        "slot 1 moved onto this relay",
+    );
+}
+
+// -- Departed-slot lifecycle (slot leaves the live roster, never resurrects) --
+
+/// A departure retires the slot from the live roster on every relay, so the
+/// session frame follows the survivors instead of staying pinned at the
+/// departed slot's frozen last frame.
+#[test]
+fn a_departure_retires_the_slot_from_the_session_frame() {
+    let mut maker = peer_maker();
+    maker.observe_frame(SlotId(0), GameFrameCount(60));
+    maker.observe_frame(SlotId(1), GameFrameCount(50));
+    assert_eq!(maker.session_frame(), Some(GameFrameCount(50)));
+
+    maker.record_departure(SlotId(1), framed(50), LEAVE_REASON_DROPPED);
+    assert_eq!(
+        maker.session_frame(),
+        Some(GameFrameCount(60)),
+        "the survivors alone drive the session frame after a departure",
+    );
+}
+
+/// A late frame observation for a departed slot (its final turns racing the
+/// departure across the mesh) must not resurrect the slot's live state — the
+/// re-created entry would re-pin the session frame at the departed slot.
+#[test]
+fn observe_frame_ignores_a_departed_slot() {
+    let mut maker = peer_maker();
+    maker.observe_frame(SlotId(0), GameFrameCount(60));
+    maker.record_departure(SlotId(1), framed(50), LEAVE_REASON_DROPPED);
+
+    maker.observe_frame(SlotId(1), GameFrameCount(52));
+    assert!(!maker.slots.contains_key(&SlotId(1)), "no resurrection");
+    assert_eq!(
+        maker.session_frame(),
+        Some(GameFrameCount(60)),
+        "the late observation does not re-pin the session frame",
+    );
+}
+
+/// A stale conditions sample for a departed slot (an in-flight datagram that
+/// raced the departure) must not re-create its condition state either.
+#[test]
+fn conditions_ingest_does_not_resurrect_a_departed_slot() {
+    let mut maker = maker();
+    maker.observe_frame(SlotId(0), GameFrameCount(60));
+    maker.record_departure(SlotId(1), framed(50), LEAVE_REASON_DROPPED);
+
+    let _ = maker.ingest_local(&conditions(1, 150_000, 0, 100));
+    assert!(!maker.slots.contains_key(&SlotId(1)), "no resurrection");
+    assert_eq!(
+        maker.target(),
+        None,
+        "no live slot has conditions to size from"
+    );
+}
+
+/// A `LinkConditions` sidecar's slot field is a raw wire `u32`, unvalidated
+/// by the transport layer (unlike a turn payload's slot, which the link
+/// layer already rejects out-of-range before delivery). A slot past `u8`
+/// range must be skipped rather than truncated onto a real slot's tracked
+/// RTT/loss state.
+#[test]
+fn conditions_ingest_skips_an_out_of_range_slot_without_corrupting_a_real_one() {
+    let mut maker = maker();
+
+    let mut batch = conditions(5, 150_000, 0, 100);
+    // 300 truncates to 44 (300 % 256) under a bare `as u8` cast -- if slot 44
+    // ever exists, that would alias this malformed sample onto it. Neither
+    // slot 44 nor slot 300 should end up tracked.
+    batch
+        .slots
+        .push(rally_point_proto::messages::SlotConditions {
+            slot: 300,
+            rtt_us: 999_999,
+            lost_packets: 0,
+            sent_packets: 1,
+            connection_epoch: None,
+        });
+
+    let _ = maker.ingest_local(&batch);
+
+    assert!(
+        maker.slots.contains_key(&SlotId(5)),
+        "the well-formed slot in the same batch is still ingested"
+    );
+    assert!(
+        !maker.slots.contains_key(&SlotId(44)),
+        "the out-of-range slot must not alias onto slot 44 (300 truncated)"
+    );
+    assert_eq!(maker.slots.len(), 1, "only the valid slot was tracked");
+}
+
+/// The Join-time reconcile always includes a cached leave — even when the
+/// survivors' session frame is at/past its apply frame. As in the promotion
+/// case, the observed frames are send stamps that lead execution by the
+/// buffer depth, so they cannot distinguish "every survivor applied it" from
+/// "every survivor is stalled waiting for it"; the reconcile re-announces
+/// unconditionally and receipt dedups by slot.
+#[test]
+fn reconcile_always_includes_a_cached_leave() {
+    let mut maker = peer_maker();
+    // Both slots observed off mesh turns; slot 1 is homed on the peer relay.
+    maker.observe_frame(SlotId(0), GameFrameCount(40));
+    maker.observe_frame(SlotId(1), GameFrameCount(50));
+    maker.record_departure(SlotId(1), framed(50), LEAVE_REASON_DROPPED);
+    let leave = leave(1, LEAVE_REASON_DROPPED, 51, 1);
+    let _ = maker.observe_leave(&leave);
+
+    let (_, directives) = maker.leave_reconcile();
+    assert_eq!(directives, vec![leave]);
+
+    // The survivor's stamps reach and pass the apply frame: the directive is
+    // still re-announced (and the departure record with it).
+    maker.observe_frame(SlotId(0), GameFrameCount(75));
+    let (departures, directives) = maker.leave_reconcile();
+    assert_eq!(directives, vec![leave], "re-announced regardless of stamps");
+    assert_eq!(departures.len(), 1, "the departure record is announced too");
+}
+
+// -- Desync comparator (SyncTracker via DecisionMaker::observe_sync) --

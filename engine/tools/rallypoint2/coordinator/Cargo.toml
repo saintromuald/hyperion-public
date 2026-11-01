@@ -1,0 +1,91 @@
+[package]
+name = "rally-point-coordinator"
+description = "Multi-tenant netcode v2 control plane: relay registry, session setup, per-tenant tokens/quotas, and consensus policy."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+axum = { workspace = true }
+# In-process automatic TLS: obtains and renews the coordinator's Let's Encrypt
+# certificate over TLS-ALPN-01 on the listening port. `axum-server` hosts the
+# router behind rustls-acme's acceptor and carries the real transport peer address
+# into connect-info before the TLS handshake, so the enrollment gate still reads
+# real peers under TLS. Both are ring-only (see the workspace manifest).
+rustls-acme = { workspace = true }
+axum-server = { workspace = true }
+# `StreamExt::next` drives the ACME certificate-lifecycle event stream.
+futures-util = { workspace = true }
+rally-point-proto = { workspace = true }
+parking_lot = { workspace = true }
+ring = { workspace = true }
+# Verifies a relay's enroll proof-of-possession signature against its
+# presented certificate (`EndEntityCert::verify_signature`), without hand-
+# parsing the certificate's SPKI.
+rustls-webpki = { workspace = true }
+rustls-pki-types = { workspace = true }
+thiserror = { workspace = true }
+# `process` (on top of the workspace features) for the local `ProcessProvisioner`,
+# which spawns relay binaries as child processes and reaps them with kill-on-drop.
+tokio = { workspace = true, features = ["process", "signal"] }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
+color-eyre = { workspace = true }
+hex = { workspace = true }
+tracing-subscriber = { workspace = true }
+# The departure webhook client (coordinator → tenant). hyper + hyper-util are
+# already in the tree via axum, so no new crypto stack for the plain-HTTP path;
+# hyper-rustls adds https:// support on the ring provider (keeps the
+# ring-only, aws-lc-rs-free pin intact).
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+hyper-rustls = { workspace = true }
+http-body-util = { workspace = true }
+bytes = { workspace = true }
+base64 = { workspace = true }
+# The provisioned-relay enrollment ledger (minted ids + one-time enroll tokens +
+# cert-fingerprint bindings). SQLite bundled from source; coordinator-only.
+rusqlite = { workspace = true }
+# The AWS Fargate substrate: launch relay tasks on ECS and resolve their public
+# addresses from the attached EC2 network interface. Coordinator-only, ring-only
+# TLS (see the workspace manifest). `aws-smithy-http-client` supplies the ring
+# HTTPS connector the SDK clients are built with.
+aws-config = { workspace = true }
+aws-sdk-ecs = { workspace = true }
+aws-sdk-ec2 = { workspace = true }
+# The flight-recorder durable sink: stores relay-shipped observability blobs into a
+# DigitalOcean Spaces bucket over the S3 API, and serves tenant-authenticated reads
+# over them. Ring-only TLS via the shared `aws-smithy-http-client` connector, the same
+# isolation the ECS/EC2 clients hold.
+aws-sdk-s3 = { workspace = true }
+aws-smithy-http-client = { workspace = true }
+# Decompresses a stored recording (zstd-of-JSON, the encoding the relay uploads) on the
+# tenant read path, so `flight_blob` serves the original JSON. Decode side only — the
+# coordinator never compresses; the relay does that before uploading.
+zstd = { workspace = true }
+
+[dev-dependencies]
+rally-point-relay = { workspace = true }
+tower = { workspace = true }
+# `test-util` for the paused-clock tests: a test that would otherwise race a
+# wall-clock margin runs under `#[tokio::test(start_paused = true)]` and asserts
+# its timer's deadline exactly.
+tokio = { workspace = true, features = ["test-util"] }
+# A raw WebSocket client for the control-endpoint tests (e.g. a connection that
+# never sends its enroll Hello), which the relay's own client can't express.
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
+# Self-signed certs for the enroll proof-of-possession tests (`identity`'s unit
+# tests and the control-connection integration tests) — real certificates a
+# relay could actually present, not the fixed placeholder bytes descriptor
+# transport's older tests use.
+rcgen = { workspace = true }

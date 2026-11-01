@@ -1,0 +1,300 @@
+//! What a freshly registered link replays to converge: the leave, slot,
+//! started-report, lobby-log and resume-cursor re-sends a Join enqueues, and the
+//! presence push that carries a session's live-player count.
+
+use std::collections::HashMap;
+
+use rally_point_proto::ids::{SessionId, SlotId};
+
+use crate::key::SessionKey;
+use crate::routing;
+
+use super::conditions::ConditionsRegistry;
+use super::frames::*;
+use super::links::MeshControlTx;
+use super::seen::{SeenRegistries, has_resumable_state, resume_cursor_snapshot};
+
+/// Re-sends this relay's known leave state for `key` down a freshly registered
+/// link's control channel, so a link that died and redialed converges. Every
+/// recorded departure goes out as a `SlotDeparted` and every cached directive as
+/// a `LeaveDirective`, unconditionally — a leave is pushed once at decision time
+/// and re-pushed on every link re-join (and on an authority promotion); the relay
+/// has no sound way to tell "every survivor applied it" from "every survivor is
+/// still stalled waiting for it", so it never tries. All idempotent (dedup by
+/// slot on receipt) and cheap — a session has <=12 slots and leaves are rare.
+pub(super) fn reconcile_leaves_on_join(
+    decision_makers: &crate::consensus::DecisionMakers,
+    control_tx: &MeshControlTx,
+    key: &SessionKey,
+) {
+    let (departures, directives) = decision_makers.leave_reconcile(key);
+    // Unbounded send only fails on a closed channel; the driver we are
+    // registering into is alive here, so these always enqueue.
+    for (slot, stamps, reason, connection_epoch) in departures {
+        let _ = control_tx.send(slot_departed_frame(
+            key.session,
+            slot,
+            &stamps,
+            reason,
+            connection_epoch,
+        ));
+    }
+    for leave in directives {
+        let _ = control_tx.send(leave_directive_frame(key.session, leave));
+    }
+    // If the session already started, re-send the directive down the fresh link
+    // too: a peer relay that dialed in (or redialed) after the authority fired
+    // would otherwise never hear it, stranding its local slots. Idempotent — a
+    // relay that already started latches it again and re-fans to its own locals.
+    // Carries this relay's stored initial buffer depth, which is `None` on a
+    // resumed relay (it never sized one), so a re-push into a running game never
+    // resizes a live buffer.
+    if decision_makers.is_started(key) {
+        let initial_buffer_turns = decision_makers.initial_buffer_turns(key);
+        let _ = control_tx.send(session_start_frame(key.session, initial_buffer_turns));
+    }
+}
+
+/// Replays every active home-client slot and connection generation to a mesh
+/// peer after Join, or after that peer proves its own Join via initial presence.
+///
+/// The conditions registry is the linearization point deliberately: a slot is
+/// activated there immediately before its live `SlotPresent`, and retired there
+/// before its terminal departure is announced. Holding its lock through these
+/// synchronous enqueues means a concurrent slot transition falls wholly before
+/// or after the replay, never departure-then-stale-present. A slot whose setup
+/// has not activated yet will announce normally after this link registration.
+/// Duplicate replays are harmless because peer slot presence is set-valued.
+pub(super) fn reconcile_local_slots_on_join(
+    conditions: &ConditionsRegistry,
+    control_tx: &MeshControlTx,
+    key: &SessionKey,
+) {
+    let roster = conditions.lock();
+    let mut slots: Vec<(SlotId, Option<u64>)> = roster
+        .get(key)
+        .into_iter()
+        .flat_map(|slots| slots.iter())
+        .map(|(&slot, conditions)| (slot, conditions.connection_epoch))
+        .collect();
+    slots.sort_by_key(|(slot, _)| *slot);
+    for (slot, epoch) in slots {
+        let _ = control_tx.send(slot_present_frame(key.session, slot));
+        if let Some(epoch) = epoch {
+            let _ = control_tx.send(slot_connectivity_frame(
+                key.session,
+                slot,
+                true,
+                Some(epoch),
+            ));
+        }
+    }
+}
+
+/// Re-shares every game-started report this relay's own home clients made for
+/// `key` down a freshly registered link's control channel, so a peer that joined
+/// the mesh after those reports — or a relay that replaced one — converges on the
+/// full set instead of treating those slots as still loading forever. First-hand
+/// reports only: a relay never re-shares a peer's, so nothing loops the mesh.
+/// Idempotent on receipt (the accumulated set is a set) and cheap — a session has
+/// <=12 slots.
+pub(super) fn reconcile_started_slots_on_join(
+    decision_makers: &crate::consensus::DecisionMakers,
+    control_tx: &MeshControlTx,
+    key: &SessionKey,
+) {
+    for slot in decision_makers.started_home_slots(key) {
+        let _ = control_tx.send(slot_started_frame(key.session, slot));
+    }
+}
+
+/// Re-shares this relay's lobby log for `key` down a freshly registered link's
+/// control channel: every command that carries its author's origin seq. A
+/// lobby command crosses the mesh once, when its origin relay accepts it, so
+/// one lost with a dying link would never reach the peer's members on its own,
+/// and the author re-sending it reaches only its home relay, which refuses it
+/// as a repeat. The peer refuses what it already has and accepts the rest, the
+/// same rule it applies to a live copy. Called both at this relay's own Join
+/// and on the peer's first presence report, since a frame sent before the peer
+/// joined the session is dropped there. The whole log, not just home-authored
+/// commands: a peer may have missed a third relay's command too, and every
+/// copy carries the author's own seq, so nothing loops.
+pub(super) fn reconcile_lobby_on_join(
+    lobby: &crate::session::side_channel::LobbyChannel,
+    control_tx: &MeshControlTx,
+    key: &SessionKey,
+) {
+    lobby.reshare_identified(key, |command| {
+        let _ = control_tx.send(lobby_command_frame(key.session, command.clone()));
+    });
+}
+
+/// Sends this relay's copy of `key`'s session clock down a freshly registered
+/// link's control channel, so a relay that joins (or redials) after the anchor
+/// has deadlines to measure its own players against at once rather than on the
+/// next heartbeat. Called both at this relay's own Join and when the peer proves
+/// its Join with its first presence report: a frame sent before the peer joined
+/// the session is dropped there. Only a relay whose clock is anchored has one to
+/// send; merging it twice changes nothing.
+pub(super) fn reconcile_session_clock_on_join(
+    decision_makers: &crate::consensus::DecisionMakers,
+    control_tx: &MeshControlTx,
+    key: &SessionKey,
+) {
+    if let Some(clock) = decision_makers.session_clock_frame(key) {
+        let _ = control_tx.send(session_clock_frame(key.session, clock));
+    }
+}
+
+/// A replacement assigned an already-running session needs history even before
+/// its first local turn creates a forward-gate entry. Ordinary first joins have
+/// neither resumed assignment nor forwarding history, and ask for no old turns.
+pub(super) fn needs_resume_replay(
+    seen: &SeenRegistries,
+    makers: &crate::consensus::DecisionMakers,
+    key: &SessionKey,
+) -> bool {
+    makers.is_resumed(key) || has_resumable_state(seen, key)
+}
+
+/// Sends this relay's resume cursors for `key` down a freshly registered
+/// link's control channel — the mesh counterpart of
+/// [`reconcile_leaves_on_join`], closing the gap a redialed link's fresh
+/// transport state otherwise leaves: turns in flight or queued at the moment
+/// the old link died are gone from that link's own state, but this session's
+/// forward-gate cursors survive it (see [`resume_cursor_snapshot`]), so the
+/// fresh link can still ask for exactly what's missing. Every Join sends one,
+/// and a Join that resumes history or an assigned running session sends another
+/// on the peer's first presence report: a peer that had not joined the session
+/// yet drops the first ask unanswered.
+pub(super) fn reconcile_resume_cursors_on_join(
+    seen: &SeenRegistries,
+    makers: &crate::consensus::DecisionMakers,
+    control_tx: &MeshControlTx,
+    key: &SessionKey,
+) {
+    let cursors = resume_cursor_snapshot(seen, key);
+    let resuming = needs_resume_replay(seen, makers, key);
+    let _ = control_tx.send(resume_cursors_frame(key.session, cursors, resuming));
+}
+
+/// Reads one joined session's authoritative local-player count. Kept separate
+/// from the reliable-stream write so the short roster lock is never held over
+/// an await.
+pub(super) fn local_live_players(sessions: &routing::Sessions, key: &SessionKey) -> u32 {
+    let roster = sessions.lock();
+    roster.get(key).map_or(0, |slots| slots.len() as u32)
+}
+
+/// This relay's presence for one session as a link pushes it: the live-player
+/// count and the own went-live count it is consistent with (see
+/// [`own_went_live`](crate::session::presence::own_went_live)).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct SentPresence {
+    /// The live-player count in the frame.
+    pub(super) live: u32,
+    /// This relay's own went-live count when the count was sampled.
+    pub(super) went_live: u64,
+}
+
+/// Samples this relay's presence for `key`. The went-live count is read
+/// **before** the roster: a fill is only counted once the roster holds a
+/// player, so a counted fill followed by an empty roster means those players
+/// really left. Read the other way round, a client connecting between the two
+/// reads would pair an empty roster with its fill and report players who never
+/// left as gone, handing a peer the authority while this relay still holds it.
+pub(super) fn local_presence(
+    sessions: &routing::Sessions,
+    presence: &crate::session::presence::PresenceRegistry,
+    key: &SessionKey,
+) -> SentPresence {
+    let went_live = crate::session::presence::own_went_live(presence, key);
+    SentPresence {
+        live: local_live_players(sessions, key),
+        went_live,
+    }
+}
+
+/// The live-player counts that state this relay's presence in full to a peer
+/// that may know nothing of it: the current count while players are live, a
+/// positive count ahead of the zero once players have come and gone, and a bare
+/// zero only while none ever have. A peer keeps a relay it has never seen serve
+/// players in contention for authority, while this relay demotes itself the
+/// moment its roster empties, so a bare zero after players would leave each
+/// deferring to the other.
+///
+/// Sent on a Join and on the Join rendezvous, where nothing this link wrote
+/// earlier is known to have landed: the peer drops reports for a session it
+/// has not joined yet, and a fresh link's peer may be a restarted process. A
+/// peer that already knew the players left sees them briefly return, which
+/// costs one handoff that ends where it started.
+pub(super) fn presence_statement(current: SentPresence) -> Vec<u32> {
+    if current.live == 0 && current.went_live > 0 {
+        vec![1, 0]
+    } else {
+        vec![current.live]
+    }
+}
+
+/// The live-player counts to push so a peer that has received everything this
+/// link sent since the rendezvous catches up on one session: nothing when
+/// neither the count nor its history moved, the current count when it changed,
+/// and a positive count ahead of the zero when players connected and left
+/// between two samples (see [`presence_statement`] for why the zero alone is
+/// not enough).
+pub(super) fn presence_catch_up(sent: Option<SentPresence>, current: SentPresence) -> Vec<u32> {
+    match sent {
+        Some(sent) if sent.live == current.live => {
+            if current.live == 0 && sent.went_live != current.went_live {
+                vec![1, 0]
+            } else {
+                Vec::new()
+            }
+        }
+        _ => vec![current.live],
+    }
+}
+
+/// Pairs each count with the sample it came from, ready for
+/// [`push_presence_updates`].
+pub(super) fn presence_updates(
+    session: SessionId,
+    current: SentPresence,
+    counts: Vec<u32>,
+) -> impl Iterator<Item = (SessionId, SentPresence)> {
+    counts.into_iter().map(move |live| {
+        (
+            session,
+            SentPresence {
+                live,
+                went_live: current.went_live,
+            },
+        )
+    })
+}
+
+/// Pushes the presence changes a link-wide maintenance pass collected, the
+/// initial report a Join produced, or a one-shot Join-rendezvous reply. Regular
+/// maintenance is push-on-change over a reliable stream, so a stable roster
+/// writes nothing; the rendezvous deliberately repeats the current value after
+/// the peer proves it has joined. `presence_sent` advances only after its frame
+/// was written successfully.
+///
+/// An `Err` means the stream (and so the connection) is gone; the caller exits
+/// with `ConnectionFailed` like any other send failure.
+pub(super) async fn push_presence_updates(
+    presence_tx: &mut rally_point_transport::noq::SendStream,
+    presence_sent: &mut HashMap<SessionId, SentPresence>,
+    updates: &[(SessionId, SentPresence)],
+) -> Result<(), rally_point_transport::noq::WriteError> {
+    for &(session_id, sent) in updates {
+        let frame = rally_point_proto::mesh::MeshPresence {
+            session: session_id,
+            live_players: sent.live,
+        }
+        .encode();
+        presence_tx.write_all(&frame).await?;
+        presence_sent.insert(session_id, sent);
+    }
+    Ok(())
+}

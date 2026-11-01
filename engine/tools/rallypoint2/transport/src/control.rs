@@ -1,0 +1,677 @@
+//! The reliable control stream's I/O halves: the reader task and the frame
+//! writer, over the sans-I/O framing in
+//! [`proto::control_stream`](rally_point_proto::control_stream).
+//!
+//! Each side of a client ↔ relay connection opens one bidirectional stream
+//! after the auth handshake and writes length-prefixed `ControlFrame`s on it;
+//! the peer reads the stream it accepted. Both sides use only the send half of
+//! the stream they opened — the pairing gives each side a send half that
+//! exists from the moment it opens (QUIC's `open_bi` completes locally),
+//! instead of one side waiting to accept before it can ever write.
+//!
+//! Today the stream carries oversize turns — payloads the datagram path can
+//! never fit (see [`Link::deliver_external`](crate::Link::deliver_external)
+//! for how they rejoin the ordered turn stream) — plus the synced-leave
+//! machinery: a relay pushes a `LeaveDirective` down to a surviving client,
+//! and a client pushes a `LeaveIntent` up to announce its own clean
+//! departure. A client also pushes a `GameResult` up with its end-of-game
+//! report, and a `GameStarted` up when its game loop begins running — the latter
+//! being why the relay can push a `LoadStateProbe` down and read the echoed ack
+//! as proof no such report is still queued in the client. A rollback client
+//! also pushes its `RollbackStats` up for the relay's flight recording. The
+//! reader skips a frame kind it doesn't know, so the channel can grow
+//! chat/resync frames without a wire break.
+
+use prost::bytes::Bytes;
+use rally_point_proto::control_stream::encode_frame;
+use rally_point_proto::messages::{
+    ControlFrame, GameChat, GameResult, GameStarted, LeadReport, LeaveDirective, LeaveIntent,
+    LoadStateProbe, LoadStateProbeAck, LobbyCommand, Payload, PhaseApplied, PhaseDirective,
+    PlayerSkin, RegionLabel, RegionLabels, RequestDrop, RollbackStats, SessionStart,
+    SlotConnectivity, control_frame,
+};
+use tokio::sync::mpsc;
+
+pub use crate::control_framing::ControlSendError;
+use crate::control_framing::read_one_frame;
+
+/// A frame surfaced from the reliable control stream to its consumer.
+///
+/// The stream carries more than one kind now, so the reader hands back a tagged
+/// value rather than a bare payload. Most kinds travel one way only, and each
+/// variant's own doc names which: an edge that receives one travelling the wrong
+/// way ignores it rather than tearing the stream down, exactly as the client edge
+/// ignores a stray `LeaveIntent` and the relay edge a stray `Leave`.
+/// Unlike the rest, `Lobby`, `Chat`, and `Skin` are legitimate in *both*
+/// directions — their `slot` field's authority just flips with direction (see
+/// [`LobbyCommand`], [`GameChat`], and [`PlayerSkin`]'s docs).
+#[derive(Debug)]
+pub enum ControlInbound {
+    /// An oversize turn to fold back into the ordered turn stream.
+    OversizeTurn(Payload),
+    /// A relay-pushed synced player-leave (relay → client). Delivered here, on
+    /// the reliable stream, because a drop stops the turn stream that the leave
+    /// would otherwise have to ride.
+    Leave(LeaveDirective),
+    /// A client announcing its own clean departure (client → relay only). A
+    /// relay never receives this from another relay, and a client never
+    /// receives it at all (it only ever sends one) — either edge that isn't
+    /// the relay reading a client's stream ignores it.
+    LeaveIntent,
+    /// A client's end-of-game result report (client → relay only). The bytes are
+    /// opaque here; the relay reading a client's stream stamps and forwards them,
+    /// and any other edge ignores a stray one just as it does a `LeaveIntent`.
+    GameResult(Bytes),
+    /// A client's report that its game loop has started (client → relay only).
+    /// Fieldless: the relay binds it to the authenticated connection's slot, so
+    /// there is nothing on the wire to surface. Any other edge ignores a stray
+    /// one just as it does a `LeaveIntent`.
+    GameStarted,
+    /// A lobby command one member authored, in both directions. Client → relay
+    /// carries this client's own lobby command (the relay ignores the frame's
+    /// `slot` and stamps the authenticated one); relay → client carries another
+    /// member's command with the relay's authoritative `slot` naming the author.
+    /// The whole message is surfaced so both directions can read the `slot`.
+    Lobby(LobbyCommand),
+    /// An in-game chat message one member authored, in both directions — the
+    /// mid-game counterpart to `Lobby`. Client → relay carries this client's own
+    /// message (the relay ignores the frame's `slot` and stamps the
+    /// authenticated one); relay → client carries another member's message with
+    /// the relay's authoritative `slot` naming the author. The whole message is
+    /// surfaced so both directions can read `slot`, `target_kind`, and
+    /// `target_slot`.
+    Chat(GameChat),
+    /// One member's opaque cosmetic-skin blob, in both directions — like `Lobby`
+    /// and `Chat`. Client → relay carries this client's own blob (the relay
+    /// ignores the frame's `slot` and stamps the authenticated one); relay →
+    /// client carries another member's blob with the relay's authoritative `slot`
+    /// naming which member it describes, either fanned live or replayed from the
+    /// relay's latest-per-slot map when this stream comes up after the blob
+    /// flowed. The whole message is surfaced so both directions can read `slot`
+    /// and the opaque `payload`.
+    Skin(PlayerSkin),
+    /// The relay-driven session-start directive (relay → client only): every
+    /// expected slot has connected, so the game may begin. A relay never receives
+    /// this from a client, so the relay edge ignores a stray one just as it does a
+    /// `Leave`. Carries the session's computed initial latency-buffer depth when
+    /// the authoring relay sized one (`Some(turns)`) — the game applies it to its
+    /// turn buffer before the first frame — or `None` when it sized none (an
+    /// authority that predates the field, or a resumed re-home re-push), in which
+    /// case the game keeps whatever depth it already seeded.
+    SessionStart(Option<u32>),
+    /// A relay-pushed slot-connectivity change (relay → client only): a member's
+    /// link died (`connected` false) or (re)registered (`connected` true). A relay
+    /// never receives this from a client, so the relay edge ignores a stray one
+    /// just as it does a `Leave`. The whole message is surfaced so the consumer
+    /// reads both `slot` and `connected`.
+    Connectivity(SlotConnectivity),
+    /// A survivor's manual request to drop a disconnected slot (client → relay
+    /// only). Carries only the target slot the requester wants dropped — the
+    /// requester itself is bound by the relay to the authenticated connection the
+    /// frame arrived on, never read from the wire, so the frame's `requester`
+    /// field is deliberately not surfaced here. A client never receives one back
+    /// (the relay is the only recipient), so the client edge ignores a stray one
+    /// just as it does a `LeaveIntent`.
+    RequestDrop(u32),
+    /// The session's relay → region-label map (relay → client only), released
+    /// once a stretch of real gameplay has elapsed on the sending relay's own
+    /// clock. A relay never receives one from a client, so the relay edge
+    /// ignores a stray one just as it does a `Leave`. The whole message is
+    /// surfaced because it is declarative — the complete map, replacing whatever
+    /// the consumer held — and may arrive more than once (the gate's fan-out, a
+    /// direct push on connecting after the gate opened, a re-fan when a later
+    /// descriptor changes the map), so the consumer applies it idempotently.
+    RegionLabels(RegionLabels),
+    /// A relay-authored send-phase directive (relay → client only): the total
+    /// delay this client should hold each outbound turn's wire handoff by, so
+    /// its arrival phase at the relay aligns with the other slots'. A relay
+    /// never receives one from a client, so the relay edge ignores a stray one
+    /// just as it does a `Leave`. The whole message is surfaced because it is
+    /// absolute — the entire commanded delay plus the slew-rate cap, replacing
+    /// whatever the consumer held — and may arrive more than once (a
+    /// correction racing the connect-time re-push), so the consumer applies it
+    /// idempotently, newest wins.
+    PhaseDirective(PhaseDirective),
+    /// A client's acknowledgement that it adopted a send-phase directive
+    /// (client → relay only), surfacing the echoed delay. The relay releases
+    /// the sender's command fence when it matches the currently commanded
+    /// delay; a client never receives one back, so the client edge ignores a
+    /// stray one just as it does a `LeaveIntent`.
+    PhaseApplied(u32),
+    /// A relay's load-state fence probe (relay → client only), carrying the
+    /// probe id to echo. The client answers it by writing any `GameStarted` it
+    /// owes and then the ack, in that order on this same stream. A relay never
+    /// receives one from a client, so the relay edge ignores a stray one just as
+    /// it does a `Leave`.
+    LoadStateProbe(u64),
+    /// A client's acknowledgement of a load-state fence probe (client → relay
+    /// only), surfacing the echoed probe id. The relay binds it to the
+    /// authenticated connection's slot; a client never receives one back, so the
+    /// client edge ignores a stray one just as it does a `LeaveIntent`.
+    LoadStateProbeAck(u64),
+    /// How early or late this client's turns have been reaching its home relay
+    /// against a rollback session's clock (relay → client only). Absolute — each
+    /// report restates the whole window, newest wins — so the consumer keeps
+    /// only the latest. A relay never receives one from a client, so the relay
+    /// edge ignores a stray one just as it does a `Leave`.
+    LeadReport(LeadReport),
+    /// A rollback client's cumulative statistics for the game so far (client →
+    /// relay only). The relay binds them to the authenticated connection's slot
+    /// and only records them; a client never receives one back, so the client
+    /// edge ignores a stray one just as it does a `LeaveIntent`.
+    RollbackStats(RollbackStats),
+}
+
+/// Depth of the reader-task → driver channel. Oversize turns are rare (the
+/// common turn is tens of bytes against a ~1200-byte datagram budget), so this
+/// is a backstop against a brief scheduling hiccup, not a tuned buffer.
+const CONTROL_CHANNEL_CAPACITY: usize = 64;
+
+/// Spawns a dedicated task that accepts the peer's control stream, reads its
+/// length-prefixed `ControlFrame`s, and forwards each oversize-turn payload
+/// over the returned channel.
+///
+/// A dedicated task for the same reason as the beacon reader: a `read_exact`
+/// dropped mid-frame inside a `select!` would desync the length-prefixed
+/// framing, so the read loop never crosses a `select!` boundary — the driver
+/// receives only complete, decoded payloads, over a channel whose `recv` is
+/// cancel-safe. Accepting lazily inside the task means a connection whose peer
+/// never sends a control frame just parks the reader harmlessly.
+///
+/// The length prefix is attacker-facing on the relay side, so it is validated
+/// against the frame cap *before* any allocation; an over-cap prefix ends the
+/// task (the stream can't be re-framed after a violation). The task also ends
+/// when the stream closes or the driver drops its receiver. Either way the
+/// dropped sender surfaces as `None` on the driver's `recv()` — a dead control
+/// stream is not itself a link failure (that surfaces via the datagram path),
+/// but any oversize turn that later needed it will stall the game, so the
+/// driver logs it.
+pub fn spawn_control_reader(connection: noq::Connection) -> mpsc::Receiver<ControlInbound> {
+    let (tx, rx) = mpsc::channel(CONTROL_CHANNEL_CAPACITY);
+    tokio::spawn(async move {
+        let Ok((_send_half, mut recv)) = connection.accept_bi().await else {
+            // Connection closed before the peer opened its control stream.
+            return;
+        };
+        // The send half of the *peer's* stream is unused by convention — each
+        // side writes only on the stream it opened — and dropping it here
+        // resets a direction the peer never reads.
+
+        loop {
+            let Some(frame) = read_one_frame::<ControlFrame>(&mut recv, "control").await else {
+                return;
+            };
+            let inbound = match frame {
+                ControlFrame {
+                    kind: Some(control_frame::Kind::OversizeTurn(payload)),
+                } => ControlInbound::OversizeTurn(payload),
+                ControlFrame {
+                    kind: Some(control_frame::Kind::LeaveDirective(leave)),
+                } => ControlInbound::Leave(leave),
+                ControlFrame {
+                    kind: Some(control_frame::Kind::LeaveIntent(LeaveIntent {})),
+                } => ControlInbound::LeaveIntent,
+                ControlFrame {
+                    kind: Some(control_frame::Kind::GameResult(GameResult { payload })),
+                } => ControlInbound::GameResult(payload),
+                ControlFrame {
+                    kind: Some(control_frame::Kind::GameStarted(GameStarted {})),
+                } => ControlInbound::GameStarted,
+                ControlFrame {
+                    kind: Some(control_frame::Kind::LobbyCommand(command)),
+                } => ControlInbound::Lobby(command),
+                ControlFrame {
+                    kind: Some(control_frame::Kind::GameChat(chat)),
+                } => ControlInbound::Chat(chat),
+                ControlFrame {
+                    kind: Some(control_frame::Kind::PlayerSkin(skin)),
+                } => ControlInbound::Skin(skin),
+                ControlFrame {
+                    kind:
+                        Some(control_frame::Kind::SessionStart(SessionStart {
+                            initial_buffer_turns,
+                        })),
+                } => ControlInbound::SessionStart(initial_buffer_turns),
+                ControlFrame {
+                    kind: Some(control_frame::Kind::SlotConnectivity(connectivity)),
+                } => ControlInbound::Connectivity(connectivity),
+                ControlFrame {
+                    // Only the target `slot` is surfaced; the wire `requester` is
+                    // never trusted (the relay stamps the authenticated slot).
+                    kind: Some(control_frame::Kind::RequestDrop(RequestDrop { slot, .. })),
+                } => ControlInbound::RequestDrop(slot),
+                ControlFrame {
+                    kind: Some(control_frame::Kind::RegionLabels(labels)),
+                } => ControlInbound::RegionLabels(labels),
+                ControlFrame {
+                    kind: Some(control_frame::Kind::PhaseDirective(directive)),
+                } => ControlInbound::PhaseDirective(directive),
+                ControlFrame {
+                    kind: Some(control_frame::Kind::PhaseApplied(PhaseApplied { delay_us })),
+                } => ControlInbound::PhaseApplied(delay_us),
+                ControlFrame {
+                    kind: Some(control_frame::Kind::LoadStateProbe(LoadStateProbe { probe_id })),
+                } => ControlInbound::LoadStateProbe(probe_id),
+                ControlFrame {
+                    kind:
+                        Some(control_frame::Kind::LoadStateProbeAck(LoadStateProbeAck { probe_id })),
+                } => ControlInbound::LoadStateProbeAck(probe_id),
+                ControlFrame {
+                    kind: Some(control_frame::Kind::LeadReport(report)),
+                } => ControlInbound::LeadReport(report),
+                ControlFrame {
+                    kind: Some(control_frame::Kind::RollbackStats(stats)),
+                } => ControlInbound::RollbackStats(stats),
+                // A frame kind this build predates: skip it, keep the stream.
+                ControlFrame { kind: None } => {
+                    tracing::debug!("skipping unknown control frame kind");
+                    continue;
+                }
+            };
+            if tx.send(inbound).await.is_err() {
+                // Consumer dropped its receiver: winding down.
+                return;
+            }
+        }
+    });
+    rx
+}
+
+/// Writes one oversize turn onto the control stream. An error means the stream
+/// (and almost certainly the connection) is gone; the caller must treat it as
+/// a link failure — unlike a lost datagram, this payload has no redundancy
+/// re-carrying it, so it cannot be silently dropped without desyncing
+/// lockstep.
+pub async fn send_control_turn(
+    control_send: &mut noq::SendStream,
+    payload: Payload,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::OversizeTurn(payload)),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Pushes one synced player-leave down the control stream (relay → client). Like
+/// an oversize turn it is reliable and un-redundant: an error means the stream
+/// is gone, which the caller treats as that client having left too. Delivering
+/// the leave here rather than on the turn envelope is the whole point — a drop
+/// stalls the game and stops the datagram turn stream, so the reliable stream is
+/// the only path that still reaches a stalled survivor.
+pub async fn send_control_leave(
+    control_send: &mut noq::SendStream,
+    leave: LeaveDirective,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::LeaveDirective(leave)),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Announces a client's own clean departure up the control stream (client →
+/// relay). Sent once, after the client has flushed its final turns, and never
+/// acked: the client's confirmation that the relay processed it is the relay
+/// closing the link. An error here means the stream (and almost certainly the
+/// connection) is already gone, in which case the departure needs no
+/// announcing — the relay will observe the link death directly.
+pub async fn send_control_leave_intent(
+    control_send: &mut noq::SendStream,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::LeaveIntent(LeaveIntent {})),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Sends a client's end-of-game result report up the control stream (client →
+/// relay). Sent once, the moment the game produces the result — mid-game, ahead
+/// of any final-turn drain — and never acked: it is a best-effort optimization
+/// feed, not a correctness signal, so an error here (the stream or connection
+/// gone) needs no recovery — the relay reasons the game's outcome from the
+/// departure that follows regardless.
+pub async fn send_control_game_result(
+    control_send: &mut noq::SendStream,
+    payload: Bytes,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::GameResult(GameResult { payload })),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Sends a rollback client's cumulative statistics up the control stream
+/// (client → relay). Best-effort, like a result report: the relay only records
+/// them, a later snapshot restates everything an earlier one said, and the
+/// caller re-sends the latest on its next stream, so an error here (the stream
+/// or connection gone) is logged and needs no recovery.
+pub async fn send_control_rollback_stats(
+    control_send: &mut noq::SendStream,
+    stats: RollbackStats,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::RollbackStats(stats)),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Announces that a client's game loop has started up the control stream
+/// (client → relay). Sent once, the moment the game begins stepping its
+/// simulation, and never acked: like a result report it is a best-effort
+/// optimization feed — it lets the tenant attribute a stalled load to the slots
+/// that never reported instead of guessing from a deadline — so an error here
+/// (the stream or connection gone) needs no recovery, and the caller logs and
+/// continues rather than treating it as a link failure.
+pub async fn send_control_game_started(
+    control_send: &mut noq::SendStream,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::GameStarted(GameStarted {})),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Sends a lobby command on the control stream, in either direction: a client
+/// pushes its own authored command up (leaving `slot` at 0 — the relay stamps
+/// the authenticated slot and never trusts a client value), and a relay fans a
+/// member's command down with `slot` stamped to the author. Reliable and
+/// un-redundant like an oversize turn: an error means the stream (and almost
+/// certainly the connection) is gone, so the caller treats it as a link failure
+/// — a dropped setup command would leave a member's pre-game state incomplete,
+/// so it cannot be silently dropped.
+pub async fn send_control_lobby(
+    control_send: &mut noq::SendStream,
+    command: LobbyCommand,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::LobbyCommand(command)),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Sends an in-game chat message on the control stream, in either direction: a
+/// client pushes its own authored message up (leaving `slot` at 0 — the relay
+/// stamps the authenticated slot and never trusts a client value), and a relay
+/// fans a member's message down with `slot` stamped to the author. Unlike a
+/// lobby command, a failed send here is not correctness-critical for the caller
+/// to treat as a link failure — chat has no pre-game state a lost message could
+/// leave incomplete — so the client-edge driver logs and continues on an
+/// `Err` here rather than propagating it as a fatal error, the same treatment
+/// it gives a failed `GameResult` send.
+pub async fn send_control_chat(
+    control_send: &mut noq::SendStream,
+    chat: GameChat,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::GameChat(chat)),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Sends a cosmetic-skin blob on the control stream, in either direction: a
+/// client pushes its own authored blob up (leaving `slot` at 0 — the relay
+/// stamps the authenticated slot and never trusts a client value), and a relay
+/// fans a member's blob down with `slot` stamped to the author (a live send or a
+/// replay from the relay's latest-per-slot map). Like a chat message, a failed
+/// send here is not correctness-critical for the caller to treat as a link
+/// failure — a skin is cosmetic, non-synced, and best-effort, so a lost blob
+/// costs only a wrong cosmetic — so the client-edge driver logs and continues on
+/// an `Err` here rather than propagating it as a fatal error, the same treatment
+/// it gives a failed `GameChat` send.
+pub async fn send_control_skin(
+    control_send: &mut noq::SendStream,
+    skin: PlayerSkin,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::PlayerSkin(skin)),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Pushes the session-start directive down the control stream (relay → client),
+/// carrying the session's computed initial latency-buffer depth in
+/// `initial_buffer_turns` (`Some(turns)`), or `None` when the authoring relay
+/// sized none (an authority that predates the field, or a resumed re-home
+/// re-push into a running game — where a stale depth must never resize the live
+/// buffer). Reliable and un-redundant like a leave: an error means the stream is
+/// gone, which the caller treats as that client having left. The relay may send
+/// it more than once (a re-push on a late slot, an authority handoff); the client
+/// dedups, so a repeat costs only a frame.
+pub async fn send_control_session_start(
+    control_send: &mut noq::SendStream,
+    initial_buffer_turns: Option<u32>,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::SessionStart(SessionStart {
+            initial_buffer_turns,
+        })),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Pushes a slot-connectivity change down the control stream (relay → client):
+/// `slot` either lost its link (`connected` false) or (re)registered one
+/// (`connected` true). Best-effort and informational — an error means the stream
+/// is gone, which the caller treats as that client having left, exactly like a
+/// leave or session-start push. The relay may send several over a game (a slot
+/// can flip more than once), and a client that missed one simply never sees it.
+pub async fn send_control_connectivity(
+    control_send: &mut noq::SendStream,
+    slot: u8,
+    connected: bool,
+    connection_epoch: Option<u64>,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::SlotConnectivity(SlotConnectivity {
+            slot: u32::from(slot),
+            connected,
+            connection_epoch,
+        })),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Sends a manual drop request up the control stream (client → relay). `slot` is
+/// the disconnected slot the requester wants dropped; the requester is left for
+/// the relay to bind to the authenticated connection, so the frame's `requester`
+/// field is unset here. Best-effort and un-acked: an error means the stream (and
+/// almost certainly the connection) is gone, but a drop request is not
+/// correctness-critical the way a turn or lobby command is — a survivor whose
+/// request never lands can simply send another once its link is back — so the
+/// caller logs and continues rather than treating an error as a link failure,
+/// the same treatment a `GameChat` send gets.
+pub async fn send_control_request_drop(
+    control_send: &mut noq::SendStream,
+    slot: u32,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::RequestDrop(RequestDrop {
+            slot,
+            requester: 0,
+        })),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Pushes the session's relay → region-label map down the control stream (relay
+/// → client). Sent only once the relay's release gate has opened, and then
+/// possibly several times per client (the gate's fan-out, a direct push to a slot
+/// that connected afterwards, a re-fan when a later descriptor changes the map);
+/// every frame carries the complete map, so a repeat is idempotent for the
+/// client. An error means the stream is gone, which the caller treats as that
+/// client having left, exactly like a leave or session-start push.
+pub async fn send_control_region_labels(
+    control_send: &mut noq::SendStream,
+    labels: Vec<RegionLabel>,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::RegionLabels(RegionLabels { labels })),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Writes a send-phase directive down a client's control stream (relay →
+/// client). Absolute and idempotent — the frame carries the client's whole
+/// commanded delay, so a repeat (a correction racing the connect-time re-push)
+/// costs a frame and nothing else. An error means the stream is gone, which
+/// the caller treats as that client having left, exactly like a leave or
+/// session-start push.
+pub async fn send_control_phase_directive(
+    control_send: &mut noq::SendStream,
+    directive: PhaseDirective,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::PhaseDirective(directive)),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Writes a lead report down a client's control stream (relay → client).
+/// Absolute — the report restates the whole window — so a repeat (a report
+/// racing the connect-time re-send) costs a frame and nothing else. An error
+/// means the stream is gone, which the caller treats as that client having
+/// left, exactly like a send-phase directive.
+pub async fn send_control_lead_report(
+    control_send: &mut noq::SendStream,
+    report: LeadReport,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::LeadReport(report)),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Writes a client's acknowledgement that it adopted a send-phase directive
+/// (client → relay), echoing the commanded delay verbatim. An error means the
+/// stream is gone; the caller treats a lost acknowledgement as best-effort —
+/// the relay simply parks the slot's command, the safe reading of silence.
+pub async fn send_control_phase_applied(
+    control_send: &mut noq::SendStream,
+    delay_us: u32,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::PhaseApplied(PhaseApplied { delay_us })),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Writes a load-state fence probe down a client's control stream (relay →
+/// client). The relay sends one per probed slot and waits for the echoed
+/// acknowledgement before it snapshots that session; an error means the stream
+/// is gone, so the caller has no fence for that slot and must read the slot as
+/// unfenced rather than treat the failure as a link failure — the probe is a
+/// question about the stream, not traffic the game depends on.
+pub async fn send_control_load_state_probe(
+    control_send: &mut noq::SendStream,
+    probe_id: u64,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::LoadStateProbe(LoadStateProbe {
+            probe_id,
+        })),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+/// Acknowledges a load-state fence probe up the control stream (client →
+/// relay), echoing the probe id verbatim. It must be written **after** any
+/// `GameStarted` the client owes, on this same stream, because the relay reads
+/// its arrival as proof that nothing the client had already queued is still
+/// behind it. An error means the stream is gone, in which case the relay's fence
+/// simply times out — the safe reading of silence.
+pub async fn send_control_load_state_probe_ack(
+    control_send: &mut noq::SendStream,
+    probe_id: u64,
+) -> Result<(), ControlSendError> {
+    let frame = ControlFrame {
+        kind: Some(control_frame::Kind::LoadStateProbeAck(LoadStateProbeAck {
+            probe_id,
+        })),
+    };
+    let encoded = encode_frame(&frame)?;
+    control_send.write_all(&encoded).await?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+    use crate::test_util::{Edge, loopback};
+
+    #[tokio::test]
+    async fn rollback_stats_survive_the_trip_past_a_frame_kind_the_reader_predates() {
+        // A client running ahead of its relay can send a frame kind the
+        // relay's reader has no arm for. The reader must skip it and keep the
+        // framing, so the statistics written straight after still arrive whole.
+        let (client_conn, server_conn, _client_ep, _server_ep) = loopback(Edge::Client).await;
+        let mut inbound = spawn_control_reader(server_conn);
+        let (mut send, _recv) = client_conn.open_bi().await.unwrap();
+
+        // A `ControlFrame` body carrying only an unknown oneof arm (field 99,
+        // length-delimited, empty), behind its length prefix.
+        let body: &[u8] = &[0x9A, 0x06, 0x00];
+        let mut framed = (body.len() as u32).to_le_bytes().to_vec();
+        framed.extend_from_slice(body);
+        send.write_all(&framed).await.unwrap();
+
+        let stats = RollbackStats {
+            version: 1,
+            through_turn: 720,
+            ticks: 1_500,
+            rollback_histogram: vec![900, 400, 150, 50],
+            pipe_histogram: vec![0, 0, 1_500],
+            schedule_corrected_us: -21_000,
+            lead_p90_max_us: -4_000,
+            clock_stopped_us: 84_000,
+            step_us: 3_000_000,
+            ..Default::default()
+        };
+        send_control_rollback_stats(&mut send, stats.clone())
+            .await
+            .unwrap();
+
+        let received = tokio::time::timeout(Duration::from_secs(5), inbound.recv())
+            .await
+            .expect("the statistics arrive before the timeout")
+            .expect("the reader is still running");
+        let ControlInbound::RollbackStats(received) = received else {
+            panic!("expected the statistics, got {received:?}");
+        };
+        assert_eq!(received, stats);
+    }
+}

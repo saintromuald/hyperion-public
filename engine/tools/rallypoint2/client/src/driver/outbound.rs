@@ -1,0 +1,413 @@
+//! What the game hands up: its produced turns (sent now, or held out a
+//! send-phase delay first) and the frames it authors for the reliable control
+//! stream — result report, loop-started announcement, lobby commands, chat,
+//! skin blobs, drop requests, rollback statistics. Grouped because they all
+//! end at the same two exits, the datagram path and the control stream.
+
+use std::time::Duration;
+
+use rally_point_proto::ids::SlotId;
+use rally_point_proto::messages::{GameChat, Payload, PlayerSkin};
+use rally_point_transport::Link;
+use rally_point_transport::control::{
+    send_control_chat, send_control_game_result, send_control_game_started,
+    send_control_request_drop, send_control_rollback_stats, send_control_skin,
+};
+use tokio::sync::watch;
+use tokio::time::Instant;
+
+use super::send::{OutboundSend, send_game_turn};
+use super::session::ArmFlow;
+use super::state::{GameSeam, LoopState};
+use super::wire::Wire;
+use super::{ChatOut, DriverError, HELD_TURN_CAP};
+
+/// One turn the game produced. With no send-phase delay in effect it goes
+/// straight to the wire; under a delay it joins the hold queue, and once
+/// anything is held every later turn queues behind it so wire order always
+/// matches production order.
+pub(super) async fn on_outgoing_turn(
+    outgoing: Option<Payload>,
+    link: &mut Link,
+    wire: &mut Wire,
+    state: &mut LoopState,
+    seam: &GameSeam,
+    own_slot: SlotId,
+) -> ArmFlow {
+    match outgoing {
+        // A turn the game produced. Its local echo already ran
+        // on the game side; only the wire handoff happens here.
+        // With no send-phase delay in effect it goes out
+        // immediately, exactly as if the hold queue did not
+        // exist. Under a delay it waits in the hold queue for
+        // its deadline instead — and once anything is held,
+        // every later turn queues behind it even at delay
+        // zero, so wire order always matches production order.
+        Some(payload) => {
+            let now = Instant::now();
+            let delay_us = state.phase_slew.advance(now);
+            let _ = seam.phase_status.send_replace(state.phase_slew.status());
+            if delay_us == 0 && state.held.is_empty() {
+                match send_game_turn(link, wire, state, own_slot, payload).await {
+                    OutboundSend::Sent => {}
+                    OutboundSend::EndSession(result) => return ArmFlow::End(result),
+                }
+                // The turn just sent may have been the last one
+                // outstanding, in which case a pending leave intent
+                // is now ready to go out.
+                if let Err(error) = state
+                    .announcer
+                    .maybe_send(
+                        &mut wire.control_send,
+                        &seam.outbound,
+                        state.held.is_empty(),
+                        link,
+                    )
+                    .await
+                {
+                    return ArmFlow::End(Err(DriverError::from(error)));
+                }
+            } else {
+                let due = now + Duration::from_micros(delay_us);
+                // Never due ahead of an already-held turn: a
+                // delay slewing downward must not reorder the
+                // wire against production order.
+                let due = state.held.back().map_or(due, |&(prev, _)| due.max(prev));
+                state.held.push_back((due, payload));
+                // The memory backstop: a producer outrunning
+                // the turn cadence would otherwise grow the
+                // hold without bound (the bounded channel is
+                // being drained into it). Send the oldest
+                // early — order and delivery hold, only its
+                // remaining delay is forfeited.
+                while state.held.len() > HELD_TURN_CAP {
+                    let Some((_, early)) = state.held.pop_front() else {
+                        break;
+                    };
+                    match send_game_turn(link, wire, state, own_slot, early).await {
+                        OutboundSend::Sent => {}
+                        OutboundSend::EndSession(result) => return ArmFlow::End(result),
+                    }
+                }
+            }
+        }
+        // The game dropped its sender: a clean stop (after
+        // the held-turn drain below the loop — the final turns
+        // of a "send, then close" teardown may still be
+        // waiting out their phase delay right here).
+        None => return ArmFlow::Teardown,
+    }
+    ArmFlow::Serve
+}
+
+/// A held turn's send-phase delay expired: hand it, and any
+/// other turn now due behind it, to the wire. This is the only
+/// branch that drains the hold queue mid-session, so the
+/// announcer check runs after it — the last held turn going out
+/// may release a pending leave intent.
+pub(super) async fn on_held_due(
+    link: &mut Link,
+    wire: &mut Wire,
+    state: &mut LoopState,
+    seam: &GameSeam,
+    own_slot: SlotId,
+) -> ArmFlow {
+    let now = Instant::now();
+    while state.held.front().is_some_and(|&(due, _)| due <= now) {
+        let Some((_, payload)) = state.held.pop_front() else {
+            break;
+        };
+        match send_game_turn(link, wire, state, own_slot, payload).await {
+            OutboundSend::Sent => {}
+            OutboundSend::EndSession(result) => return ArmFlow::End(result),
+        }
+    }
+    if let Err(error) = state
+        .announcer
+        .maybe_send(
+            &mut wire.control_send,
+            &seam.outbound,
+            state.held.is_empty(),
+            link,
+        )
+        .await
+    {
+        return ArmFlow::End(Err(DriverError::from(error)));
+    }
+    ArmFlow::Serve
+}
+
+/// The game handed over its end-of-game result report. Send it up
+/// the control stream immediately — mid-game, over a fully live
+/// link — rather than waiting for any turn drain: a defeat report
+/// must go out while the link is still up. At most one is sent; a
+/// second payload, or one arriving after the leave intent already
+/// went out, is dropped. Disarmed on the channel's first
+/// resolution (the payload, or the sender dropping without one),
+/// like the leave-intent branch.
+pub(super) async fn on_result(
+    payload: Option<Vec<u8>>,
+    link: &Link,
+    wire: &mut Wire,
+    state: &mut LoopState,
+    seam: &GameSeam,
+) -> ArmFlow {
+    match payload {
+        Some(payload) => {
+            if state.announcer.result_sent() {
+                tracing::debug!("dropping extra game-result payload; one already sent");
+            } else if state.announcer.sent() {
+                tracing::debug!("dropping game-result payload arriving after leave intent");
+            } else {
+                // A best-effort report: a failed send is not worth
+                // tearing the driver down over — the link may still
+                // be live for play (a mid-game defeat report leaves
+                // the game running), and the relay reasons the
+                // outcome from the departure that follows. Latch it
+                // as sent regardless, so the leave-intent hold
+                // releases and no retry piles up.
+                if let Err(error) =
+                    send_control_game_result(&mut wire.control_send, payload.into()).await
+                {
+                    tracing::debug!(
+                        %error,
+                        "game-result send failed; dropping the report"
+                    );
+                }
+                state.announcer.note_result_sent();
+                // Sending the result may have been the last thing
+                // a pending leave intent was holding for.
+                if let Err(error) = state
+                    .announcer
+                    .maybe_send(
+                        &mut wire.control_send,
+                        &seam.outbound,
+                        state.held.is_empty(),
+                        link,
+                    )
+                    .await
+                {
+                    return ArmFlow::End(Err(DriverError::from(error)));
+                }
+            }
+        }
+        // The game dropped its result sender without ever handing
+        // one over: nothing to send, and the leave-intent hold is
+        // still bounded by the safety timeout.
+        None => wire.result_alive = false,
+    }
+    ArmFlow::Serve
+}
+
+/// The game announced that its loop has begun running. Retain the
+/// fact for the session — every later control stream re-asserts it
+/// — and write the fieldless `GameStarted` frame up this one at
+/// once: it is only useful while fresh, and there is nothing to
+/// drain behind it. Best-effort, like a result report: a failed
+/// write is logged and left to the next stream's re-assertion. The
+/// already-announced case is a no-op: this stream's own
+/// re-assertion, or a fence probe answered ahead of it, has already
+/// carried the frame. Disarmed on the channel's first resolution,
+/// like the leave-intent and result branches.
+pub(super) async fn on_game_started(signal: Option<()>, wire: &mut Wire, state: &mut LoopState) {
+    wire.game_started_alive = false;
+    if signal.is_some() && !state.game_started_announced {
+        state.game_started_announced = true;
+        match send_control_game_started(&mut wire.control_send).await {
+            Ok(()) => wire.game_started_on_stream = true,
+            Err(error) => tracing::debug!(
+                %error,
+                "game-started send failed; retrying on the next stream"
+            ),
+        }
+    }
+}
+
+/// A lobby command the game authored during setup. Stamp it with
+/// its origin seq, queue it behind every earlier one, and write
+/// whatever the pacer allows up the reliable control stream at once
+/// (normally this command itself) — setup runs before any turn
+/// barrier exists, so there is nothing to drain behind. The relay
+/// stamps this client's authenticated slot (the `0` here is ignored)
+/// and fans it to the other members. Disarmed when the game drops
+/// its sender (setup finished).
+///
+/// A write that succeeds locally proves nothing: a connection whose
+/// path silently died accepts it and only times out later. Retention
+/// is what recovers that command — every new control stream writes
+/// the whole history again, and the relay drops each one it already
+/// accepted by `(slot, seq)`.
+pub(super) async fn on_lobby_out(
+    bytes: Option<Vec<u8>>,
+    wire: &mut Wire,
+    state: &mut LoopState,
+) -> ArmFlow {
+    match bytes {
+        Some(bytes) => {
+            if state.lobby_outbox.author(bytes) {
+                return send_due_lobby(wire, state).await;
+            }
+        }
+        None => wire.lobby_out_alive = false,
+    }
+    ArmFlow::Serve
+}
+
+/// Writes the lobby commands this stream has not carried yet, oldest
+/// first, as far as the pacer allows — the re-send of the history on a
+/// new stream, a command just authored, and whatever the pacer held
+/// back, all on one path through the one pacer. A failed write means the stream (and
+/// almost certainly the connection) is gone; a dropped setup command
+/// would leave a member's pre-game state incomplete, so it is the same
+/// reconnect trigger as an undeliverable oversize turn — except once our
+/// leave intent is out, the relay closing the stream under this write is
+/// the expected confirmation.
+pub(super) async fn send_due_lobby(wire: &mut Wire, state: &mut LoopState) -> ArmFlow {
+    if let Err(error) = state
+        .lobby_outbox
+        .send_due(&mut wire.control_send, &mut wire.lobby_sent)
+        .await
+    {
+        return ArmFlow::End(
+            state
+                .announcer
+                .absorb_link_close(Err(DriverError::from(error))),
+        );
+    }
+    ArmFlow::Serve
+}
+
+/// A chat message the game authored — the mid-game counterpart to
+/// the lobby branch above. Sent at once, same as a lobby command:
+/// chat has no turn barrier or drain to wait behind either. Unlike
+/// a lobby command, though, a send failure here is NOT treated as
+/// a link failure: chat has no pre-game state a lost message
+/// could leave incomplete, so this is best-effort like a
+/// `GameResult` send — log it and keep the driver running rather
+/// than tearing the session down over a dropped chat line.
+/// Disarmed only when the game drops its sender (chat streams for
+/// the whole game, unlike lobby).
+pub(super) async fn on_chat_out(chat: Option<ChatOut>, wire: &mut Wire) {
+    match chat {
+        Some(ChatOut {
+            target_kind,
+            target_slot,
+            text,
+        }) => {
+            let message = GameChat {
+                slot: 0,
+                target_kind,
+                target_slot,
+                text,
+            };
+            if let Err(error) = send_control_chat(&mut wire.control_send, message).await {
+                tracing::debug!(
+                    %error,
+                    "game-chat send failed; dropping the message"
+                );
+            }
+        }
+        None => wire.chat_out_alive = false,
+    }
+}
+
+/// A cosmetic-skin blob the game authored — broadcast to the other
+/// members near game start. Sent at once, same as a chat message:
+/// there is no turn barrier or drain to wait behind. The relay
+/// stamps this client's authenticated slot (the `0` here is ignored)
+/// and fans it to the other members. A send failure is best-effort
+/// like a chat send — a skin is cosmetic and non-synced, so a lost
+/// blob costs only a wrong cosmetic — so log it and keep the driver
+/// running rather than tearing the session down. Disarmed only when
+/// the game drops its sender.
+pub(super) async fn on_skin_out(bytes: Option<Vec<u8>>, wire: &mut Wire) {
+    match bytes {
+        Some(bytes) => {
+            let skin = PlayerSkin {
+                slot: 0,
+                payload: bytes.into(),
+            };
+            if let Err(error) = send_control_skin(&mut wire.control_send, skin).await {
+                tracing::debug!(
+                    %error,
+                    "player-skin send failed; dropping the blob"
+                );
+            }
+        }
+        None => wire.skin_out_alive = false,
+    }
+}
+
+/// A manual drop request the game authored: the survivor asked to
+/// drop a disconnected member. Send it up the reliable control stream
+/// at once — no drain to wait behind, like chat — naming the target
+/// slot; the relay stamps this client's authenticated slot as the
+/// requester. Best-effort, exactly like chat: a send failure is
+/// logged and swallowed rather than treated as a link failure, since
+/// a lost request is not correctness-critical — the survivor can
+/// simply click again, and the `LeaveDirective` for the target is the
+/// only confirmation. Disarmed only when the game drops its sender.
+pub(super) async fn on_request_drop(target: Option<SlotId>, wire: &mut Wire) {
+    match target {
+        Some(target) => {
+            match send_control_request_drop(&mut wire.control_send, u32::from(target.0)).await {
+                Ok(()) => tracing::info!(
+                    target = target.0,
+                    "drop-request control-stream write completed"
+                ),
+                Err(error) => {
+                    tracing::warn!(
+                        %error,
+                        target = target.0,
+                        "drop-request send failed; dropping the request"
+                    );
+                }
+            }
+        }
+        None => wire.request_drop_alive = false,
+    }
+}
+
+/// The game published a rollback statistics snapshot: write the newest up
+/// this stream. Disarmed when the game drops its sender, after which the
+/// newest snapshot is still re-sent on a new stream and ahead of the leave
+/// intent.
+pub(super) async fn on_rollback_stats(
+    changed: Result<(), watch::error::RecvError>,
+    wire: &mut Wire,
+    state: &LoopState,
+    seam: &mut GameSeam,
+) {
+    match changed {
+        Ok(()) => send_newest_rollback_stats(wire, state, seam).await,
+        Err(_) => wire.rollback_stats_alive = false,
+    }
+}
+
+/// Writes the game's newest rollback statistics snapshot up this stream,
+/// unless there is none or this stream already carried it. Nothing once the
+/// leave intent is out: the relay reads nothing past it. Best-effort, like a
+/// result report: the statistics only feed the relay's recording, so a failed
+/// write is logged and left for the next stream to re-send.
+pub(super) async fn send_newest_rollback_stats(
+    wire: &mut Wire,
+    state: &LoopState,
+    seam: &mut GameSeam,
+) {
+    if state.announcer.sent() {
+        return;
+    }
+    let Some(stats) = seam.rollback_stats.borrow_and_update().clone() else {
+        return;
+    };
+    if wire.rollback_stats_on_stream.as_ref() == Some(&stats) {
+        return;
+    }
+    match send_control_rollback_stats(&mut wire.control_send, stats.clone()).await {
+        Ok(()) => wire.rollback_stats_on_stream = Some(stats),
+        Err(error) => tracing::debug!(
+            %error,
+            "rollback-stats send failed; re-sending on the next stream"
+        ),
+    }
+}

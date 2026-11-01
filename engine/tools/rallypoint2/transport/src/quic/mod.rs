@@ -1,0 +1,425 @@
+//! Shared QUIC setup for a netcode v2 link.
+//!
+//! Both endpoints of a link use the same crypto configuration: the client dials
+//! its home relay, and the relay accepts both clients and mesh peers. Building
+//! that config once here keeps the two roles in lockstep on protocol version,
+//! ALPN, and crypto provider.
+//!
+//! The crypto provider is pinned to **ring**, not the default aws-lc-rs, because
+//! the client links this crate into the 32-bit game DLL, and ring builds for
+//! `i686-pc-windows-msvc` without a C/NASM toolchain. Selecting it explicitly
+//! (rather than relying on a process-wide default provider) means a host that
+//! happens to have aws-lc-rs linked elsewhere can't change which provider a link
+//! uses.
+//!
+//! TLS here secures the channel and proves the relay's server identity; it does
+//! **not** authenticate the *client*. Client authorization is a separate
+//! app-level step — the signed token plus a connection-binding challenge — that
+//! runs after the QUIC handshake, so these connections use no client
+//! certificates.
+
+use std::sync::Arc;
+
+use noq::crypto::rustls::{NoInitialCipherSuite, QuicClientConfig, QuicServerConfig};
+use rustls::client::danger::HandshakeSignatureValid;
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, UnixTime};
+use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
+use rustls::{DigitallySignedStruct, DistinguishedName, SignatureScheme};
+
+mod congestion;
+
+pub use congestion::MIN_CONGESTION_WINDOW;
+
+/// Preferred client-edge protocol, retaining the authenticated stream for periodic evidence.
+/// Both endpoints also offer [`EVIDENCE_ALPN`] and [`LEGACY_ALPN`].
+/// Mesh connections use the independent [`MESH_ALPN`] namespace.
+///
+/// Bump the trailing version when the handshake, datagram framing, or stream shape
+/// becomes incompatible. Negotiation selects a complete wire contract before any
+/// application bytes are exchanged, so incompatible peers fail during TLS rather
+/// than misreading each other's messages. Offering the legacy version alongside
+/// the preferred version permits either rollout order; each negotiated version
+/// must retain its own framing. Mesh versions evolve independently because their
+/// connections carry different packets and streams.
+pub const ALPN: &[u8] = b"rp2/3";
+
+/// Client-edge protocol with admission evidence only.
+pub const EVIDENCE_ALPN: &[u8] = b"rp2/2";
+
+/// Client-edge protocol without the optional evidence frame.
+pub const LEGACY_ALPN: &[u8] = b"rp2/1";
+
+/// Whether the negotiated client-edge protocol includes the evidence frame.
+pub fn supports_evidence(connection: &noq::Connection) -> bool {
+    connection.handshake_data().is_some_and(|data| {
+        data.downcast_ref::<noq::crypto::rustls::HandshakeData>()
+            .and_then(|data| data.protocol.as_deref())
+            .is_some_and(|protocol| protocol == ALPN || protocol == EVIDENCE_ALPN)
+    })
+}
+
+/// Whether the authenticated stream supports periodic evidence exchanges.
+pub fn supports_periodic_evidence(connection: &noq::Connection) -> bool {
+    connection.handshake_data().is_some_and(|data| {
+        data.downcast_ref::<noq::crypto::rustls::HandshakeData>()
+            .and_then(|data| data.protocol.as_deref())
+            == Some(ALPN)
+    })
+}
+
+/// ALPN protocol id negotiated on every relay ↔ relay mesh QUIC connection. A
+/// relay-pair shares one connection across every game both relays jointly serve,
+/// so it is distinct from the client-edge [`ALPN`]: the connection carries
+/// `MeshPacket` datagrams (a `Packet` wrapped with the session it belongs to),
+/// not client-edge `Packet` datagrams. `1` is the first version shipped to
+/// production, and like the client edge it bumps on any wire- or
+/// connection-shape change an older peer can't interoperate with.
+///
+/// Versioned on a **separate line** from the client-edge [`ALPN`] (`rp2-mesh/N`,
+/// not `rp2/N`), because the server advertises both and dispatches by which one
+/// negotiated — so the two strings must stay distinct forever, even as each
+/// bumps independently. A shared `rp2/N` line would collide: a future
+/// client-edge-only bump (a handshake or stream-shape change the mesh's own
+/// establishment doesn't share) would push the client number onto one the mesh
+/// already occupies, the server would advertise two identical strings, and
+/// `protocol()` couldn't tell a client from a peer relay. The separate namespace
+/// makes that impossible.
+pub const MESH_ALPN: &[u8] = b"rp2-mesh/1";
+
+/// Failure to assemble a QUIC TLS configuration.
+#[derive(Debug, thiserror::Error)]
+pub enum TlsError {
+    /// The underlying rustls configuration was rejected (e.g. the cert and key
+    /// don't match, or no protocol version is available).
+    #[error("rustls configuration error: {0}")]
+    Rustls(#[from] rustls::Error),
+    /// rustls produced a config QUIC can't use because it lacks a TLS 1.3
+    /// initial cipher suite. Not reachable with the ring provider, which always
+    /// supplies one.
+    #[error("QUIC requires a TLS 1.3 cipher suite: {0}")]
+    NoInitialCipherSuite(#[from] NoInitialCipherSuite),
+}
+
+/// How often a QUIC mesh connection sends a keepalive PING frame when it has
+/// no outgoing datagrams of its own. Prevents idle-timeout disconnects on a
+/// mesh link that goes briefly silent — between turns in a quiet game, or
+/// when no sessions are joined yet — without adding app-level traffic. QUIC's
+/// keepalive is cheaper than an app-level datagram (no payload, no redundancy
+/// processing) and rides the existing congestion controller.
+///
+/// Set clear of ordinary jitter (the mesh flush timer fires every 150ms
+/// during active play, so a keepalive at 5s only fires during a genuine
+/// silence). Short enough that a NAT mapping or firewall state doesn't expire
+/// mid-game (consumer NAT timeouts are typically 30–60s; AWS security groups
+/// allow established UDP flows indefinitely).
+const KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The maximum idle time before QUIC closes a connection. The default (30s) is
+/// too long: a dead peer or a dropped NAT mapping would stall lockstep for 30s
+/// before anyone notices. 10s detects a dead peer fast enough that a stall
+/// surfaces promptly (and, on the client edge, that a departed player's leave is
+/// decided within ~10s), while staying clear of brief silences (keepalive fires
+/// at 5s, so a live connection never approaches this timeout).
+///
+/// Applied to every dial side (`keepalive_transport_config`): the mesh edge and
+/// the client edge, and one side's keepalive keeps both ends alive (its PINGs
+/// elicit ACKs, resetting both idle timers). QUIC negotiates the idle timeout as
+/// the minimum of both endpoints' advertised values, and a dialer that advertises
+/// none leaves only the other side's, so the accept side ([`server_config`])
+/// advertises it too: the relay's own bound on a dead client link must not be a
+/// value the client chose.
+pub const MAX_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Builds a `TransportConfig` running the floored congestion controller (see
+/// [`floored_transport_config`]), with keepalive (to prevent idle disconnects during
+/// silences) and a shorter-than-default idle timeout (to detect dead peers fast).
+/// Applied to every dial side — mesh ([`mesh_client_config`]) *and* client edge
+/// ([`client_config`]). On the client edge it is load-bearing: when a player
+/// drops, lockstep stalls every survivor and their turn traffic stops, so without
+/// keepalive their own connections would idle-time-out and the relay would wrongly
+/// drop them too; the PINGs keep a stalled-but-alive client connected until the
+/// relay pushes it the leave that unstalls it, and only the genuinely dead client
+/// (no PINGs) times out — a clean drop detector. One side's keepalive keeps both
+/// idle timers reset, so the accept side sends none; it does advertise the same
+/// idle timeout ([`server_config`]), so a dialer cannot lengthen it.
+fn keepalive_transport_config() -> noq::TransportConfig {
+    let mut config = floored_transport_config();
+    config.keep_alive_interval(Some(KEEPALIVE_INTERVAL));
+    config.max_idle_timeout(Some(
+        noq::IdleTimeout::try_from(MAX_IDLE_TIMEOUT).expect("10s fits in a VarInt"),
+    ));
+    config
+}
+
+/// A default `TransportConfig` running the floored Cubic controller (see
+/// [`MIN_CONGESTION_WINDOW`]). Every side of every link starts from this: each
+/// endpoint's controller governs only what that endpoint sends, so the floor has
+/// to be set on the relay's accept side as well as on each dialer.
+fn floored_transport_config() -> noq::TransportConfig {
+    let mut config = noq::TransportConfig::default();
+    config.congestion_controller_factory(Arc::new(congestion::FlooredCubicConfig::default()));
+    config
+}
+
+/// The ring crypto provider, constructed fresh so we never depend on a
+/// process-wide default having been installed.
+fn ring_provider() -> Arc<rustls::crypto::CryptoProvider> {
+    Arc::new(rustls::crypto::ring::default_provider())
+}
+
+/// The SHA-256 fingerprint of a DER-encoded TLS certificate — the compact form
+/// the mesh-accept path pins a dialing peer's presented client certificate
+/// against, and the coordinator records to remember which certificate a relay
+/// enrolled with. A relay's identity *is* this fingerprint: there is no shared
+/// certificate authority, so two independently self-signed relay certs have
+/// nothing else in common to check.
+///
+/// The fingerprints the coordinator distributes in the fleet-peer set are
+/// computed by its own equivalent of this digest (SHA-256 over the raw DER
+/// bytes), and the accept-path pin compares the two byte-for-byte — any change
+/// to this digest must land on both sides at once.
+pub fn cert_fingerprint(cert_der: &[u8]) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    out.copy_from_slice(ring::digest::digest(&ring::digest::SHA256, cert_der).as_ref());
+    out
+}
+
+/// A freshly established connection's datagram budget falls short of
+/// [`GUARANTEED_DATAGRAM_BUDGET`](crate::ack_manager::GUARANTEED_DATAGRAM_BUDGET)
+/// — the peer advertised a datagram limit below the floor the transport's
+/// liveness arguments assume (path MTU alone can never take the budget under
+/// the floor; only a peer's handshake parameter can).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error(
+    "peer's datagram budget ({advertised} bytes) is under the {floor}-byte guaranteed floor \
+     (or datagrams are unsupported)"
+)]
+pub struct DatagramBudgetTooSmall {
+    /// The connection's live `max_datagram_size()`, or 0 when datagrams are
+    /// not supported at all.
+    pub advertised: usize,
+    /// [`GUARANTEED_DATAGRAM_BUDGET`](crate::ack_manager::GUARANTEED_DATAGRAM_BUDGET).
+    pub floor: usize,
+}
+
+/// Verifies that `connection` supports datagrams with a budget at or above the
+/// guaranteed floor. **Every** link establishment — client-edge dial,
+/// client-edge accept, mesh dial, mesh accept — must call this and refuse the
+/// connection on failure, because the floor is an admission-time invariant the
+/// rest of the transport builds on: payloads are admitted for datagram
+/// carriage against the floor and are assumed to fit every packet the
+/// connection (and any later rebind target) will ever build. A peer whose
+/// advertised limit undercuts the floor is an unsupported configuration;
+/// refusing it outright at establishment is strictly better than degrading
+/// into a state where preserved unacked payloads no longer fit the link that
+/// is supposed to replay them.
+pub fn verify_datagram_budget(connection: &noq::Connection) -> Result<(), DatagramBudgetTooSmall> {
+    let floor = crate::ack_manager::GUARANTEED_DATAGRAM_BUDGET;
+    let advertised = connection.max_datagram_size().unwrap_or(0);
+    if advertised < floor {
+        return Err(DatagramBudgetTooSmall { advertised, floor });
+    }
+    Ok(())
+}
+
+/// Requests but does not require a TLS client certificate from a peer dialing
+/// the relay's single listening endpoint ([`server_config`]), and accepts
+/// whatever certificate is presented without validating it against any
+/// certificate chain, trust anchor, or expiry.
+///
+/// The client edge and the mesh edge share one TLS listener, and their two
+/// kinds of dialer need opposite defaults: a game client presents no
+/// certificate at all (client authorization is a separate app-level step, see
+/// the module docs) and must keep connecting exactly as before; a peer relay
+/// dialing the mesh edge now presents its own self-signed leaf certificate as
+/// its TLS client identity ([`mesh_client_config`]). `client_auth_mandatory`
+/// returning `false` is what keeps the client edge unaffected — a connection
+/// presenting no certificate is accepted here exactly as `with_no_client_auth`
+/// always accepted it.
+///
+/// **This verifier makes no trust decision.** `verify_client_cert` accepts any
+/// certificate unconditionally — there is no root store to check it against,
+/// because relay certs are independently self-signed with no shared CA. The
+/// actual trust decision is made one layer up, at the application level: the
+/// mesh acceptor SHA-256s the presented leaf ([`cert_fingerprint`]) and pins it
+/// against the fingerprint the coordinator recorded for the claimed relay id at
+/// that relay's enroll, refusing the connection post-handshake on a mismatch. A
+/// certificate this verifier "accepted" only proves the dialer holds the
+/// matching private key — which certificate is trustworthy is a fact this
+/// verifier does not have.
+///
+/// Signature verification still runs for real: `verify_tls12_signature` and
+/// `verify_tls13_signature` delegate to the ring provider's default webpki-based
+/// checks, which parse the certificate to extract its public key. So "no chain
+/// validation" means no root/issuer/expiry check, not no check at all — a
+/// certificate that isn't valid X.509, or a handshake signature that doesn't
+/// actually match the presented certificate's public key, still fails here.
+#[derive(Debug)]
+struct RequestClientCert {
+    provider: Arc<rustls::crypto::CryptoProvider>,
+}
+
+impl ClientCertVerifier for RequestClientCert {
+    fn client_auth_mandatory(&self) -> bool {
+        false
+    }
+
+    fn root_hint_subjects(&self) -> &[DistinguishedName] {
+        // No trust anchors to hint at: this verifier trusts no CA, so there is
+        // nothing to name here. An empty list asks a client to present whatever
+        // it has rather than steering it toward a specific issuer.
+        &[]
+    }
+
+    fn verify_client_cert(
+        &self,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _now: UnixTime,
+    ) -> Result<ClientCertVerified, rustls::Error> {
+        // No chain validation — see the type doc. A malformed certificate still
+        // fails the handshake below, where signature verification must parse it
+        // to extract a public key.
+        Ok(ClientCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.provider
+            .signature_verification_algorithms
+            .supported_schemes()
+    }
+}
+
+/// Builds the relay-side QUIC server config from its certificate chain and
+/// private key. The relay presents this chain; clients verify it against their
+/// trusted roots (see [`client_config`]). The server advertises both the
+/// client-edge [`ALPN`]/[`LEGACY_ALPN`] and the mesh [`MESH_ALPN`], so a single listening
+/// endpoint accepts both connection kinds; the negotiated ALPN tells the accept
+/// loop which wire type (`Packet` or `MeshPacket`) the connection will carry.
+///
+/// Requests (does not require) a TLS client certificate from every dialer —
+/// see `RequestClientCert`, this module's client-cert verifier. A client-edge
+/// dialer presents none and connects
+/// unaffected; a mesh-edge dialer presents its own leaf cert, which the mesh
+/// acceptor pins against the coordinator's fleet set at the application layer.
+pub fn server_config(
+    cert_chain: Vec<CertificateDer<'static>>,
+    key: PrivateKeyDer<'static>,
+) -> Result<noq::ServerConfig, TlsError> {
+    let provider = ring_provider();
+    let client_verifier = Arc::new(RequestClientCert {
+        provider: Arc::clone(&provider),
+    });
+    let mut tls = rustls::ServerConfig::builder_with_provider(provider)
+        .with_protocol_versions(&[&rustls::version::TLS13])?
+        .with_client_cert_verifier(client_verifier)
+        .with_single_cert(cert_chain, key)?;
+    tls.alpn_protocols = vec![
+        ALPN.to_vec(),
+        EVIDENCE_ALPN.to_vec(),
+        LEGACY_ALPN.to_vec(),
+        MESH_ALPN.to_vec(),
+    ];
+
+    let server = QuicServerConfig::try_from(tls)?;
+    let mut config = noq::ServerConfig::with_crypto(Arc::new(server));
+    // Keepalive is the dialer's to send (see `keepalive_transport_config`); the idle
+    // timeout is advertised here as well, so no dialer can lengthen it.
+    let mut transport = floored_transport_config();
+    transport.max_idle_timeout(Some(
+        noq::IdleTimeout::try_from(MAX_IDLE_TIMEOUT).expect("10s fits in a VarInt"),
+    ));
+    config.transport_config(Arc::new(transport));
+    Ok(config)
+}
+
+/// Builds the client-edge QUIC config, trusting the given root certificates to
+/// authenticate the relay it dials. Negotiates the client-edge [`ALPN`], so the
+/// connection carries `Packet` datagrams — never `MeshPacket`.
+pub fn client_config(roots: rustls::RootCertStore) -> Result<noq::ClientConfig, TlsError> {
+    let mut tls = rustls::ClientConfig::builder_with_provider(ring_provider())
+        .with_protocol_versions(&[&rustls::version::TLS13])?
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    tls.alpn_protocols = vec![ALPN.to_vec(), EVIDENCE_ALPN.to_vec(), LEGACY_ALPN.to_vec()];
+    // The relay's identity is the pinned leaf certificate, so the server name is
+    // only a local label the verifier checks that cert against; it carries no
+    // security weight. Leaving it off the wire matters because a QUIC Initial is
+    // decryptable by any observer: a fixed SNI is a plaintext marker
+    // that censors' SNI filters can match on.
+    tls.enable_sni = false;
+
+    let client = QuicClientConfig::try_from(tls)?;
+    let mut config = noq::ClientConfig::new(Arc::new(client));
+    // Keepalive + short idle timeout on the client edge: keeps a stalled-but-alive
+    // client connected (so a drop doesn't idle-time-out the survivors) while a dead
+    // client is detected fast. See `keepalive_transport_config`.
+    config.transport_config(Arc::new(keepalive_transport_config()));
+    Ok(config)
+}
+
+/// Builds the mesh-edge QUIC config a relay uses to dial a peer relay,
+/// trusting the given root certificates to authenticate it and presenting
+/// `cert_chain`/`key` as this relay's own TLS client identity — the same
+/// certificate it serves with (see [`server_config`]'s `RequestClientCert`,
+/// which the peer's acceptor applies to us in turn). Negotiates the mesh
+/// [`MESH_ALPN`], so the connection carries `MeshPacket` datagrams — never
+/// client-edge `Packet`. A mesh link is a relay ↔ relay connection distinct from
+/// the client ↔ relay edge; the ALPN keeps the two wire types from crossing.
+///
+/// Presenting a client certificate is unconditional here — every mesh dial
+/// announces itself — because the *enforcement* decision (whether an acceptor
+/// actually checks it) lives entirely on the accept side, keyed off whether the
+/// coordinator has pushed a fleet-peer set. An acceptor with no fleet set yet
+/// (or one that predates this leg) simply never looks at the certificate this
+/// presents, so dialing with one is always safe.
+pub fn mesh_client_config(
+    roots: rustls::RootCertStore,
+    cert_chain: Vec<CertificateDer<'static>>,
+    key: PrivateKeyDer<'static>,
+) -> Result<noq::ClientConfig, TlsError> {
+    let mut tls = rustls::ClientConfig::builder_with_provider(ring_provider())
+        .with_protocol_versions(&[&rustls::version::TLS13])?
+        .with_root_certificates(roots)
+        .with_client_auth_cert(cert_chain, key)?;
+    tls.alpn_protocols = vec![MESH_ALPN.to_vec()];
+    // Peers are fingerprint-pinned too; see `client_config` for why the server
+    // name stays off the wire.
+    tls.enable_sni = false;
+
+    let client = QuicClientConfig::try_from(tls)?;
+    let mut config = noq::ClientConfig::new(Arc::new(client));
+    config.transport_config(Arc::new(keepalive_transport_config()));
+    Ok(config)
+}
+
+#[cfg(test)]
+mod tests;

@@ -1,0 +1,710 @@
+//! The relay's client-facing edge: accept QUIC connections, authorize them, and
+//! route each one's turns to its session.
+//!
+//! This is the `C–S–C` path — clients to a single relay and back, no mesh. The
+//! accept loop turns each incoming QUIC connection into its own task that runs the
+//! authorization handshake, registers the authorized slot for routing, tells the
+//! client it's in, and then serves the connection's turns until it closes. One
+//! misbehaving or rejected connection only ends its own task; the loop keeps
+//! accepting.
+
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
+
+use rally_point_proto::control::TenantId;
+use rally_point_proto::ids::{SessionId, SlotId};
+use rally_point_transport::Link;
+use rally_point_transport::noq::{self, VarInt};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+
+use rally_point_proto::close_codes;
+use rally_point_proto::time;
+
+use crate::auth::{self, AuthError, HANDSHAKE_OK, Registry, RegistryReader};
+use crate::consensus;
+use crate::key::SessionKey;
+use crate::routing::{self, Sessions};
+
+mod admission;
+
+use admission::{
+    ASSIGNMENT_CHANGED, Admission, DEPARTED_AT_ADMISSION, EVIDENCE_REJECTED, EVIDENCE_UNAVAILABLE,
+    PRE_REGISTER_GATES, PROVISIONAL_CAPACITY, SESSION_RETIRED, SLOT_TAKEN,
+    journal_seal_still_clear,
+};
+
+/// Maximum authorization handshakes in flight at once. A coarse admission backstop:
+/// connections that stall mid-handshake can only tie up this many slots of pre-auth
+/// state no matter how fast they arrive, so an unauthenticated flood can't grow
+/// unbounded. The per-relay capacity model and full DDoS posture come later; this
+/// is set generously so it never sheds legitimate load.
+const MAX_PENDING_HANDSHAKES: usize = 4096;
+
+/// How long a client has to complete the authorization handshake once its QUIC
+/// connection is accepted. The exchange is sub-second in practice; this bounds a
+/// client that connects and then stalls — opening no stream, or sending only part
+/// of the handshake — so unauthenticated connections cannot pin a relay task open.
+const AUTH_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Why one connection ended. Logged per connection; never tears down the relay.
+#[derive(Debug, thiserror::Error)]
+enum ConnError {
+    /// The QUIC handshake itself failed.
+    #[error("QUIC connection failed: {0}")]
+    Connection(#[from] noq::ConnectionError),
+    /// The peer's advertised datagram budget is under the guaranteed floor the
+    /// transport's admission and replay invariants assume — an unsupported
+    /// configuration, refused at establishment.
+    #[error(transparent)]
+    DatagramBudgetTooSmall(#[from] rally_point_transport::quic::DatagramBudgetTooSmall),
+    /// The client did not finish the authorization handshake within the deadline.
+    #[error("authorization handshake timed out")]
+    AuthTimeout,
+    /// The client did not authorize.
+    #[error("authorization failed: {0}")]
+    Auth(#[from] AuthError),
+    /// The authorized slot was already taken by another live connection.
+    #[error("tenant {tenant:?} session {session:?} slot {slot:?} is already connected")]
+    SlotTaken {
+        tenant: TenantId,
+        session: SessionId,
+        slot: SlotId,
+    },
+    /// The authorized slot re-registered after its leave was already decided (a
+    /// drop request was honored, or it left cleanly) — too late to resume, so the
+    /// re-register is refused terminally.
+    #[error("tenant {tenant:?} session {session:?} slot {slot:?} already departed the game")]
+    SlotDeparted {
+        tenant: TenantId,
+        session: SessionId,
+        slot: SlotId,
+    },
+    /// The authorized slot is not among the session descriptor's homed set for
+    /// this relay — a misrouted client (or a token replayed against the wrong
+    /// relay in a multi-relay session).
+    #[error("tenant {tenant:?} session {session:?} slot {slot:?} is not homed on this relay")]
+    SlotNotHomed {
+        tenant: TenantId,
+        session: SessionId,
+        slot: SlotId,
+    },
+    /// Required evidence was unavailable for this connection attempt.
+    #[error("tenant {tenant:?} session {session:?} slot {slot:?} evidence unavailable")]
+    EvidenceUnavailable {
+        tenant: TenantId,
+        session: SessionId,
+        slot: SlotId,
+    },
+    /// The slot requires evidence and the supplied frame did not pass.
+    #[error("tenant {tenant:?} session {session:?} slot {slot:?} evidence refused")]
+    EvidenceRejected {
+        tenant: TenantId,
+        session: SessionId,
+        slot: SlotId,
+    },
+    /// The session's descriptor was retired and its tombstone still stands —
+    /// a stale dial into a session the coordinator already ended.
+    #[error("tenant {tenant:?} session {session:?} slot {slot:?} dialed a retired session")]
+    SessionRetired {
+        tenant: TenantId,
+        session: SessionId,
+        slot: SlotId,
+    },
+    /// The provisional journal's session ceiling refused a pre-descriptor
+    /// admission — the connection is closed before any turn could be
+    /// accepted, so nothing is acknowledged that cannot be retained.
+    #[error("tenant {tenant:?} session {session:?} slot {slot:?} refused at provisional capacity")]
+    ProvisionalCapacity {
+        tenant: TenantId,
+        session: SessionId,
+        slot: SlotId,
+    },
+}
+
+/// Failure to stand up the relay's listening endpoint.
+#[derive(Debug, thiserror::Error)]
+pub enum ServerError {
+    /// Binding the UDP socket / QUIC endpoint failed.
+    #[error("binding the relay endpoint failed: {0}")]
+    Bind(#[from] std::io::Error),
+}
+
+/// Binds the relay's QUIC endpoint to the requested address.
+///
+/// The IPv6 wildcard accepts both address families. Concrete IPv6 addresses stay
+/// IPv6-only because Windows rejects dual-stack binds to addresses such as `::1`.
+pub fn bind_endpoint(
+    server_config: noq::ServerConfig,
+    listen: SocketAddr,
+) -> std::io::Result<noq::Endpoint> {
+    let socket = socket2::Socket::new(
+        socket2::Domain::for_address(listen),
+        socket2::Type::DGRAM,
+        Some(socket2::Protocol::UDP),
+    )?;
+    if listen.is_ipv6() {
+        socket.set_only_v6(!listen.ip().is_unspecified())?;
+    }
+    socket.bind(&listen.into())?;
+    let runtime =
+        noq::default_runtime().ok_or_else(|| std::io::Error::other("no async runtime found"))?;
+    noq::Endpoint::new(
+        noq::EndpointConfig::default(),
+        Some(server_config),
+        socket.into(),
+        runtime,
+    )
+}
+
+/// Binds the relay's endpoints: `listen` itself, then the same IP on each of
+/// `extra_ports`.
+///
+/// The extra ports exist for clients whose networks filter UDP to the primary
+/// port; each is a full endpoint on the same server config, so it accepts the
+/// client edge and the mesh alike. Only the primary bind is fatal. An extra port
+/// that fails to bind is logged and skipped, because a relay still serving the
+/// primary port is worth far more than one that refuses to start. A client
+/// handed the dead port loses only that one candidate in its dial race.
+pub fn bind_endpoints(
+    server_config: noq::ServerConfig,
+    listen: SocketAddr,
+    extra_ports: &[u16],
+) -> std::io::Result<Vec<noq::Endpoint>> {
+    let mut endpoints = vec![bind_endpoint(server_config.clone(), listen)?];
+    for &port in extra_ports {
+        let addr = SocketAddr::new(listen.ip(), port);
+        match bind_endpoint(server_config.clone(), addr) {
+            Ok(endpoint) => endpoints.push(endpoint),
+            Err(error) => tracing::error!(
+                %addr,
+                %error,
+                "binding an extra client-edge port failed; serving without it",
+            ),
+        }
+    }
+    Ok(endpoints)
+}
+
+/// Binds the relay's endpoints (see [`bind_endpoints`]) and serves the client
+/// edge on all of them.
+///
+/// Runs until every endpoint stops yielding connections. `registry` is the
+/// snapshot handle onto the tenant signing keys clients authorize against —
+/// fixed for a dev/static relay, or fed by the coordinator's `TenantKeys`
+/// pushes, which this server reads afresh per connection so a mid-connection
+/// replacement never tears a verification in flight.
+pub async fn run(
+    listen: SocketAddr,
+    extra_ports: Vec<u16>,
+    server_config: noq::ServerConfig,
+    registry: RegistryReader,
+    sessions: Sessions,
+    mesh: crate::mesh::MeshState,
+    mesh_accept: Option<tokio::sync::mpsc::Sender<noq::Connection>>,
+) -> Result<(), ServerError> {
+    let endpoints = bind_endpoints(server_config, listen, &extra_ports)?;
+    serve_reader(
+        endpoints,
+        registry,
+        sessions,
+        mesh,
+        mesh_accept,
+        MAX_PENDING_HANDSHAKES,
+    )
+    .await;
+    Ok(())
+}
+
+/// Serves the client edge on an already-bound endpoint.
+///
+/// `sessions` is the shared session roster the caller creates upfront and passes
+/// to both the client edge and the mesh-link drivers, so a turn validated at the
+/// client edge and a turn arriving from a mesh peer share one roster and fan out
+/// to the same local slots. `mesh_accept` receives peer-relay connections
+/// dispatched by the ALPN check; pass `None` if the relay isn't meshed.
+pub async fn serve(
+    endpoint: noq::Endpoint,
+    registry: Arc<Registry>,
+    sessions: Sessions,
+    mesh: crate::mesh::MeshState,
+    mesh_accept: Option<tokio::sync::mpsc::Sender<noq::Connection>>,
+) {
+    serve_with_max_pending(
+        endpoint,
+        registry,
+        sessions,
+        mesh,
+        mesh_accept,
+        MAX_PENDING_HANDSHAKES,
+    )
+    .await;
+}
+
+/// [`serve`] across several already-bound endpoints at once, as a relay with
+/// extra client-edge ports runs: one roster, one handshake-admission cap, so a
+/// client's port changes nothing past the socket it arrived on.
+pub async fn serve_all(
+    endpoints: Vec<noq::Endpoint>,
+    registry: Arc<Registry>,
+    sessions: Sessions,
+    mesh: crate::mesh::MeshState,
+    mesh_accept: Option<tokio::sync::mpsc::Sender<noq::Connection>>,
+) {
+    serve_reader(
+        endpoints,
+        RegistryReader::fixed(registry),
+        sessions,
+        mesh,
+        mesh_accept,
+        MAX_PENDING_HANDSHAKES,
+    )
+    .await;
+}
+
+/// Serves the client edge with an explicit cap on concurrent in-flight
+/// authorization handshakes, plus ALPN-based dispatch for mesh connections.
+///
+/// The admission semaphore is acquired **before** the TLS handshake (not after),
+/// so the cap bounds in-flight handshakes including the TLS exchange itself —
+/// the original "refused before any handshake work" DoS posture. Each handshake
+/// runs in a spawned task so handshakes are concurrent, not serialized. After
+/// the handshake, the negotiated ALPN dispatches:
+///
+/// - `MESH_ALPN`: a peer relay. The admission permit is dropped (mesh peers
+///   skip the client-auth bound), and the connection is sent over
+///   `mesh_accept` to the mesh-link establishment task (or the test harness).
+///   If `mesh_accept` is `None`, the connection is closed — the relay isn't
+///   configured for mesh.
+pub async fn serve_with_max_pending(
+    endpoint: noq::Endpoint,
+    registry: Arc<Registry>,
+    sessions: Sessions,
+    mesh: crate::mesh::MeshState,
+    mesh_accept: Option<tokio::sync::mpsc::Sender<noq::Connection>>,
+    max_pending_handshakes: usize,
+) {
+    serve_reader(
+        vec![endpoint],
+        RegistryReader::fixed(registry),
+        sessions,
+        mesh,
+        mesh_accept,
+        max_pending_handshakes,
+    )
+    .await;
+}
+
+/// Serves the client edge on every endpoint, reading the tenant-key registry
+/// through a [`RegistryReader`], so a coordinator-fed relay picks up a
+/// `TenantKeys` replacement without a restart. Each accepted connection
+/// snapshots the current set once, before its handshake, and verifies against
+/// that stable snapshot for the connection's lifetime — a replacement landing
+/// mid-handshake never tears an in-flight verification.
+///
+/// The endpoints share one admission semaphore, so extra ports never raise the
+/// relay-wide bound on in-flight handshakes.
+async fn serve_reader(
+    endpoints: Vec<noq::Endpoint>,
+    registry: RegistryReader,
+    sessions: Sessions,
+    mesh: crate::mesh::MeshState,
+    mesh_accept: Option<tokio::sync::mpsc::Sender<noq::Connection>>,
+    max_pending_handshakes: usize,
+) {
+    if registry.is_empty() {
+        tracing::warn!("no tenant signing keys registered; all clients will be rejected");
+    }
+    let admission = Arc::new(Semaphore::new(max_pending_handshakes));
+    futures_util::future::join_all(endpoints.into_iter().map(|endpoint| {
+        accept_loop(
+            endpoint,
+            registry.clone(),
+            Arc::clone(&sessions),
+            mesh.clone(),
+            mesh_accept.clone(),
+            Arc::clone(&admission),
+        )
+    }))
+    .await;
+}
+
+/// Accepts connections on one endpoint until it stops yielding them, handing
+/// each to its own task: the TLS handshake, then the ALPN dispatch to the mesh
+/// or the client-edge admission pipeline.
+async fn accept_loop(
+    endpoint: noq::Endpoint,
+    registry: RegistryReader,
+    sessions: Sessions,
+    mesh: crate::mesh::MeshState,
+    mesh_accept: Option<tokio::sync::mpsc::Sender<noq::Connection>>,
+    admission: Arc<Semaphore>,
+) {
+    if let Ok(addr) = endpoint.local_addr() {
+        tracing::info!(%addr, "relay client edge listening");
+    }
+    while let Some(incoming) = endpoint.accept().await {
+        // Acquire the admission slot BEFORE the handshake, so the cap bounds
+        // in-flight handshakes (including TLS), not just app-level auth.
+        let Ok(permit) = Arc::clone(&admission).try_acquire_owned() else {
+            incoming.refuse();
+            continue;
+        };
+        // Snapshot the current set for this connection: it stays fixed for the
+        // whole handshake even if the coordinator replaces the registry meanwhile.
+        let registry = registry.current();
+        let sessions = Arc::clone(&sessions);
+        let mesh = mesh.clone();
+        let mesh_accept = mesh_accept.clone();
+        tokio::spawn(async move {
+            // Complete the TLS handshake in a spawned task so handshakes run
+            // concurrently, not serialized in the accept loop.
+            let connection = match incoming.await {
+                Ok(conn) => conn,
+                Err(error) => {
+                    tracing::info!(%error, "incoming connection handshake failed");
+                    return;
+                }
+            };
+
+            let alpn = connection
+                .handshake_data()
+                .and_then(|data| {
+                    data.downcast_ref::<noq::crypto::rustls::HandshakeData>()
+                        .and_then(|hd| hd.protocol.clone())
+                })
+                .unwrap_or_default();
+            if alpn.as_slice() == rally_point_transport::quic::MESH_ALPN {
+                // A peer relay. Mesh connections skip the auth bound — drop the
+                // permit so the admission slot frees for the next client.
+                drop(permit);
+                if let Some(tx) = mesh_accept {
+                    // The channel is the bounded waiting room between this
+                    // dispatch and the mesh accept loop, which admits
+                    // connections into its handshake slots one permit at a
+                    // time. Shed on overflow rather than awaiting space: an
+                    // awaited send would park this task holding a live
+                    // connection, and enough anonymous `MESH_ALPN` dials would
+                    // accumulate one such task each, unbounded. A real fleet's
+                    // concurrent (re)connect burst is a handful of peers, far
+                    // under the queue; anything overflowing it is load worth
+                    // refusing, and a refused legitimate peer just redials on
+                    // its supervisor's delay.
+                    match tx.try_send(connection) {
+                        Ok(()) => {}
+                        Err(tokio::sync::mpsc::error::TrySendError::Full(connection)) => {
+                            tracing::info!(
+                                remote = ?connection.path(noq::PathId::ZERO).and_then(|path| path.remote_address().ok()),
+                                "mesh accept queue full; refusing connection",
+                            );
+                            connection.close(
+                                VarInt::from_u32(
+                                    rally_point_proto::version::MESH_CLOSE_AT_CAPACITY,
+                                ),
+                                b"mesh accept at capacity",
+                            );
+                        }
+                        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                            tracing::info!("mesh accept channel closed; dropping connection");
+                        }
+                    }
+                } else {
+                    connection.close(VarInt::from_u32(0), b"mesh not configured");
+                }
+            } else {
+                if let Err(error) =
+                    serve_connection(connection, &registry, sessions, mesh, permit).await
+                {
+                    tracing::info!(%error, "client connection ended");
+                }
+            }
+        });
+    }
+}
+
+/// Authorizes one incoming client connection, wires it into routing, and serves
+/// its turns until it closes. The TLS handshake is already complete (the accept
+/// loop ran it and dispatched on the negotiated ALPN); what remains is the
+/// relay's own admission pipeline.
+///
+/// That pipeline is a sequence of gates, and **their order is load-bearing**.
+/// Each gate's own reasoning is written on it below; the two orderings worth
+/// naming up front are that the handshake ack is written before any hold or
+/// departure state is touched, and that the journal seal is re-checked after
+/// registration succeeds. Every refusal past authorization goes through the
+/// [`Admission`] guard, which owns the rollback each one has to run — see
+/// [`admission`]'s docs for that rule.
+async fn serve_connection(
+    connection: noq::Connection,
+    registry: &Registry,
+    sessions: Sessions,
+    mesh: crate::mesh::MeshState,
+    handshake_permit: OwnedSemaphorePermit,
+) -> Result<(), ConnError> {
+    // GATE: the datagram floor. Refuse before any handshake or registration
+    // state exists: the transport's admission and replay invariants assume
+    // every connection's datagram budget meets the guaranteed floor, so a peer
+    // advertising less is an unsupported configuration — refused whole rather
+    // than partially served, mirroring the check the client dial runs on its
+    // own side.
+    if let Err(error) = rally_point_transport::quic::verify_datagram_budget(&connection) {
+        connection.close(0u32.into(), b"datagram budget under guaranteed floor");
+        return Err(ConnError::DatagramBudgetTooSmall(error));
+    }
+
+    // GATE: the authorization handshake, and the deadline on it. Nothing below
+    // has a session to refuse against until this has named one.
+    let auth_deadline = tokio::time::Instant::now() + AUTH_TIMEOUT;
+    let handshake = auth::authenticate(&connection, registry, time::unix_secs_fail_closed());
+    let auth::Authenticated {
+        authorized,
+        resume_cursors,
+        connection_epoch,
+        send: mut handshake_send,
+        recv: handshake_recv,
+        evidence,
+        evidence_request,
+    } = match tokio::time::timeout_at(auth_deadline, handshake).await {
+        Ok(result) => result?,
+        Err(_elapsed) => {
+            connection.close(
+                VarInt::from_u32(close_codes::AUTH_TIMEOUT),
+                b"authorization timed out",
+            );
+            return Err(ConnError::AuthTimeout);
+        }
+    };
+
+    let key = SessionKey {
+        tenant: authorized.tenant.clone(),
+        session: authorized.session,
+    };
+
+    // A managed relay cannot know an absent descriptor's policy. Keep both
+    // protocol versions within the authorization deadline and admission cap until
+    // the descriptor is installed; no roster or routing state exists while waiting.
+    let config = if mesh.session.decision_makers.descriptors_required() {
+        let wait = mesh.session.wait_evidence_config(&key);
+        match tokio::time::timeout_at(auth_deadline, wait).await {
+            Ok(Some(config)) => config,
+            Ok(None) => {
+                connection.close(
+                    VarInt::from_u32(close_codes::SESSION_RETIRED),
+                    b"session retired",
+                );
+                return Err(ConnError::SessionRetired {
+                    tenant: key.tenant,
+                    session: key.session,
+                    slot: authorized.slot,
+                });
+            }
+            Err(_) => {
+                connection.close(
+                    VarInt::from_u32(close_codes::AUTH_TIMEOUT),
+                    b"authorization timed out",
+                );
+                return Err(ConnError::AuthTimeout);
+            }
+        }
+    } else {
+        mesh.session
+            .decision_makers
+            .evidence_config(&key)
+            .unwrap_or_default()
+    };
+    let evidence = auth::verify_evidence(&evidence_request, evidence, &config);
+    drop(handshake_permit);
+
+    // The session and slot are known, so from here on a refusal could leave
+    // relay state behind. The guard takes custody: it closes the connection,
+    // frees the roster seat once there is one, and runs the rollback each
+    // refusal owes.
+    let supports_periodic = rally_point_transport::quic::supports_periodic_evidence(&connection);
+    let transport = connection.weak_handle();
+    let mut admission = Admission::new(connection, key.clone(), authorized.slot, &sessions, &mesh);
+
+    // GATES: home-relay binding, then the decided-departure fast-fail, then
+    // the journaled clean-leave seal — in that order, and all three before the
+    // roster is touched, so a refusal here has nothing to undo. Each gate's
+    // reasoning is on its own predicate in `admission`.
+    for gate in PRE_REGISTER_GATES {
+        if let Some(refusal) = gate(&mesh.session, &key, authorized.slot) {
+            return Err(admission.refuse(refusal));
+        }
+    }
+
+    if config.required_slots.contains(&authorized.slot)
+        && evidence.verdict != rally_point_proto::control::EvidenceVerdict::Valid
+    {
+        let refusal = if evidence.verdict == rally_point_proto::control::EvidenceVerdict::Missing {
+            EVIDENCE_UNAVAILABLE
+        } else {
+            EVIDENCE_REJECTED
+        };
+        return Err(admission.refuse(refusal));
+    }
+
+    // GATE: the roster seat. Admission is an ingress critical section on the
+    // session's gate: the retirement check and the roster registration happen
+    // atomically against a concurrent descriptor retirement, so a stale dial
+    // can neither slip in behind the sweep (recreating roster/seen state for a
+    // session with no lifecycle left) nor land between the check and the
+    // register.
+    let registered = mesh.session.gates.with_ingress(&key, || {
+        routing::register_with_transport(
+            &sessions,
+            &key,
+            authorized.slot,
+            connection_epoch,
+            Some(transport),
+            &resume_cursors,
+        )
+    });
+    let Some(registered) = registered else {
+        return Err(admission.refuse(SESSION_RETIRED));
+    };
+    let Some((registration, mut inbox)) = registered else {
+        return Err(admission.refuse(SLOT_TAKEN));
+    };
+    admission.hold_seat(registration);
+
+    // GATE: the provisional journal's session capacity. Reserved BEFORE the
+    // handshake ack and BEFORE any hold/departure state is touched. Both
+    // orderings are load-bearing: `HANDSHAKE_OK` is the shared contract's
+    // "your slot is routable" — a client that reads it treats the link as up,
+    // so a capacity refusal after the ack could be observed as a success that
+    // then dies; and `admit_reconnect` can consume a drop hold or reinstate a
+    // departure, mutations a refused connection must never have made. Refusing
+    // here, the connection has been told nothing and changed nothing beyond
+    // its roster seat and possibly this reservation — both rolled back by the
+    // refusal.
+    if mesh.session.provisional_turns.armed() {
+        let reserved = mesh.session.gates.with_ingress(&key, || {
+            mesh.session.decision_makers.maker_exists(&key)
+                || mesh.session.provisional_turns.reserve(&key)
+        });
+        match reserved {
+            Some(true) => {}
+            Some(false) => return Err(admission.refuse(PROVISIONAL_CAPACITY)),
+            None => return Err(admission.refuse(SESSION_RETIRED)),
+        }
+    }
+
+    let current_assignment = mesh.session.gates.with_ingress(&key, || {
+        mesh.session.decision_makers.evidence_assignment_current(
+            &key,
+            authorized.slot,
+            evidence.assignment_revision,
+        )
+    });
+    match current_assignment {
+        Some(true) => {}
+        Some(false) => return Err(admission.refuse(ASSIGNMENT_CHANGED)),
+        None => return Err(admission.refuse(SESSION_RETIRED)),
+    }
+
+    // GATE: the handshake ack, written BEFORE touching any hold/departure
+    // state. A write failure here rolls back everything this admission created
+    // — the roster seat (the registration guard's drop) and the session
+    // scaffolding when nothing else owns it (`abandon_refused_admission`,
+    // which removes only an empty, un-drained journal reservation) — and
+    // neither a hold nor a departure record was ever claimed or cleared, so
+    // nothing is left inconsistent for a later retry to trip over. The old
+    // ordering used to release the hold and reinstate the slot first and write
+    // the ack after, so a write failure would leave the drop's hold gone and
+    // its departure record cleared with no client ever actually connected —
+    // unrecoverable, since nothing was left to decide against and no hold to
+    // admit a future retry's resume.
+    if let Err(error) = handshake_send.write_all(&[HANDSHAKE_OK]).await {
+        return Err(admission.refuse_unannounced(AuthError::from(error).into()));
+    }
+    if supports_periodic {
+        inbox.set_evidence_stream(handshake_send, handshake_recv, evidence_request);
+    } else {
+        let _ = handshake_send.finish();
+    }
+
+    // GATE: the admission itself. Resolve this slot against CURRENT hold,
+    // departure, final-leave, and epoch state. The holds lock stays stable
+    // while one decision-maker lock restores any suspended game-progress state
+    // and activates this generation. An old teardown therefore lands wholly
+    // before this transition (and is claimed) or wholly after it (and is
+    // stale); it cannot re-land between reinstatement and activation. The
+    // no-hold path uses the same maker critical section, so a departure that
+    // won immediately beforehand is observed rather than raced.
+    //
+    // Run under the session's ingress gate: the handshake-ack write above is
+    // an await the register-time gate section could not span, so a retirement
+    // can land in between — sweeping the maker and holds — and this admission
+    // would then sail through the permissive no-maker path and start a link on
+    // a session the coordinator already ended. The gate re-check makes the
+    // sweep and this resolution mutually exclusive; a retirement that lands
+    // first refuses the admission here.
+    let verdict = mesh.session.gates.with_ingress(&key, || {
+        // Re-check the journal seal now that registration succeeded — see
+        // `journal_seal_still_clear` for why the pre-register read
+        // was only a fast-fail and this one is authoritative.
+        if !journal_seal_still_clear(&mesh.session, &key, authorized.slot) {
+            return consensus::ReconnectAdmission::Rejected;
+        }
+        let verdict = mesh
+            .session
+            .admit_reconnect(&key, authorized.slot, Some(connection_epoch));
+        // Library callers can explicitly enable provisional admission. Managed
+        // relays wait for descriptors and never arm this bookkeeping.
+        if mesh.session.provisional_turns.armed()
+            && matches!(verdict, consensus::ReconnectAdmission::Admitted { .. })
+        {
+            mesh.session
+                .provisional
+                .mark_if_undescribed(&mesh.session.decision_makers, &key);
+        }
+        verdict
+    });
+    let Some(verdict) = verdict else {
+        return Err(admission.refuse(SESSION_RETIRED));
+    };
+    let reinstated = match verdict {
+        consensus::ReconnectAdmission::Admitted { reinstated } => reinstated,
+        consensus::ReconnectAdmission::Rejected => {
+            return Err(admission.refuse(DEPARTED_AT_ADMISSION));
+        }
+    };
+    if reinstated {
+        tracing::info!(
+            tenant = key.tenant.as_ref(),
+            session = key.session.0,
+            slot = authorized.slot.0,
+            "client re-registered while its drop was undecided; claimed the hold and reinstated",
+        );
+    }
+
+    // Every gate passed: the connection and its roster seat leave the guard,
+    // and the seat stops being this admission's to roll back.
+    let (connection, mut registration) = admission.into_serving();
+    registration.disarm();
+
+    tracing::info!(
+        tenant = key.tenant.as_ref(),
+        session = key.session.0,
+        slot = authorized.slot.0,
+        "client authorized",
+    );
+    routing::run_slot_link(
+        // A single-ingress edge: every payload on this connection is authorized as
+        // `authorized.slot`, so the link rebinds the untrusted wire slot to it
+        // before dedup keys on it — keeping the receive-window anchor and dedup on
+        // the same slot across a same-relay resume.
+        Link::with_ingress_slot(connection, authorized.slot),
+        key,
+        authorized.slot,
+        connection_epoch,
+        resume_cursors,
+        evidence,
+        inbox,
+        sessions,
+        mesh,
+    )
+    .await;
+    Ok(())
+}

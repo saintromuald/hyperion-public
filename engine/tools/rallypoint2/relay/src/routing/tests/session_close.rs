@@ -1,0 +1,367 @@
+//! Tearing a session's serving state down: what a refused admission leaves
+//! behind, what the emptied-session close reports and erases, and the
+//! reconnect promise that defers it.
+
+use super::*;
+
+/// A refused admission's light teardown removes exactly the scaffolding
+/// the failed attempt created — the first-touch gate, the empty journal
+/// reservation, any mark — and nothing anyone else owns: not a retired
+/// tombstone, not an occupied session's gate, not a journal with
+/// entries.
+#[test]
+fn a_refused_admission_leaves_no_scaffolding() {
+    let sessions: Sessions = Arc::default();
+    let mesh = crate::mesh::MeshState::default();
+    mesh.session.provisional_turns.arm();
+    let k = key();
+
+    // The refusal path's residue: the register attempt touched the gate,
+    // the reservation created the empty journal entry.
+    let _ = mesh.session.gates.with_ingress(&k, || ());
+    assert!(mesh.session.provisional_turns.reserve(&k));
+    abandon_refused_admission(&sessions, &mesh, &k);
+    assert_eq!(
+        mesh.session.gates.tracked(),
+        0,
+        "the refused session's gate is gone"
+    );
+    assert!(
+        mesh.session.provisional_turns.discard_if_empty(&k),
+        "the empty reservation is gone too (an absent journal reads empty)",
+    );
+
+    // A retired gate is a tombstone: kept.
+    mesh.session.gates.retire(&k);
+    abandon_refused_admission(&sessions, &mesh, &k);
+    assert_eq!(mesh.session.gates.tracked(), 1, "the tombstone stands");
+    mesh.session.gates.reopen(&k);
+
+    // An occupied roster owns the session's state: kept.
+    let (_reg, _inbox) = register(&sessions, &k, SlotId(0), 1).expect("registers");
+    assert!(mesh.session.provisional_turns.reserve(&k));
+    abandon_refused_admission(&sessions, &mesh, &k);
+    assert_eq!(
+        mesh.session.gates.tracked(),
+        1,
+        "a live occupant's gate (and journal state) is untouched",
+    );
+}
+
+/// The session's ONLY local link cleanly leaves before the descriptor: its
+/// teardown empties the roster, but the emptied-session close must keep
+/// the journal (and the gate) holding that departure — discarding it
+/// would erase the only record of the leave, and the descriptor would
+/// then drain nothing while peer-homed survivors wait forever on an
+/// expected slot with neither presence nor a departure.
+#[tokio::test]
+async fn an_emptied_close_keeps_an_undrained_journal() {
+    let sessions: Sessions = Arc::default();
+    let mesh = crate::mesh::MeshState::default();
+    mesh.session.provisional_turns.arm();
+    let k = key();
+    let _i1 = registered(&sessions, &k, SlotId(1));
+    // Admission marks the undescribed session for the provisional sweep.
+    assert!(
+        mesh.session
+            .provisional
+            .mark_if_undescribed(&mesh.session.decision_makers, &k)
+    );
+
+    // The clean-leave intent path: journal the departure, then the full
+    // link teardown with the leave already announced.
+    let announced = mesh.session.gates.with_ingress(&k, || {
+        announce_departure(
+            &sessions,
+            &mesh,
+            &k,
+            SlotId(1),
+            LEAVE_REASON_LEFT,
+            None,
+            Some(3),
+        )
+    });
+    assert_eq!(announced, Some(true), "the pre-descriptor leave journals");
+    end_slot_link(&sessions, &mesh, &k, SlotId(1), 3, true);
+
+    assert!(
+        mesh.session.provisional_turns.has_undrained(&k),
+        "the emptied close keeps the journaled departure for the descriptor",
+    );
+    assert!(
+        mesh.session.provisional_turns.slot_sealed(&k, SlotId(1)),
+        "the clean leave's admission seal survives the emptied close",
+    );
+    assert!(
+        mesh.session.provisional.is_marked(&k),
+        "the sweep mark is retained WITH the journal — clearing it while \
+         keeping the journal would leave the retained state immortal if \
+         no descriptor ever comes",
+    );
+}
+
+#[tokio::test]
+async fn slot_teardown_records_flight_events_and_the_close_flushes() {
+    // The real teardown flow, through `end_slot_link`: a dropped link records
+    // its disconnect and the drop hold; the session-emptying teardown records
+    // the close and flushes the recording (a logged discard — no sink here).
+    let sessions: Sessions = Arc::default();
+    let mesh = crate::mesh::MeshState::default();
+    let k = key();
+    let _i0 = registered(&sessions, &k, SlotId(0));
+    let _i1 = registered(&sessions, &k, SlotId(1));
+    let flight = mesh.session.decision_makers.flight_recorder().clone();
+
+    // Slot 1's link dies without a clean leave; slot 0 remains, so the
+    // session stays open and the recording keeps accumulating.
+    end_slot_link(&sessions, &mesh, &k, SlotId(1), 0, false);
+    let events: Vec<_> = flight.events(&k).into_iter().map(|r| r.event).collect();
+    assert!(
+        events.contains(
+            &crate::observability::flight_recorder::FlightEvent::SlotDisconnected { slot: 1 }
+        ),
+        "the dropped link's disconnect is recorded: {events:?}",
+    );
+    assert!(
+        events.contains(&crate::observability::flight_recorder::FlightEvent::DropHeld { slot: 1 }),
+        "the held drop decision is recorded: {events:?}",
+    );
+
+    // The last slot leaves: the close event seals the recording and the
+    // detached flush retires it (discarded — no sink configured). The flush
+    // runs on a spawned task, so yield until the scheduler has run it rather
+    // than polling a clock — with no sink it removes the recording without
+    // awaiting anything, so a couple of yields always suffice and the bound
+    // only keeps a regression a failure instead of a hang.
+    end_slot_link(&sessions, &mesh, &k, SlotId(0), 0, false);
+    for _ in 0..64 {
+        if flight.recorded_sessions().is_empty() {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    assert!(
+        flight.recorded_sessions().is_empty(),
+        "the session-emptying teardown flushed the recording",
+    );
+}
+
+#[test]
+fn session_emptying_teardown_drops_the_seen_registry_entry() {
+    // `mesh.seen`'s entry for a session is created lazily on the first
+    // turn forwarded (there is no explicit "join" to pair a deregister
+    // with) and must be dropped once the relay's last local slot for the
+    // session leaves -- otherwise it outlives every other per-session
+    // registry the same teardown clears, leaking one `MeshSeen` per
+    // session for the process lifetime.
+    let sessions: Sessions = Arc::default();
+    let mesh = crate::mesh::MeshState::default();
+    let k = key();
+    let _i0 = registered(&sessions, &k, SlotId(0));
+
+    crate::mesh::mark_seen(&mesh.seen, &k, SlotId(0), 0);
+    assert!(
+        mesh.seen.lock().contains_key(&k),
+        "marking a turn forwarded creates the session's entry",
+    );
+
+    // The only local slot leaves: the session-emptying teardown fires.
+    end_slot_link(&sessions, &mesh, &k, SlotId(0), 0, false);
+    assert!(
+        !mesh.seen.lock().contains_key(&k),
+        "the emptied session's seen-registry entry must not survive its teardown",
+    );
+}
+
+/// A started session whose last local slot drops keeps its serving state and
+/// defers the coordinator close while that drop is undecided: the hold is
+/// the reconnect's admission token, and the retained registries (the seen
+/// entry standing in for the lobby log and replay ring here) are what make
+/// the resume whole. Deciding the departure is what runs the close.
+#[tokio::test]
+async fn an_undecided_drop_defers_the_emptied_session_close_until_decided() {
+    use crate::consensus::{Authority, RelayNotice};
+    use crate::session::presence::Candidate;
+    use rally_point_proto::ids::GameFrameCount;
+
+    let k = key();
+    let sessions: Sessions = Arc::default();
+    let mesh = crate::mesh::MeshState::new(SessionState::with_tunables(Tunables {
+        drop_unlock: UNREACHABLE_UNLOCK,
+        abandon_timeout: UNREACHABLE_UNLOCK,
+        ..Tunables::default()
+    }));
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    mesh.session.decision_makers.set_notice_notifier(tx);
+    seed_maker(
+        &mesh.session.decision_makers,
+        &k,
+        Authority::SelfRelay,
+        &[0],
+        &[],
+    );
+    mesh.session.decision_makers.mark_started(&k);
+    mesh.session
+        .decision_makers
+        .observe_frame(&k, SlotId(0), GameFrameCount(50));
+    crate::session::presence::set_order(&mesh.session.presence, &k, vec![Candidate::SelfRelay]);
+
+    let _i0 = registered(&sessions, &k, SlotId(0));
+    // The serve path reports own presence right after registering; without a
+    // live report the session is never `ever_live` and the abandoned-expiry
+    // recheck below would (correctly) refuse to treat it as abandoned.
+    report_own_presence(&sessions, &mesh, &k);
+    crate::mesh::mark_seen(&mesh.seen, &k, SlotId(0), 0);
+
+    // The only local slot's link dies without a clean leave — the emptying
+    // that must NOT close the session while the drop is held.
+    end_slot_link(&sessions, &mesh, &k, SlotId(0), 0, false);
+
+    assert!(
+        mesh.session.drop_holds.is_pending(&k, SlotId(0)),
+        "the drop marked a hold",
+    );
+    assert!(
+        mesh.seen.lock().contains_key(&k),
+        "the deferred close keeps the session's serving state",
+    );
+    while let Ok(notice) = rx.try_recv() {
+        assert!(
+            !matches!(notice, RelayNotice::SessionClosed { .. }),
+            "no close is reported while the drop is undecided",
+        );
+    }
+
+    // The abandoned-session force-decide (the expiry effect of the timer the
+    // emptying armed) decides the held drop — which is what unblocks and
+    // runs the deferred close. No close has been reported for the session:
+    // the emptying above deferred it.
+    decide_and_broadcast_abandoned(&sessions, &mesh, &k, false);
+
+    assert!(
+        !mesh.seen.lock().contains_key(&k),
+        "the decided departure ran the close",
+    );
+    assert!(
+        !mesh.session.drop_holds.is_pending(&k, SlotId(0)),
+        "the decided hold was released and swept",
+    );
+    let mut saw_closed = false;
+    while let Ok(notice) = rx.try_recv() {
+        saw_closed |= matches!(notice, RelayNotice::SessionClosed { .. });
+    }
+    assert!(saw_closed, "the close reported once the drop was decided");
+}
+
+/// The clean counterpart: a last local slot that leaves cleanly (its hold
+/// released by the leave-intent, so no reconnect is promised) closes
+/// immediately, exactly as an emptying with nothing held always has.
+#[tokio::test]
+async fn a_clean_leave_does_not_defer_the_emptied_session_close() {
+    use crate::consensus::{Authority, RelayNotice};
+
+    let k = key();
+    let sessions: Sessions = Arc::default();
+    let mesh = crate::mesh::MeshState::new(SessionState::with_tunables(Tunables {
+        drop_unlock: UNREACHABLE_UNLOCK,
+        abandon_timeout: UNREACHABLE_UNLOCK,
+        ..Tunables::default()
+    }));
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    mesh.session.decision_makers.set_notice_notifier(tx);
+    seed_maker(
+        &mesh.session.decision_makers,
+        &k,
+        Authority::SelfRelay,
+        &[0],
+        &[],
+    );
+    mesh.session.decision_makers.mark_started(&k);
+
+    let _i0 = registered(&sessions, &k, SlotId(0));
+    crate::mesh::mark_seen(&mesh.seen, &k, SlotId(0), 0);
+
+    // A clean leave, announced by the control-stream handler before the
+    // link ends, so `end_slot_link` skips the drop announce. No framed turn
+    // was observed, so the decide itself holds for a frame basis — but the
+    // clean leave released any hold, and only a *held* departure promises a
+    // reconnect, so the emptying still closes.
+    hold_or_decide_leave(
+        &mesh.session.drop_holds,
+        &mesh.session.decision_makers,
+        &sessions,
+        &mesh.links,
+        &k,
+        SlotId(0),
+        LEAVE_REASON_LEFT,
+    );
+    end_slot_link(&sessions, &mesh, &k, SlotId(0), 0, true);
+
+    assert!(
+        !mesh.seen.lock().contains_key(&k),
+        "a clean emptying closes at once",
+    );
+    let mut saw_closed = false;
+    while let Ok(notice) = rx.try_recv() {
+        saw_closed |= matches!(notice, RelayNotice::SessionClosed { .. });
+    }
+    assert!(saw_closed, "the close reported on the emptying itself");
+}
+
+/// A NEVER-started session's emptying closes immediately — nothing defers
+/// it — but the undecided held drop still survives as the
+/// reconnect-admission token, and the receipts that reconnect's resume
+/// depends on must survive exactly as long. The teardown erasing the seen
+/// state while honoring the hold would admit a resume whose
+/// transport-acked holes (a pre-start turn the forward gate recorded)
+/// nothing could ever seed: the fresh window's prefix wedges permanently.
+#[tokio::test]
+async fn a_never_started_emptying_retains_receipts_while_the_hold_survives() {
+    use crate::consensus::{Authority, RelayNotice};
+
+    let k = key();
+    let sessions: Sessions = Arc::default();
+    let mesh = crate::mesh::MeshState::new(SessionState::with_tunables(Tunables {
+        drop_unlock: UNREACHABLE_UNLOCK,
+        abandon_timeout: UNREACHABLE_UNLOCK,
+        ..Tunables::default()
+    }));
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    mesh.session.decision_makers.set_notice_notifier(tx);
+    // Descriptor-backed (a maker exists, homing slot 0) but never started.
+    seed_maker(
+        &mesh.session.decision_makers,
+        &k,
+        Authority::SelfRelay,
+        &[0],
+        &[],
+    );
+
+    let _i0 = registered(&sessions, &k, SlotId(0));
+    // A pre-start turn passed the forward gate: seq 1 was received and
+    // transport-acked while seq 0 never arrived — the acked hole the
+    // resume's anchor-0 seeding must close from these receipts.
+    crate::mesh::mark_seen(&mesh.seen, &k, SlotId(0), 1);
+
+    // The only local slot's link dies without a clean leave.
+    end_slot_link(&sessions, &mesh, &k, SlotId(0), 0, false);
+
+    assert!(
+        mesh.session.drop_holds.is_pending(&k, SlotId(0)),
+        "the drop marked a hold — the reconnect-admission token",
+    );
+    let mut saw_closed = false;
+    while let Ok(notice) = rx.try_recv() {
+        saw_closed |= matches!(notice, RelayNotice::SessionClosed { .. });
+    }
+    assert!(
+        saw_closed,
+        "a never-started emptying still closes immediately",
+    );
+    let receipts = crate::mesh::slot_receipts(&mesh.seen, &k, SlotId(0));
+    assert_eq!(
+        receipts.ahead,
+        vec![1],
+        "the receipts survive the close for as long as the hold does",
+    );
+}

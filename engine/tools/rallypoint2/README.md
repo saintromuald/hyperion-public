@@ -1,0 +1,45 @@
+# rally-point2
+
+All-Rust netcode v2 platform for [ShieldBattery](https://shieldbattery.net): a
+portable client, a shared per-link transport layer, a validating relay + mesh,
+and a multi-tenant coordinator. Replaces the Node.js `rally-point` with a newer,
+more scalable protocol + server structure.
+
+Discussion of the architecture is available [here](./docs/architecture.md). The
+repeatable microbenchmark and relay-load workflow is in
+[the performance guide](./docs/performance.md).
+
+## Workspace
+
+| Crate         | Role                                                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `proto`       | Shared wire framing, control-plane messages, tokens, protocol versioning, and the SC:R command table. Source of truth for every cross-component interface. |
+| `transport`   | Per-link reliable delivery over unreliable QUIC datagrams (ack + redundancy + sequence buffer). Shared by `client` and `relay` — one instance per link.        |
+| `client`      | Portable client endpoint, consumed by the ShieldBattery game DLL. Runs `transport` for its home-relay link. Builds for `i686-pc-windows-msvc`.                |
+| `relay`       | Validating relay: command validation, mesh + dedup, per-turn consensus (including authority handoff, desync detection, and synced leaves), reconnect replay, flight recorder. |
+| `coordinator` | Multi-tenant control plane: relay registry, session setup, per-tenant tokens/quotas, consensus policy.                          |
+| `infra/`      | Fargate / region-beacon IaC (Phase 5; not a Cargo crate — see [`infra/README.md`](infra/README.md)).                            |
+
+## Development
+
+```sh
+cargo build --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all
+```
+
+`relay` and `coordinator` are runnable today:
+
+```sh
+cargo run -p rally-point-relay -- --help
+cargo run -p rally-point-coordinator -- --help
+```
+
+## License
+
+Dual-licensed under either of [MIT](LICENSE-MIT) or
+[Apache-2.0](LICENSE-APACHE) at your option. Unless you explicitly state
+otherwise, any contribution intentionally submitted for inclusion in the work by
+you, as defined in the Apache-2.0 license, shall be dual-licensed as above,
+without any additional terms or conditions.

@@ -1,0 +1,685 @@
+//! Turn-command validation — the relay's defensive gate over client turns.
+//!
+//! A validating relay is not a dumb forwarder: before a client's turn is
+//! accepted onto the mesh and fanned out to the other players, the relay walks
+//! its native SC:R command bytes and:
+//!
+//! - **binds the turn to the slot the client is authorized for** — the slot the
+//!   client puts on the wire is never trusted; the authoritative slot comes from
+//!   the client's token and is stamped here. This prevents one client from
+//!   submitting turns as another.
+//! - **bounds-checks every command** against the SC:R length table and the
+//!   variable-length rules, so a truncated or over-long command can't slip
+//!   through and crash a peer's parser (a parser-crash desync, or worse).
+//! - **rejects commands it can't bound-check** — an opcode the SC:R length table
+//!   can't classify has an unknown length, so it can't be safely parsed and the
+//!   whole turn is refused. This is also where save/load lands: they're real
+//!   multiplayer commands, but ShieldBattery deliberately doesn't support saving
+//!   or loading games (see below), so the table doesn't model them.
+//! - **strips commands a live client turn shouldn't carry** — three kinds.
+//!   *Relay-owned pacing* (added-latency, set/dynamic turn-rate) must change on
+//!   the same turn for every player, so the relay — the one vantage point that
+//!   sees all the links — decides it and originates it on its outbound fan-out; an
+//!   inbound client copy could only shift everyone's pacing unilaterally.
+//!   *Replay-playback* commands (set-speed, seek, the leave marker) only mean
+//!   something while a replay plays. This is an *ingress* rule: the relay-
+//!   originated pacing copies going back out aren't stripped, and a replay session
+//!   (below) keeps the playback commands. *Out-of-range hotkeys* name a
+//!   selection group past the last one SC:R keeps, which its handler writes
+//!   into the next player's groups instead of rejecting.
+//!
+//! Three things are deliberately out of scope here:
+//!
+//! - **Where latency/leave intent enters.** A manual latency change or a player's
+//!   intent to leave reaches the relay out of band — a control-plane message, or
+//!   the QUIC connection simply dropping — and is folded into the relay's
+//!   coordinated decision, not carried as a client turn command. Until that path
+//!   exists, stripping pacing on ingress leaves a manual latency change with
+//!   nowhere to go.
+//! - **Multiplayer save/load (`0x06`/`0x07`).** Real commands a live game can
+//!   carry, but ShieldBattery doesn't support saving or loading games today — no
+//!   load path through SB, and in-game save is unused and broken (it drops you
+//!   from the game). So the command table doesn't model them and the validator
+//!   refuses the turn. A deliberate product decision, not an oversight; revisit
+//!   only if SB brings save/load back, which means modeling their variable-length
+//!   null-terminated-string form (and accepting the extra parse surface).
+//! - **Replay-watching sessions.** The replay-playback commands are stripped here
+//!   on the assumption every session is a live game. A shared-replay session
+//!   inverts that — those commands are the point and must pass through — but
+//!   nothing yet tags a connection as live-game vs. replay, so that gating waits
+//!   for the session-kind work.
+//!
+//! This runs on attacker-controlled bytes on every turn, so it never panics and
+//! never reads past what a command declares. It is pure and synchronous — the
+//! connection handling, token check, and fan-out live elsewhere and call in here.
+
+use rally_point_proto::commands::{CommandId, CommandLength, classify};
+use rally_point_proto::ids::SlotId;
+use rally_point_proto::messages::Payload;
+
+/// Relay-owned pacing opcodes a client may not originate in its turn stream:
+/// added-latency (`0x55`), set-turn-rate (`0x5f`), and dynamic-turn-rate (`0x66`,
+/// which also re-issues a latency change). Each shifts pacing for every player and
+/// must take effect on the same turn, so the relay decides it and originates it on
+/// its outbound fan-out; an inbound copy from a client could only move everyone's
+/// latency or turn rate unilaterally. Stripping salvages the rest of the turn
+/// instead of rejecting it.
+const RELAY_OWNED_PACING: [u8; 3] = [0x55, 0x5f, 0x66];
+
+/// Replay-playback opcodes: set-speed (`0x56`), seek (`0x5d`), and the
+/// player-leave marker (`0x57`). They drive an observer client through a replay,
+/// so shared replay-watching needs them synced across watchers — but in a live
+/// game they're out of place (the leave marker is a no-op live; seek and speed
+/// have nothing to act on).
+///
+/// Stripping them is correct only because every session today is a live game.
+/// When a connection is tagged live-game vs. replay, a replay session must invert
+/// this — these become the stream's purpose and pass through — while live-game
+/// turns keep stripping them.
+const REPLAY_ONLY: [u8; 3] = [0x56, 0x5d, 0x57];
+
+/// The selection hotkey command (`0x13`): an action byte (assign, recall, add)
+/// and the group it acts on.
+const HOTKEY: u8 = 0x13;
+
+/// Selection groups SC:R keeps per player: 0-9 for the number keys and 10-17
+/// for its history of recent selections, which an Alt+click recalls. Its hotkey
+/// handler accepts group 18 too, and the write lands in the next player's
+/// group 0. No honest client sends a group past 17.
+const SELECTION_GROUPS: u8 = 18;
+
+/// Whether `command` must be stripped from a live-game client turn: a relay-owned
+/// pacing control, a replay-playback command, or a hotkey naming a group SC:R
+/// doesn't keep. None of them belongs in a live turn, though for different
+/// reasons (see each).
+fn is_stripped_from_live_turn(command: &[u8]) -> bool {
+    match command {
+        [HOTKEY, _, group, ..] => *group >= SELECTION_GROUPS,
+        [opcode, ..] => RELAY_OWNED_PACING.contains(opcode) || REPLAY_ONLY.contains(opcode),
+        [] => false,
+    }
+}
+
+/// A client turn that passed validation: the sanitized payload to forward, plus
+/// how many commands were stripped out of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidatedTurn {
+    /// The payload to fan out. Its `slot` is bound to the authorized slot (never
+    /// the client-sent value), its `commands` are the client's bytes with the
+    /// commands a live turn shouldn't carry (relay-owned pacing,
+    /// replay-playback, out-of-range hotkeys) removed, and its `seq` is the
+    /// client's origin identity — preserved verbatim. The seq is the turn's
+    /// identity across the whole mesh: assigned by the sending client and
+    /// honored by every hop, so the relay forwards it untouched rather than
+    /// restamping.
+    pub payload: Payload,
+    /// How many commands were stripped — relay-owned pacing, replay-playback, or
+    /// out-of-range hotkeys. Non-zero means the client emitted something a live
+    /// turn has no business carrying, a signal worth recording for abuse
+    /// attribution even though the turn itself is salvaged.
+    pub stripped_control: u32,
+}
+
+/// Why a client turn was rejected. Every variant carries the byte `offset` of the
+/// offending command within the turn and its leading `opcode`, so a rejection can
+/// be attributed to a specific command for diagnostics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum ValidationError {
+    /// The opcode isn't in the command-length table, so its length is unknown and
+    /// the command can't be bounds-checked — garbage bytes, or save/load
+    /// (`0x06`/`0x07`), which the table deliberately doesn't model because SB
+    /// doesn't support saving/loading games (see the module docs). Either way the
+    /// turn is refused.
+    #[error("unknown command opcode {opcode:#04x} at offset {offset}")]
+    UnknownOpcode { offset: usize, opcode: u8 },
+    /// A well-known opcode whose command runs past the end of the turn: either a
+    /// variable-length command missing its count byte, or a command whose
+    /// declared length exceeds the bytes that remain.
+    #[error("command {opcode:#04x} at offset {offset} runs past the end of the turn")]
+    Truncated { offset: usize, opcode: u8 },
+}
+/// Validates and sanitizes one client turn, binding it to `slot`.
+///
+/// `payload.commands` is the raw native SC:R command stream the client submitted
+/// (with no transport framing), and `payload.seq` is the turn's origin identity
+/// — assigned by the sending client and preserved end-to-end. On success the
+/// returned [`ValidatedTurn`] holds a payload safe to forward: bound to `slot`,
+/// the client's `seq` preserved verbatim, every command length-checked, and the
+/// commands a live turn shouldn't carry (relay-owned pacing, replay-playback,
+/// out-of-range hotkeys) stripped. An empty command stream (a bare turn signal,
+/// or a turn that stripped down to nothing) is valid and yields an empty
+/// payload. When nothing needs stripping, validation reuses the decoded command
+/// buffer without copying it.
+///
+/// `payload.game_frame_count` is the consensus coordinate — which simulated
+/// step the turn belongs to. Like `payload.seq`, it is preserved verbatim across
+/// the seam: a forwarded turn carries the sender's frame, never a relay-stamped
+/// one, so the relay never silently strips the coordinate the latency-buffer and
+/// leave consensus engines key on. `None` means the payload has no consensus
+/// coordinate (lobby turns); those don't participate in apply-at-turn-N decisions.
+///
+/// This is the attacker-facing parse: it never panics and never reads beyond a
+/// command's declared length.
+pub fn validate_turn(slot: SlotId, mut payload: Payload) -> Result<ValidatedTurn, ValidationError> {
+    // The overwhelmingly common case is an honest turn with nothing to strip.
+    // Keep the decoded `Bytes` in place in that case. The first stripped command
+    // lazily creates a replacement and copies the already-validated prefix;
+    // later allowed commands append to it as the walk continues.
+    let commands = &payload.commands;
+    let mut forwarded: Option<Vec<u8>> = None;
+    let mut stripped_control: u32 = 0;
+    let mut offset = 0;
+
+    while offset < commands.len() {
+        let rest = &commands[offset..];
+        let opcode = rest[0];
+        let id = CommandId(opcode);
+
+        let length = match classify(id) {
+            None => return Err(ValidationError::UnknownOpcode { offset, opcode }),
+            Some(CommandLength::Fixed(n)) => usize::from(n),
+            Some(CommandLength::Variable { stride }) => {
+                let count = *rest
+                    .get(1)
+                    .ok_or(ValidationError::Truncated { offset, opcode })?;
+                2 + usize::from(stride) * usize::from(count)
+            }
+        };
+
+        let command = rest
+            .get(..length)
+            .ok_or(ValidationError::Truncated { offset, opcode })?;
+
+        if is_stripped_from_live_turn(command) {
+            stripped_control += 1;
+            if forwarded.is_none() {
+                let mut sanitized = Vec::with_capacity(commands.len());
+                sanitized.extend_from_slice(&commands[..offset]);
+                forwarded = Some(sanitized);
+            }
+        } else if let Some(sanitized) = forwarded.as_mut() {
+            sanitized.extend_from_slice(command);
+        }
+
+        offset += length;
+    }
+
+    payload.slot = u32::from(slot.0);
+    // A freshly validated client turn carries no buffer directive: the relay
+    // stamps that onto turns it forwards, never onto ingress. (Leaves aren't on
+    // the turn envelope at all — they ride the control stream.)
+    payload.buffer_directive = None;
+    if let Some(forwarded) = forwarded {
+        payload.commands = forwarded.into();
+    }
+
+    Ok(ValidatedTurn {
+        payload,
+        stripped_control,
+    })
+}
+
+/// Asserts the four invariants [`validate_turn`] owes the rest of the relay
+/// for one input, whatever those bytes are: the validated payload is bound to
+/// `slot` and carries `seq`/`game_frame_count` verbatim with no
+/// client-supplied envelope directive (**binding**); the sanitized command
+/// stream never grows, and stripping is the only rewrite (**no
+/// amplification**); that stream itself re-validates with nothing further
+/// stripped, byte for byte, so a peer re-parsing forwarded bytes can never
+/// disagree with the ingress validator (**fixpoint**); and a rejection names
+/// a byte offset inside the input, so abuse diagnostics always point at real
+/// bytes (**attribution**).
+///
+/// Always compiled and public because two harnesses assert this set: the
+/// randomized property tests that run on stable in every CI `cargo test`, and
+/// the coverage-guided fuzz target in `relay/fuzz/` — a separate, nightly-only
+/// workspace that can only reach this crate's public API. One shared copy,
+/// rather than two that can silently drift apart.
+pub fn assert_validate_turn_invariants(
+    slot: SlotId,
+    seq: u64,
+    game_frame_count: Option<u32>,
+    commands: &[u8],
+) {
+    let submitted = Payload {
+        state_hash: None,
+        seq,
+        // Deliberately untrusted: a successful validation must replace it
+        // with the authorized slot.
+        slot: u32::MAX,
+        commands: commands.to_vec().into(),
+        game_frame_count,
+        sync_generation: None,
+        buffer_directive: None,
+    };
+    match validate_turn(slot, submitted) {
+        Ok(validated) => {
+            assert_eq!(validated.payload.slot, u32::from(slot.0));
+            assert_eq!(validated.payload.seq, seq);
+            assert_eq!(validated.payload.game_frame_count, game_frame_count);
+            assert_eq!(validated.payload.buffer_directive, None);
+            assert!(validated.payload.commands.len() <= commands.len());
+            if validated.stripped_control == 0 {
+                assert_eq!(&validated.payload.commands[..], commands);
+            }
+
+            let again = validate_turn(slot, validated.payload.clone())
+                .expect("sanitized output must re-validate");
+            assert_eq!(again.stripped_control, 0, "sanitizing must be complete");
+            assert_eq!(
+                again.payload.commands, validated.payload.commands,
+                "sanitized output must be a fixpoint",
+            );
+        }
+        Err(
+            ValidationError::UnknownOpcode { offset, .. }
+            | ValidationError::Truncated { offset, .. },
+        ) => {
+            assert!(
+                offset < commands.len(),
+                "a rejection must point inside the turn",
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SLOT: SlotId = SlotId(3);
+
+    fn payload(seq: u64, game_frame_count: Option<u32>, commands: &[u8]) -> Payload {
+        Payload {
+            state_hash: None,
+            seq,
+            // Deliberately untrusted: successful validation must replace it
+            // with the authorized slot.
+            slot: u32::MAX,
+            commands: commands.to_vec().into(),
+            game_frame_count,
+            sync_generation: None,
+            buffer_directive: None,
+        }
+    }
+
+    fn validate_bytes(
+        slot: SlotId,
+        seq: u64,
+        game_frame_count: Option<u32>,
+        commands: &[u8],
+    ) -> Result<ValidatedTurn, ValidationError> {
+        validate_turn(slot, payload(seq, game_frame_count, commands))
+    }
+
+    /// Validate `commands` for [`SLOT`] with `seq` and unwrap the sanitized turn.
+    fn validated(commands: &[u8]) -> ValidatedTurn {
+        validated_with_seq(SLOT, 0, commands)
+    }
+
+    /// Validate `commands` for `slot` with `seq` and unwrap the sanitized turn.
+    fn validated_with_seq(slot: SlotId, seq: u64, commands: &[u8]) -> ValidatedTurn {
+        validate_bytes(slot, seq, None, commands).expect("turn should validate")
+    }
+
+    #[test]
+    fn empty_turn_is_valid_and_bound_to_slot() {
+        let turn = validated(&[]);
+        assert_eq!(turn.payload.slot, u32::from(SLOT.0));
+        assert!(turn.payload.commands.is_empty());
+        assert_eq!(turn.stripped_control, 0);
+        // seq is preserved verbatim from the client, not assigned here.
+        assert_eq!(turn.payload.seq, 0);
+    }
+
+    #[test]
+    fn preserves_the_client_seq_verbatim() {
+        // The seq is the turn's origin identity: assigned by the client and
+        // honored untouched, never restamped by the validator.
+        for seq in [0u64, 1, 42, 0x100, u64::MAX] {
+            let turn = validated_with_seq(SLOT, seq, &[0x05]);
+            assert_eq!(turn.payload.seq, seq);
+        }
+    }
+
+    #[test]
+    fn preserves_the_game_frame_count_verbatim() {
+        // The frame is the consensus coordinate — which simulated step the turn
+        // belongs to. Like seq, the relay forwards the sender's frame untouched,
+        // never dropping or restamping it, so the latency-buffer and leave
+        // consensus engines can key on it. A None (lobby turn) stays None.
+        for frame in [None, Some(0u32), Some(1), Some(42), Some(u32::MAX)] {
+            let turn = validate_bytes(SLOT, 0, frame, &[0x05]).unwrap();
+            assert_eq!(turn.payload.game_frame_count, frame);
+        }
+    }
+
+    #[test]
+    fn preserves_sync_generation_when_stripping_relay_owned_commands() {
+        for generation in [None, Some(0), Some(2036), Some(u64::MAX)] {
+            let mut input = payload(2041, Some(2035), &[0x55, 0, 0x37, 4, 1, 2, 3, 4, 5]);
+            input.sync_generation = generation;
+            let turn = validate_turn(SLOT, input).unwrap();
+            assert_eq!(turn.payload.sync_generation, generation);
+            assert_eq!(&turn.payload.commands[..], &[0x37, 4, 1, 2, 3, 4, 5]);
+            assert_eq!(turn.stripped_control, 1);
+        }
+    }
+
+    #[test]
+    fn preserves_the_state_hash_report() {
+        use rally_point_proto::messages::StateHashReport;
+        for report in [
+            None,
+            Some(StateHashReport { step: 0, hash: 0 }),
+            Some(StateHashReport {
+                step: 2040,
+                hash: u64::MAX,
+            }),
+        ] {
+            let mut input = payload(2041, None, &[0x55, 0, 0x05]);
+            input.state_hash = report;
+            let turn = validate_turn(SLOT, input).unwrap();
+            assert_eq!(turn.payload.state_hash, report);
+            assert_eq!(&turn.payload.commands[..], &[0x05]);
+        }
+    }
+
+    #[test]
+    fn binds_to_the_authorized_slot() {
+        // A keep-alive carries no slot of its own, and the turn never does on the
+        // wire either — the relay always stamps the authorized slot.
+        for slot in [0u8, 1, 7, 255] {
+            let turn = validate_bytes(SlotId(slot), 0, None, &[0x05]).unwrap();
+            assert_eq!(turn.payload.slot, u32::from(slot));
+        }
+    }
+
+    #[test]
+    fn reuses_the_command_buffer_when_nothing_is_stripped() {
+        let build = [0x0C, 1, 2, 3, 4, 5, 6, 7];
+        let mut input = payload(9, Some(41), &build);
+        input.buffer_directive = Some(rally_point_proto::messages::BufferDirective {
+            buffer_turns: 6,
+            apply_at_frame: 40,
+            decision_seq: 5,
+            authority_relay_id: Some(7),
+        });
+        let input_ptr = input.commands.as_ptr();
+
+        let turn = validate_turn(SLOT, input).expect("turn should validate");
+
+        assert_eq!(turn.payload.commands.as_ptr(), input_ptr);
+        assert_eq!(&turn.payload.commands[..], &build);
+        // A client cannot smuggle a relay-owned envelope directive through the
+        // zero-copy path.
+        assert_eq!(turn.payload.buffer_directive, None);
+    }
+
+    #[test]
+    fn forwards_a_variable_length_command_verbatim() {
+        // Classic select (0x09): 2 + 2 * count. count = 2 → 6 bytes.
+        let select = [0x09, 2, 0xAA, 0xBB, 0xCC, 0xDD];
+        let turn = validated(&select);
+        assert_eq!(&turn.payload.commands[..], &select);
+    }
+
+    #[test]
+    fn forwards_a_run_of_fixed_length_commands_in_order() {
+        // KeepAlive (1) + Vision (3) + Build (8) back to back: the offset
+        // advances by each command's table length, and every one of them —
+        // including the 8-byte Build on its own — comes out byte for byte.
+        let mut stream = Vec::new();
+        stream.extend_from_slice(&[0x05]);
+        stream.extend_from_slice(&[0x0D, 0, 1]);
+        stream.extend_from_slice(&[0x0C, 1, 2, 3, 4, 5, 6, 7]);
+
+        let turn = validated(&stream);
+        assert_eq!(&turn.payload.commands[..], &stream[..]);
+        assert_eq!(turn.stripped_control, 0);
+    }
+
+    #[test]
+    fn strips_relay_owned_pacing_commands() {
+        // Latency (0x55, 2), SetTurnRate (0x5f, 2), DynamicTurnRate (0x66, 4).
+        for control in [vec![0x55, 0x00], vec![0x5f, 0x00], vec![0x66, 0, 0, 0]] {
+            let turn = validated(&control);
+            assert!(turn.payload.commands.is_empty(), "{control:?} not stripped");
+            assert_eq!(turn.stripped_control, 1);
+        }
+    }
+
+    #[test]
+    fn strips_hotkeys_past_the_last_selection_group() {
+        // Hotkey (0x13, 3): action, group. Groups 0-17 exist; SC:R's handler
+        // also takes 18, writing it into the next player's group 0.
+        for group in [18u8, 19, 0xff] {
+            for action in [0u8, 1, 2] {
+                let turn = validated(&[0x13, action, group]);
+                assert!(
+                    turn.payload.commands.is_empty(),
+                    "group {group} not stripped"
+                );
+                assert_eq!(turn.stripped_control, 1);
+            }
+        }
+        // The number-key groups and the selection history pass through.
+        let kept = [0x13, 0x01, 0x00, 0x13, 0x01, 0x0e, 0x13, 0x00, 0x11];
+        let turn = validated(&kept);
+        assert_eq!(&turn.payload.commands[..], &kept[..]);
+        assert_eq!(turn.stripped_control, 0);
+        // Only the bad command goes; its neighbors are forwarded in order.
+        let turn = validated(&[0x13, 0x01, 0x02, 0x13, 0x00, 0x12, 0x05]);
+        assert_eq!(&turn.payload.commands[..], &[0x13, 0x01, 0x02, 0x05]);
+        assert_eq!(turn.stripped_control, 1);
+    }
+
+    #[test]
+    fn strips_replay_playback_commands_from_a_live_turn() {
+        // ReplaySetSpeed (0x56, 10), ReplaySeek (0x5d, 5), and the leave marker
+        // (0x57, 2). These belong only in a replay session; a live turn drops
+        // them. 0x56/0x5d classify as ordinary fixed-length commands, so without
+        // this they would otherwise be forwarded.
+        for control in [
+            vec![0x56, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            vec![0x5d, 0, 0, 0, 0],
+            vec![0x57, 0x00],
+        ] {
+            let turn = validated(&control);
+            assert!(turn.payload.commands.is_empty(), "{control:?} not stripped");
+            assert_eq!(turn.stripped_control, 1);
+        }
+    }
+
+    #[test]
+    fn strips_control_but_keeps_surrounding_gameplay() {
+        // KeepAlive, a client-injected latency change, a Build, a turn-rate
+        // change, and the replay leave marker. Only the three control commands
+        // are removed — the lazy rebuild copies the already-validated prefix
+        // and appends every later allowed command — and the stripped count
+        // accumulates across all of them.
+        let mut stream = Vec::new();
+        stream.extend_from_slice(&[0x05]);
+        stream.extend_from_slice(&[0x55, 0x02]);
+        stream.extend_from_slice(&[0x0C, 1, 2, 3, 4, 5, 6, 7]);
+        stream.extend_from_slice(&[0x5f, 0x00]);
+        stream.extend_from_slice(&[0x57, 0x00]);
+
+        let turn = validated(&stream);
+
+        let mut expected = Vec::new();
+        expected.extend_from_slice(&[0x05]);
+        expected.extend_from_slice(&[0x0C, 1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(&turn.payload.commands[..], &expected[..]);
+        assert_eq!(turn.stripped_control, 3);
+    }
+
+    #[test]
+    fn rejects_an_unknown_opcode() {
+        // 0x00 is a hole in the table; the whole turn is refused.
+        let err = validate_bytes(SLOT, 0, None, &[0x00]).unwrap_err();
+        assert_eq!(
+            err,
+            ValidationError::UnknownOpcode {
+                offset: 0,
+                opcode: 0x00
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_unsupported_save_load() {
+        // Save/load (0x06/0x07) are real multiplayer commands, but ShieldBattery
+        // deliberately doesn't support saving or loading games, so the command
+        // table doesn't model them and the validator refuses the turn. A product
+        // decision to revisit only if SB brings save/load back — not a claim that
+        // the commands are inherently invalid.
+        for opcode in [0x06u8, 0x07] {
+            let err = validate_bytes(SLOT, 0, None, &[opcode]).unwrap_err();
+            assert_eq!(err, ValidationError::UnknownOpcode { offset: 0, opcode });
+        }
+    }
+
+    #[test]
+    fn reports_the_offset_of_a_bad_opcode_mid_stream() {
+        // A valid KeepAlive, then garbage: the error points at the garbage.
+        let stream = [0x05, 0xFF];
+        let err = validate_bytes(SLOT, 0, None, &stream).unwrap_err();
+        assert_eq!(
+            err,
+            ValidationError::UnknownOpcode {
+                offset: 1,
+                opcode: 0xFF
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_a_fixed_command_that_overruns_the_turn() {
+        // Build claims 8 bytes but only 4 are present.
+        let err = validate_bytes(SLOT, 0, None, &[0x0C, 1, 2, 3]).unwrap_err();
+        assert_eq!(
+            err,
+            ValidationError::Truncated {
+                offset: 0,
+                opcode: 0x0C
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_a_variable_command_missing_its_count_byte() {
+        // Classic select with no count byte at all.
+        let err = validate_bytes(SLOT, 0, None, &[0x09]).unwrap_err();
+        assert_eq!(
+            err,
+            ValidationError::Truncated {
+                offset: 0,
+                opcode: 0x09
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_a_variable_command_whose_count_overruns_the_turn() {
+        // Select claims 3 entries (2 + 2*3 = 8 bytes) but only carries one.
+        let err = validate_bytes(SLOT, 0, None, &[0x09, 3, 0xAA, 0xBB]).unwrap_err();
+        assert_eq!(
+            err,
+            ValidationError::Truncated {
+                offset: 0,
+                opcode: 0x09
+            }
+        );
+    }
+
+    #[test]
+    fn a_zero_entry_variable_command_is_valid() {
+        // count = 0 → just opcode + count byte, and it forwards verbatim.
+        let turn = validated(&[0x09, 0]);
+        assert_eq!(&turn.payload.commands[..], &[0x09, 0]);
+    }
+
+    /// The validator's cross-cutting invariants for one turn, at the fixed
+    /// binding coordinates the randomized tests below drive: the assertions
+    /// themselves live in `super::assert_validate_turn_invariants`, which the
+    /// fuzz harness in `relay/fuzz/` calls too.
+    fn assert_validator_invariants(commands: &[u8]) {
+        assert_validate_turn_invariants(SLOT, 7, Some(41), commands);
+    }
+
+    /// A tiny deterministic xorshift so the randomized tests need no dev
+    /// dependency and every run covers the same inputs (a failure reproduces).
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0
+        }
+        fn byte(&mut self) -> u8 {
+            (self.next() >> 32) as u8
+        }
+        fn below(&mut self, n: u64) -> u64 {
+            self.next() % n
+        }
+    }
+
+    #[test]
+    fn random_bytes_never_panic_and_uphold_the_invariants() {
+        // Pure noise: almost every case rejects at the first unknown opcode,
+        // but the walk to that rejection must stay in bounds and attributed.
+        let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
+        for _ in 0..20_000 {
+            let len = rng.below(64) as usize;
+            let commands: Vec<u8> = (0..len).map(|_| rng.byte()).collect();
+            assert_validator_invariants(&commands);
+        }
+    }
+
+    #[test]
+    fn random_command_streams_never_panic_and_uphold_the_invariants() {
+        // Structured noise: streams assembled *from the command table* (with
+        // occasional corruption), so the deep paths — variable lengths, strip
+        // sets, multi-command walks, mid-stream truncation — are all reached
+        // rather than dying on byte one like pure noise does.
+        let mut rng = Rng(0x0123_4567_89AB_CDEF);
+        for _ in 0..20_000 {
+            let mut commands = Vec::new();
+            for _ in 0..rng.below(6) {
+                let opcode = rng.byte();
+                match classify(CommandId(opcode)) {
+                    Some(CommandLength::Fixed(n)) => {
+                        commands.push(opcode);
+                        for _ in 1..n {
+                            commands.push(rng.byte());
+                        }
+                    }
+                    Some(CommandLength::Variable { stride }) => {
+                        let count = rng.below(5) as u8;
+                        commands.push(opcode);
+                        commands.push(count);
+                        for _ in 0..(usize::from(stride) * usize::from(count)) {
+                            commands.push(rng.byte());
+                        }
+                    }
+                    // An opcode the table can't classify: include it sometimes
+                    // (the whole turn must reject), skip it otherwise.
+                    None => {
+                        if rng.below(4) == 0 {
+                            commands.push(opcode);
+                        }
+                    }
+                }
+            }
+            // Sometimes truncate the tail, corrupting the final command's
+            // declared length mid-stream.
+            if rng.below(3) == 0 && !commands.is_empty() {
+                let cut = rng.below(commands.len() as u64) as usize;
+                commands.truncate(cut);
+            }
+            assert_validator_invariants(&commands);
+        }
+    }
+}
