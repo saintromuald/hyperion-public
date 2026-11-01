@@ -172,9 +172,10 @@ const createLoadingData = Record({
   turnsKnown: false,
   /**
    * Whether this game has no network session at all — a lone human playing against the map or
-   * computers. Such a game is the only kind that reports its own load completion, since there's no
-   * network to observe it from; everything else is a networked game whose progress the relay
-   * infrastructure watches directly.
+   * computers, or a Hyperion game whose engine provides its own transport. Such games are the only
+   * kind that report their own load completion, since there's no netcode v2 session to observe them
+   * from; everything else is a networked game whose progress the relay infrastructure watches
+   * directly.
    */
   localOnly: false,
   /**
@@ -1285,7 +1286,10 @@ export class GameLoader {
       }
 
       const hasMultipleHumans = players.length > 1
-      if (hasMultipleHumans && !this.netcodeV2Service.isEnabled()) {
+      // A Hyperion game is networked by Hyperion's own transport: its participants report their own
+      // load completion over HTTP, and no netcode v2 session is ever created for it.
+      const isHyperionGame = gameConfig.engine === 'hyperion'
+      if (hasMultipleHumans && !isHyperionGame && !this.netcodeV2Service.isEnabled()) {
         return Result.error(
           new BaseGameLoaderError(
             GameLoadErrorType.Internal,
@@ -1293,10 +1297,11 @@ export class GameLoader {
           ),
         )
       }
-      const useNetcodeV2 = hasMultipleHumans
-      // A game with a single human has no network session; anything else is networked. Recorded on
-      // the load because it decides where this load's completion signal comes from, and how a load
-      // that runs out of time assigns fault.
+      const useNetcodeV2 = hasMultipleHumans && !isHyperionGame
+      // A game with a single human, and a Hyperion game (whose engine networks itself), have no
+      // netcode v2 session; their load completion is self-reported by the players rather than
+      // observed by the relay infrastructure. Recorded on the load because it decides where this
+      // load's completion signal comes from, and how a load that runs out of time assigns fault.
       this.updateLoadingData(gameId, data => data.set('localOnly', !useNetcodeV2))
       const seed = generateSeed()
       // Persist the networking mode and initialization seed before distributing setup. A failed

@@ -87,6 +87,7 @@ import {
 import GameResultService, {
   ALL_MANUAL_GAME_RESULTS,
   GameResultServiceError,
+  SUBMIT_GAME_RESULTS_REQUEST_SCHEMA,
 } from './game-result-service'
 import { deriveResultSubmission } from './raw-results'
 import { ReviewRequestService, ReviewRequestServiceError } from './review-request-service'
@@ -703,6 +704,28 @@ export class GameApi {
       // regroups when its game ends) can stop waiting.
       this.gameLifecycleEvents.emit('userGameEnded', { gameId, userId: user.id })
     }
+
+    ctx.status = 204
+  }
+
+  // NOTE(tec27): Like the replay and rehome endpoints this doesn't require being logged in — the
+  // game client authenticates by presenting the per-(game, user) resultCode the server minted,
+  // which is secret to that user. A Hyperion engine posts its digested results here directly;
+  // StarCraft: Remastered games report through their relay instead. Either shape the
+  // `SUBMIT_GAME_RESULTS_REQUEST_SCHEMA` accepts is honored, so a report version-discriminates
+  // itself.
+  @httpPost('/:gameId/results')
+  @httpBefore(throttleMiddleware(gameResultsThrottle, throttleByIp))
+  async submitResults(ctx: RouterContext): Promise<void> {
+    const {
+      params: { gameId },
+      body: report,
+    } = validateRequest(ctx, {
+      params: GAME_ID_PARAM,
+      body: SUBMIT_GAME_RESULTS_REQUEST_SCHEMA,
+    })
+
+    await this.gameResultService.submitGameResults({ gameId, report, logger })
 
     ctx.status = 204
   }

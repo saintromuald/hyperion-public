@@ -13,6 +13,14 @@ export enum GameSource {
 
 export const ALL_GAME_SOURCES: ReadonlyArray<GameSource> = Object.values(GameSource)
 
+/**
+ * Which engine plays a game. `scr` is StarCraft: Remastered through the Electron app and the
+ * injected game DLL (upstream's only client); `hyperion` is the Hyperion engine, which plays
+ * matchmaking games over its own self-hosted transport and reports its own results. Records without
+ * the field are `scr` games (the field is a Hyperion addition to the vendored tree).
+ */
+export type GameEngine = 'scr' | 'hyperion'
+
 export interface GameConfigPlayer {
   id: SbUserId
   race: RaceChar
@@ -68,6 +76,13 @@ interface BaseGameConfig<Source extends GameSource, SourceExtra> {
    * readers should treat a missing value as `false`.
    */
   resultsExempt?: boolean
+  /**
+   * Which engine plays this game (see {@link GameEngine}). Missing means `scr`. A `hyperion` game
+   * is networked by Hyperion's own transport: the loader publishes the game setup to the
+   * participants and awaits their own "game loop started" reports, never creating a netcode v2
+   * session.
+   */
+  engine?: GameEngine
 }
 
 export type LobbyGameConfig = SetOptional<

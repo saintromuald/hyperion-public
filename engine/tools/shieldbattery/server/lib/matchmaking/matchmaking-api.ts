@@ -150,16 +150,17 @@ export class MatchmakingApi {
           is: Joi.exist(),
           otherwise: Joi.forbidden(),
         }),
-        // Required: matchmaking is always multi-human, so every match needs each player's per-session
-        // netcode v2 public key to mint their coordinator-signed session token. Must decode to
-        // exactly 32 raw bytes (an Ed25519 public key).
+        // Required for StarCraft: Remastered clients: matchmaking is always multi-human, so every
+        // SCR match needs each player's per-session netcode v2 public key to mint their
+        // coordinator-signed session token. Must decode to exactly 32 raw bytes (an Ed25519 public
+        // key). Hyperion clients play over their own transport and omit it; the service enforces
+        // its presence for Electron clients, where the network session depends on it.
         clientPubkey: Joi.string()
           .base64()
           .max(64)
           .custom((value, helpers) =>
             Buffer.from(value, 'base64').length === 32 ? value : helpers.error('any.invalid'),
-          )
-          .required(),
+          ),
       }),
     })
     const { clientId, preferences, identifiers, region, rttMs, regionManual, clientPubkey } = body

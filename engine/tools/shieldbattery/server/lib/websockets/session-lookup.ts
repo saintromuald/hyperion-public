@@ -9,7 +9,7 @@ export interface SessionInfo {
   clientId: string
   userName: string
   address: string
-  clientType: 'web' | 'electron'
+  clientType: 'web' | 'electron' | 'hyperion'
   /** Server-authorized development mode for this client connection only. */
   developmentClient?: boolean
 }

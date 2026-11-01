@@ -14,6 +14,7 @@ import { GameServerRegionId } from '../../../common/game-server-regions'
 import {
   GameConfig,
   GameConfigPlayer,
+  GameEngine,
   GameSource,
   MatchmakingExtra,
 } from '../../../common/games/configuration'
@@ -144,9 +145,15 @@ interface PlayerQueueData {
   /**
    * base64 of the player's per-session netcode v2 public key, submitted when they queued. Read at
    * match time to build the coordinator session token; survives a requeue (only `queuedAt` is
-   * reset). Kept off the wire-visible `Slot` (like rtt) since no peer needs it.
+   * reset). Kept off the wire-visible `Slot` (like rtt) since no peer needs it. Absent for
+   * Hyperion clients, whose games have no coordinator session.
    */
-  clientPubkey: string
+  clientPubkey?: string
+  /**
+   * Which engine the player queued from (`scr` or `hyperion`), derived from their client socket's
+   * type. Every player in a match must share it: the two engines cannot play each other.
+   */
+  engine: GameEngine
 }
 
 /**
@@ -612,10 +619,22 @@ export class MatchmakingService {
     clientId: string,
     identifiers: ReadonlyArray<ClientIdentifierString>,
     allPreferences: MatchmakingPreferences[],
-    clientPubkey: string,
+    clientPubkey: string | undefined,
     desiredRegion?: { region?: GameServerRegionId; rttMs?: number; regionManual?: boolean },
   ): Promise<void> {
     const clientSockets = this.getClientSocketsOrFail(userId, clientId)
+
+    // The engine the player queued from, from their client socket's type. An Electron (StarCraft:
+    // Remastered) client must supply its per-session netcode v2 pubkey here, since every match it
+    // plays needs a coordinator-minted session token; a Hyperion client plays over Hyperion's own
+    // transport and carries none.
+    const engine: GameEngine = clientSockets.clientType === 'hyperion' ? 'hyperion' : 'scr'
+    if (engine === 'scr' && !clientPubkey) {
+      throw new MatchmakingServiceError(
+        MatchmakingServiceErrorCode.InvalidClient,
+        'Missing netcode v2 public key',
+      )
+    }
 
     for (const pref of allPreferences) {
       if (!this.matchmakingStatus.isEnabled(pref.matchmakingType)) {
@@ -646,6 +665,7 @@ export class MatchmakingService {
         identifiers,
         allPreferences,
         clientPubkey,
+        engine,
         desiredRegion,
       )
     } catch (err) {
@@ -666,7 +686,8 @@ export class MatchmakingService {
     clientId: string,
     identifiers: ReadonlyArray<ClientIdentifierString>,
     allPreferences: MatchmakingPreferences[],
-    clientPubkey: string,
+    clientPubkey: string | undefined,
+    engine: GameEngine,
     desiredRegion?: { region?: GameServerRegionId; rttMs?: number; regionManual?: boolean },
   ): Promise<void> {
     const clientSockets = this.getClientSocketsOrFail(userId, clientId)
@@ -714,6 +735,7 @@ export class MatchmakingService {
       queuedAt: monotonicNow(),
       region,
       clientPubkey,
+      engine,
     })
     this.queueEntries.set(userId, {
       types: new Set(typeDataEntries.map(d => d.type)),
@@ -1497,6 +1519,21 @@ export class MatchmakingService {
         gameSubType = 0
     }
 
+    // Every player in a match must have queued from the same engine: a StarCraft: Remastered client
+    // and a Hyperion client cannot play each other. The queue data carries each player's engine; a
+    // match mixing engines is refused rather than half-launched. Only the Hyperion engine is stored
+    // on the config — an absent `engine` means `scr`, keeping stored SCR configs unchanged.
+    const engines = new Set(
+      playersInTeams.flat().map(p => this.playerQueueData.get(p.userId)?.engine ?? 'scr'),
+    )
+    if (engines.size > 1) {
+      throw new MatchmakingServiceError(
+        MatchmakingServiceErrorCode.GameplayConflict,
+        'players queued from different engines cannot be matched',
+      )
+    }
+    const engine = engines.values().next().value as GameEngine
+
     const gameConfig: GameConfig = {
       gameType,
       gameSubType,
@@ -1504,6 +1541,7 @@ export class MatchmakingService {
       gameSourceExtra,
       teams,
       lockedAlliances: true,
+      ...(engine === 'hyperion' ? { engine } : {}),
     }
 
     // Ranks are only shown on the loading screen, so failing to look them up doesn't stop the load
@@ -1993,7 +2031,7 @@ export class MatchmakingService {
         'Client could not be found',
       )
     }
-    if (clientSockets.clientType !== 'electron') {
+    if (clientSockets.clientType !== 'electron' && clientSockets.clientType !== 'hyperion') {
       throw new MatchmakingServiceError(MatchmakingServiceErrorCode.InvalidClient, 'Invalid client')
     }
 
