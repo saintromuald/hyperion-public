@@ -138,6 +138,7 @@ void __fastcall voice_squelch(DWORD dwStormID, BOOL bSquelch);
 // read 16 bits of it; game_mute_key_hook reads them signed.
 #define evt_vkey(p) (*reinterpret_cast<WORD *>(&(p)->_unmapped08[0]))
 #define evt_skey(p) (*reinterpret_cast<short *>(&(p)->_unmapped08[0]))
+#define evt_mods(p) (*reinterpret_cast<WORD *>(&(p)->_unmapped08[2]))
 
 // gbTimeOutDialogActive -- BYTE @0x67500C, spelled as src117/lang/net_time.cpp
 // spells it.
@@ -179,9 +180,11 @@ void game_keychar_hook(dlgevt_t *pEvent)
   unsigned int nKey = evt_vkey(pEvent);
 
   // Hyperion: the key that selects a group as the profile binds it, 1.17's digit
-  // unless it says otherwise (the hotkeys milestone K3, port_hotkeys.cpp)
+  // unless it says otherwise (the hotkeys milestone K3, port_hotkeys.cpp). With a
+  // modifier held the press already made the group (event_Win.cpp), and the character
+  // it makes must not select it again.
   const int nGroup = PortKeyGroup(nKey);
-  if (nGroup >= 0)
+  if (nGroup >= 0 && (evt_mods(pEvent) & 0x0F) == 0)
     game_key_down_num(static_cast<BYTE>(nGroup));
 
   if (nKey == 0x1B)

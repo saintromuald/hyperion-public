@@ -112,7 +112,7 @@ struct PortHudState {
   bool bShields, bEnergy, bKills;  // whether the panel shows each
   int nIdleWorkers;
   int nArmy;                    // army.count: the player's units that fight, not workers or Overlords
-  int anGroups[10];             // live units in the control groups, index 1 the key 1, index 0 the key 0
+  int anGroups[16];             // live units in the control groups, index 1 the key 1, index 0 the key 0
   int nGroupLast;               // group.last: the group recalled last, -1 for none
   bool bTerrain;                // minimap.terrain: the minimap shows the terrain, true until its button turns it off
   bool abButton[PORT_HUD_BTN_KINDS];  // each button shown, by 1.17's rules for the game

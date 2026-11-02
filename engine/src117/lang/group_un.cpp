@@ -57,10 +57,18 @@ extern WORD word_66CAD8[8][8] OC_UNALIGNED;
 #endif
 #endif
 
+// A unit a group may hold (Hyperion): 1.17's own, or a building, which may sit in a group
+// beside units (the user, 2026-11-02: hotkey units and buildings alike).
+static bool GroupAble(CUnit *pUnit)
+{
+  return pUnit->IsMultiSelectable() || (gulUnitTypeFlags[pUnit->wType] & 1) != 0;
+}
+
 // 0x463D60. Centres the view on the group the digit names.
+// Hyperion: the six extra groups' letters name groups 10 to 15, which centre too.
 void __fastcall CenterOnSelectionGroup(BYTE nGroup)
 {
-  if (nGroup >= 10)
+  if (nGroup >= 16)
     return;
 
   int nGroupIdx = nGroup;
@@ -89,7 +97,7 @@ void __fastcall CenterOnSelectionGroup(BYTE nGroup)
       continue;
     if (pUnit->pSprite->flags.b & 0x20)
       continue;
-    if (!pUnit->IsMultiSelectable() && nFilled > 1)
+    if (!GroupAble(pUnit) && nFilled > 1)
       continue;
     nSumX += PosS(pUnit->pSprite->wPosX);
     nSumY += pUnit->pSprite->wPosY;
@@ -143,7 +151,7 @@ void game_key_down_num(BYTE nDigit)
     pUnit = CUnit::FromIdAlive(GroupRow(g_LocalHumanID, nGroupIdx)[i]);
     if (pUnit != NULL && !(pUnit->pSprite->flags.b & 0x20) &&
         pUnit->bPlayer == g_ActiveNationID &&
-        (pUnit->IsMultiSelectable() || nFilled <= 1))
+        (GroupAble(pUnit) || nFilled <= 1))  // Hyperion: a building may sit in a group
       apUnits[nSel++] = pUnit;
     else
       pUnit = NULL;
@@ -162,12 +170,14 @@ void game_key_down_num(BYTE nDigit)
 }
 
 // 0x464360. Recycles the hotkey group whose stamp is oldest.
+// Hyperion: the six extra groups' letters took 10 to 15, so 1.17's eight recent selections
+// are two, the groups 16 and 17 (the array holds eighteen rows a player).
 void __fastcall sub_464360()
 {
   int h = g_ActiveHumanID;
   BYTE bBest = 0xFF;
   WORD wBest = 0xFFFF;
-  int k = 8;
+  int k = 2;
 
   do {
     k--;
@@ -177,7 +187,7 @@ void __fastcall sub_464360()
     }
   } while (k != 0);
 
-  group_modify(bBest + 10, 1);
+  group_modify(bBest + 16, 1);
   word_66CAD8[g_ActiveHumanID][bBest] = (WORD)dword_672658;
 }
 
@@ -207,7 +217,7 @@ void __fastcall group_recall(BYTE nGroup)
 
     if (pUnit != NULL && pUnit->bPlayer == g_ActiveNationID &&
         !(pUnit->pSprite->flags.b & 0x20) &&
-        (pUnit->IsMultiSelectable() || nFilled <= 1)) {
+        (GroupAble(pUnit) || nFilled <= 1)) {  // Hyperion: a building may sit in a group
       select_insert(pUnit, g_ActiveHumanID, j);
       j++;
     } else {
@@ -218,8 +228,8 @@ void __fastcall group_recall(BYTE nGroup)
     }
   }
 
-  if (nGroup >= 10)
-    word_66CAD8[g_ActiveHumanID][nGroupIdx - 10] = (WORD)dword_672658;
+  if (nGroup >= 16)
+    word_66CAD8[g_ActiveHumanID][nGroupIdx - 16] = (WORD)dword_672658;
   else
     sub_464360();
   PortHudGroup(nGroup, false);  // Hyperion: group.recall (port_hudstate.cpp)
@@ -235,12 +245,12 @@ int __fastcall sub_464030(int nUnitId)
   CUnit *apUnits[SELECTION_WIDE];
   int h = g_LocalHumanID;
   int nBest = -1;
-  int k = 8;
+  int k = 2;  // Hyperion: the two recent-selection groups, 16 and 17
 
   do {
     k--;
     for (int s = 0; s < SelectionMax(); s++) {
-      DWORD dwId = GroupRow(h, k + 10)[s];
+      DWORD dwId = GroupRow(h, k + 16)[s];
 
       if (dwId != 0 && dwId == (DWORD)nUnitId &&
           word_66CAD8[h][k] > word_66CAD8[g_LocalHumanID][nBest])
@@ -249,7 +259,7 @@ int __fastcall sub_464030(int nUnitId)
   } while (k != 0);
 
   if (nBest > -1) {
-    BYTE bGroup = (BYTE)(nBest + 10);
+    BYTE bGroup = (BYTE)(nBest + 16);
     int nGroupIdx = bGroup;
     int nFilled = 0;
 
