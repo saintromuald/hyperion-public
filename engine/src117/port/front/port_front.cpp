@@ -151,7 +151,7 @@ bool Enabled(const char *pszId)
   // the score screen ends as 1.17's did: home, which is its OK, or Exit Game
   if (g_nScreen == SCREEN_SCORE)
     return strcmp(pszId, "menu") == 0 || strcmp(pszId, "exit") == 0;
-  static const char *const kNotYet[] = {"collections", "hotkeys"};
+  static const char *const kNotYet[] = {"collections"};
   for (const char *p : kNotYet)
     if (strcmp(p, pszId) == 0)
       return false;
@@ -198,6 +198,11 @@ void Choose(const char *pszId)
   // Settings and Patch Notes open over whichever screen is up
   if (strcmp(pszId, "settings") == 0) {
     SettingsOpen();
+    return;
+  }
+  // Hotkeys opens Settings on its Hotkeys tab, the one menu for every key
+  if (strcmp(pszId, "hotkeys") == 0) {
+    SettingsOpen(false, "hotkeys");
     return;
   }
   if (strcmp(pszId, "notes") == 0) {
