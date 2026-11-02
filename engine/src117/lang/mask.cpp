@@ -48,6 +48,28 @@ extern mask_tbl_t sgMaskTbls[12] OC_UNALIGNED;
 #endif
 #endif
 
+// Hyperion: sight ranges past 1.17's 11, which mods reach through a unit's
+// sight_range. 1.17's sgMaskTbls holds twelve patterns (0 to 11); the
+// companion's three (12, 13 and 14) are built with the same builder
+// (los.cpp's sub_466E40) at map load. port_moddata refuses a sight_range
+// past 14, so nothing indexes beyond these.
+static mask_tbl_t sgMaskTblsExt[3] = {
+  {27, 27, 3, 3, 0, 0, nullptr},
+  {29, 29, 3, 3, 0, 0, nullptr},
+  {31, 31, 3, 3, 0, 0, nullptr},
+};
+
+// The pattern a sight range names: 1.17's for 0 to 11, the companion's for 12
+// to 14, none beyond.
+static mask_tbl_t *MaskTblFor(int nRange)
+{
+  if (nRange < 12)
+    return &sgMaskTbls[nRange];
+  if (nRange < 15)
+    return &sgMaskTblsExt[nRange - 12];
+  return nullptr;
+}
+
 // 0x5264B0 and 0x5264B2 -- the screen's top-left tile, two WORDs, under names
 // coined here.
 #ifndef OC_GW_SCREEN_TILE_X
@@ -312,7 +334,9 @@ void sub_46BBB0(int nPixelX, int nPixelY, int bAir, int nPlayer, int nRange,
   if (static_cast<DWORD>(nPlayer) > 0xFF)
     return;
 
-  mask_tbl_t *pTbl = &sgMaskTbls[nRange];
+  mask_tbl_t *pTbl = MaskTblFor(nRange);
+  if (pTbl == nullptr)
+    return;
   PFN_MASKUPDATE *ppfn = &MaskFnTbl[0];
   DWORD dwAnd = ~(static_cast<DWORD>(nPlayer) << 8) & ~static_cast<DWORD>(nPlayer);
   DWORD dwSeen = static_cast<DWORD>(nPlayer);
@@ -360,7 +384,9 @@ void MaskStampHx(int nPixelX, int nPixelY, int bAir, const PlayerSet &q, int nRa
     return;
   const PlayerSet qKeep = ~qSlots;
   static BYTE s_abLit[0x4000];
-  const mask_tbl_t *pTbl = &sgMaskTbls[nRange];
+  const mask_tbl_t *pTbl = MaskTblFor(nRange);
+  if (pTbl == nullptr)
+    return;
   const int nTileX = nPixelX / 32, nTileY = nPixelY / 32;
   const int nCentre = gwMapWidth * nTileY + nTileX;
   DWORD dwHeight = 0;
@@ -622,6 +648,7 @@ void mask_disable_fog()
 void mask_free()
 {
   los_free(sgMaskTbls, 12);
+  los_free(sgMaskTblsExt, 3);
 
   if (sgpCurrMaskMap != NULL) {
     SMemFree(sgpCurrMaskMap, "mask.cpp", 0x118, 0);
@@ -679,6 +706,7 @@ void mask_init()
 
   sub_46BFC0();
   sub_466E40(sgMaskTbls, 12, gwMapWidth);
+  sub_466E40(sgMaskTblsExt, 3, gwMapWidth);  // Hyperion: the mods' sights 12 to 14
 
   sgbBitMask = 0x1F;
 

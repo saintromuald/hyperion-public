@@ -112,7 +112,7 @@ const Column kUnitColumns[] = {
     R("ai_idle_order", "orders"), R("idle_order", "orders"), R("return_to_idle_order", "orders"),
     R("attack_unit_order", "orders"), R("attack_move_order", "orders"), R("ground_weapon", "weapons"),
     C("max_ground_hits"), R("air_weapon", "weapons"), C("max_air_hits"), C("ai_internal"),
-    C("flags"), C("target_range"), C("sight_range"), R("armor_upgrade", "upgrades"), C("size"), C("armor"),
+    C("flags"), C("target_range"), N("sight_range", 15), R("armor_upgrade", "upgrades"), C("size"), C("armor"),
     C("right_click"), R("ready_sound", "sounds"), R("what_sound_first", "sounds"), R("what_sound_last", "sounds"),
     R("pissed_sound_first", "sounds"), R("pissed_sound_last", "sounds"), R("yes_sound_first", "sounds"),
     R("yes_sound_last", "sounds"), C("placement_box"), C("addon_position"), C("bounds"), R("portrait", "portraits"),

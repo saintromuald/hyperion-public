@@ -40,6 +40,12 @@ MOD_DATA = os.path.join(REPO, "engine", "mods", "cosmonarchy", "data")
 DEFAULT_MOD = os.path.expanduser(
     "~/Games/cosmonarchy/prefix/drive_c/Cosmonarchy/Prerelease/mpq")
 
+# Hyperion's engine holds one sight pattern per range, 0 to 14 (1.17's twelve
+# plus the port's three); the mod's own exe reaches past that. Its sight_range
+# values clamp here, so the loader's own refusal (a range past 14) never fires
+# on this mod's data.
+SIGHT_MAX = 14
+
 # ---------------------------------------------------------------------------
 # Table specifications.  Each column: (field, width) in file order.  The
 # widths are the extended (GPTP DatExt) ones; the datex files are laid out
@@ -214,7 +220,10 @@ class Table:
                 self.names = [ln.rstrip("\n") for ln in f]
 
     def row(self, r):
-        return {f: c[r] for (f, _, _), c in zip(self.widths, self.cols)}
+        d = {f: c[r] for (f, _, _), c in zip(self.widths, self.cols)}
+        if "sight_range" in d and d["sight_range"] > SIGHT_MAX:
+            d["sight_range"] = SIGHT_MAX
+        return d
 
 
 def load_all(mod_dir):
