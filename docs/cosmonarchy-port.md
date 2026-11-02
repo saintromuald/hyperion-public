@@ -146,16 +146,44 @@ Hyperion.exe --mod cosmonarchy                     # play it
      8-frame gate) capped at 3, and Ocsal buildings hatching Ocsal larva
      (larva_creep_spawn.cpp); spreaders take the creep order and larva the idle order in
      `CUnit::Complete`.
+   - **The Zerg remainder**: morph regression on death (the full structure and unit
+     chains, a completed base building becomes its Droleth, the factional cases; the
+     killing blow is suppressed and the previous form is made at full HP with the mod's
+     1-second stun, workers and larva spawn beside a real death); egg cancels revert to
+     the larva (under the three-larva cap) or the morph source; the Gathtelosk's
+     Swarmhold and the Sovrokor's triple birth add their hatchlings; the burrowed cagra
+     spreaders (Agrileth, Yblyleth, Scrylyleth, Malkothrokor) cover their footprint on
+     unburrow and spread a tile every 15th frame; broodspawn hatch with the 119-frame
+     life. The stun and the unstable flag live in `ModUnitState`, which the save and the
+     hash already cover.
+7. **The game modes, the first three** — done, gated on the game's type byte
+   (`CosmoGameKind`, gptp-fork GameType 33/34/37):
+   - **Massacre (34)**: every vespene node is removed at the first frame; a kill pays
+     its killer 3 gas (non-allied, lethal), a completed unit pays its owner 3 gas, and
+     every production event doubles its unit -- a trained unit's copy a tile west, a
+     morph's hatchling an extra copy (three from a Swarmhold morph).
+   - **Faction Wars (33)**: every computer rolls its race's faction (1-5) from the
+     game's RNG at the first frame; the faction decides the Zerg's factional morph
+     regressions (Imicren/Goszirith/Orkoti/Zorthos). The per-player faction lives in
+     `ModPlayerState`, saved and hashed with the unit state. The AI's unit requests are
+     not yet substituted (`get_factional_unit_id` is ported and unused).
+   - **Duopoly (37)**: each human's mode race from its pick (TerranProtoss /
+     ProtossZerg / ZergTerran), the town hall becomes the Omnivale, and the start holds
+     three workers of each of the two races in place of four of one
+     (create_init_units.cpp). The Omnivale's card gating and its custom larva/creep are
+     the piece still open.
+   - Selecting these types still needs the mod's game-type templates in the lobby (the
+     engine reads `gGameHeader.bGameType`, as the mod's exe does); the sim side is
+     complete.
    - **Pending, later**: the MiningEfficiency setter (AI cheat levels), trigger-driven
-     yields, worker wandering, gas-node display amounts, burrowed cagra spreaders
-     (Agrileth, Yblyleth, Scrylyleth, Malkothrokor), morph regression on death, and the
-     zerg production/dual-birth flows beyond the data (Swarmhold, triple birth, egg
-     cancel refunds).
-7. **QoL port — LAST, and slow.** The GPTP/Plus plugin features (saturation
+     yields, worker wandering, gas-node display amounts, the Rilirokor pause-on-cagra,
+     broodling 3-to-5 on cagra, Vilgoleth's missing corpse, Swarming Spite, the
+     Protoss and Terran race hooks, and Askosi last.
+8. **QoL port — LAST, and slow.** The GPTP/Plus plugin features (saturation
    overlays, Tab cycling, F11 HUD, idle-worker key, larva picker, custom
    triggers, Lua melee AI, the game modes). Some are already in Hyperion
    itself (anti-meta is a mutator; the engine has extended selections,
    zoom, HUD designs), so each item gets a "already present?" check first.
    This is the hardest part to get right and is deliberately scheduled at
    the end, one feature at a time, with the test campaign behind it.
-8. **Test campaign** — replay-free, headless matches against the reference   install, then merge back to `pre-release`/release.
+9. **Test campaign** — replay-free, headless matches against the reference   install, then merge back to `pre-release`/release.

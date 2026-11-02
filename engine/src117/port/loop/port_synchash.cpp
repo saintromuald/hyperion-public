@@ -769,6 +769,9 @@ void Units(Hasher &h) {
     const ModUnitState *p = ModUnitStates(&n);
     if (p != nullptr && n != 0)
       h.Bytes(reinterpret_cast<const unsigned char *>(p), sizeof(ModUnitState) * static_cast<size_t>(n));
+    const ModPlayerState *q = ModPlayerStates(&n);
+    if (q != nullptr && n != 0)
+      h.Bytes(reinterpret_cast<const unsigned char *>(q), sizeof(ModPlayerState) * static_cast<size_t>(n));
   }
 }
 
