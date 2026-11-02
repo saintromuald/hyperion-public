@@ -438,6 +438,15 @@ static const unsigned SC_STATUS = 0x57F0B8;     // playerStatusArray[8]
 static const unsigned SC_GAME = 0x57F0F0;       // BWGame
 static const unsigned SC_SENDTURN = 0x485A40;   // BWFXN_sendTurn, called by the bot
 
+struct HxUnit {
+  unsigned id, type, player, x, y, hp, shields, energy, order;
+  unsigned char visible, completed, pad[2];
+};
+struct HxPlayer {
+  unsigned race, minerals, gas, supplyTotal, supplyUsed;
+  unsigned startX, startY;
+};
+
 static void UpdateScMemory() {
   // The ActiveTileArray at 0x6D1260 is a POINTER to a 4-byte-a-tile array; the bot
   // indexes it by map tile. Point it at a rig buffer: visible, explored, walkable.
@@ -539,6 +548,188 @@ static void UpdateScMemory() {
   Sc(0x400001)[0] = '\0';
 }
 
+// The production path: the Hyperion frame is written straight into the SC image
+// (the fork's input). The fork's own server converts the image into the GameData
+// every frame -- the GameData is the fork's private output, and the bridge writing
+// it concurrently broke the server's unit sync (the bot ended up observing one
+// zero unit and issuing no commands).
+static void ApplyImageState(const HxUnit *units, unsigned nUnits, const HxPlayer *players,
+                            unsigned nPlayers, unsigned frame, unsigned mapW, unsigned mapH) {
+  // ActiveTileArray: the same one-time setup UpdateScMemory does.
+  static void *s_tiles;
+  if (!s_tiles) {
+    s_tiles = VirtualAlloc(NULL, 256 * 256 * 4, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    unsigned char *t = static_cast<unsigned char *>(s_tiles);
+    for (int i = 0; i < 256 * 256; ++i) {
+      t[i * 4 + 0] = 1;  // visibility flags: visible
+      t[i * 4 + 1] = 1;  // explored flags: explored
+      t[i * 4 + 2] = 1;  // walkable
+      t[i * 4 + 3] = 0;
+    }
+    *ScT<void *>(0x6D1260) = s_tiles;
+  }
+
+  ScUnit *nodes = ScT<ScUnit>(SC_UNITS);
+  // The node table is set up once at start-up by UpdateScMemory and is not
+  // wiped here: the fork's engine reads it concurrently, and a torn walk of a
+  // half-memset table would leave its model empty.
+
+  // Slots: Hyperion sends position-based ids (0..n-1) every frame, so the slot
+  // IS the id. The fork's server tracks units by their node addresses, so a
+  // fixed slot keeps the fork's model index equal to the Hyperion list position,
+  // and the bot's commands (9363 + index) map straight back. The id table only
+  // serves ids beyond 1700 (the test harness's legacy ids).
+  static unsigned s_slotOfId[0x20000];
+  static unsigned s_idOfSlot[1700];
+  static bool s_inited = false;
+  if (!s_inited) {
+    for (unsigned i = 0; i < 0x20000; ++i)
+      s_slotOfId[i] = ~0u;
+    for (int i = 0; i < 1700; ++i)
+      s_idOfSlot[i] = ~0u;
+    s_inited = true;
+  }
+  // Free the table-managed slots whose ids left the stream.
+  for (int s = 0; s < 1700; ++s) {
+    const unsigned id = s_idOfSlot[s];
+    if (id == ~0u)
+      continue;
+    bool alive = false;
+    for (unsigned i = 0; i < nUnits && i < 9999; ++i)
+      if (units[i].id == id) {
+        alive = true;
+        break;
+      }
+    if (!alive) {
+      if (id < 0x20000)
+        s_slotOfId[id] = ~0u;
+      s_idOfSlot[s] = ~0u;
+    }
+  }
+  // Direct slots: position-based ids.
+  for (unsigned i = 0; i < nUnits && i < 9999; ++i)
+    if (units[i].id < 1700) {
+      s_idOfSlot[units[i].id] = units[i].id;
+      if (units[i].id < 0x20000)
+        s_slotOfId[units[i].id] = units[i].id;
+    }
+  // Fallback slots: legacy ids, lowest free.
+  for (unsigned i = 0; i < nUnits && i < 9999; ++i) {
+    const unsigned id = units[i].id;
+    if (id < 1700 || (id < 0x20000 && s_slotOfId[id] != ~0u))
+      continue;
+    for (int s = 0; s < 1700; ++s)
+      if (s_idOfSlot[s] == ~0u) {
+        if (id < 0x20000)
+          s_slotOfId[id] = static_cast<unsigned>(s);
+        s_idOfSlot[s] = id;
+        break;
+      }
+  }
+  // 3. The dead slots are marked gone in place; the live ones are filled in
+  // place (a 0x150-byte window per node, not a 1700-node one).
+  for (int sl = 0; sl < 1700; ++sl)
+    if (s_idOfSlot[sl] == ~0u && nodes[sl].playerID != 0xFF) {
+      nodes[sl].unitType = 228;
+      nodes[sl].playerID = 0xFF;
+      nodes[sl].statusFlags = 0;
+    }
+  for (unsigned i = 0; i < nUnits && i < 9999; ++i) {
+    const HxUnit &u = units[i];
+    const unsigned slot = u.id < 0x20000 ? s_slotOfId[u.id] : ~0u;
+    if (slot == ~0u || slot >= 1700)
+      continue;
+    ScUnit &su = nodes[slot];
+    memset(&su, 0, sizeof su);
+    su.hitPoints = static_cast<int32_t>(u.hp) * 256;
+    su.posX = static_cast<uint16_t>(u.x);
+    su.posY = static_cast<uint16_t>(u.y);
+    su.playerID = static_cast<uint8_t>(u.player);
+    su.orderID = static_cast<uint8_t>(u.order);
+    su.shieldPoints = static_cast<int32_t>(u.shields) * 256;
+    su.unitType = static_cast<uint16_t>(u.type);
+    su.energy = static_cast<int32_t>(u.energy) * 256;
+    su.statusFlags = 1;   // Completed
+    su.visibilityStatus = 1;  // visible
+  }
+  // 4. Link the used slots in ascending order through the visible-unit list.
+  unsigned linkOrder[1700];
+  unsigned nLinked = 0;
+  for (int s = 0; s < 1700; ++s)
+    if (s_idOfSlot[s] != ~0u)
+      linkOrder[nLinked++] = static_cast<unsigned>(s);
+  unsigned prevPtr = 0;
+  for (unsigned k = 0; k < nLinked; ++k) {
+    const unsigned slot = linkOrder[k];
+    const unsigned me = 0x21400000u + (SC_UNITS - 0x400000) + slot * 0x150;
+    nodes[slot].prev = prevPtr;
+    nodes[slot].next = 0;
+    if (k)
+      nodes[linkOrder[k - 1]].next = me;
+    else
+      *ScT<unsigned>(SC_VIS_FIRST) = me;
+    prevPtr = me;
+  }
+  if (nLinked == 0)
+    *ScT<unsigned>(SC_VIS_FIRST) = 0;
+
+  // Players, from the stream.
+  for (int i = 0; i < 12; ++i) {
+    unsigned char *p = Sc(SC_PLAYERS) + i * 0x24;
+    if (i < static_cast<int>(nPlayers)) {
+      *reinterpret_cast<unsigned *>(p + 0x00) = i;   // dwPlayerID
+      *reinterpret_cast<unsigned *>(p + 0x04) = i;   // dwStormId
+      p[0x08] = 2;                                   // nType: human
+      p[0x09] = static_cast<unsigned char>(players[i].race);  // nRace
+      p[0x0A] = 0;                                   // nTeam
+      snprintf(reinterpret_cast<char *>(p + 0x0B), 25, "%s", i == 0 ? "Pluto" : "Bravo");
+    } else {
+      p[0x08] = 0;
+      p[0x0B] = '\0';
+    }
+  }
+  for (int i = 0; i < 8; ++i)
+    ScT<unsigned>(SC_STATUS)[i] = 1;  // playing
+
+  // Game state, from the stream.
+  unsigned char *gg = Sc(SC_GAME);
+  for (int i = 0; i < 12; ++i) {
+    *reinterpret_cast<int *>(gg + 0x00 + i * 4) =
+        i < static_cast<int>(nPlayers) ? players[i].minerals : 0;
+    *reinterpret_cast<int *>(gg + 0x30 + i * 4) =
+        i < static_cast<int>(nPlayers) ? players[i].gas : 0;
+  }
+  *reinterpret_cast<uint16_t *>(gg + 0xE4) = static_cast<uint16_t>(mapW);
+  *reinterpret_cast<uint16_t *>(gg + 0xE6) = static_cast<uint16_t>(mapH);
+  *reinterpret_cast<uint32_t *>(gg + 0x14C) = frame;
+  snprintf(reinterpret_cast<char *>(gg + 0xC4C), 0x100, "HyperionRig.scm");
+  // Supplies: SuppliesPerRace[3] { available[12], used[12], max[12] } at +0x3054.
+  for (int r = 0; r < 3; ++r)
+    for (int i = 0; i < 12; ++i) {
+      unsigned char *s = gg + 0x3054 + r * 0x90 + i * 4;
+      *reinterpret_cast<int *>(s) = 0;
+      *reinterpret_cast<int *>(s + 0x30) = 0;
+      *reinterpret_cast<int *>(s + 0x60) = 0;
+    }
+  for (unsigned i = 0; i < nPlayers && i < 12; ++i) {
+    *reinterpret_cast<int *>(gg + 0x3054 + 0 * 0x90 + i * 4) = players[i].supplyTotal;
+    *reinterpret_cast<int *>(gg + 0x3054 + 0 * 0x90 + 0x30 + i * 4) = players[i].supplyUsed;
+  }
+  // Unit counts: all[type][player] from the stream (the fork reads these for its
+  // opening choice).
+  for (int i = 0; i < 12; ++i)
+    for (int t = 0; t < 234; ++t)
+      *reinterpret_cast<int *>(gg + 0x3234 + t * 0x30 + i * 4) = 0;
+  for (unsigned i = 0; i < nUnits && i < 9999; ++i)
+    if (units[i].player < 12 && units[i].type < 234)
+      ++*reinterpret_cast<int *>(gg + 0x3234 + units[i].type * 0x30 + units[i].player * 4);
+  // NetMode (LAN), gwGameMode.
+  *reinterpret_cast<int *>(Sc(0x59688C)) = 2;
+  *reinterpret_cast<uint16_t *>(Sc(0x596904)) = 0;
+  Sc(SC_SENDTURN)[0] = 0xC3;
+  Sc(0x400001)[0] = '\0';
+}
+
 // The bot's client thread syncs once and closes the pipe (its update is
 // one-shot), so the rig's free-running pipe loop serves it: connect, send 2,
 // read the ready codes. The per-frame game state is written on the host's
@@ -627,15 +818,6 @@ static void ReserveScMemory() {
   fflush(stdout);
 }
 
-struct HxUnit {
-  unsigned id, type, player, x, y, hp, shields, energy, order;
-  unsigned char visible, completed, pad[2];
-};
-struct HxPlayer {
-  unsigned race, minerals, gas, supplyTotal, supplyUsed;
-  unsigned startX, startY;
-};
-
 static bool ReadN(void *pv, size_t cb) {
   unsigned char *p = static_cast<unsigned char *>(pv);
   while (cb) {
@@ -662,69 +844,48 @@ static bool WriteN(const void *pv, size_t cb) {
 // A frame's state over the rig's scripted state: the units keep their slots by
 // their frame order (v1: ids are 1000+n for Hyperion's, 2000+n for the enemy's
 // first appearance; the bot tracks the slots between frames).
-static void ApplyFrameState(const HxUnit *units, unsigned nUnits, const HxPlayer *players,
-                            unsigned nPlayers, unsigned frame) {
-  for (unsigned i = 0; i < 12; ++i)
-    g->players[i].minerals = g->players[i].gas = 0;
-  for (unsigned i = 0; i < nPlayers && i < 12; ++i) {
-    PlayerData *pp = reinterpret_cast<PlayerData *>(
-        reinterpret_cast<char *>(g) + 0xC0 + i * sizeof(PlayerData));
-    (void)pp;
-    snprintf(g->players[i].name, sizeof g->players[i].name, "%s", i == 0 ? "Pluto" : "Bravo");
-    g->players[i].race = static_cast<Races::Enum::Enum>(players[i].race);
-    g->players[i].type = PlayerTypes::Enum::Player;
-    g->players[i].force = 0;
-    g->players[i].isNeutral = false;
-    g->players[i].isParticipating = true;
-    for (int j = 0; j < 12; ++j) {
-      g->players[i].isAlly[j] = (j == static_cast<int>(i));
-      g->players[i].isEnemy[j] = (j != static_cast<int>(i) && j < static_cast<int>(nPlayers));
+
+// The bot appends its commands to the TurnBuffer but its byte count does not
+// land reliably in the harness; the commands are self-describing (the classic
+// opcode sizes), so the reply scans the stream and sends only the new bytes.
+static void FlushReply(unsigned frame) {
+  static unsigned s_nSent = 0;
+  unsigned char *tb = Sc(0x654880);
+  unsigned end = s_nSent;
+  while (end < 0x10000) {
+    const unsigned char op = tb[end];
+    unsigned sz = 0;
+    if (op == 0x09 || op == 0x0A || op == 0x0B) {
+      sz = 2 + static_cast<unsigned>(tb[end + 1]) * 2;
+    } else if (op == 0x14) {
+      sz = 10;
+    } else if (op == 0x15) {
+      sz = 12;
+    } else if (op == 0x16) {
+      sz = 1;
+    } else {
+      break;  // a partial command at the tail: wait for the next frame
     }
-    g->players[i].minerals = players[i].minerals;
-    g->players[i].gas = players[i].gas;
-    g->players[i].supplyTotal[0] = players[i].supplyTotal;
-    g->players[i].supplyUsed[0] = players[i].supplyUsed;
-    g->players[i].startLocationX = players[i].startX;
-    g->players[i].startLocationY = players[i].startY;
-    for (int t = 0; t < 234; ++t)
-      reinterpret_cast<unsigned *>(reinterpret_cast<char *>(g) + 0xC0 +
-                                   i * sizeof(PlayerData) + 0x88)[t] =
-      reinterpret_cast<unsigned *>(reinterpret_cast<char *>(g) + 0xC0 +
-                                   i * sizeof(PlayerData) + 0x898)[t] = 0;
+    end += sz;
   }
-  for (unsigned i = 0; i < nUnits && i < 9999; ++i) {
-    const HxUnit &u = units[i];
-    UnitData &d = g->units[i];
-    memset(&d, 0, sizeof d);
-    d.clearanceLevel = 2;
-    d.id = u.id;
-    d.player = static_cast<int>(u.player);
-    d.type = static_cast<UnitTypes::Enum::Enum>(u.type);
-    d.positionX = u.x;
-    d.positionY = u.y;
-    d.hitPoints = u.hp;
-    d.lastHitPoints = u.hp;
-    d.shields = u.shields;
-    d.energy = u.energy;
-    d.isCompleted = u.completed != 0;
-    d.isIdle = u.order == 0;
-    d.exists = true;
-    d.order = static_cast<Orders::Enum::Enum>(u.order);
-    d.isDetected = true;
-    for (int k = 0; k < 9; ++k)
-      d.isVisible[k] = u.visible != 0;
-    g->unitArray[i] = i;
-    // The per-player counts: the compiled g->players base misbehaves under Wine
-    // (the bot reads these only for its opening choice; zeros are acceptable).
-  }
-  for (unsigned i = nUnits; i < 9999; ++i)
-    g->units[i].exists = false;
-  g->initialUnitCount = nUnits;
-  g->frameCount = frame;
-  UpdateScMemory();
+  const unsigned used = end - s_nSent;
+  if (getenv("HX_DEBUG") != NULL && used)
+    fprintf(stderr, "[bridge] f%d: %u new turn bytes: %02x %02x %02x %02x %02x %02x\n",
+            static_cast<int>(frame), used,
+            tb[s_nSent], tb[s_nSent + 1], tb[s_nSent + 2],
+            tb[s_nSent + 3], tb[s_nSent + 4], tb[s_nSent + 5]);
+  unsigned out[3] = {0x50525848, frame, used};  // 'HXRP'
+  WriteN(out, sizeof out);
+  WriteN(tb + s_nSent, used);
+  unsigned win = 0;
+  WriteN(&win, 4);
+  s_nSent = end;
+  fflush(stdout);
 }
 
+
 int main(int argc, char **argv) {
+  const bool bDebug = getenv("HX_DEBUG") != NULL;
   AddVectoredExceptionHandler(1, VecHandler);
   const int scenario = argc > 1 ? atoi(argv[1]) : 1;
   ReserveScMemory();
@@ -988,9 +1149,12 @@ int main(int argc, char **argv) {
     ReadN(units, nUnits * sizeof(HxUnit));
     ReadN(players, nPlayers * sizeof(HxPlayer));
     DWORD t1 = GetTickCount();
-    if (getenv("HX_NOAPPLY") == NULL)
-      ApplyFrameState(units, nUnits, players, nPlayers, frame);
-    if (frame == 0) {
+    // Frame 0 is not applied: the start-up image is complete before the fork's
+    // threads first read it, and rebuilding here raced those first reads. The
+    // fork starts from the scripted state and sees the real state from frame 1.
+    if (getenv("HX_NOAPPLY") == NULL && frame != 0)
+      ApplyImageState(units, nUnits, players, nPlayers, frame, mapWH[0], mapWH[1]);
+    if (bDebug && frame == 0) {
       fprintf(stderr, "[bridge] sizes: HxUnit=%u HxPlayer=%u\n",
               static_cast<unsigned>(sizeof(HxUnit)),
               static_cast<unsigned>(sizeof(HxPlayer)));
@@ -1021,7 +1185,18 @@ int main(int argc, char **argv) {
     int f = static_cast<int>(frame);
     g->frameCount = f;
     g->elapsedTime = f * 42;
-    UpdateScMemory();
+    if (getenv("HX_NOAPPLY") != NULL)
+      UpdateScMemory();  // the scripted debug path; the production path applied the image above
+    if (bDebug && frame == 0) {
+      const char *tag = getenv("HX_NOAPPLY") != NULL ? "na" : "p";
+      char path[64];
+      snprintf(path, sizeof path, "dump/sc-img-%s.bin", tag);
+      FILE *pf = fopen(path, "wb");
+      if (pf) {
+        fwrite(reinterpret_cast<void *>(0x21400000), 1, 0x400000, pf);
+        fclose(pf);
+      }
+    }
     g->eventCount = 1;
     g->events[0].type = f == 0 ? EventType::Enum::MatchStart : EventType::Enum::MatchFrame;
     g->events[0].v1 = f;
@@ -1036,14 +1211,30 @@ int main(int argc, char **argv) {
       gates[0x18] = 0;                                  // not yet sent
       gates[0x21] = 1;                                  // engine "ready"
     }
-    ArmTaps();
+    if (bDebug)
+      ArmTaps();
     handoff.onMatchFrame();
     onFrame(mod);
+    if (bDebug && frame == 1) {
+      fprintf(stderr, "[bridge] GameData units after onFrame f1 (initialUnitCount=%d):\n", g->initialUnitCount);
+      for (int i = 0; i < 14; ++i) {
+        const UnitData &u = g->units[i];
+        fprintf(stderr, "  [%d] ex=%d id=%u pl=%d ty=%u vis0=%d idle=%d ord=%u hp=%d\n",
+                i, u.exists, u.id, u.player, u.type, u.isVisible[0], u.isIdle,
+                static_cast<unsigned>(u.order), u.hitPoints);
+      }
+      unsigned *cnts = reinterpret_cast<unsigned *>(reinterpret_cast<char *>(g) + 0xC0 + 0x88);
+      fprintf(stderr, "  p0 counts: %u %u %u | p1 counts: %u %u %u\n",
+              cnts[0], cnts[1], cnts[2],
+              reinterpret_cast<unsigned *>(reinterpret_cast<char *>(g) + 0xC0 + sizeof(PlayerData) + 0x88)[0],
+              reinterpret_cast<unsigned *>(reinterpret_cast<char *>(g) + 0xC0 + sizeof(PlayerData) + 0x88)[1],
+              reinterpret_cast<unsigned *>(reinterpret_cast<char *>(g) + 0xC0 + sizeof(PlayerData) + 0x88)[2]);
+    }
     // Capture the live pipeline: the bot's own handshake (inside onStart) points
     // the client's view at the real BWRL_SHM mapping it shares with the engine, so
     // dump that mapping (the obs requests) and SC's TurnBuffer (the bot's issued
     // commands, 0x654880 with the byte count at 0x654AA0) on the step cadence.
-    if (f % 6 == 0) {
+    if (bDebug && f % 6 == 0) {
       MEMORY_BASIC_INFORMATION q;
       void *view = reinterpret_cast<void *>(
           *reinterpret_cast<unsigned *>(0x7b1e4160 + 0x18));
@@ -1105,52 +1296,18 @@ int main(int argc, char **argv) {
     }
     ++nFramesDone;
     DWORD t2 = GetTickCount();
-    if (frame % 6 == 0 || frame < 3)
+    if (bDebug && (frame % 6 == 0 || frame < 3))
       fprintf(stderr, "[bridge] f%d: read=%lums fill=%lums frame=%lums\n",
               static_cast<int>(frame), t1 - t0, t2 - t1, GetTickCount() - t2);
-    {
-      // The bot appends its commands to the TurnBuffer but its byte count does
-      // not land reliably in the harness; the commands are self-describing (the
-      // classic opcode sizes), so scan the stream and send only the new bytes.
-      static unsigned s_nSent = 0;
-      unsigned char *tb = Sc(0x654880);
-      unsigned end = s_nSent;
-      while (end < 0x10000) {
-        const unsigned char op = tb[end];
-        unsigned sz = 0;
-        if (op == 0x09 || op == 0x0A || op == 0x0B) {
-          sz = 2 + static_cast<unsigned>(tb[end + 1]) * 2;
-        } else if (op == 0x14) {
-          sz = 10;
-        } else if (op == 0x15) {
-          sz = 12;
-        } else if (op == 0x16) {
-          sz = 1;
-        } else {
-          break;  // a partial command at the tail: wait for the next frame
-        }
-        end += sz;
-      }
-      const unsigned used = end - s_nSent;
-      if (used)
-        fprintf(stderr, "[bridge] f%d: %u new turn bytes: %02x %02x %02x %02x %02x %02x\n",
-                static_cast<int>(frame), used,
-                tb[s_nSent], tb[s_nSent + 1], tb[s_nSent + 2],
-                tb[s_nSent + 3], tb[s_nSent + 4], tb[s_nSent + 5]);
-      unsigned out[3] = {0x50525848, frame, used};  // 'HXRP'
-      WriteN(out, sizeof out);
-      WriteN(tb + s_nSent, used);
-      unsigned win = 0;
-      WriteN(&win, 4);
-      s_nSent = end;
-      fflush(stdout);
-    }
-    DumpShm(f);
-    if (f % 100 == 0)
+    FlushReply(f);
+    if (bDebug)
+      DumpShm(f);    if (bDebug)
+      DumpShm(f);
+    if (bDebug && f % 100 == 0)
       fprintf(stderr, "[bridge] frame %d\n", f);
     Sleep(16);
   }
-  {
+  if (bDebug) {
     // The client is a static object at base+0x54160 (the onFrame loads ecx=0x7b1e4160
     // for the writer); dump it and its neighbourhood.
     unsigned char *base = reinterpret_cast<unsigned char *>(0x7b190000);
@@ -1160,8 +1317,9 @@ int main(int argc, char **argv) {
       fclose(f);
     }
   }
+  FlushReply(static_cast<unsigned>(nFramesDone));  // a last command may land late
   onEnd(mod, 1);
-  {
+  if (bDebug) {
     unsigned char *tb = Sc(0x654880);
     unsigned char *cn = Sc(0x654A90);
     fprintf(stderr, "[bridge] end: turn buffer: %02x %02x %02x %02x %02x %02x %02x %02x\n",
