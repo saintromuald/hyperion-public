@@ -1331,9 +1331,19 @@ static std::vector<std::string> SplitCommandLine(const char *psz)
 #endif
 #endif
 
+BOOL __stdcall CreatePipe(PHANDLE phRead, PHANDLE phWrite, LPSECURITY_ATTRIBUTES, DWORD)
+{
+  int fds[2];
+  if (pipe(fds) != 0)
+    return FALSE;
+  *phRead = reinterpret_cast<HANDLE>(static_cast<intptr_t>(fds[0]));
+  *phWrite = reinterpret_cast<HANDLE>(static_cast<intptr_t>(fds[1]));
+  return TRUE;
+}
+
 BOOL __stdcall CreateProcessA(LPCSTR lpApplicationName, LPSTR lpCommandLine, LPSECURITY_ATTRIBUTES,
-                              LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID, LPCSTR lpCurrentDirectory, LPSTARTUPINFOA,
-                              LPPROCESS_INFORMATION lpProcessInformation)
+                              LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID, LPCSTR lpCurrentDirectory,
+                              LPSTARTUPINFOA lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation)
 {
   std::vector<std::string> args = SplitCommandLine(lpCommandLine);
   std::string program = lpApplicationName ? OcPath(lpApplicationName) : args.empty() ? std::string() : OcPath(args[0].c_str());
@@ -1357,6 +1367,23 @@ BOOL __stdcall CreateProcessA(LPCSTR lpApplicationName, LPSTR lpCommandLine, LPS
       posix_spawn_file_actions_destroy(&actions);
   }
 #endif
+  // The child's std handles, when the caller names them (the Pluto bridge's
+  // pipes): each is dup2'd onto 0/1/2 and closed, so no fd leaks into the child.
+  if (lpStartupInfo != NULL && (lpStartupInfo->dwFlags & STARTF_USESTDHANDLES)) {
+    if (!bActions && posix_spawn_file_actions_init(&actions) == 0)
+      bActions = true;
+    if (bActions) {
+      const HANDLE ah[3] = {lpStartupInfo->hStdInput, lpStartupInfo->hStdOutput,
+                            lpStartupInfo->hStdError};
+      for (int i = 0; i < 3; ++i) {
+        const int fd = reinterpret_cast<intptr_t>(ah[i]);
+        if (fd >= 0) {
+          posix_spawn_file_actions_adddup2(&actions, fd, i);
+          posix_spawn_file_actions_addclose(&actions, fd);
+        }
+      }
+    }
+  }
   const int r = posix_spawn(&pid, program.c_str(), bActions ? &actions : NULL, NULL, argv.data(), environ);
   if (bActions)
     posix_spawn_file_actions_destroy(&actions);
