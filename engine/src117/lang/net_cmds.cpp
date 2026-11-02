@@ -278,25 +278,34 @@ bool ResearchFree(const CUnit *pUnit) {
 
 }  // namespace
 
-// The single-selection guard, TTAllowed on the packet's unit type, then the
-// build queue. The type goes to TTAllowed as a bare 16-bit argument, not through
-// a local. A failed AddBuildQueue still refreshes the button state, unlike in
-// recv_net_cmd_UpgradeBldg; only the type-range reject returns without it.
+// The selection's guard, TTAllowed on the packet's unit type, then the build queue. The
+// type goes to TTAllowed as a bare 16-bit argument, not through a local. A failed
+// AddBuildQueue still refreshes the button state, unlike in recv_net_cmd_UpgradeBldg; only
+// the type-range reject returns without it.
+// Hyperion: of several selected buildings, every one that can train the unit takes one in
+// its queue, as SC2 does (the user, 2026-11-02: five Barracks and one press make five
+// Marines); the one-building game queues as 1.17 did.
 void __fastcall recv_net_cmd_Build(const net_cmd_word_t *pCmd) {
-  // Hyperion: of several, the one allowed to train it with the shortest queue
   CUnit *apSel[SELECTION_WIDE];
   if (const int nSel = SeveralSelected(apSel)) {
-    CUnit *pBest = NULL;
-    int nBest = 5;
+    const unsigned nUnitType = pCmd->wArg;
+    if (!UnitTypeQueueable(nUnitType))  // Hyperion: > 0x69 in 1.17
+      return;
+    bool bAny = false;
+    int nErr = 0;
     for (int i = 0; i < nSel; i++) {
-      const int nQueued = QueuedCount(apSel[i]);
-      if (nQueued < nBest && TTAllowed(pCmd->wArg, g_ActiveNationID, apSel[i]) == 1) {
-        pBest = apSel[i];
-        nBest = nQueued;
+      if (TTAllowed(pCmd->wArg, g_ActiveNationID, apSel[i]) != 1) {
+        nErr = get_allowed_err();
+        continue;
+      }
+      if (apSel[i]->AddBuildQueue(nUnitType)) {
+        apSel[i]->SetBackgroundOrder(0x26);
+        bAny = true;
       }
     }
-    SelectOnly only(pBest != NULL ? pBest : apSel[0]);
-    recv_net_cmd_Build(pCmd);
+    if (!bAny && nErr != 0)
+      AllowedErr(nErr);
+    status_set_update();
     return;
   }
   CUnit *pUnit = select_get_first();
