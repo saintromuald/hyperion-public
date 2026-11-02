@@ -18,6 +18,7 @@
 #include "../h/grp.h"        // Hyperion: GROUP, FRAME
 #include "../port/data/port_formats.h"  // Hyperion: PortGroupNative
 #include "../port/render/port_scene.h"  // Hyperion: PortSceneCreep
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 #include "../h/hxrules.h"              // Hyperion: HxRules
 #include "../gen/globals117.h"
 
@@ -811,7 +812,12 @@ BYTE spread_creep(WORD nType, int nX, int nY)
   int aBox[4];
   BYTE bResult = 0;
   memset(aCount, 0, sizeof(aCount));
-  int bEllipse = get_max_creep_bounding_box((short)nType, nX, nY, aBox, 1);
+  // Hyperion: the mod's spreaders grow cagra in their own 320x200 ellipse
+  // (larva_creep_spawn.cpp:172-245), not in 1.17's per-type box.
+  const bool bCosmo = PortCosmonarchy() &&
+                      (CosmoCreepSpreader(nType) || CosmoCreepSpreaderDone(nType));
+  int bEllipse = bCosmo ? CosmoCreepBox(nX, nY, aBox)
+                        : get_max_creep_bounding_box((short)nType, nX, nY, aBox, 1);
 
   int nLeft = aBox[0];
   int dy = (aBox[1] << 5) - nY + 16;
@@ -832,7 +838,8 @@ BYTE spread_creep(WORD nType, int nX, int nY)
       int nIdx = count_neighboring_creep_tiles(x, y) - 1;
       if ((unsigned int)nIdx > 7)
         continue;
-      if (bEllipse && creep_within_ellipse(dx, dy))
+      if (bCosmo ? (100 * dx * dx + 256 * dy * dy > 10240000)
+                 : (bEllipse && creep_within_ellipse(dx, dy)))
         continue;
       creep_update_targets_g[nIdx][aCount[nIdx]].x = x;
       creep_update_targets_g[nIdx][aCount[nIdx]].y = y;

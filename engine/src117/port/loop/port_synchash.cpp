@@ -52,6 +52,7 @@
 #include "../platform/port_standalone.h"  // PortOriginalAddress, PortOriginalSpans
 #include "port_workers.h"         // PortWorkersFor
 #include "../gameplay/port_richbases.h"  // RichBasesTable
+#include "../gameplay/port_cosmonarchy.h"  // ModUnitStates
 #include "../../gen/globals117.h"
 #define SAVE117_TABLES
 #include "../../gen/save117.h"
@@ -762,6 +763,13 @@ void Units(Hasher &h) {
   // the rich resources and loads of a game with rich bases
   if (const unsigned char *pRich = RichBasesTable())
     h.Bytes(pRich, static_cast<size_t>(g_pools.units));
+  // the mod's per-unit state, only in a game that has the Cosmonarchy mod
+  if (PortCosmonarchy()) {
+    unsigned n = 0;
+    const ModUnitState *p = ModUnitStates(&n);
+    if (p != nullptr && n != 0)
+      h.Bytes(reinterpret_cast<const unsigned char *>(p), sizeof(ModUnitState) * static_cast<size_t>(n));
+  }
 }
 
 void Objects(Hasher &h) {

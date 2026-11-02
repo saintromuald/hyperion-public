@@ -13,6 +13,7 @@
 
 #include "../h/playervision.h"  // Hyperion: the slots past 7
 #include "../h/hxrules.h"       // Hyperion: HxRules
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 
 // Include order matters. src117/gen/globals117.h is generated with no includes of
 // its own and relies on its includer having BYTE, DWORD and its rows' struct
@@ -3149,6 +3150,10 @@ void CUnit::Damage(int nDamage, weapon_id_t bWeapon, int nDivisor, BYTE bShieldE
   DamageApply(nHit, pSource, nSourcePlayer, bWeapon != 0x22);
   if (nShields) {
     lShields -= nShields;
+    if (PortCosmonarchy()) {  // Hyperion: the mod's regen timers reset on shield damage
+      ModUnitStateOf(this).nShieldRegen = 0;
+      ModUnitStateOf(this).nDamageTaken = 0;
+    }
     if (wpn_wpnType_g[bWeapon] != 0 && lShields != 0)
       CreateShieldEffect(bShieldEffect);
   }

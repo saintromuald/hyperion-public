@@ -1026,6 +1026,7 @@ void CUnit::RemoveFromStatusBar() {
 }
 
 #include "../port/data/port_moddata.h"  // Hyperion: ModDataForGame
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 
 // Loads orders.dat and units.dat and builds an empty unit pool.
 void CUnit::InitUnits() {
@@ -1258,7 +1259,8 @@ void CUnit::Complete() {
   if (gulUnitTypeFlags[wType] & 0x400000)
     sub_41D200(0x111);
   int nType = wType;
-  if (nType == 0x21 || nType == 0x65) {
+  if (nType == 0x21 || nType == 0x65 ||
+      (PortCosmonarchy() && CosmoIsLarva(nType))) {  // Hyperion: the mod's Ocsal larva
     reinterpret_cast<CLink *>(this)->Unlink(
         reinterpret_cast<CLink **>(&sgpTransHead),
         reinterpret_cast<CLink **>(&sgpTransTail));
@@ -1283,6 +1285,13 @@ void CUnit::Complete() {
     SetOrder(gubUnitOrderAI[wType]);
   else
     SetOrder(gubUnitOrderInitialize[wType]);
+  // Hyperion: the mod's cagra spreaders take the creep order and its larva the
+  // idle-larva order, whatever their data says (larva_creep_spawn.cpp).
+  if (PortCosmonarchy() &&
+      (CosmoCreepSpreader(nType) || CosmoCreepSpreaderDone(nType)))
+    SetOrder(0x65);
+  else if (PortCosmonarchy() && CosmoIsLarva(nType))
+    SetOrder(0x4D);
   if (gulUnitTypeFlags[wType] & 0x800) {
     wPowerupOriginX = pSprite->wPosX;
     wPowerupOriginY = pSprite->wPosY;

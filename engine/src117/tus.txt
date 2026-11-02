@@ -363,6 +363,7 @@ port port_ai
 port port_handicap
 port port_mutators
 port port_richbases
+port port_cosmonarchy
 port port_audiodecode
 port port_session
 port port_score

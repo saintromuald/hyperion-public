@@ -16,6 +16,7 @@
 #include <string.h>
 #include <intrin.h>              // _ReadWriteBarrier -- count_unit_exists
 #include "../gen/globals117.h"
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 
 // Globals this TU reaches, dual-spelled, one #ifdef per name. Before coining a
 // name, look for an existing one in sc-refs/sheets.
@@ -116,6 +117,10 @@ int count_get_supplies_used(BYTE bRace, BYTE bPlayer)
 // the cap. The clamp is unsigned, which is what puts a cmovb here.
 int count_get_supplies_available(BYTE bRace, BYTE bPlayer)
 {
+  // Hyperion: the mod pins its provided supply at 60000 every frame, so the
+  // available is always the cap (supply_hooks.cpp); the display follows.
+  if (PortCosmonarchy() && bRace <= 2)
+    return glGameCounts_g[20 + bRace * 3][bPlayer];
   switch (bRace) {
     case 0: {
       const DWORD dwHave = glGameCounts_g[18][bPlayer];
@@ -227,6 +232,12 @@ void __fastcall count_add_killed(CUnit *pUnit, int nPlayer)
 // player. The food cheat replaces the clamped total with the raw cap.
 unsigned count_food_available(int unitType, BYTE nation)
 {
+  // Hyperion: the mod has no supply gate -- what a unit costs is tallied but
+  // never blocks (gptp-fork supply_hooks.cpp pins the provided total at 60000,
+  // so the available is the cap). The cap itself stays 1.17's 400.
+  if (PortCosmonarchy())
+    return count_food_max(unitType, nation) - count_get_supplies_used(
+        static_cast<BYTE>(count_race(unitType)), nation);
   const BYTE bInfo = gubUnitCountInfo[(WORD)unitType];
   int nMax = 0;
   int nUsed = 0;

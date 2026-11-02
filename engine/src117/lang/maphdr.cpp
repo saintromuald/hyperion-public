@@ -42,6 +42,7 @@
 #include "../port/data/port_map.h"  // Hyperion: PortMapStringsWide, PortMapColorsSet, PortMapColorsBegin
 #include "../port/platform/port_standalone.h"  // Hyperion: PortGameVcod
 #include "../port/render/port_view.h"  // Hyperion: g_portView
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: ModUnitStateInit
 #include <stddef.h>      // offsetof (the layout static_asserts)
 #include <string.h>      // memset
 #include "../h/gamedata.h"  // Hyperion: array_data_t
@@ -2166,6 +2167,7 @@ void maphdr_data_init(void) {
   memset(gbUpgradeLevelBW + 0x2E, 0, 0xB4);
   memset(gUpgradeInProgress.a, 0, 0x60);
   PlayerTechInit(upg_repeats);  // Hyperion: Hyperion's slots
+  ModUnitStateInit();  // Hyperion: the mod's per-unit state, once a game
   memset(gbSlotRemap_g, 0, 8);
   resetUnitProps();
   memset(byte_526526, 0, 32);

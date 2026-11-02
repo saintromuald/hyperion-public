@@ -120,12 +120,42 @@ Hyperion.exe --mod cosmonarchy                     # play it
      patched exe's tileset table, which the tree does not carry. Needs that
      table extracted (like the strings were) or the maps re-saved against
      vanilla sets.
-5. **QoL port — LAST, and slow.** The GPTP/Plus plugin features (saturation
+6. **The mod's rules, part 1 — the economy and the Zerg life cycle** — done
+   (`src117/port/gameplay/port_cosmonarchy.cpp`, gated on `PortCosmonarchy()`; every
+   number transcribed from gptp-fork with its anchor):
+   - **No supply gate**: the three races' supply stays one pool whose provided total is
+     pinned, the cap stays 400, and what units cost is tallied but never blocks
+     (`count_food_available` in count.cpp; gptp-fork supply_hooks.cpp).
+   - **The vespene rework**: the neutral ridge and geyser mine without a structure
+     (`CosmoUncappedGasNode`), the mod's refineries mine for the owner or mutual allies
+     (`CosmoGeyserMineable`), gas never depletes, and a trip carries the node's yield —
+     3 (ridge), 5 (geyser/tier 1), 7 (tier 2), 9 (tier 3), minerals 5, depleted 5 at the
+     90-frame timer, normal trips 42 frames (harvest.cpp, trigger_system.h). The
+     MiningEfficiency upgrade's 125%–300% carry multiplier is in `SetHarvestInventory`.
+   - **Energy**: every caster regains 10 a second after 2 seconds since its last spend,
+     cloaking costs nothing, and maximums are the mod's fixed per-unit values
+     (update_unit_energy, cloak_tech, max_energy). The regen timers live in a per-unit
+     side table (`ModUnitState`), which the save (HXMS) and the state hash cover.
+   - **Shields**: flash shielding — nearly every shielded unit regains shields after 2 s
+     out of combat, ramping from 10 to 2 hp/s, forerunners doubled — and the golden
+     units' fixed ~2 hp/s; both reset on shield damage only (update_unit_state.cpp).
+   - **HP regen**: 1 hp/s, doubled while burrowed, after the same 2 s window, in place of
+     1.17's 4 a frame (api.cpp:4317+).
+   - **Cagra and larva**: the mod's spreader list with its 320x200 ellipse and completed
+     gate, the 15-tick timer stepping by 2, larva every 14 s (a 42-frame timer on an
+     8-frame gate) capped at 3, and Ocsal buildings hatching Ocsal larva
+     (larva_creep_spawn.cpp); spreaders take the creep order and larva the idle order in
+     `CUnit::Complete`.
+   - **Pending, later**: the MiningEfficiency setter (AI cheat levels), trigger-driven
+     yields, worker wandering, gas-node display amounts, burrowed cagra spreaders
+     (Agrileth, Yblyleth, Scrylyleth, Malkothrokor), morph regression on death, and the
+     zerg production/dual-birth flows beyond the data (Swarmhold, triple birth, egg
+     cancel refunds).
+7. **QoL port — LAST, and slow.** The GPTP/Plus plugin features (saturation
    overlays, Tab cycling, F11 HUD, idle-worker key, larva picker, custom
    triggers, Lua melee AI, the game modes). Some are already in Hyperion
    itself (anti-meta is a mutator; the engine has extended selections,
    zoom, HUD designs), so each item gets a "already present?" check first.
    This is the hardest part to get right and is deliberately scheduled at
    the end, one feature at a time, with the test campaign behind it.
-6. **Test campaign** — replay-free, headless matches against the reference
-   install, then merge back to `pre-release`/release.
+8. **Test campaign** — replay-free, headless matches against the reference   install, then merge back to `pre-release`/release.
