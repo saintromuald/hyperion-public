@@ -8,3 +8,5 @@ btest.err
 btest.log
 out.bin
 *.log
+bwapi-data/
+shim/
