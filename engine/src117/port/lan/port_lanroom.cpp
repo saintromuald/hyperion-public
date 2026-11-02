@@ -19,7 +19,9 @@
 #include "../platform/port_util.h"  // PortNowMs
 #include "../gameplay/port_mutators.h"  // MutatorsJson, MutatorsFromJson
 #include "../platform/port_json.h"  // PortJsonParse, PortJsonWrite
+#ifndef SB_NETCODE_OFF
 #include "../../../tools/rallypoint2/bridge/ctest/rp_bridge.h"  // rp_dev_mint
+#endif
 
 namespace LanRoom {
 
@@ -273,9 +275,13 @@ bool MintSession(Match &m, std::string *pszWhy)
     return false;
   }
   char out[1 << 20];
+#ifndef SB_NETCODE_OFF
   const int n = rp_dev_mint(coordinator.c_str(), tenant.c_str(), kid.c_str(), seed.c_str(),
                             static_cast<uint32_t>(nHumans), m.name.c_str(), serverName.c_str(),
                             out, sizeof out);
+#else
+  const int n = 0;
+#endif
   if (n <= 0) {
     if (pszWhy)
       *pszWhy = "The coordinator could not mint the session.";
