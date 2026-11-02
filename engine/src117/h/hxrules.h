@@ -46,9 +46,14 @@
 // start resources and workers, the supply cap and the supply each supplier gives. The replay
 // and the save hold them (port_mutators.h).
 #define HX_OPT_MUTATORS 0x100u
+// The start workers split, SC2's way (port_mineinfo.cpp): each goes to its own mineral
+// field. Every new game by Hyperion's rules takes it, and the replay records it, so its
+// playback starts the workers the same way; a game recorded before it plays as it was.
+#define HX_OPT_START_SPLIT 0x200u
 // The options this build plays back and loads.
 #define HX_OPT_KNOWN (HX_OPT_PATH_BUDGET_117 | HX_OPT_TEAMS | HX_OPT_AI_LEVELS | HX_OPT_STRESS | HX_OPT_EUD | \
-                      HX_OPT_ORDER_QUEUE | HX_OPT_SELECTION | HX_OPT_HANDICAP | HX_OPT_MUTATORS)
+                      HX_OPT_ORDER_QUEUE | HX_OPT_SELECTION | HX_OPT_HANDICAP | HX_OPT_MUTATORS | \
+                      HX_OPT_START_SPLIT)
 
 // The rule versions' names, as the rule record holds them.
 #define HX_RULE_CLASSIC "1.17"

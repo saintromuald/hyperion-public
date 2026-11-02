@@ -1034,25 +1034,25 @@ const Setting kSettings[] = {
      ReadKey, WriteKey, NULL, NULL},
     {"hotkeys", PT_("Control groups"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
      NULL, NULL, NULL, PT_("The keys that select a group and, with Ctrl, make the selection a group (Shift adds to it, Alt selects and centres): the ten digits, then six more on R, F, V, T, G and B, which hold units and buildings alike. A letter a command card also uses selects the group instead; click a key and press another to change it.")},
-    {"hotkeys", PT_("Group 1"), CTL_KEYS, "1", 49.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP0,
+    {"hotkeys", PT_("Group 1"), CTL_KEYS, "1", 49.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP1,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group 2"), CTL_KEYS, "2", 50.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP1,
+    {"hotkeys", PT_("Group 2"), CTL_KEYS, "2", 50.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP2,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group 3"), CTL_KEYS, "3", 51.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP2,
+    {"hotkeys", PT_("Group 3"), CTL_KEYS, "3", 51.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP3,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group 4"), CTL_KEYS, "4", 52.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP3,
+    {"hotkeys", PT_("Group 4"), CTL_KEYS, "4", 52.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP4,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group 5"), CTL_KEYS, "5", 53.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP4,
+    {"hotkeys", PT_("Group 5"), CTL_KEYS, "5", 53.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP5,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group 6"), CTL_KEYS, "6", 54.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP5,
+    {"hotkeys", PT_("Group 6"), CTL_KEYS, "6", 54.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP6,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group 7"), CTL_KEYS, "7", 55.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP6,
+    {"hotkeys", PT_("Group 7"), CTL_KEYS, "7", 55.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP7,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group 8"), CTL_KEYS, "8", 56.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP7,
+    {"hotkeys", PT_("Group 8"), CTL_KEYS, "8", 56.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP8,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group 9"), CTL_KEYS, "9", 57.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP8,
+    {"hotkeys", PT_("Group 9"), CTL_KEYS, "9", 57.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP9,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group 0"), CTL_KEYS, "0", 48.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP9,
+    {"hotkeys", PT_("Group 0"), CTL_KEYS, "0", 48.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP0,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
     {"hotkeys", PT_("Group R"), CTL_KEYS, "R", 82.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP10,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
@@ -2090,6 +2090,8 @@ void SettingsDialog(void)
     if (Clicked(b.d.id) && !bHere) {
       g_nTab = t;
       g_nDropOpen = -1;
+      g_nKeyCapture = -1;  // Hyperion: the key a row waits for does not follow the tab
+      g_nKeyNoteRow = -1;
     }
     b.d.layout.sizing.width = Fixed(Sc(341));
     b.d.layout.sizing.height = Fixed(Sc(50));
@@ -2360,8 +2362,11 @@ void SettingsKeys(void)
     return;
   }
   for (int t = 0; t < kTabCount; ++t)
-    if (Key(kTabs[t].cKey))
+    if (Key(kTabs[t].cKey)) {
       g_nTab = t;
+      g_nKeyCapture = -1;  // Hyperion: the key a row waits for does not follow the tab
+      g_nKeyNoteRow = -1;
+    }
 }
 
 // Over a game, once a pass of the game loop: the Accept the dialog asked for, made out of the

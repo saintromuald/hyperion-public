@@ -58,13 +58,14 @@ struct Patch {
   int nOn;      // the workers on it now
 };
 
-// The distance a worker walks in a frame, from the game's own direction table (the
-// cardinal entry) and the worker's top speed; 0 for none.
+// The distance a worker walks in a frame: the game's own velocity, the direction table's
+// cardinal entry times the worker's top speed shifted to whole pixels (the flingy keeps its
+// position in 24.8 and moves a 256th of this a frame, so two shifts of 8); 0 for none.
 int WorkerPxPerFrame(const CUnit *pWorker)
 {
   if (pWorker->lTopSpeed <= 0)
     return 0;
-  return static_cast<int>((DIRECTIONS[0] * static_cast<LONGLONG>(pWorker->lTopSpeed)) >> 8);
+  return static_cast<int>((DIRECTIONS[0] * static_cast<LONGLONG>(pWorker->lTopSpeed)) >> 16);
 }
 
 // The workers a patch takes to saturate: the trip, the walk there and back plus one dock,
@@ -102,13 +103,13 @@ int PatchOf(const CUnit *pWorker, const std::vector<Patch> &ap)
 
 // A start worker's first order, SC2's split (the user, 2026-11-02): each worker of the
 // start goes to its own mineral field, the base's nearest ones in the round, where 1.17's
-// start lets them all crowd the nearest. Only a new game by Hyperion's rules: a replayed
-// or loaded game keeps its own orders, and a classic game 1.17's, to the frame.
+// start lets them all crowd the nearest. The game records the option (HX_OPT_START_SPLIT)
+// in its rule record, so a replay of a game that split starts its workers the same way, and
+// one recorded before it keeps 1.17's, to the frame; a loaded game never places its workers
+// again, and a classic game does not carry the option.
 void PortStartWorkerMine(CUnit *pWorker, int nWorker)
 {
-  // only a new game by Hyperion's rules: a replayed or loaded game keeps its own orders,
-  // and a classic game 1.17's, where the workers find their own patches
-  if (gPlayback != 0 || gpLoadGameFile != NULL || !HxRules())
+  if (gpLoadGameFile != NULL || (g_hxRuleOptions & HX_OPT_START_SPLIT) == 0)
     return;
   // the worker's town hall, the nearest completed one it belongs to
   CUnit *pHall = NULL;
@@ -161,7 +162,7 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   std::vector<CUnit *> abase;
   const CUnit *pWorker = NULL;
   for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
-    if (p->bPlayer != nPlayer || (p->dwFlags & 1) == 0)
+    if (p->bPlayer != nPlayer || (p->dwFlags & 1) == 0 || p->pSprite == NULL)
       continue;
     if (IsTownHall(p->wType))
       abase.push_back(p);
@@ -185,6 +186,8 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     int nBest = 0;
     long long llBest = -1;
     for (size_t b = 0; b < abase.size(); ++b) {
+      if (abase[b]->pSprite == NULL)
+        continue;
       const long long dx = x - static_cast<int>(abase[b]->pSprite->wPosX);
       const long long dy = y - static_cast<int>(abase[b]->pSprite->wPosY);
       const long long d = dx * dx + dy * dy;
@@ -227,12 +230,13 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   }
 
   // the words over each town hall: the workers over the saturation count, and, while the
-  // patches' work falls short, the efficiency it comes to
-  const double fZoom = PortCameraShown();
-  const double fSx = fW * fZoom / g_portView.nWidth;
-  const double fSy = fH * fZoom / g_portView.nViewRows;
-  const double fScrollX = glScrollPixelX;
-  const double fScrollY = glScrollPixelY;
+  // patches' work falls short, the efficiency it comes to. The camera's anchor and zoom put
+  // each world point on the window: the game box shows nWidth by nViewRows game pixels, and
+  // a map pixel is a game pixel divided by the zoom, off the anchor.
+  double fCamX, fCamY, fZoom;
+  PortViewCamera(&fCamX, &fCamY, &fZoom);
+  const double fSx = fW / g_portView.nWidth / fZoom;
+  const double fSy = fH / 480.0 / fZoom;
   bool bDrew = false;
   for (size_t b = 0; b < abase.size(); ++b) {
     if (abase[b]->pSprite == NULL)
@@ -255,8 +259,8 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
 
     const double fXw = static_cast<int>(abase[b]->pSprite->wPosX);
     const double fYw = static_cast<int>(abase[b]->pSprite->wPosY);
-    const double fSx0 = fX + (fXw - fScrollX) * fSx;
-    const double fSy0 = fY + (fYw - fScrollY) * fSy;
+    const double fSx0 = fX + (fXw - fCamX) * fSx;
+    const double fSy0 = fY + (fYw - fCamY) * fSy;
     if (fSx0 < fX - 80 || fSx0 > fX + fW + 80 || fSy0 < fY - 60 || fSy0 > fY + fH)
       continue;
 

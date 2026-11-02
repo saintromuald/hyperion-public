@@ -22,7 +22,6 @@
 #include "../h/Storm.h"
 #include "../h/mask.h"
 #include "../h/gds_vidblit.h"
-#include "../port/gameplay/port_camkeys.h"  // Hyperion: SC2's camera locations' seed
 #include "../h/minimap.h"
 #include "../h/gameloop.h"
 #include "../h/TrigAct.h"
@@ -301,8 +300,6 @@ void gamemap_choose_center()
     word_526550[3] = (WORD)glScrollPixelY;
     word_526550[4] = (WORD)glScrollPixelX;
     word_526550[5] = (WORD)glScrollPixelY;
-
-    PortCamKeysInit();  // Hyperion: SC2's eight locations start on the same view
 }
 
 // Invalidate the playfield layer so the next paint redraws all of it. The test

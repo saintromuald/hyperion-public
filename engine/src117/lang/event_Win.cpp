@@ -12,6 +12,7 @@
 #include "../h/glues.h"      // CloseAllWindows
 #include "../h/net_cmds.h"   // gameloop_init, error_get_str, map_msg_chat_msg
 #include "../h/group_un.h"   // Hyperion: sub_463ED0, the letter groups' Alt
+#include "../h/hxrules.h"    // Hyperion: HxRules, the letter groups' game
 #include "../h/minimap.h"    // mou_cager
 #include "../h/snd.h"        // snd_update_streams
 #include "../h/victory.h"    // psnprintf
@@ -701,7 +702,10 @@ win_lparam_t __stdcall WndProc(void *hWnd, unsigned int uMsg, uintptr_t wParam, 
   // as its own
   if (PortOverlayKey(uMsg, static_cast<unsigned long long>(wParam), static_cast<long long>(lParam)))
     return 0;
-  if ((uMsg == 0x100 || uMsg == 0x104) && gwGameMode == 3) {
+  if ((uMsg == 0x100 || uMsg == 0x104) && gwGameMode == 3 &&
+      // Hyperion: a key the player gave one of these that types a character does not fire
+      // while a message is typed; the function keys, Tab and the cursor's two do
+      (!gbInMsgMode || ((wParam >= 0x70 && wParam <= 0x7B) || wParam == 0x09 || wParam == 0x11 || wParam == 0x12))) {
     const int nHotkey = PortHotkeyPressed(static_cast<unsigned>(wParam));
     const bool bRepeat = (lParam & 0x40000000) != 0;
     // Ctrl+Alt (VK_CONTROL 0x11, VK_MENU 0x12), either first, lets the cursor go (port_present.cpp); the keys still reach the
@@ -778,7 +782,9 @@ win_lparam_t __stdcall WndProc(void *hWnd, unsigned int uMsg, uintptr_t wParam, 
       return 0;
     }
   }
-  if ((uMsg == 0x100 || uMsg == 0x104) && (lParam & 0x40000000) == 0 && gwGameMode == 3) {
+  if ((uMsg == 0x100 || uMsg == 0x104) && (lParam & 0x40000000) == 0 && gwGameMode == 3 &&
+      // Hyperion: a character key given to these does not fire while a message is typed
+      (!gbInMsgMode || ((wParam >= 0x70 && wParam <= 0x7B) || wParam == 0x09))) {
     const int nHotkey = PortHotkeyPressed(static_cast<unsigned>(wParam));
     if (nHotkey == PORT_HOTKEY_ART) {
       PortGpuHdToggle();
@@ -797,7 +803,10 @@ win_lparam_t __stdcall WndProc(void *hWnd, unsigned int uMsg, uintptr_t wParam, 
     const unsigned nHeld = PortHotkeyHeld(static_cast<unsigned>(wParam));
     if (!bRepeat && (nHeld & (PORT_KEY_CTRL | PORT_KEY_SHIFT | PORT_KEY_ALT)) != 0) {
       const int nGroup = PortKeyGroup(static_cast<unsigned>(wParam));
-      if (nGroup >= 0) {
+      // the six extra groups' letters are a game by Hyperion's rules' own (the digits'
+      // modifiers 1.17's tables already take before this); a classic game keeps 1.17's
+      // letters, its Alt+R message log among them
+      if (nGroup >= 0 && (nGroup < 10 || HxRules())) {
         if ((nHeld & PORT_KEY_CTRL) != 0)
           send_net_cmd_GroupUnits(0, static_cast<BYTE>(nGroup), NULL, 0);
         else if ((nHeld & PORT_KEY_SHIFT) != 0)

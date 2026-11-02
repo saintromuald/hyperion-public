@@ -110,7 +110,9 @@ int MutatorUnitLimitOf(int nUnits);
 int MutatorsRevisionOf(void);
 
 // The replay's and the save's record, MUTATOR_RECORD_BYTES: the ten values, the rules'
-// revision, MUTATOR_REVISION, rich bases' four and the unit limit. 0.6.21 to 0.6.24 wrote
+// revision, MUTATOR_REVISION, rich bases' four, the unit limit, and the no-cap and one
+// add-on mutators. 0.6.25's record (64) had the unit limit but not the last two, read with
+// neither; 0.6.21 to 0.6.24 wrote
 // MUTATOR_RECORD_BYTES_RADIUS, without the unit limit, read as Automatic; 0.6.16 to 0.6.20 wrote
 // MUTATOR_RECORD_BYTES_RICH, without the radius, read with 48 tiles; 0.6.10 to 0.6.15 wrote
 // MUTATOR_RECORD_BYTES_REVISION, without rich bases, read with none; 0.6.9
@@ -119,6 +121,7 @@ int MutatorsRevisionOf(void);
 // and tech, read with the three at 1.17's. MutatorsRecorded(NULL, 0) forgets the last one read;
 // false for a record this build does not read.
 #define MUTATOR_RECORD_BYTES 72
+#define MUTATOR_RECORD_BYTES_UNITS 64
 #define MUTATOR_RECORD_BYTES_RADIUS 60
 #define MUTATOR_RECORD_BYTES_RICH 56
 #define MUTATOR_RECORD_BYTES_REVISION 44

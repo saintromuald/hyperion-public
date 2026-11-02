@@ -2,7 +2,7 @@
 #ifndef PORT_CAMKEYS_H
 #define PORT_CAMKEYS_H
 
-// A game begins: every location the start view (gamemap_choose_center calls it).
+// A game begins: every location the start view (port_camera.cpp's game start calls it).
 void PortCamKeysInit(void);
 // Which camera action a key down is with the modifiers held now: 0 to 7 a jump to the
 // location, 8 to 15 a save of it (n % 8), or -1 for none. The keys are PORT_HOTKEY_CAMGO1

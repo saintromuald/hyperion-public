@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include "port_camera.h"
 #include "port_view.h"  // PortViewZoomWhole
+#include "../gameplay/port_camkeys.h"  // Hyperion: the camera locations' seed
 #include "../tools/port_control.h"
 #include "../gameplay/port_cutscene.h"
 #include "port_motion.h"
@@ -80,6 +81,10 @@ void PortCameraGameStarts(int bReplay)
 {
   CameraStart();
   g_bReplay = bReplay != 0;
+  // Hyperion: the eight camera locations (port_camkeys.cpp) start on this game's view,
+  // a new one's, a replayed one's and a loaded one's alike (a loaded game never runs
+  // gamemap_choose_center)
+  PortCamKeysInit();
   if (g_bEnvZoom)
     return;
   double f = 1.0;
