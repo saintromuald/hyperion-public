@@ -554,7 +554,9 @@ static void UpdateScMemory() {
 // it concurrently broke the server's unit sync (the bot ended up observing one
 // zero unit and issuing no commands).
 static void ApplyImageState(const HxUnit *units, unsigned nUnits, const HxPlayer *players,
-                            unsigned nPlayers, unsigned frame, unsigned mapW, unsigned mapH) {
+                            unsigned nPlayers, unsigned frame, unsigned mapW, unsigned mapH,
+                            const unsigned char *seen, const unsigned char *explored,
+                            unsigned nPlaneBytes) {
   // ActiveTileArray: the same one-time setup UpdateScMemory does.
   static void *s_tiles;
   if (!s_tiles) {
@@ -565,6 +567,16 @@ static void ApplyImageState(const HxUnit *units, unsigned nUnits, const HxPlayer
       t[i * 4 + 1] = 1;  // explored flags: explored
       t[i * 4 + 2] = 1;  // walkable
       t[i * 4 + 3] = 0;
+    }
+    // The fog planes, one bit a tile in the map's row order (the fork indexes
+    // the array by the map's width): byte 0 = the seen bit (the bot's player is
+    // 0), byte 1 = the explored bit, byte 2 = walkable.
+    for (unsigned ti = 0; ti < nPlaneBytes * 8u; ++ti) {
+      const bool bSeen = (seen[ti >> 3] >> (ti & 7)) & 1;
+      const bool bExplored = (explored[ti >> 3] >> (ti & 7)) & 1;
+      t[ti * 4 + 0] = bSeen ? 1 : 0;
+      t[ti * 4 + 1] = bExplored ? 1 : 0;
+      t[ti * 4 + 2] = 1;
     }
     *ScT<void *>(0x6D1260) = s_tiles;
   }
@@ -650,14 +662,20 @@ static void ApplyImageState(const HxUnit *units, unsigned nUnits, const HxPlayer
     su.unitType = static_cast<uint16_t>(u.type);
     su.energy = static_cast<int32_t>(u.energy) * 256;
     su.statusFlags = 1;   // Completed
-    su.visibilityStatus = 1;  // visible
+    su.visibilityStatus = u.visible ? 1 : 0;
   }
-  // 4. Link the used slots in ascending order through the visible-unit list.
+  // 4. Link the slots in ascending order through the visible-unit list. The
+  // list is the local player's view: only the units seen by the bot are in it,
+  // and the fork's engine keeps the rest as hidden last-seen entries.
   unsigned linkOrder[1700];
   unsigned nLinked = 0;
-  for (int s = 0; s < 1700; ++s)
-    if (s_idOfSlot[s] != ~0u)
-      linkOrder[nLinked++] = static_cast<unsigned>(s);
+  for (int s = 0; s < 1700; ++s) {
+    if (s_idOfSlot[s] == ~0u)
+      continue;
+    if (nodes[s].visibilityStatus == 0)
+      continue;
+    linkOrder[nLinked++] = static_cast<unsigned>(s);
+  }
   unsigned prevPtr = 0;
   for (unsigned k = 0; k < nLinked; ++k) {
     const unsigned slot = linkOrder[k];
@@ -1148,12 +1166,14 @@ int main(int argc, char **argv) {
     static HxPlayer players[12];
     ReadN(units, nUnits * sizeof(HxUnit));
     ReadN(players, nPlayers * sizeof(HxPlayer));
+    static unsigned char seen[0x8000], explored[0x8000];  // 256x256 bits max
+    const unsigned nPlaneBytes = (mapWH[0] * mapWH[1] + 7) / 8;
+    ReadN(seen, nPlaneBytes);
+    ReadN(explored, nPlaneBytes);
     DWORD t1 = GetTickCount();
-    // Frame 0 is not applied: the start-up image is complete before the fork's
-    // threads first read it, and rebuilding here raced those first reads. The
-    // fork starts from the scripted state and sees the real state from frame 1.
-    if (getenv("HX_NOAPPLY") == NULL && frame != 0)
-      ApplyImageState(units, nUnits, players, nPlayers, frame, mapWH[0], mapWH[1]);
+    if (getenv("HX_NOAPPLY") == NULL)
+      ApplyImageState(units, nUnits, players, nPlayers, frame, mapWH[0], mapWH[1],
+                      seen, explored, nPlaneBytes);
     if (bDebug && frame == 0) {
       fprintf(stderr, "[bridge] sizes: HxUnit=%u HxPlayer=%u\n",
               static_cast<unsigned>(sizeof(HxUnit)),

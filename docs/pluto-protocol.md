@@ -94,12 +94,21 @@ bridge's stdin/stdout. All little-endian.
 | nPlayers | 4 | the player count (<= 12) |
 | units | nUnits * 40 | one `{u32 id,type,player,x,y,hp,shields,energy,order; u8 visible,completed,pad[2]}` a unit |
 | players | nPlayers * 28 | one `{u32 race,minerals,gas,supplyTotal,supplyUsed,startX,startY}` a player |
+| seen | (mapW*mapH+7)/8 | one bit a tile in row order: the tile is seen by the Pluto slot |
+| explored | (mapW*mapH+7)/8 | one bit a tile: the tile is explored by the Pluto slot |
 
 Traps learned the hard way:
 
 - `order` must be a real, alive order (the rig sends `PlayerGuard`). Sending 0
   (`Die`) makes the fork's engine drop every unit from its model: the obs stays at
   N=1 and no commands ever come back.
+- **Fog of war is real, not a cheat**: `visible` per unit (the Pluto slot's own
+  vision — `SpriteSeenBy(u->pSprite, slot)` on Hyperion's side) and the seen /
+  explored tile planes (`VisionHxTileSeen/Explored`). The bridge writes the planes
+  into the tile array and links only the visible units into the visible-unit
+  list — the list is the local player's view, and the fork's engine keeps
+  everything else hidden. Units that were never seen never reach the obs at all;
+  the net's map planes carry the fog too.
 - The unit `id`s are the positions in the list (0..n-1), sent fresh each frame.
   The bridge maps slot = id, so the fork's model index equals the Hyperion list
   position, and the commands' unit ids (9363 + index) map straight back.
