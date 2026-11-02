@@ -60,10 +60,21 @@ const int kRadii[] = {32, 48, 64, 80, -25, -33, -50};
 // field upwards of 600 units with the mutator, so the table goes much higher
 const int kUnitLimits[] = {0, 3400, 6800, 13600, 27200, 54400, 108800, POOL_UNITS_MAX};
 
+// the no-cap mutator's choices and the one add-on's (the user, 2026-11-02): Classic's,
+// or the new rule
+const char *const kNocaps[] = {PT_("Classic"), PT_("No cap")};    // MUT_NOCAP
+const char *const kAddons[] = {PT_("Classic"), PT_("One add-on")};  // MUT_ADDON
+
+// the types the no-cap mutator cheapens and halves (the user, 2026-11-02): 1.17's Supply
+// Depot (109) and Pylon (156), 40 minerals each, and half the life, a pylon's half its
+// shields too (gxUnitLife in 256ths, the shields in guwUnitEnergy)
+const int kNoCapTypes[] = {109, 156};
+const int kNoCapMinerals = 40;
+
 const char *const kNames[MUT_COUNT] = {PT_("Mineral fields"), PT_("Vespene geysers"), PT_("Start resources"),
                                        PT_("Supply cap"),     PT_("Start workers"),   PT_("Supply boost"),
                                        PT_("Fog of war"),     PT_("Build time"),      PT_("Tech and upgrades"),
-                                       PT_("Rich resources")};
+                                       PT_("Rich resources"), PT_("No cap"),         PT_("One add-on")};
 const char *const kLines[MUT_COUNT] = {
     PT_("What each mineral field holds, or that it never runs dry. Classic: 1,500, the small ones 750."),
     PT_("What each geyser holds before it runs dry, or that it never does. Classic: 5,000."),
@@ -81,6 +92,12 @@ const char *const kLines[MUT_COUNT] = {
     PT_("Bases away from every start may turn rich: gold mineral fields and violet geysers that give 11 "
         "minerals and 16 gas a trip, and run dry sooner. Never a start's main or natural; bases that mirror "
         "each other turn rich together. Every base: all of them. Classic: none."),
+    PT_("Supply is not needed: every unit costs no supply and the cap is off, and a depot and a pylon cost "
+        "40 minerals with half their life, as they are built for their tech, not their supply. Classic: "
+        "supply as 1.17's."),
+    PT_("One add-on of a kind serves every building: one Machine Shop lets any Factory build Siege Tanks, "
+        "and the same for the Control Tower's, the Covert Ops' and the Physics Lab's. Classic: each "
+        "building needs its own."),
 };
 
 // the presets' names, which --mutators also reads (MutatorsChooseList) from the English
@@ -164,7 +181,8 @@ bool Same(const MutatorSet &a, const MutatorSet &b) {
          a.nTech == b.nTech && a.nRich == b.nRich &&
          (!RichRolled(a) || (a.nRichChance == b.nRichChance && a.nRichRules == b.nRichRules)) &&
          (a.nRich == MUTATOR_RICH_OFF || (a.nRichRules & MUTATOR_RICH_QUIET) == (b.nRichRules & MUTATOR_RICH_QUIET)) &&
-         (a.nRich != MUTATOR_RICH_RADIUS || a.nRichRadius == b.nRichRadius) && a.nUnits == b.nUnits;
+         (a.nRich != MUTATOR_RICH_RADIUS || a.nRichRadius == b.nRichRadius) && a.nUnits == b.nUnits &&
+         a.nNoCap == b.nNoCap && a.nAddon == b.nAddon;
 }
 
 // A radius in words: "48 tiles", "a quarter of the map"; in English for a log or a key.
@@ -271,6 +289,7 @@ struct Record {
   DWORD dwRich, dwRichChance, dwRichRules;
   DWORD dwRichRadius;
   DWORD dwUnits;
+  DWORD dwNoCap, dwAddon;
 };
 #pragma pack(pop)
 static_assert(sizeof(Record) == MUTATOR_RECORD_BYTES, "the record's size is fixed");
@@ -300,6 +319,8 @@ MutatorSet MutatorsClamp(const MutatorSet &m) {
   c.nRichRadius = m.nRichRadius < 0 ? Clamp(m.nRichRadius, -75, -10) : m.nRichRadius == 0 ? c.nRichRadius
                                                                                           : Clamp(m.nRichRadius, 16, 256);
   c.nUnits = m.nUnits <= 0 ? 0 : Clamp(m.nUnits, POOL_UNITS_117, POOL_UNITS_MAX);
+  c.nNoCap = m.nNoCap != 0;
+  c.nAddon = m.nAddon != 0;
   return c;
 }
 
@@ -345,6 +366,8 @@ int MutatorChoices(int nMut) {
   case MUT_BUILD: return static_cast<int>(sizeof kBuilds / sizeof kBuilds[0]);
   case MUT_TECH: return static_cast<int>(sizeof kTechs / sizeof kTechs[0]);
   case MUT_RICH: return static_cast<int>(sizeof kRiches / sizeof kRiches[0]);
+  case MUT_NOCAP: return static_cast<int>(sizeof kNocaps / sizeof kNocaps[0]);
+  case MUT_ADDON: return static_cast<int>(sizeof kAddons / sizeof kAddons[0]);
   case MUT_RICH_CHANCE: return static_cast<int>(sizeof kChances / sizeof kChances[0]);
   case MUT_RICH_RADIUS: return static_cast<int>(sizeof kRadii / sizeof kRadii[0]);
   }
@@ -365,6 +388,8 @@ std::string MutatorChoiceName(int nMut, int i) {
   case MUT_BUILD: return Share(kBuilds[i]);
   case MUT_TECH: return PortText(kTechs[i]);
   case MUT_RICH: return PortText(kRiches[i]);
+  case MUT_NOCAP: return PortText(kNocaps[i]);
+  case MUT_ADDON: return PortText(kAddons[i]);
   case MUT_RICH_CHANCE: return PortTextF("{0}% chance", {std::to_string(kChances[i])});
   case MUT_RICH_RADIUS: return RadiusChip(kRadii[i]);
   }
@@ -391,6 +416,8 @@ int MutatorChoiceOf(const MutatorSet &m, int nMut) {
   case MUT_BUILD: return Nearest(kBuilds, MutatorChoices(nMut), m.nBuildTime);
   case MUT_TECH: return Clamp(m.nTech, 0, MutatorChoices(nMut) - 1);
   case MUT_RICH: return Clamp(m.nRich, 0, MutatorChoices(nMut) - 1);
+  case MUT_NOCAP: return Clamp(m.nNoCap, 0, MutatorChoices(nMut) - 1);
+  case MUT_ADDON: return Clamp(m.nAddon, 0, MutatorChoices(nMut) - 1);
   case MUT_RICH_CHANCE: return Nearest(kChances, MutatorChoices(nMut), m.nRichChance);
   case MUT_RICH_RADIUS:
     for (int i = 0; i < MutatorChoices(nMut); i++)
@@ -418,6 +445,8 @@ void MutatorChoose(MutatorSet *pm, int nMut, int i) {
   case MUT_BUILD: pm->nBuildTime = kBuilds[i]; break;
   case MUT_TECH: pm->nTech = i; break;
   case MUT_RICH: pm->nRich = i; break;
+  case MUT_NOCAP: pm->nNoCap = i; break;
+  case MUT_ADDON: pm->nAddon = i; break;
   case MUT_RICH_CHANCE: pm->nRichChance = kChances[i]; break;
   case MUT_RICH_RADIUS: pm->nRichRadius = kRadii[i]; break;
   }
@@ -464,6 +493,8 @@ bool MutatorOn(const MutatorSet &m, int nMut) {
   case MUT_BUILD: return m.nBuildTime != c.nBuildTime;
   case MUT_TECH: return m.nTech != c.nTech;
   case MUT_RICH: return m.nRich != c.nRich;
+  case MUT_NOCAP: return m.nNoCap != c.nNoCap;
+  case MUT_ADDON: return m.nAddon != c.nAddon;
   }
   return false;
 }
@@ -606,6 +637,10 @@ std::string MutatorsText(const MutatorSet &m, bool bShown) {
   }
   if (m.nUnits != s.nUnits)
     add(PT_("unit limit {0}"), {count(m.nUnits)});
+  if (m.nNoCap != s.nNoCap)
+    add(PT_("no supply, cheap depots and pylons"));
+  if (m.nAddon != s.nAddon)
+    add(PT_("one add-on serves every building"));
   return out;
 }
 
@@ -617,7 +652,8 @@ std::string MutatorsJson(const MutatorSet &m) {
          ",\"build\":" + std::to_string(m.nBuildTime) + ",\"tech\":" + std::to_string(m.nTech) +
          ",\"rich\":" + std::to_string(m.nRich) + ",\"richChance\":" + std::to_string(m.nRichChance) +
          ",\"richRules\":" + std::to_string(m.nRichRules) + ",\"richRadius\":" + std::to_string(m.nRichRadius) +
-         ",\"units\":" + std::to_string(m.nUnits) + "}";
+         ",\"units\":" + std::to_string(m.nUnits) + ",\"noCap\":" + std::to_string(m.nNoCap) +
+         ",\"addon\":" + std::to_string(m.nAddon) + "}";
 }
 
 MutatorSet MutatorsFromJson(const PortJson &j) {
@@ -638,6 +674,8 @@ MutatorSet MutatorsFromJson(const PortJson &j) {
   m.nRichRules = static_cast<int>(j["richRules"].Num(s.nRichRules));
   m.nRichRadius = static_cast<int>(j["richRadius"].Num(s.nRichRadius));
   m.nUnits = static_cast<int>(j["units"].Num(s.nUnits));
+  m.nNoCap = static_cast<int>(j["noCap"].Num(s.nNoCap));
+  m.nAddon = static_cast<int>(j["addon"].Num(s.nAddon));
   return MutatorsClamp(m);
 }
 
@@ -708,9 +746,13 @@ bool MutatorsChooseList(const char *pszList) {
     } else if (lstrcmpiA(key.c_str(), "richseed") == 0) {
       m.nRichRules = _strnicmp(pszValue, "map", 3) == 0 ? m.nRichRules | MUTATOR_RICH_SAME_MAP
                                                          : m.nRichRules & ~MUTATOR_RICH_SAME_MAP;
+    } else if (lstrcmpiA(key.c_str(), "nocap") == 0 || lstrcmpiA(key.c_str(), "nosupply") == 0) {
+      m.nNoCap = ParseOn(pszValue) ? 1 : 0;
+    } else if (lstrcmpiA(key.c_str(), "addon") == 0 || lstrcmpiA(key.c_str(), "oneaddon") == 0) {
+      m.nAddon = ParseOn(pszValue) ? 1 : 0;
     } else {
       Log("--mutators: %s is none of minerals, gas, start, supply, workers, boost, fog, build, tech, rich, radius, "
-          "chance, fair, atleast, announce, richseed and units", key.c_str());
+          "chance, fair, atleast, announce, richseed, nocap, addon and units", key.c_str());
       continue;
     }
     bAny = true;
@@ -770,6 +812,10 @@ std::string MutatorsList(const MutatorSet &m) {
   }
   if (m.nUnits != c.nUnits)
     add("units", std::to_string(m.nUnits));
+  if (m.nNoCap != c.nNoCap)
+    add("nocap", "on");
+  if (m.nAddon != c.nAddon)
+    add("addon", "on");
   return s;
 }
 
@@ -842,8 +888,16 @@ int MutatorFoodMadeOf(int nMade) {
   return nWhole > nMade ? nWhole : nMade;
 }
 
+int MutatorFoodUsedOf(int nUsed) {
+  return g_game.nNoCap ? 0 : nUsed;
+}
+
+bool MutatorAddonOf(void) {
+  return g_game.nAddon != 0;
+}
+
 int MutatorSupplyCapOf(void) {
-  return g_game.nSupplyCap == 0 ? kUnlimitedHalves : g_game.nSupplyCap * 2;
+  return g_game.nSupplyCap == 0 || g_game.nNoCap ? kUnlimitedHalves : g_game.nSupplyCap * 2;
 }
 
 int MutatorWorkersOf(void) {
@@ -904,6 +958,22 @@ void MutatorsMapLoaded(void) {
       }
     }
   }
+  if (!bLoaded && g_game.nNoCap) {
+    // the no-cap mutator (the user, 2026-11-02): the supply buildings are built for their
+    // tech, not their supply, so they cost 40 minerals and hold half their life, a pylon's
+    // half its shields. The tables hold what every reader and the save then have, as the
+    // build times above.
+    for (const int t : kNoCapTypes) {
+      guwUnitMineralsCost[t] = kNoCapMinerals;
+      gxUnitLife[t] = static_cast<LONG>(gxUnitLife[t] / 2);
+      if (gbUnitHasShields[t])
+        guwUnitEnergy[t] = static_cast<WORD>(guwUnitEnergy[t] / 2);
+    }
+    Log("no cap: the depot is %d minerals and %d life; the pylon %d minerals, %d life and %d shields",
+        guwUnitMineralsCost[kNoCapTypes[0]], static_cast<int>(gxUnitLife[kNoCapTypes[0]] >> 8),
+        guwUnitMineralsCost[kNoCapTypes[1]], static_cast<int>(gxUnitLife[kNoCapTypes[1]] >> 8),
+        guwUnitEnergy[kNoCapTypes[1]]);
+  }
   if (!bLoaded)
     MutatorsVisionRefresh();
   Log("the map loaded%s: times at %d%%, tech %d, fog %d", bLoaded ? " for a saved game" : "", g_game.nBuildTime,
@@ -939,7 +1009,8 @@ void MutatorsSave(unsigned char *pbOut) {
                     static_cast<DWORD>(g_game.nBuildTime),     static_cast<DWORD>(g_game.nTech),
                     static_cast<DWORD>(g_nRevision),           static_cast<DWORD>(g_game.nRich),
                     static_cast<DWORD>(g_game.nRichChance),    static_cast<DWORD>(g_game.nRichRules),
-                    static_cast<DWORD>(g_game.nRichRadius),    static_cast<DWORD>(g_game.nUnits)};
+                    static_cast<DWORD>(g_game.nRichRadius),    static_cast<DWORD>(g_game.nUnits),
+                    static_cast<DWORD>(g_game.nNoCap),         static_cast<DWORD>(g_game.nAddon)};
   memcpy(pbOut, &r, sizeof r);
 }
 
@@ -958,9 +1029,10 @@ bool MutatorsRecorded(const unsigned char *pbIn, int nBytes) {
   if (!MutatorRecordBytesRead(nBytes))
     return false;
   // a record without the revision is 0.6.9's, revision 0; one without rich bases has none, one
-  // without the radius 48 tiles, and one without the unit limit Automatic
+  // without the radius 48 tiles, one without the unit limit Automatic, and one without the no-cap
+  // mutator and the one add-on's has neither
   Record r = {0, 0, 0, 0, 0, 0, 0, MUTATOR_FOG_CLASSIC, 100, MUTATOR_TECH_CLASSIC, 0, MUTATOR_RICH_OFF, 50,
-              MUTATOR_RICH_FAIR | MUTATOR_RICH_AT_LEAST_ONE, 48, 0};
+              MUTATOR_RICH_FAIR | MUTATOR_RICH_AT_LEAST_ONE, 48, 0, 0, 0};
   memcpy(&r, pbIn, nBytes);
   g_nRecordedRevision = static_cast<int>(r.dwRevision);
   MutatorSet m;
@@ -979,6 +1051,8 @@ bool MutatorsRecorded(const unsigned char *pbIn, int nBytes) {
   m.nRichRules = static_cast<int>(r.dwRichRules);
   m.nRichRadius = static_cast<int>(r.dwRichRadius);
   m.nUnits = static_cast<int>(r.dwUnits);
+  m.nNoCap = static_cast<int>(r.dwNoCap);
+  m.nAddon = static_cast<int>(r.dwAddon);
   g_recorded = MutatorsClamp(m);
   g_bRecorded = true;
   return true;

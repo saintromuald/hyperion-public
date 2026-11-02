@@ -29,6 +29,12 @@ bool MutatorEndlessOf(bool bGas);
 // rounded down to a whole supply, and never less than without it. A game recorded before 0.6.10
 // rounds down to a half, as it was played (port_mutators.h, the record's revision).
 int MutatorFoodMadeOf(int nMade);
+// The supply a unit type costs, nUsed (gubUnitFoodUsed): 1.17's, or none with the no-cap
+// mutator, under which supply is not needed at all.
+int MutatorFoodUsedOf(int nUsed);
+// Whether the one add-on mutator is on: one add-on of a kind counts for every building
+// (TechTree.cpp, TTAllowed's addon requirement).
+bool MutatorAddonOf(void);
 // A player's supply cap in halves (1.17's 400), and the workers each player starts with (4).
 int MutatorSupplyCapOf(void);
 int MutatorWorkersOf(void);
@@ -80,6 +86,12 @@ static inline const char *MutatorRichName(int nUnit, int nType) {
 }
 static inline int MutatorFoodMade(int nMade) {
   return g_hxMutatorsOn ? MutatorFoodMadeOf(nMade) : nMade;
+}
+static inline int MutatorFoodUsed(int nUsed) {
+  return g_hxMutatorsOn ? MutatorFoodUsedOf(nUsed) : nUsed;
+}
+static inline bool MutatorAddon(void) {
+  return g_hxMutatorsOn && MutatorAddonOf();
 }
 static inline int MutatorSupplyCap(void) {
   return g_hxMutatorsOn ? MutatorSupplyCapOf() : 400;

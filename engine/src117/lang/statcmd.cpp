@@ -24,6 +24,7 @@
 #include "../h/snd.h"       // load_game_data
 #include "../h/statbtn.h"   // target_is_on, placebox_is_on
 #include "../h/statdraw.h"  // statdraw_replay_progress
+#include "../h/mutators.h"  // Hyperion: MutatorFoodUsed, the no-cap mutator's
 #include "../h/CtxtHelp.h"  // ctxhelp_get_surface, img_ctxhelp_invalid
 #include "../port/hud/port_hudinput.h"  // Hyperion: PortHudHelpPlace, PortHudConsoleCursor
 #include "../h/dlg_draw.h"  // font_set, font_set_color_tbl
@@ -485,6 +486,12 @@ int statcmd_dlg_char_evn(dlgevt_t *pEvent)
     int c = tolower(evt_vkey(pEvent));
     ctrl_t *pDlg = sgpStatCmdDlg;
     ch = (char)c;
+
+    // Hyperion: a key of a control group selects the group before the card takes it, so
+    // the six extra groups' letters work as 1 to 0 do (the user, 2026-11-02); the card
+    // keeps every other key.
+    if (PortKeyGroup(static_cast<unsigned>(ch)) >= 0)
+      return 0;
 
     if (ctrl_chainr(pDlg->pChildren,
                     reinterpret_cast<dlgevt_t *>(&ch),
@@ -1043,9 +1050,9 @@ void statcmd_show_btn_tooltip(ctrl_t *pDlg, ctrl_t *pCtrl)
             WORD wType = pBtn->w0E;
             BYTE bCount = (gulUnitTypeFlags[wType] & 0x400) != 0 ? 2 : 1;
             BYTE bInfo = gubUnitCountInfo[wType];
-            WORD w4 = static_cast<WORD>(bCount * ((bInfo & 4) ? gubUnitFoodUsed[wType] : 0));
-            WORD w2 = static_cast<WORD>(bCount * ((bInfo & 2) ? gubUnitFoodUsed[wType] : 0));
-            WORD w1 = static_cast<WORD>(bCount * ((bInfo & 1) ? gubUnitFoodUsed[wType] : 0));
+            WORD w4 = static_cast<WORD>(bCount * ((bInfo & 4) ? MutatorFoodUsed(gubUnitFoodUsed[wType]) : 0));  // Hyperion
+            WORD w2 = static_cast<WORD>(bCount * ((bInfo & 2) ? MutatorFoodUsed(gubUnitFoodUsed[wType]) : 0));  // Hyperion
+            WORD w1 = static_cast<WORD>(bCount * ((bInfo & 1) ? MutatorFoodUsed(gubUnitFoodUsed[wType]) : 0));  // Hyperion
             statcmd_set_tooltip_data(guwUnitMineralsCost[wType],
                                      guwUnitGasesCost[wType], 0, 0, 0, w4 >> 1,
                                      w2 >> 1, w1 >> 1);

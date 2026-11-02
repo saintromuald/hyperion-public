@@ -19,6 +19,7 @@
 #include "CUnitUpgrade.h"   // get_upgrade_ore_cost / get_upgrade_gas_cost
 #include "CUnitHarvest.h"   // gamesnd_show_player_error
 #include "count.h"          // count_race, count_get_supplies_used
+#include "../h/mutators.h"  // Hyperion: MutatorFoodUsed, the no-cap mutator's
 #undef bldg_get_unit_cost
 
 // One callee from another TU is declared nowhere in src117/h: count_food_max
@@ -144,7 +145,7 @@ void refund_unit_partial(BYTE bPlayer, WORD wUnitType) {
 // inc edx`. Six shapes were measured and this is the only one that matches.
 BOOL bldg_check_food(BYTE bPlayer, int nUnitType, int bShowError) {
   const WORD wUnit = (WORD)nUnitType;
-  const int nFood = gubUnitFoodUsed[wUnit];
+  const int nFood = MutatorFoodUsed(gubUnitFoodUsed[wUnit]);  // Hyperion: none with no cap
   const DWORD ulFlags = gulUnitTypeFlags[wUnit];
 
   banker_staging_supplycost_g[bPlayer] = nFood;
@@ -157,7 +158,7 @@ BOOL bldg_check_food(BYTE bPlayer, int nUnitType, int bShowError) {
   if (ulFlags & 0x1000000)
     return 1;
   if (wUnit == 0x67) {
-    nStaged -= gubUnitFoodUsed[0x26];
+    nStaged -= MutatorFoodUsed(gubUnitFoodUsed[0x26]);  // Hyperion: none with no cap
     banker_staging_supplycost_g[bPlayer] = nStaged;
   }
 
@@ -298,7 +299,7 @@ void GetUnitCost(WORD unitType, DWORD *outOre, DWORD *outGas, BYTE *outSupply) {
   if (outGas)
     *outGas = guwUnitGasesCost[wUnit];
   if (outSupply) {
-    BYTE bSupply = gubUnitFoodUsed[wUnit];
+    BYTE bSupply = MutatorFoodUsed(gubUnitFoodUsed[wUnit]);  // Hyperion: none with no cap
     *outSupply = bSupply;
     if (gulUnitTypeFlags[wUnit] & 0x400) {
       bSupply = (BYTE)(bSupply + bSupply);

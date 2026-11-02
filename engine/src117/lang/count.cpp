@@ -362,19 +362,19 @@ void count_unit_exists(int nDelta, CUnit *pUnit)
   if (bInfo & 1) {
     BYTE bFood;
     if (wType == 0x24 || wType == 0x3B || wType == 0x61) {
-      bFood = gubUnitFoodUsed[pUnit->wBuildQueue[pUnit->bBuildQueueSlot]];
+      bFood = MutatorFoodUsed(gubUnitFoodUsed[pUnit->wBuildQueue[pUnit->bBuildQueueSlot]]);  // Hyperion
       if (gulUnitTypeFlags[pUnit->wBuildQueue[pUnit->bBuildQueueSlot]] & 0x400)
         bFood += bFood;
     } else {
-      bFood = gubUnitFoodUsed[wType];
+      bFood = MutatorFoodUsed(gubUnitFoodUsed[wType]);  // Hyperion: none with no cap
       if ((gulUnitTypeFlags[wType] & 0x400) && !(pUnit->dwFlags & 1))
         bFood += bFood;
     }
     glGameCounts_g[19][bPlayer] += bFood * nDelta;
   } else if (bInfo & 2) {
-    glGameCounts_g[22][bPlayer] += gubUnitFoodUsed[wType] * nDelta;
+    glGameCounts_g[22][bPlayer] += MutatorFoodUsed(gubUnitFoodUsed[wType]) * nDelta;  // Hyperion
   } else if (bInfo & 4) {
-    glGameCounts_g[25][bPlayer] += gubUnitFoodUsed[wType] * nDelta;
+    glGameCounts_g[25][bPlayer] += MutatorFoodUsed(gubUnitFoodUsed[wType]) * nDelta;  // Hyperion
   }
 
   if (bInfo & 0x20)

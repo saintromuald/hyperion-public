@@ -51,6 +51,14 @@ struct MutatorSet {
   // automatic (PoolsForGame), else at least that many, 1,700 to 262,144. Chosen in
   // Game Options, not on the Mutators tab, but held, sent and recorded with the mutators.
   int nUnits = 0;
+  // No cap (the user, 2026-11-02): supply is not needed. Every unit costs no supply and the
+  // cap is off; a depot and a pylon cost 40 minerals and have half their life (and a pylon
+  // half its shields), as they are built for their tech, not their supply.
+  int nNoCap = 0;
+  // One add-on (the user, 2026-11-02): one add-on of a kind serves every building. A player
+  // with one Machine Shop anywhere may build Siege Tanks in any Factory, and the same for
+  // the Control Tower's, the Covert Ops' and the Physics Lab's.
+  int nAddon = 0;
 };
 
 struct PortSession {
