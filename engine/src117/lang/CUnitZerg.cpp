@@ -37,6 +37,7 @@ extern "C" CUnit *__fastcall find_first_unit_near(int x, int y, int nRadius, int
 #define find_first_unit_near(a0, a1, a2, a3, a4) (find_first_unit_near)(PosU(a0), PosU(a1), (a2), (a3), (a4))
 #undef mtx_query_place_bldg
 #include "../gen/globals117.h"
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 #include "../h/typelimits.h"  // Hyperion: a mod's types
 #include "../h/handicap.h"  // Hyperion: a player's handicap
 
@@ -607,6 +608,52 @@ void CUnit::DispatchIdleLarva()
 // Spawns a larva at a free tile around the hatchery, at most three alive.
 void CUnit::DispatchSpawningLarva()
 {
+  // Hyperion: the mod's larva logic (gptp-fork larva_creep_spawn.cpp): a birth
+  // every 14 seconds -- a 42-frame timer opened every 8th frame -- at most three
+  // larva, from the buildings that hatch them, an Ocsal larva from the Ocsal ones.
+  if (PortCosmonarchy()) {
+    if (this->bPlayer == 11 || !CosmoSpawnsLarva(this->wType))
+      return;
+    ModUnitState &st = ModUnitStateOf(this);
+    if (st.nSpawnLarvaGate != 0) {
+      st.nSpawnLarvaGate--;
+      return;
+    }
+    st.nSpawnLarvaGate = 8;
+
+    CSprite *pSprite = this->pSprite;
+
+    gLarvaNearCount = 0;
+    find_first_unit_near(pSprite->wPosX, pSprite->wPosY, 0x100, FindCountLarvae, (intptr_t)this);
+
+    if (gLarvaNearCount >= 3)
+      return;
+
+    if (UNIT_LARVA_TIMER(this) != 0) {
+      --UNIT_LARVA_TIMER(this);
+      return;
+    }
+
+    DWORD dwPt[2];
+
+    UNIT_LARVA_TIMER(this) = 0x2A;  // 42 ticks of 8 frames = 14 seconds
+    if (this->sub_43D360(dwPt) == 0) {
+      UNIT_LARVA_TIMER(this) = 3;
+      return;
+    }
+
+    CUnit *pLarva = CreateUnitAt(CosmoLarvaType(this->wType), dwPt[0], dwPt[1], this->bPlayer);
+    if (pLarva == 0)
+      return;
+
+    pLarva->FinishedMaking();
+    pLarva->pUnion80 = this;
+    pLarva->sub_43D990();
+
+    if (this->dwUnion134 != 0)
+      town_move_morphed_building(this, pLarva);
+    return;
+  }
   if (this->bUnion85 != 0)
     return;
   if (this->bPlayer == 11)
@@ -653,6 +700,31 @@ void CUnit::DispatchSpawningLarva()
 // failed spread re-queues the background order.
 void CUnit::DispatchSpreadCreep()
 {
+  // Hyperion: the mod's cagra -- its own spreaders (larva_creep_spawn.cpp), the
+  // 320x200 ellipse (spread_creep below), and larva hatching beside the creep.
+  if (PortCosmonarchy()) {
+    if (CosmoSpawnsLarva(this->wType))
+      this->DispatchSpawningLarva();
+    if (!CosmoCreepSpreader(this->wType) && !CosmoCreepSpreaderDone(this->wType)) {
+      this->SetBackgroundOrder(0x17);
+      return;
+    }
+    if (CosmoCreepSpreaderDone(this->wType) && !(this->dwFlags & 1))
+      return;  // the completed-only spreaders hold their cagra until they finish
+    if (UNIT_CREEP_TIMER(this) != 0) {
+      UNIT_CREEP_TIMER(this) = UNIT_CREEP_TIMER(this) > 2 ? UNIT_CREEP_TIMER(this) - 2 : 0;
+      return;
+    }
+
+    UNIT_CREEP_TIMER(this) = 0x0F;
+
+    upos_t wY = this->pSprite->wPosY;
+    upos_t wX = this->pSprite->wPosX;
+
+    if (!spread_creep(this->wType, PosS(wX), PosS(wY)))
+      this->SetBackgroundOrder(CosmoSpawnsLarva(this->wType) ? 0x4E : 0x17);
+    return;
+  }
   if (this->wType == 0x83 || this->wType == 0x84 || this->wType == 0x85)
     this->DispatchSpawningLarva();
 

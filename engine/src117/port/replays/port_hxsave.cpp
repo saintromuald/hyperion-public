@@ -53,6 +53,7 @@
 #include "../gameplay/port_handicap.h"  // HandicapsSave, HandicapsRecorded
 #include "../gameplay/port_mutators.h"  // MutatorsSave, MutatorsRecorded
 #include "../gameplay/port_richbases.h"  // RichBasesSave, RichBasesLoad
+#include "../gameplay/port_cosmonarchy.h"  // ModUnitStateSave, ModUnitStateLoad
 #include "../../gen/globals117.h"
 #include "../platform/port_globals117.h"
 
@@ -115,6 +116,7 @@ const ULONG kMutators = PORT_SAVE_ID('H', 'X', 'M', 'U');  // the game's mutator
 const ULONG kUnits = PORT_SAVE_ID('H', 'X', 'U', 'N');  // the unit table, when not the slots'
 const ULONG kWideIds = PORT_SAVE_ID('H', 'X', 'W', 'I');  // ids past 255, after HXST
 const ULONG kModTech = PORT_SAVE_ID('H', 'X', 'M', 'T');  // a mod's techs and upgrades, after
+const ULONG kModUnitState = PORT_SAVE_ID('H', 'X', 'M', 'S');  // the mod's per-unit state
 
 // HXRC's records, as the load read them, until the loaded game starts.
 BYTE g_abLoadRgb[PLAYER_SLOTS_MAX][4];
@@ -708,7 +710,8 @@ int HxSaveState(void *pFile) {
       && TableSave(sglCachedGameCounts_g, pFile) && TableSave(sglCachedUnitCounts_g, pFile)
       && TableSave(sglCachedCompletedCounts_g, pFile) && ListsSave(pFile, false) && DemandsSave(pFile)
       && CountersSave(pFile) && (!PoolsWideIds() || CargoSave(pFile)) && (!SelectionWide() || SelectionSave(pFile))
-      && (!RichBasesInGame() || RichBasesSave(pFile)) && WideIdsSave(pFile) && ModTechSave(pFile);
+      && (!RichBasesInGame() || RichBasesSave(pFile)) && WideIdsSave(pFile) && ModTechSave(pFile)
+      && (!PortCosmonarchy() || ModUnitStateSave(pFile));
 }
 
 int HxLoadState(void *pFile) {
@@ -722,7 +725,8 @@ int HxLoadState(void *pFile) {
       || !TableLoad(sglCachedUnitCounts_g, pFile) || !TableLoad(sglCachedCompletedCounts_g, pFile)
       || !ListsRead(pFile, &late) || !ListsApply(late, false) || !DemandsLoad(pFile) || !CountersLoad(pFile)
       || (PoolsWideIds() && !CargoLoad(pFile)) || (SelectionWide() && !SelectionLoad(pFile))
-      || (RichBasesInGame() && !RichBasesLoad(pFile)) || !WideIdsLoad(pFile) || !ModTechLoad(pFile))
+      || (RichBasesInGame() && !RichBasesLoad(pFile)) || !WideIdsLoad(pFile) || !ModTechLoad(pFile)
+      || (PortCosmonarchy() && !ModUnitStateLoad(pFile)))
     return 0;
   sgwCheckDelay = static_cast<WORD>(head.dwCheckDelay);
   sgdwOrderSeqDelay_g = head.adwOrderSeq[0];

@@ -30,6 +30,7 @@
 #include "../h/SAI_Banker.h"     // banker_hold_ai_spells
 #include "../gen/globals117.h"
 #include "../port/data/port_moddata.h"  // Hyperion: ModTechUseTree
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 
 // Registry rows no generated header carries yet, one #ifndef per name: the set grows over
 // time and a single guard over the block would undeclare every other name in it.
@@ -116,6 +117,8 @@ int CUnit::GetMaxEnergyReal() {
 void CUnit::SubtractEnergy(WORD wCost) {
   if ((glCheatBits & 0x800) == 0)
     wEnergy -= wCost;
+  if (PortCosmonarchy())  // Hyperion: the mod's 2-second post-spend regen delay
+    ModUnitStateOf(this).nEnergyRegen = 0;
 }
 
 int CUnit::GetMaxEnergyInProgress() {
@@ -309,6 +312,8 @@ void CUnit::sub_434C60() {
 // (`mov eax, 0Ah`): the six-type group reaches the later block, 0x0A, and the two-type
 // group the earlier one, 0x0D. The default is the fall-through `xor eax, eax`.
 WORD CUnit::GetCloakingCost() {
+  if (PortCosmonarchy())  // Hyperion: the mod's cloaking costs nothing (cloak_tech.cpp)
+    return 0;
   if (wType == 0x01 || wType == 0x10 || wType == 0x64 || wType == 0x63 ||
       wType == 0x68 || wType == 0x33)
     return 0x0A;
@@ -731,6 +736,8 @@ WORD get_spell_err_str(int nOrderId, WORD wUnitType) {
 // Returns the unit's maximum energy (x256): 250 with its energy upgrade or as a
 // hero, 200 otherwise.
 int CUnit::GetMaxEnergy() {
+  if (PortCosmonarchy())  // Hyperion: the mod's fixed per-unit maximums (max_energy.cpp)
+    return CosmoMaxEnergy(this);
   if (gulUnitTypeFlags[wType] & 0x40)
     return 0xFA00;
   switch (wType) {

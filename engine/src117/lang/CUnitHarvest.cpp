@@ -26,8 +26,10 @@
 #include "CUnitZSpells.h"   // ours: FindPlaceForUnit
 #include "sai_influence.h"  // ours: LineClip
 #include "CUnitCombat.h"    // ours: GetVectorComponents
+#include "../h/saveload.h"  // ours: get_upgrade_level (the mod's MiningEfficiency)
 
 #include "../gen/globals117.h"
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 
 // gulUnitTypeFlags -- the units.dat per-type flags table, DWORD[228] at 0x521660, indexed
 // unbiased by CUnit::wType. The dual spelling is mandatory and not a style: the shipped
@@ -141,9 +143,9 @@ void CUnit::DispatchInteractWithGasMine() {
   CUnit *pTarget = this->pOrderTarget;
   if (!(this->pSprite->flags.b & 0x20)) {
     if (!(pTarget && (pTarget->dwFlags & 1) &&
-          (pTarget->wType == 0x6E || pTarget->wType == 0x9D ||
-           pTarget->wType == 0x95) &&
-          pTarget->bPlayer == this->bPlayer &&
+          (PortCosmonarchy() ? CosmoGeyserMineable(pTarget, this)   // Hyperion: the mod's
+                             : (pTarget->wType == 0x6E || pTarget->wType == 0x9D ||
+                                pTarget->wType == 0x95) && pTarget->bPlayer == this->bPlayer) &&
           (this->bCarryResource == 0 || (this->bCarryResource & 3)))) {
       this->StopUnitMovement();
       this->EndUninterruptableDispatchOrder();
@@ -199,7 +201,7 @@ void CUnit::DispatchInteractWithGasMine() {
   }
   this->sub_430390(1);
   this->bOrderState = 5;
-  this->bUnion54 = 0x25;
+  this->bUnion54 = PortCosmonarchy() ? 0x2A : 0x25;  // Hyperion: the mod's 42 frames
 }
 
 
@@ -221,9 +223,9 @@ void CUnit::DispatchInteractWithGasMine() {
 void CUnit::DispatchGasMinePrecondition() {
   CUnit *pTarget = this->pOrderTarget;
   if (pTarget && (pTarget->dwFlags & 1) &&
-      (pTarget->wType == 0x6E || pTarget->wType == 0x9D ||
-       pTarget->wType == 0x95) &&
-      pTarget->bPlayer == this->bPlayer &&
+      (PortCosmonarchy() ? CosmoGeyserMineable(pTarget, this)      // Hyperion: the mod's
+                         : (pTarget->wType == 0x6E || pTarget->wType == 0x9D ||
+                            pTarget->wType == 0x95) && pTarget->bPlayer == this->bPlayer) &&
       (this->bCarryResource == 0 || (this->bCarryResource & 3))) {
     if (this->bOrderState == 0)
       this->sub_424230(pTarget);
@@ -272,7 +274,10 @@ void CUnit::DispatchHarvestingMinerals() {
     }
     case 4:
       this->pSprite->SetAnimation(0x0F, 1);
-      this->bUnion54 = 0x4B;
+      // Hyperion: the mod's mining time, 42 frames on a field that still holds
+      // its yield, 90 on a depleted one (orders_harvesting_minerals).
+      this->bUnion54 = PortCosmonarchy() && pTarget->wResourceAmount <= CosmoYield(0)
+                           ? 0x5A : PortCosmonarchy() ? 0x2A : 0x4B;
       this->bOrderState = 5;
       return;
     }
@@ -559,6 +564,22 @@ void CUnit::DispatchReturnResource() {
 // The suicide arm is the out-of-line one, which pins the guard's polarity: the oracle
 // falls through to UpdateResourceAnim and jumps forward to Suicide, so Suicide is last.
 BYTE CUnit::GetHarvest(BYTE bSuicideWhenEmpty) {
+  // Hyperion: the mod's resource model (gptp-fork hooks/harvest.cpp): a trip
+  // carries the node's yield -- 5 minerals, and per gas tier 3 to 9 -- and gas
+  // never depletes. A mineral field floors at the depleted yield and stays.
+  if (PortCosmonarchy()) {
+    const BYTE bAmount = static_cast<BYTE>(CosmoHarvestAmount(this));
+    if (!this->IsMineralSrc())
+      return bAmount;  // the geysers and refineries hold their yield forever
+    if (this->wResourceAmount < CosmoYield(1)) {
+      this->wResourceAmount = CosmoYield(0);
+    } else if (this->wResourceAmount - bAmount > CosmoYield(0)) {
+      this->wResourceAmount = this->wResourceAmount - bAmount;
+    } else {
+      this->wResourceAmount = CosmoYield(0);
+    }
+    return bAmount;
+  }
   // Hyperion: a trip is 1.17's 8, or a rich resource's 11 or 16 (rich bases)
   const int nTrip = MutatorTrip(static_cast<int>(this - CUnit::Head()), !this->IsMineralSrc());
   // Hyperion: a resource a mutator makes endless gives its trip and keeps what it holds
@@ -658,6 +679,17 @@ CUnit *CUnit::sub_423F90() {
 void CUnit::SetHarvestInventory(CUnit *pHarvester) {
   BYTE bMinerals = 0;
   int nImage;
+  // Hyperion: the mod's gas nodes -- the neutral ridge and geyser and its four races'
+  // refineries -- carry their chunk by race (transfer_resource_to_worker). Gas never
+  // depletes, so the amount never changes the image.
+  if (PortCosmonarchy() && !this->IsMineralSrc() &&
+      (CosmoUncappedGasNode(this->wType) || CosmoCappedGasNode(this->wType))) {
+    switch (this->GetRace()) {
+      case 0: case 3: nImage = 0x193; break;  // the Terran tank, the Askosi's too
+      case 1:         nImage = 0x191; break;  // the Zerg sac
+      default:        nImage = 0x18F; break;  // the Protoss orb, and the neutral nodes
+    }
+  } else
   switch (this->wType) {
   case 0x6E: nImage = 0x193; break;
   case 0x9D: nImage = 0x18F; break;
@@ -669,6 +701,22 @@ void CUnit::SetHarvestInventory(CUnit *pHarvester) {
   if (bAmount < 8)
     nImage++;
   if (bAmount) {
+    // Hyperion: the mod's MiningEfficiency upgrade multiplies a carried load
+    // (transfer_resource_to_worker: 125% to 300% by its level).
+    if (PortCosmonarchy()) {
+      static const unsigned s_nMining = CosmoUnit("mining_efficiency");
+      switch (get_upgrade_level(pHarvester->bPlayer, s_nMining)) {
+        case 1: bAmount += (BYTE)(bAmount / 4); break;                       // 125%
+        case 2: bAmount += (BYTE)(bAmount / 3); break;                       // 133%
+        case 3: bAmount += (BYTE)(bAmount / 2); break;                       // 150%
+        case 4: bAmount += (BYTE)((bAmount / 4) + (bAmount / 4) + (bAmount / 4)); break;  // 175%
+        case 5: bAmount *= 2; break;                                         // 200%
+        case 6: bAmount *= (BYTE)(2 + (1 / 4)); break;                       // 225%, the mod's own
+        case 7: bAmount *= (BYTE)(2 + (1 / 2)); break;                       // 250%, integer quirk
+        case 8: bAmount *= (BYTE)(2 + ((bAmount / 4) + (bAmount / 4) + (bAmount / 4))); break;  // 275%
+        case 9: bAmount *= 3; break;                                         // 300%
+      }
+    }
     if (pHarvester->bCarryResource & 3) {
       pHarvester->RemoveInventoryOverlay();
       pHarvester->bCarryResource = 0;
@@ -870,6 +918,8 @@ BOOL CUnit::IsRefinery() {
 // the left, so the source order is `this->bPlayer == pHarvester->bPlayer`: equality operand
 // order survives into the cmp.
 BOOL CUnit::IsTargetRefinery(CUnit *pHarvester) {
+  if (PortCosmonarchy())  // Hyperion: the mod's nodes -- uncapped, or a self/allied refinery
+    return CosmoGeyserMineable(this, pHarvester);
   return (this->dwFlags & 1) &&
          (this->wType == 0x6E || this->wType == 0x9D || this->wType == 0x95) &&
          this->bPlayer == pHarvester->bPlayer;
