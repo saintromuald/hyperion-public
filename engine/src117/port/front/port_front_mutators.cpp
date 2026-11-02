@@ -58,16 +58,16 @@ UiColor Alpha(UiColor c, float a)
 
 // The list's order and its groups (mutators.js GROUPS), and what each one does in a sentence
 // over its picture (gist).
-const int kOrder[MUT_COUNT] = {MUT_MINERALS, MUT_GAS,   MUT_RICH, MUT_START, MUT_WORKERS,
-                               MUT_SUPPLY,   MUT_BOOST, MUT_FOG,  MUT_BUILD, MUT_TECH};
+const int kOrder[MUT_COUNT] = {MUT_MINERALS, MUT_GAS,  MUT_RICH,  MUT_START, MUT_WORKERS, MUT_SUPPLY,
+                               MUT_BOOST,    MUT_NOCAP, MUT_FOG, MUT_BUILD, MUT_TECH,    MUT_ADDON};
 struct Group {
   const char *pszName;
   int nFirst, nCount;  // in kOrder
 };
 const Group kGroups[] = {{PT_("Resources"), 0, 3},
                          {PT_("The start"), 3, 2},
-                         {PT_("Supply"), 5, 2},
-                         {PT_("Fog, time and tech"), 7, 3}};
+                         {PT_("Supply"), 5, 3},
+                         {PT_("Fog, time and tech"), 8, 4}};
 const char *const kGists[MUT_COUNT] = {
     PT_("How much each mineral field holds, so how long a base can be mined."),
     PT_("How much each geyser holds before it runs dry."),
@@ -79,6 +79,8 @@ const char *const kGists[MUT_COUNT] = {
     PT_("How fast everything is built, trained and researched."),
     PT_("Start with everything researched, or play without upgrades or research."),
     PT_("Some bases away from the starts get gold minerals and violet gas, which bring more each trip."),
+    PT_("Units cost no supply and the cap is off; depots and pylons cost 40 minerals at half their life."),
+    PT_("One Machine Shop serves every Factory, and the same for the other add-ons."),
 };
 
 int g_nSel = MUT_MINERALS;  // the mutator briefed
@@ -1182,9 +1184,11 @@ void DrawPicture(float x, float y, float w, float h, void *pCtx)
   case MUT_WORKERS: StillWorkers(p, m); break;
   case MUT_SUPPLY: StillSupply(p, m); break;
   case MUT_BOOST: StillBoost(p, m); break;
+  case MUT_NOCAP: StillSupply(p, m); break;  // the cheapened depots and pylons, the supply picture's
   case MUT_FOG: StillFog(p, m); break;
   case MUT_BUILD: StillBuild(p, m); break;
   case MUT_TECH: StillTech(p, m); break;
+  case MUT_ADDON: StillTech(p, m); break;  // the add-ons unlock what the tech picture's icons show
   }
   UiPopClip();
 }
@@ -1690,7 +1694,7 @@ bool MutatorsTab(float x, float y, float w, float h, const MutatorsSetUp &s)
       Text(MutatorName(i), UI_FACE_BOLD, Fs(16), 0.0f, kScInkLabel);
       // the new mutator's tag until it is chosen: then its choice takes the room ("Rich resources"
       // and "Outside a radius" with the tag wrapped)
-      if (i == MUT_RICH && !bOn)
+      if ((i == MUT_RICH || i == MUT_NOCAP || i == MUT_ADDON) && !bOn)
         NewTag();
       Spacer();
       Text(bOn ? Keep(MutatorValueName(m, i)) : PortText("Classic"), bOn ? UI_FACE_BOLD : UI_FACE_TEXT, Fs(15), 0.0f,
@@ -1716,7 +1720,7 @@ bool MutatorsTab(float x, float y, float w, float h, const MutatorsSetUp &s)
   top.d.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
   Open(top);
   Text(MutatorName(nShown), UI_FACE_BOLD, Fs(24), 0.0f, kLbInkInfo);
-  if (nShown == MUT_RICH)
+  if (nShown == MUT_RICH || nShown == MUT_NOCAP || nShown == MUT_ADDON)
     NewTag();
   Spacer();
   if (bPeekRow)

@@ -12,6 +12,7 @@
 #include "../h/saveload.h"       // get_tech_researched
 #include "../gen/globals117.h"
 #include "../h/typelimits.h"  // Hyperion: a mod's types
+#include "../h/mutators.h"    // Hyperion: MutatorAddon, the one add-on's
 #include "../port/data/port_moddata.h"  // Hyperion: ModUnitTree, ModTreeEdit
 
 int TTAllowed(WORD wUnitId, int nPlayer, CUnit *pUnit);
@@ -166,20 +167,26 @@ int TTAllowed(WORD wUnitId, int nPlayer, CUnit *pUnit) {
           ++nCount;
           break;
 
-        case 0xFF04:
+        case 0xFF04: {
+          // the addon this unit needs on its building, by the tree's next word
+          const WORD wAddon = pTree[++i];
           if (glCheatBits & 0x2000) {
-            ++i;
             ++nCount;
             break;
           }
-
-          if (pUnit->pUnionC0 == 0 || pUnit->pUnionC0->wType != pTree[++i]) {
+          // Hyperion: the one add-on mutator (the user, 2026-11-02): one of the kind anywhere
+          // serves every building, so a completed one counts
+          const bool bOwned = MutatorAddon()
+                                  ? glCounts_g[1][wAddon][nPlayer] != 0
+                                  : pUnit->pUnionC0 != 0 && pUnit->pUnionC0->wType == wAddon;
+          if (!bOwned) {
             allowed_errcode_g = nFlagA == 0 ? 4 : allowed_errcode_g;
             return -1;
           }
 
           ++nCount;
           break;
+        }
 
         case 0xFF07:
           if (pUnit->IsConstructing() || pUnit->bTechType != 0x2C ||

@@ -22,7 +22,7 @@ MutatorSet MutatorsClamp(const MutatorSet &m);
 // choices on its card, the radius and the chance (MUT_RICH_RADIUS, MUT_RICH_CHANCE, past the
 // cards' count).
 enum { MUT_MINERALS, MUT_GAS, MUT_START, MUT_SUPPLY, MUT_WORKERS, MUT_BOOST, MUT_FOG, MUT_BUILD, MUT_TECH, MUT_RICH,
-       MUT_COUNT, MUT_RICH_CHANCE = MUT_COUNT, MUT_RICH_RADIUS };
+       MUT_NOCAP, MUT_ADDON, MUT_COUNT, MUT_RICH_CHANCE = MUT_COUNT, MUT_RICH_RADIUS };
 // Rich bases' radius in tiles on a map nMapW by nMapH tiles: m's tiles, or its share of the
 // map's size, its width and height averaged.
 int MutatorRichRadiusTiles(const MutatorSet &m, int nMapW, int nMapH);
@@ -118,7 +118,7 @@ int MutatorsRevisionOf(void);
 // half; and its first builds MUTATOR_RECORD_BYTES_FIRST, the first seven, before fog, build time
 // and tech, read with the three at 1.17's. MutatorsRecorded(NULL, 0) forgets the last one read;
 // false for a record this build does not read.
-#define MUTATOR_RECORD_BYTES 64
+#define MUTATOR_RECORD_BYTES 72
 #define MUTATOR_RECORD_BYTES_RADIUS 60
 #define MUTATOR_RECORD_BYTES_RICH 56
 #define MUTATOR_RECORD_BYTES_REVISION 44
@@ -126,7 +126,8 @@ int MutatorsRevisionOf(void);
 #define MUTATOR_RECORD_BYTES_FIRST 28
 // 1: the supply boost gives whole supply (0.6.10; the user, 2026-10-24).
 // 2: the unit table grows with the supply cap past 200, and with the unit limit.
-#define MUTATOR_REVISION 2
+// 3: the no-cap mutator and the one add-on's (2026-11-02), the record's two new words.
+#define MUTATOR_REVISION 3
 bool MutatorRecordBytesRead(int nBytes);
 void MutatorsSave(unsigned char *pbOut);
 bool MutatorsRecorded(const unsigned char *pbIn, int nBytes);
