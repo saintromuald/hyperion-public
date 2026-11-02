@@ -402,8 +402,8 @@ void PortHudReplayWatch(void) {
 }
 
 void PortHudGroup(int nGroup, bool bSet) {
-  // the ten hotkey groups only; 10 to 17 are 1.17's own recent selections
-  if (nGroup < 0 || nGroup > 9 || g_ActiveNationID != g_LocalNationID)
+  // the sixteen hotkey groups; 16 and 17 are the two recent selections left
+  if (nGroup < 0 || nGroup > 15 || g_ActiveNationID != g_LocalNationID)
     return;
   if (!bSet)
     g_nGroupLast = nGroup;
@@ -509,7 +509,7 @@ void PortHudGet(PortHudState *s) {
       ++s->nArmy;
   }
   if (g_LocalHumanID < 8)
-    for (int g = 0; g < 10; ++g)
+    for (int g = 0; g < 16; ++g)  // Hyperion: the six extra groups' letters are groups 10 to 15
       for (int i = 0; i < SelectionMax(); ++i) {
         const DWORD dwId = GroupRow(g_LocalHumanID, g)[i];
         if (dwId == 0)
@@ -829,8 +829,8 @@ bool PortHudPressGroup(int nGroup, const char **ppszWhy, int nHow) {
     *ppszWhy = "no game the player plays";
     return false;
   }
-  if (nGroup < 0 || nGroup > 9) {
-    *ppszWhy = "a group is 0 to 9";
+  if (nGroup < 0 || nGroup > 15) {
+    *ppszWhy = "a group is 0 to 15";
     return false;
   }
   // as the group's key recalls it (game_keychar_hook), and as Ctrl and Shift with it make it of
@@ -892,7 +892,7 @@ std::string PortHudJson(void) {
   }
   j += ",\"stats.side\":" + Bool(s.bStatsSide) + ",\"stats.popup\":" + Bool(s.bStatsPopup) +
        ",\"teams.count\":" + Int(s.nTeams);
-  for (int g = 0; g < 10; ++g)
+  for (int g = 0; g < 16; ++g)
     j += ",\"group." + Int(g) + ".count\":" + Int(s.anGroups[g]);
   j += "}";
   j += ",\"player\":" + Int(s.nPlayer) + ",\"unit\":{\"shown\":" + Bool(s.bUnit) + ",\"type\":" +

@@ -17,8 +17,18 @@ const char *PortCardTooltip(unsigned wStrId, int nSlot, const char *pszText);
 // K2: an accelerator table's entries (ACCEL's, 6 bytes each) with the profile's keys for its
 // commands in place of 1.17's; the count written. PortAccelProfiled: the profile binds any.
 int PortAccelRemap(const void *pIn, int nIn, void *pOut, int nCap);
-// K3: the control group a typed character selects, as the profile binds it; -1 for none.
+// K3: the control group a typed character selects, as the profile binds it, 0 to 15: the ten
+// digits, then the six letters R, F, V, T, G, B; -1 for none. A digit selects its group
+// unless the profile gave that group another key.
 int PortKeyGroup(unsigned nChar);
+// The key a group selects on, lower case, 0 for its own (a digit's own is its digit); set
+// one (a letter or a digit, 0 for its own again) saves the profile's hotkeys.json, for
+// Settings' Hotkeys rows.
+int PortKeyGroupGet(int nGroup);
+// The key a group shows and selects on, its own when the player gave it none.
+char PortKeyGroupShown(int nGroup);
+bool PortKeyGroupSet(int nGroup, int nChar);
+bool PortKeyGroupFree(int nChar);
 bool PortAccelProfiled(void);
 
 #endif
