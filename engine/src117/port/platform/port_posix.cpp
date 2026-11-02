@@ -1336,8 +1336,11 @@ BOOL __stdcall CreatePipe(PHANDLE phRead, PHANDLE phWrite, LPSECURITY_ATTRIBUTES
   int fds[2];
   if (pipe(fds) != 0)
     return FALSE;
-  *phRead = reinterpret_cast<HANDLE>(static_cast<intptr_t>(fds[0]));
-  *phWrite = reinterpret_cast<HANDLE>(static_cast<intptr_t>(fds[1]));
+  // The ends are FileObjects, not raw fds: WriteFile/ReadFile resolve handles
+  // through the live-object table, and a raw fd cast to HANDLE reads as an
+  // invalid handle there (the Pluto bridge's pipe never worked until now).
+  *phRead = new FileObject(fds[0]);
+  *phWrite = new FileObject(fds[1]);
   return TRUE;
 }
 
@@ -1369,6 +1372,14 @@ BOOL __stdcall CreateProcessA(LPCSTR lpApplicationName, LPSTR lpCommandLine, LPS
 #endif
   // The child's std handles, when the caller names them (the Pluto bridge's
   // pipes): each is dup2'd onto 0/1/2 and closed, so no fd leaks into the child.
+  // The handles are FileObjects (CreatePipe) or raw fds (a log file's); NULL
+  // means the child keeps the parent's own handle.
+  auto HandleFd = [](HANDLE h) {
+    if (h == NULL)
+      return -1;
+    FileObject *f = FileOf(h);
+    return f != NULL ? f->fd : static_cast<int>(reinterpret_cast<intptr_t>(h));
+  };
   if (lpStartupInfo != NULL && (lpStartupInfo->dwFlags & STARTF_USESTDHANDLES)) {
     if (!bActions && posix_spawn_file_actions_init(&actions) == 0)
       bActions = true;
@@ -1379,17 +1390,17 @@ BOOL __stdcall CreateProcessA(LPCSTR lpApplicationName, LPSTR lpCommandLine, LPS
       // two std slots (the bridge's stderr riding its stdout pipe) must not be
       // closed between its dup2s, or posix_spawn dies with EBADF.
       for (int i = 0; i < 3; ++i) {
-        const int fd = reinterpret_cast<intptr_t>(ah[i]);
+        const int fd = HandleFd(ah[i]);
         if (fd >= 0)
           posix_spawn_file_actions_adddup2(&actions, fd, i);
       }
       for (int i = 0; i < 3; ++i) {
-        const int fd = reinterpret_cast<intptr_t>(ah[i]);
+        const int fd = HandleFd(ah[i]);
         if (fd < 0)
           continue;
         bool bSeen = false;
         for (int j = 0; j < i; ++j)
-          if (reinterpret_cast<intptr_t>(ah[j]) == fd)
+          if (HandleFd(ah[j]) == fd)
             bSeen = true;
         if (!bSeen)
           posix_spawn_file_actions_addclose(&actions, fd);
