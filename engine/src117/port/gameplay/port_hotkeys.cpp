@@ -32,7 +32,13 @@ bool g_bLoaded;
 int g_nLayout;                      // PORT_CARD_CLASSIC or PORT_CARD_GRID
 std::map<unsigned, char> g_card;    // a string id's own key
 std::map<unsigned, std::vector<ACCEL>> g_accel;  // a command's own keys
-int g_anGroupKey[10];               // a group's key, lower case; 0 for 1.17's digit
+int g_anGroupKey[16];               // a group's key, lower case; 0 for its own
+
+// The six extra groups' keys, SC2's letters the user picked (2026-11-02): groups 10 to 15
+// select on R, F, V, T, G and B, with Ctrl to make a group of the selection, Shift to add
+// to it and Alt to select and centre, as the digit groups' Ctrl, Shift and Alt work. A
+// profile may give any group any letter or digit in hotkeys.json's "keys".
+const char kGroupLetters[7] = "rfvtgb";
 
 // The accelerators' commands by name (dialog_accel, game_evt.cpp); the groups' and the
 // locations' with their digit after.
@@ -57,8 +63,9 @@ const Command kCommands[] = {
     {"speedUp", 40056, 1},
     {"speedDown", 40058, 1},
     {"gameMenu", 40059, 1},
-    {"locationSet", 40060, 3},   // Shift+F2 .. Shift+F4
-    {"locationGo", 40063, 3},    // F2 .. F4
+    // 1.17's F2 to F4 screen locations are gone (their keys came off the tables in
+    // event_Win.cpp); SC2's eight camera locations are Hyperion's own hotkeys
+    // (port_keys.h, PORT_HOTKEY_CAMGO1 to CAMSET8), set in Settings rather than here.
 };
 
 // A command's id from its name: "speedUp", or "groupSet1" (the groups' 1 to 9 then 0, the
@@ -132,6 +139,9 @@ void Load(void)
   g_card.clear();
   g_accel.clear();
   memset(g_anGroupKey, 0, sizeof g_anGroupKey);
+  // the six extra groups' own letters, which a profile's keys may take off or move
+  for (int g = 10; g < 16; ++g)
+    g_anGroupKey[g] = kGroupLetters[g - 10];
   const std::string path = FilePath();
   FILE *f = NULL;
   if (path.empty() || fopen_s(&f, path.c_str(), "rb") != 0 || f == NULL)
@@ -167,9 +177,20 @@ void Load(void)
   }
   for (const auto &m : j["keys"].members) {
     const std::string value = m.second.Str();
-    if (m.first.compare(0, 11, "groupSelect") == 0 && m.first.size() == 12 && isdigit(static_cast<unsigned char>(m.first[11])) &&
-        value.size() == 1)
-      g_anGroupKey[m.first[11] - '0'] = tolower(static_cast<unsigned char>(value[0]));
+    if (m.first.compare(0, 11, "groupSelect") != 0 || value.size() != 1)
+      continue;
+    const std::string num = m.first.substr(11);
+    int g = 0;
+    bool bDigits = !num.empty();
+    for (const char c : num) {
+      if (!isdigit(static_cast<unsigned char>(c))) {
+        bDigits = false;
+        break;
+      }
+      g = g * 10 + c - '0';
+    }
+    if (bDigits && g >= 0 && g < 16)
+      g_anGroupKey[g] = tolower(static_cast<unsigned char>(value[0]));
   }
   for (const auto &m : j["card"].members) {
     const std::string &key = m.first;
@@ -197,6 +218,19 @@ void Save(void)
     }
     t += "\r\n  }";
   }
+  // the groups' keys other than their own: a digit's stays 1.17's digit, the letters' the
+  // letter (kGroupLetters)
+  std::string keys;
+  for (int g = 0; g < 16; ++g) {
+    const char c = static_cast<char>(g_anGroupKey[g]);
+    if (c == 0 || (g >= 10 && c == kGroupLetters[g - 10]))
+      continue;
+    keys += (keys.empty() ? "\r\n    \"" : ",\r\n    \"") + std::string("groupSelect") + std::to_string(g) + "\": \"";
+    keys += c;
+    keys += "\"";
+  }
+  if (!keys.empty())
+    t += ",\r\n  \"keys\": {" + keys + "\r\n  }";
   t += "\r\n}\r\n";
   fwrite(t.data(), 1, t.size(), f);
   fclose(f);
@@ -214,12 +248,56 @@ int PortKeyGroup(unsigned nChar)
   if (!g_bLoaded)
     Load();
   const int c = tolower(static_cast<int>(nChar & 0xFF));
-  for (int g = 0; g < 10; g++)
+  for (int g = 0; g < 16; g++)
     if (g_anGroupKey[g] != 0 && g_anGroupKey[g] == c)
       return g;
   if (c >= '0' && c <= '9' && g_anGroupKey[c - '0'] == 0)
     return c - '0';
   return -1;
+}
+
+// The key a group selects on, lower case, 0 for its own: 1.17's digit for the first ten,
+// the letter for the six extra (kGroupLetters). Presentation only, for Settings' rows.
+int PortKeyGroupGet(int nGroup)
+{
+  if (!g_bLoaded)
+    Load();
+  return nGroup >= 0 && nGroup < 16 ? g_anGroupKey[nGroup] : 0;
+}
+
+// The key a group shows and selects on, its own when the player gave it none: the digit for
+// the first ten (1 to 9, then 0), the letter for the six extra. Presentation only.
+char PortKeyGroupShown(int nGroup)
+{
+  if (!g_bLoaded)
+    Load();
+  if (nGroup < 0 || nGroup >= 16)
+    return '0';
+  if (g_anGroupKey[nGroup] != 0)
+    return static_cast<char>(g_anGroupKey[nGroup]);
+  return nGroup < 10 ? static_cast<char>('0' + (nGroup + 1) % 10) : kGroupLetters[nGroup - 10];
+}
+
+// The key a group selects on, lower case, 0 for its own. Saved to the profile's
+// hotkeys.json; any letter or digit may be a group's key, and the key it leaves is free.
+bool PortKeyGroupSet(int nGroup, int nChar)
+{
+  if (!g_bLoaded)
+    Load();
+  if (nGroup < 0 || nGroup >= 16)
+    return false;
+  if (nChar != 0 && !PortKeyGroupFree(nChar))
+    return false;
+  g_anGroupKey[nGroup] = nChar == 0 ? static_cast<char>(0) : static_cast<char>(tolower(nChar));
+  Save();
+  return true;
+}
+
+// Whether a key may select a group: a letter or a digit.
+bool PortKeyGroupFree(int nChar)
+{
+  return (nChar >= 'a' && nChar <= 'z') || (nChar >= 'A' && nChar <= 'Z') ||
+         (nChar >= '0' && nChar <= '9');
 }
 
 int PortAccelRemap(const void *pIn, int nIn, void *pOut, int nCap)

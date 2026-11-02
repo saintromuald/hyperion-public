@@ -11,6 +11,7 @@
 #include "../h/save_dlg.h"   // RunEvtDispatcher, _mbsicmp
 #include "../h/glues.h"      // CloseAllWindows
 #include "../h/net_cmds.h"   // gameloop_init, error_get_str, map_msg_chat_msg
+#include "../h/group_un.h"   // Hyperion: sub_463ED0, the letter groups' Alt
 #include "../h/minimap.h"    // mou_cager
 #include "../h/snd.h"        // snd_update_streams
 #include "../h/victory.h"    // psnprintf
@@ -26,6 +27,7 @@
 #include "../port/render/port_gpu_hd.h"  // Hyperion: PortGpuHdToggle
 #include "../port/gameplay/port_hotkeys.h"  // Hyperion: PortAccelRemap, PortAccelProfiled
 #include "../port/gameplay/port_keys.h"  // Hyperion
+#include "../port/gameplay/port_camkeys.h"  // Hyperion: PortCameraPressed, PortCameraRun
 #include "../port/loop/port_perf.h"  // Hyperion: PortPerfIdle
 #include "../port/render/port_overlay.h"  // Hyperion: PortOverlayHold, PortOverlayMouse, PortOverlayKey
 #include "../port/render/port_present.h"  // Hyperion
@@ -264,46 +266,68 @@ void accel_close()
   gAccelCur = 0;
 }
 
-// 0x43F210 accel_init (279 B). Builds the single-player accelerator table by
+// Hyperion: a table's entries less 1.17's screen-location keys (F2 to F4 and their Shift
+// forms, the commands 0x9C7C to 0x9C81), whose three locations SC2's eight replace
+// (port_camkeys.cpp). The install's own Local.dll tables hold them too, so they are taken
+// off wherever the table came from, and every install plays the one camera system.
+static int AccelCopy(const void *hTable, accel_t *pBuf, int nCap)
+{
+  accel_t all[0x100];
+  const int n = WinMsgCopyAccelerators(const_cast<void *>(hTable), all, 0x100);
+  int nOut = 0;
+  for (int i = 0; i < n && nOut < nCap; ++i)
+    if (all[i].wCmd < 0x9C7C || all[i].wCmd > 0x9C81)
+      pBuf[nOut++] = all[i];
+  return nOut;
+}
+
+// 0x43F210 accel_init. Builds the single-player accelerator table by
 // concatenating resource 0x65 with resource 0x71, falling back to plain 0x65 if
 // any step fails. The running total is unsigned, as 1.17's compare is.
+// Hyperion: every table is rebuilt from its entries with 1.17's screen-location
+// keys taken off (AccelCopy).
 void accel_init()
 {
   accel_t buf[0x100];
   void *hSingle;
   void *hMulti;
-  unsigned int nSingle;
-  unsigned int nMulti;
-  unsigned int nTotal;
+  int nSingle;
+  int nMulti;
+  int nTotal;
 
   gAccelSingle = 0;
   hSingle = GetAcceleratorTable(0x65);
   hMulti = GetAcceleratorTable(0x71);
   if (hSingle)
   {
-    if (hMulti)
-    {
-      nSingle = WinMsgCopyAccelerators(hSingle, 0, 0);
-      nMulti = WinMsgCopyAccelerators(hMulti, 0, 0);
-      nTotal = nSingle + nMulti;
-      if (nTotal <= 0x100)
-      {
-        // Each count is the left operand of its compare, as in 1.17.
-        if (nSingle == WinMsgCopyAccelerators(hSingle, buf, nSingle)
-            && nMulti == WinMsgCopyAccelerators(hMulti, &buf[nSingle], nMulti))
-        {
-          gAccelSingle = WinMsgCreateAccelerators(buf, nTotal);
-        }
-      }
-    }
+    nSingle = AccelCopy(hSingle, buf, 0x100);
+    nMulti = hMulti ? AccelCopy(hMulti, &buf[nSingle], 0x100 - nSingle) : 0;
+    nTotal = nSingle + nMulti;
+    if (nTotal > 0 && nTotal <= 0x100)
+      gAccelSingle = WinMsgCreateAccelerators(buf, nTotal);
     WinMsgDestroyAccelerators(hSingle);
   }
   if (hMulti)
     WinMsgDestroyAccelerators(hMulti);
 
   if (!gAccelSingle)
-    gAccelSingle = GetAcceleratorTable(0x65);
-  gAccelMulti = GetAcceleratorTable(0x66);
+  {
+    hSingle = GetAcceleratorTable(0x65);
+    if (hSingle)
+    {
+      nSingle = AccelCopy(hSingle, buf, 0x100);
+      if (nSingle > 0)
+        gAccelSingle = WinMsgCreateAccelerators(buf, nSingle);
+      WinMsgDestroyAccelerators(hSingle);
+    }
+  }
+  hMulti = GetAcceleratorTable(0x66);
+  if (hMulti)
+  {
+    nMulti = AccelCopy(hMulti, buf, 0x100);
+    gAccelMulti = nMulti > 0 ? WinMsgCreateAccelerators(buf, nMulti) : 0;
+    WinMsgDestroyAccelerators(hMulti);
+  }
   gAccelSound = GetAcceleratorTable(0x67);
   gAccelSaved = 0;
   gAccelProcSaved = 0;
@@ -711,6 +735,19 @@ win_lparam_t __stdcall WndProc(void *hWnd, unsigned int uMsg, uintptr_t wParam, 
       return 0;
     }
   }
+  // Hyperion: the camera locations' keys (port_camkeys.cpp), SC2's: a plain F5 to F8 jumps
+  // to the location, Ctrl+F5 to Ctrl+F8 saves it. Not while a message is typed, so a key
+  // the player moved elsewhere can be a letter without taking its chat character.
+  if ((uMsg == 0x100 || uMsg == 0x104) && gwGameMode == 3 && !gbInMsgMode) {
+    const bool bRepeat = (lParam & 0x40000000) != 0;
+    if (!bRepeat) {
+      const int nCam = PortCameraPressed(static_cast<unsigned>(wParam));
+      if (nCam >= 0) {
+        PortCameraRun(nCam);
+        return 0;
+      }
+    }
+  }
   // Hyperion: the selection's keys, not while a message is typed: the
   // subgroup's in a game of Hyperion's selection, with Shift the subgroup before; the terrain's,
   // 1.17's Tab, with Shift the units' colours; the idle worker's and the army's, as their
@@ -750,6 +787,25 @@ win_lparam_t __stdcall WndProc(void *hWnd, unsigned int uMsg, uintptr_t wParam, 
     if (nHotkey == PORT_HOTKEY_VIEW) {
       PortViewToggle();
       return 0;
+    }
+  }
+  // Hyperion: a key of the six extra control groups (R, F, V, T, G and B; port_hotkeys.cpp)
+  // with Ctrl makes a group of the selection, Shift adds to it and Alt selects and centres,
+  // as the digit groups' Ctrl, Shift and Alt work. Not while a message is typed.
+  if ((uMsg == 0x100 || uMsg == 0x104) && gwGameMode == 3 && !gbInMsgMode) {
+    const bool bRepeat = (lParam & 0x40000000) != 0;
+    const unsigned nHeld = PortHotkeyHeld(static_cast<unsigned>(wParam));
+    if (!bRepeat && (nHeld & (PORT_KEY_CTRL | PORT_KEY_SHIFT | PORT_KEY_ALT)) != 0) {
+      const int nGroup = PortKeyGroup(static_cast<unsigned>(wParam));
+      if (nGroup >= 0) {
+        if ((nHeld & PORT_KEY_CTRL) != 0)
+          send_net_cmd_GroupUnits(0, static_cast<BYTE>(nGroup), NULL, 0);
+        else if ((nHeld & PORT_KEY_SHIFT) != 0)
+          send_net_cmd_GroupUnits(2, static_cast<BYTE>(nGroup), NULL, 0);
+        else
+          sub_463ED0(static_cast<BYTE>(nGroup));
+        return 0;
+      }
     }
   }
   if (uMsg == 0x106 && wParam == 0x0D)

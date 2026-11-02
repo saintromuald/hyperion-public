@@ -300,6 +300,8 @@ port port_eud
 port port_maptext
 port port_cutscene
 port port_camera
+port port_camkeys
+port port_mineinfo
 port port_tv
 port port_trace
 port port_clock
