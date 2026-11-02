@@ -356,9 +356,12 @@ void PlutoGameStart() {
 void PlutoFrame() {
   if (s_nPlutoSlot < 0 || !s_bUp)
     return;
-  ++s_dwFrame;
-  if (!PlutoSendFrame())
+  // The bridge's frame 0 is the fork's MatchStart: it runs the bot's onStart
+  // then. The first frame must therefore be 0 (sending 1 first left the fork's
+  // game unstarted -- it loaded and idled while the game played on).
+  if (!PlutoSendFrame())  // sends s_dwFrame
     return;
+  ++s_dwFrame;
   if (!PlutoReadAndApply())
     return;
 }
