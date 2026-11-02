@@ -745,6 +745,7 @@ typedef struct pcmwaveformat_tag {
 #define THREAD_QUERY_INFORMATION 0x0040
 #define DUPLICATE_SAME_ACCESS 0x00000002
 #define STARTF_USESHOWWINDOW 0x00000001
+#define STARTF_USESTDHANDLES 0x00000100
 #define NORMAL_PRIORITY_CLASS 0x00000020
 #define THREAD_PRIORITY_NORMAL 0
 #define THREAD_PRIORITY_ABOVE_NORMAL 1
@@ -1253,6 +1254,8 @@ WINBASEAPI void __stdcall GetStartupInfoA(LPSTARTUPINFOA lpStartupInfo);
 WINBASEAPI DWORD __stdcall GetEnvironmentVariableA(LPCSTR lpName, LPSTR lpBuffer, DWORD nSize);
 WINBASEAPI BOOL __stdcall SetEnvironmentVariableA(LPCSTR lpName, LPCSTR lpValue);
 WINBASEAPI UINT __stdcall SetErrorMode(UINT uMode);
+WINBASEAPI BOOL __stdcall CreatePipe(PHANDLE hReadPipe, PHANDLE hWritePipe,
+                                  LPSECURITY_ATTRIBUTES lpPipeAttributes, DWORD nSize);
 WINBASEAPI BOOL __stdcall CreateProcessA(LPCSTR lpApplicationName, LPSTR lpCommandLine,
                                          LPSECURITY_ATTRIBUTES lpProcessAttributes,
                                          LPSECURITY_ATTRIBUTES lpThreadAttributes, BOOL bInheritHandles,

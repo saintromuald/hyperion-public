@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "port_ai.h"
+#include "port_pluto.h"
 #include "port_session.h"  // Session
 #include "../front/port_text.h"    // PT_: the names are logged and saved in English
 #include "../platform/port_log.h"  // PortLogger
@@ -58,12 +59,14 @@ const Knobs kKnobs[AI_LEVELS] = {
     {50, 70, 100, 100, 0, true, 0},      // Cheater: vision
     {50, 70, 100, 100, 0, true, 1},      // Cheater: resources
     {50, 70, 100, 100, 0, true, 2},      // Cheater: insane
+    {100, 100, 100, 100, 0, false, 0},   // Pluto: the bridge plays; these go unused
 };
 
 const char *const kLevelNames[AI_LEVELS] = {
     PT_("Classic AI"), PT_("Very Easy"), PT_("Easy"), PT_("Medium"), PT_("Hard"), PT_("Harder"), PT_("Very Hard"),
-    PT_("Elite"), PT_("Cheater: vision"), PT_("Cheater: resources"), PT_("Cheater: insane")};
-const char kLevelLetters[AI_LEVELS + 1] = "c1234567vri";  // see AiLevelLetter
+    PT_("Elite"), PT_("Cheater: vision"), PT_("Cheater: resources"), PT_("Cheater: insane"),
+    PT_("Pluto")};
+const char kLevelLetters[AI_LEVELS + 1] = "c1234567vrip";  // see AiLevelLetter
 const char *const kStyleNames[AI_STYLES] = {PT_("Its own script")};
 
 int g_nSeated;                            // the rows seated: the local player and its computers
@@ -207,6 +210,8 @@ void AiForGame() {
     g_bVision = g_bVision || KnobsOf(s).bVision;
     Log("slot %d: %s, %s", s, AiLevelName(g_aSlot[s].bLevel), AiStyleName(g_aSlot[s].bStyle));
   }
+  if (!bOld)
+    PlutoGameStart();  // Hyperion: the bridge, once a live game with a Pluto slot starts
 }
 
 AiProfile AiProfileOf(int nSlot) {
@@ -238,6 +243,7 @@ void AiFrame() {
     AiVisionRefresh();
   }
   sai_update();
+  PlutoFrame();  // Hyperion: the Pluto slot's step through the bridge
 }
 
 void AiVisionRefresh() {
@@ -266,7 +272,8 @@ void AiVisionRefresh() {
 }
 
 DWORD AiMeleeScript(int nSlot, DWORD dwClassic) {
-  (void)nSlot;
+  if (AiProfileOf(nSlot).bLevel == AI_LEVEL_PLUTO)
+    return 0;  // the bridge plays this slot; the classic script must not
   return dwClassic;
 }
 
