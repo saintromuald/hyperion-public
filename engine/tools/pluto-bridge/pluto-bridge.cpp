@@ -539,6 +539,10 @@ static void UpdateScMemory() {
   Sc(0x400001)[0] = '\0';
 }
 
+// The bot's client thread syncs once and closes the pipe (its update is
+// one-shot), so the rig's free-running pipe loop serves it: connect, send 2,
+// read the ready codes. The per-frame game state is written on the host's
+// thread only, which the client no longer shares by then.
 static DWORD WINAPI ServePipe(LPVOID p) {  HANDLE hPipe = static_cast<HANDLE>(p);
   if (!ConnectNamedPipe(hPipe, NULL) && GetLastError() != ERROR_PIPE_CONNECTED)
     return 1;
@@ -917,8 +921,14 @@ int main(int argc, char **argv) {
   // 5. The bot's thread now connects; grant it, then serve its updates.
   fprintf(stderr, "[bridge] waiting for the bot to connect\n");
   fflush(stdout);
-  HANDLE hConnect = CreateThread(NULL, 0, ServePipe, hPipe, 0, NULL);
-  (void)hConnect;
+  // The bot's client thread connects during its start-up, syncs once (its
+  // update is one-shot: ready code, wait 2, one pass), then closes the pipe.
+  // The rig's thread serves it; the per-frame state is written on the host's
+  // thread, which the client no longer shares by then.
+  {
+    HANDLE hOpen = CreateThread(NULL, 0, ServePipe, hPipe, 0, NULL);
+    (void)hOpen;
+  }
 
   // 6. Drive the module through its own vtable, as the bridge does: its layout is not
   // BWAPI 4.4.0's AIModule (no virtual destructor; slots read from the disassembly):
@@ -953,12 +963,17 @@ int main(int argc, char **argv) {
     *reinterpret_cast<unsigned char *>(client + 7) = 1;
   }
   ArmTaps();
+  int nFramesDone = 0;
   for (;;) {
     unsigned hdr[3];
-    if (!ReadN(hdr, sizeof hdr))
+    if (!ReadN(hdr, sizeof hdr)) {
+      fprintf(stderr, "[bridge] stdin closed after %d frames\n", nFramesDone);
       break;
-    if (hdr[0] != 0x46505048)  // 'HXPF'
+    }
+    if (hdr[0] != 0x46505048) {  // 'HXPF'
+      fprintf(stderr, "[bridge] bad magic %08x after %d frames\n", hdr[0], nFramesDone);
       break;
+    }
     const unsigned frame = hdr[1];
     const unsigned nUnits = hdr[2] < 9999 ? hdr[2] : 9999;
     unsigned mapWH[2];
@@ -972,6 +987,26 @@ int main(int argc, char **argv) {
     ReadN(units, nUnits * sizeof(HxUnit));
     ReadN(players, nPlayers * sizeof(HxPlayer));
     ApplyFrameState(units, nUnits, players, nPlayers, frame);
+    if (frame == 0) {
+      fprintf(stderr, "[bridge] sizes: HxUnit=%u HxPlayer=%u\n",
+              static_cast<unsigned>(sizeof(HxUnit)),
+              static_cast<unsigned>(sizeof(HxPlayer)));
+      fprintf(stderr, "[bridge] p0: race=%u min=%u gas=%u sup=%u/%u sx=%u sy=%u\n",
+              players[0].race, players[0].minerals, players[0].gas,
+              players[0].supplyTotal, players[0].supplyUsed,
+              players[0].startX, players[0].startY);
+      fprintf(stderr, "[bridge] offs: race=%u minerals=%u gas=%u supply=%u size=%u\n",
+              static_cast<unsigned>(offsetof(PlayerData, race)),
+              static_cast<unsigned>(offsetof(PlayerData, minerals)),
+              static_cast<unsigned>(offsetof(PlayerData, gas)),
+              static_cast<unsigned>(offsetof(PlayerData, supplyTotal)),
+              static_cast<unsigned>(sizeof(PlayerData)));
+      FILE *pf = fopen("dump/pdata0.bin", "wb");
+      if (pf) {
+        fwrite(&g->players[0], 1, 0x169C, pf);
+        fclose(pf);
+      }
+    }
     int f = static_cast<int>(frame);
     g->frameCount = f;
     g->elapsedTime = f * 42;
@@ -1057,6 +1092,9 @@ int main(int argc, char **argv) {
       gates[0x18] = 0;                                  // not yet sent
       gates[0x21] = 1;                                  // engine "ready"
     }
+    ++nFramesDone;
+    if (frame % 60 == 0)
+      fprintf(stderr, "[bridge] replying f%d\n", static_cast<int>(frame));
     {
       unsigned used = *ScT<unsigned>(0x654AA0);
       if (used > 0x10000)
