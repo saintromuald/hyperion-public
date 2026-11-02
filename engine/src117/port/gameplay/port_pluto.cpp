@@ -217,7 +217,7 @@ bool PlutoSendFrame() {
 
   const unsigned nUnits = static_cast<unsigned>(units.size());
   const unsigned nPlayers = static_cast<unsigned>(players.size());
-  unsigned hdr[3] = {0x46505048, s_dwFrame, nUnits};  // 'HXPF'
+  unsigned hdr[3] = {0x50465848, s_dwFrame, nUnits};  // 'HXPF'
   unsigned mapWH[2] = {gwMapWidth, gwMapHeight};
   if (!WriteAll(s_hToBridge, hdr, sizeof hdr) ||
       !WriteAll(s_hToBridge, mapWH, sizeof mapWH) ||
@@ -234,7 +234,7 @@ bool PlutoReadAndApply() {
   for (;;) {
     if (!ReadAll(s_hFromBridge, out, 12))
       return false;
-    if (out[0] == 0x50524858)  // 'HXRP'
+    if (out[0] == 0x50525848)  // 'HXRP'
       break;
     // Wine's noise before the first reply: skip to the magic.
     unsigned char rest[12];
