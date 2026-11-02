@@ -75,6 +75,27 @@ Transport: shared memory + events, with a pipes fallback.
   the actions, an AI boundary made for another level, and the lab's pattern of starting and
   owning a helper process.
 
+## The bridge (tools/pluto-bridge) — status 2026-11-02: the bot plays
+
+The obs-schema reimplementation was not needed: the bridge runs the fork's own
+engine under Wine and only moves frames. The split of duties:
+
+- Hyperion (`port_pluto.cpp`) sends one `HXPF` frame a game frame (the unit list
+  with positions, hp, orders, the players) and receives `HXRP` replies with the
+  bot's classic net commands, applied through the existing receivers.
+- The bridge feeds the frames into the fork's **SC image**, never its GameData
+  (the fork's server owns the GameData conversion). Unit ids are positions, so
+  the fork's model index equals the Hyperion list position and the commands'
+  ids (9363 + index) map back by `id - kPlutoIdBase`.
+
+Measured, with the order field carrying a live order (Die makes the fork drop
+every unit): obs N=9 every step, real commands out (select + move), zero faults
+over repeated runs. The wire format and the traps are in `pluto-protocol.md`.
+
+Staged for the play test: `~/Games/hyperion/Hyperion.x86_64.pluto` (the client)
+and `~/Games/hyperion/Data/pluto/` (pluto-bridge.exe, pluto.patched.dll,
+pluto/pluto_infer.exe, pluto_weights.bin).
+
 ## The rig (tools/pluto-rig) — status 2026-11-01, session 3
 
 The obs path is mapped end to end; the schema extraction is one gate away.
