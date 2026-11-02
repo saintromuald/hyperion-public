@@ -90,6 +90,38 @@ enum Bind {
   BIND_KEY_TERRAIN,     // the minimap terrain's
   BIND_KEY_IDLE,        // the idle worker's
   BIND_KEY_ARMY,        // the army's
+  BIND_KEY_CAMGO1,      // the eight camera locations' (port_camkeys.cpp): jump to each
+  BIND_KEY_CAMGO2,
+  BIND_KEY_CAMGO3,
+  BIND_KEY_CAMGO4,
+  BIND_KEY_CAMGO5,
+  BIND_KEY_CAMGO6,
+  BIND_KEY_CAMGO7,
+  BIND_KEY_CAMGO8,
+  BIND_KEY_CAMSET1,     // and save each
+  BIND_KEY_CAMSET2,
+  BIND_KEY_CAMSET3,
+  BIND_KEY_CAMSET4,
+  BIND_KEY_CAMSET5,
+  BIND_KEY_CAMSET6,
+  BIND_KEY_CAMSET7,
+  BIND_KEY_CAMSET8,
+  BIND_KEY_GROUP0,      // the control groups' keys (port_hotkeys.cpp): the ten digits,
+  BIND_KEY_GROUP1,      // then the six letters R, F, V, T, G and B
+  BIND_KEY_GROUP2,
+  BIND_KEY_GROUP3,
+  BIND_KEY_GROUP4,
+  BIND_KEY_GROUP5,
+  BIND_KEY_GROUP6,
+  BIND_KEY_GROUP7,
+  BIND_KEY_GROUP8,
+  BIND_KEY_GROUP9,
+  BIND_KEY_GROUP10,
+  BIND_KEY_GROUP11,
+  BIND_KEY_GROUP12,
+  BIND_KEY_GROUP13,
+  BIND_KEY_GROUP14,
+  BIND_KEY_GROUP15,
   BIND_DATA_FOLDER,     // shown: PortDataFolder
   BIND_SETTINGS_FILE,   // shown: PortSettingsPath
   BIND_GAME_FILES,      // the kind of install the game's files come from (port_install.cpp)
@@ -695,8 +727,30 @@ int HotkeyOf(int bind)
     case BIND_KEY_TERRAIN: return PORT_HOTKEY_TERRAIN;
     case BIND_KEY_IDLE: return PORT_HOTKEY_IDLE;
     case BIND_KEY_ARMY: return PORT_HOTKEY_ARMY;
+    case BIND_KEY_CAMGO1: return PORT_HOTKEY_CAMGO1;
+    case BIND_KEY_CAMGO2: return PORT_HOTKEY_CAMGO2;
+    case BIND_KEY_CAMGO3: return PORT_HOTKEY_CAMGO3;
+    case BIND_KEY_CAMGO4: return PORT_HOTKEY_CAMGO4;
+    case BIND_KEY_CAMGO5: return PORT_HOTKEY_CAMGO5;
+    case BIND_KEY_CAMGO6: return PORT_HOTKEY_CAMGO6;
+    case BIND_KEY_CAMGO7: return PORT_HOTKEY_CAMGO7;
+    case BIND_KEY_CAMGO8: return PORT_HOTKEY_CAMGO8;
+    case BIND_KEY_CAMSET1: return PORT_HOTKEY_CAMSET1;
+    case BIND_KEY_CAMSET2: return PORT_HOTKEY_CAMSET2;
+    case BIND_KEY_CAMSET3: return PORT_HOTKEY_CAMSET3;
+    case BIND_KEY_CAMSET4: return PORT_HOTKEY_CAMSET4;
+    case BIND_KEY_CAMSET5: return PORT_HOTKEY_CAMSET5;
+    case BIND_KEY_CAMSET6: return PORT_HOTKEY_CAMSET6;
+    case BIND_KEY_CAMSET7: return PORT_HOTKEY_CAMSET7;
+    case BIND_KEY_CAMSET8: return PORT_HOTKEY_CAMSET8;
   }
   return -1;
+}
+
+// The control group a row sets (port_hotkeys.cpp), or -1 for none.
+int GroupOf(int bind)
+{
+  return bind >= BIND_KEY_GROUP0 && bind <= BIND_KEY_GROUP15 ? bind - BIND_KEY_GROUP0 : -1;
 }
 
 SetValue ReadKey(const Setting &s) { return Value(static_cast<float>(PortHotkey(HotkeyOf(s.bind)))); }
@@ -704,6 +758,15 @@ SetValue ReadKey(const Setting &s) { return Value(static_cast<float>(PortHotkey(
 bool WriteKey(const Setting &s, const SetValue &v)
 {
   PortHotkeySet(HotkeyOf(s.bind), static_cast<unsigned>(lroundf(v.f)));
+  return false;
+}
+
+// The control groups' keys (port_hotkeys.cpp), a letter or a digit, 0 for the group's own.
+SetValue ReadKeyGroup(const Setting &s) { return Value(static_cast<float>(PortKeyGroupGet(GroupOf(s.bind)))); }
+
+bool WriteKeyGroup(const Setting &s, const SetValue &v)
+{
+  PortKeyGroupSet(GroupOf(s.bind), lroundf(v.f));
   return false;
 }
 
@@ -930,11 +993,79 @@ const Setting kSettings[] = {
      ReadKey, WriteKey, NULL, PT_("In a game by Hyperion\xE2\x80\x99""s rules, the next kind of unit in the selection: the console shows its card and the page that holds it, as StarCraft II\xE2\x80\x99""s Tab. With Shift, the kind before. Click the key and press another: Tab, F5 to F9, F11 or F12, with Ctrl, Shift or Alt if you like.")},
     {"hotkeys", PT_("Minimap terrain"), CTL_KEYS, "Ctrl+Tab", 265.0f, false, "Hyperion", NULL, "live", BIND_KEY_TERRAIN,
      ReadKey, WriteKey, NULL, PT_("The minimap\xE2\x80\x99""s terrain on or off, as its button does; with Shift, the units\xE2\x80\x99"" colours, as the original\xE2\x80\x99""s Shift+Tab. In a game by classic rules Tab still does it, as in the original; in a game by Hyperion\xE2\x80\x99""s rules Tab is the subgroup\xE2\x80\x99""s.")},
-    {"hotkeys", PT_("Idle worker"), CTL_KEYS, "Shift+F11", 634.0f, false, "Hyperion", NULL, "live", BIND_KEY_IDLE,
-     ReadKey, WriteKey, NULL, PT_("Selects your next idle worker and takes the view to it, as the HUD\xE2\x80\x99""s idle worker button does.")},
+    {"hotkeys", PT_("Idle worker"), CTL_KEYS, "`", 192.0f, false, "Hyperion", NULL, "live", BIND_KEY_IDLE,
+     ReadKey, WriteKey, NULL, PT_("Selects your next idle worker and takes the view to it, as the HUD\xE2\x80\x99""s idle worker button does. The ` key, as StarCraft II\xE2\x80\x99""s players set it.")},
     {"hotkeys", PT_("Select army"), CTL_KEYS, "Shift+F12", 635.0f, false, "Hyperion", NULL, "live", BIND_KEY_ARMY,
      ReadKey, WriteKey, NULL, PT_("In a game by Hyperion\xE2\x80\x99""s rules, selects your army, every unit that fights, up to 255, as the HUD\xE2\x80\x99""s army button does. A game by classic rules keeps the original\xE2\x80\x99""s selections and has no army key.")},
-    {"hotkeys", PT_("Screenshot"), CTL_KEYS, "Print", 0.0f, false, "Classic", NULL, "live", BIND_NONE,
+
+    {"hotkeys", PT_("Camera locations"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+     NULL, NULL, NULL, PT_("As StarCraft II\xE2\x80\x99""s: eight saved views. F5 to F8 jump to the first four and Ctrl+F5 to Ctrl+F8 save them, and 5 to 8 have no key until you give them one. A save says so on the map\xE2\x80\x99""s message. Each game starts the eight on the start view.")},
+    {"hotkeys", PT_("Jump to location 1"), CTL_KEYS, "F5", 116.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO1,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Jump to location 2"), CTL_KEYS, "F6", 117.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO2,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Jump to location 3"), CTL_KEYS, "F7", 118.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO3,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Jump to location 4"), CTL_KEYS, "F8", 119.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO4,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Jump to location 5"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO5,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Jump to location 6"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO6,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Jump to location 7"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO7,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Jump to location 8"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO8,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Save location 1"), CTL_KEYS, "Ctrl+F5", 372.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET1,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Save location 2"), CTL_KEYS, "Ctrl+F6", 373.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET2,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Save location 3"), CTL_KEYS, "Ctrl+F7", 374.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET3,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Save location 4"), CTL_KEYS, "Ctrl+F8", 375.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET4,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Save location 5"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET5,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Save location 6"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET6,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Save location 7"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET7,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Save location 8"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET8,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Control groups"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+     NULL, NULL, NULL, PT_("The keys that select a group and, with Ctrl, make the selection a group (Shift adds to it, Alt selects and centres): the ten digits, then six more on R, F, V, T, G and B, which hold units and buildings alike. A letter a command card also uses selects the group instead; click a key and press another to change it.")},
+    {"hotkeys", PT_("Group 1"), CTL_KEYS, "1", 49.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP0,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group 2"), CTL_KEYS, "2", 50.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP1,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group 3"), CTL_KEYS, "3", 51.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP2,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group 4"), CTL_KEYS, "4", 52.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP3,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group 5"), CTL_KEYS, "5", 53.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP4,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group 6"), CTL_KEYS, "6", 54.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP5,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group 7"), CTL_KEYS, "7", 55.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP6,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group 8"), CTL_KEYS, "8", 56.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP7,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group 9"), CTL_KEYS, "9", 57.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP8,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group 0"), CTL_KEYS, "0", 48.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP9,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group R"), CTL_KEYS, "R", 82.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP10,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group F"), CTL_KEYS, "F", 70.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP11,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group V"), CTL_KEYS, "V", 86.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP12,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group T"), CTL_KEYS, "T", 84.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP13,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group G"), CTL_KEYS, "G", 71.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP14,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group B"), CTL_KEYS, "B", 66.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP15,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},    {"hotkeys", PT_("Screenshot"), CTL_KEYS, "Print", 0.0f, false, "Classic", NULL, "live", BIND_NONE,
      NULL, NULL, NULL, NULL},
     {"access", PT_("Allies blue, enemies red"), CTL_TOGGLE, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
      ReadFlag, WriteAllyColours, "allyColours", PT_("In a game you play, you are drawn in blue, your allies in teal and the other players in red, units, buildings and minimap alike, as StarCraft II\xE2\x80\x99""s team colours and Warcraft III\xE2\x80\x99""s ally colours do. The original\xE2\x80\x99""s minimap button does it for the minimap alone. Only what is drawn changes: replays and saved games keep every player\xE2\x80\x99""s own colour. Remastered has the string and no control.")},
@@ -1667,7 +1798,18 @@ void SettingGroup(int i)
       Decl row;
       row.d.layout.childGap = Gap(Fs(8));
       Open(row);
-      if (HotkeyOf(s.bind) >= 0) {
+      if (GroupOf(s.bind) >= 0) {
+        // a control group's key, its own (the digit, or the letter for the six extra) until
+        // the player gives it another; a click, then the key pressed (KeyCapture)
+        char szKey[2];
+        szKey[0] = static_cast<char>(toupper(static_cast<unsigned char>(PortKeyGroupShown(GroupOf(s.bind)))));
+        szKey[1] = '\0';
+        Field(g_nKeyCapture == i ? PortText("Press a key") : szKey, false, bDim, i);
+        if (bLive && Clicked(Id("setfield", i))) {
+          g_nKeyCapture = i;
+          g_nKeyNoteRow = -1;
+        }
+      } else if (HotkeyOf(s.bind) >= 0) {
         // a click, then the key pressed (KeyCapture); none when another took its default
         char szKey[48];
         SDL_strlcpy(szKey, PortText("None"), sizeof szKey);
@@ -1861,6 +2003,45 @@ void Confirm(void)
   }
 }
 
+// The Hotkeys tab's rows, which the well's two columns cannot all hold: two columns a
+// screen's worth, the wheel showing the rest (as the HUD tab's design list scrolls).
+void HotkeysTab(const std::vector<int> &rows, void (*pfnRow)(int))
+{
+  const int kShown = 22;  // 11 a column, enough for the well's height
+  static int s_nFirst;
+  const int nMost = static_cast<int>(rows.size()) - kShown;
+  s_nFirst = SDL_max(0, SDL_min(s_nFirst + WheelRows(Over(Id("hotkeylist")), 2), nMost > 0 ? nMost : 0));
+  Decl cols;
+  cols.d.id = Id("hotkeylist");
+  cols.d.layout.layoutDirection = CLAY_LEFT_TO_RIGHT;
+  cols.d.layout.childGap = Gap(Fs(40));
+  Open(cols);
+  for (int c = 0; c < 2; ++c) {
+    Decl col;
+    col.d.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
+    col.d.layout.sizing.width = Grow();
+    Open(col);
+    for (int i = 0; i < kShown / 2; ++i) {
+      const int r = s_nFirst + c * (kShown / 2) + i;
+      if (r < static_cast<int>(rows.size()))
+        pfnRow(rows[r]);
+    }
+    Close();
+  }
+  Close();
+  if (static_cast<int>(rows.size()) > kShown) {
+    Decl note;
+    note.d.layout.padding = Pad(Fs(20), Fs(0), Fs(8), Fs(0));
+    Open(note);
+    // {0} and {1} the rows shown, {2} how many there are
+    Text(Keep(PortTextF("{0}\xE2\x80\x93{1} of {2}. The wheel shows the rest.",
+                        {std::to_string(s_nFirst + 1), std::to_string(SDL_min(static_cast<int>(rows.size()), s_nFirst + kShown)),
+                         std::to_string(rows.size())})),
+         UI_FACE_TEXT, Fs(12), 0.0f, kScInkOff);
+    Close();
+  }
+}
+
 void SettingsDialog(void)
 {
   g_nTip = -1;
@@ -1940,6 +2121,8 @@ void SettingsDialog(void)
 
   // the tab's rows, those not available yet last under their heading (the HUD tab lays out its own)
   const bool bHudTab = strcmp(kTabs[g_nTab].pszId, "hud") == 0;
+  // the Hotkeys tab lays out its own too: its rows are more than the well holds
+  const bool bHotkeysTab = strcmp(kTabs[g_nTab].pszId, "hotkeys") == 0;
   std::vector<int> rows, later;
   int nTotal = 0;
   for (int i = 0; i < kSettingCount; ++i)
@@ -1969,7 +2152,14 @@ void SettingsDialog(void)
     HudTab(rows, SettingGroup);
     r = rows.size();
   }
-  for (int c = 0; c < 2 && !bHudTab; ++c) {
+  // the Hotkeys tab's own out: its rows scroll, two columns a screen's worth
+  if (bHotkeysTab) {
+    for (int i : rows)
+      leftColumn[i] = false;
+    HotkeysTab(rows, SettingGroup);
+    r = rows.size();
+  }
+  for (int c = 0; c < 2 && !bHudTab && !bHotkeysTab; ++c) {
     Decl col;
     col.d.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
     col.d.layout.sizing.width = Grow();
@@ -2036,10 +2226,35 @@ void KeyCapture(void)
     }
     if (k == VK_SHIFT || k == VK_CONTROL || k == VK_MENU || (k >= VK_LSHIFT && k <= VK_RMENU))
       continue;
-    const unsigned nKey = PortHotkeyHeld(static_cast<unsigned>(k));
     g_nKeyNoteRow = g_nKeyCapture;
+    // a control group's key: a letter or a digit alone
+    const int nGroup = GroupOf(kSettings[g_nKeyCapture].bind);
+    if (nGroup >= 0) {
+      const int c = (k >= 'A' && k <= 'Z') || (k >= '0' && k <= '9') ? tolower(k) : 0;
+      if (!PortKeyGroupFree(c)) {
+        g_keyNote = PortText("A control group\xE2\x80\x99s key is a letter or a digit.");
+        continue;
+      }
+      int nOther = -1;
+      for (int r = 0; r < kSettingCount; ++r)
+        if (r != g_nKeyCapture && GroupOf(kSettings[r].bind) >= 0 &&
+            PortKeyGroupShown(GroupOf(kSettings[r].bind)) == c)
+          nOther = r;
+      if (nOther >= 0) {
+        char szKey[2];
+        szKey[0] = static_cast<char>(toupper(c));
+        szKey[1] = '\0';
+        g_keyNote = PortTextF("{0} is {1}\xE2\x80\x99s key.", {std::string(szKey), PortText(kSettings[nOther].pszLabel)});
+        continue;
+      }
+      g_set[g_nKeyCapture].f = static_cast<float>(c);
+      g_keyNote.clear();
+      g_nKeyCapture = -1;
+      return;
+    }
+    const unsigned nKey = PortHotkeyHeld(static_cast<unsigned>(k));
     if (!PortHotkeyFree(nKey)) {
-      g_keyNote = PortText("The original uses that key. F5 to F9, F11, F12 and Tab are free.");
+      g_keyNote = PortText("That key is the system\xE2\x80\x99s. A letter, a digit, F1 to F12 and Tab are free.");
       continue;
     }
     int nOther = -1;
