@@ -57,6 +57,7 @@
 #undef mtx_query_place_bldg
 #include "../gen/globals117.h"
 #include "../port/render/port_view.h"  // Hyperion: g_portView, PortViewScreenToMap
+#include "../port/gameplay/port_mineinfo.h"  // Hyperion: PortStartWorkerMine, the start's split
 #include "../port/data/port_moddata.h"  // Hyperion: ModRaceStartUnit
 #include "../h/mutators.h"  // Hyperion: the start workers
 
@@ -1368,8 +1369,10 @@ void TeamPlaceStartingUnits()
                                     gStartLoc_534A00[bCaptain].x,
                                     gStartLoc_534A00[bCaptain].y,
                                     bCaptain);
-        if (pUnit != NULL)
+        if (pUnit != NULL) {
           pUnit->sub_424DB0();
+          PortStartWorkerMine(pUnit, i);  // Hyperion: SC2's split, each its own field
+        }
         break;
       }
       default:
@@ -1434,8 +1437,10 @@ void PlaceStartingUnits()
         for (int k = 0; k < MutatorWorkers(); ++k) {
           CUnit *pUnit = CreateUnitAt(PlaceWorkerType(p->nRace),
                                       gStartLoc_534A00[bSlot].x, gStartLoc_534A00[bSlot].y, bSlot);
-          if (pUnit != NULL)
+          if (pUnit != NULL) {
             pUnit->sub_424DB0();
+            PortStartWorkerMine(pUnit, k);  // Hyperion: SC2's split, each its own field
+          }
         }
         break;
       }
