@@ -4,6 +4,8 @@
 #include "platform.h"
 #include "CUnit.h"
 
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: ModUnitStateOf (the regression stun)
+
 // src117/lang/Allowed.cpp -- the tech-tree gate. OrderAllowed, ResearchAllowed,
 // TechUseAllowed and UpgradeAllowed are declared in statbtn.h; only the names
 // below are new.
@@ -32,6 +34,10 @@ OC_EMIT inline BOOL CUnit::IsDisabled()
 {
   if ((dwFlags & 0x400) != 0 || bLockdownTimer != 0 || bStasisTimer != 0 ||
       bParalyzeTimer != 0)
+    return 1;
+  // Hyperion: the mod's regression stun counts as disabled while it runs
+  // (TimerStun > 1, game_hooks.cpp:1445-1449).
+  if (PortCosmonarchy() && ModUnitStateOf(this).nStun > 1)
     return 1;
   return 0;
 }

@@ -13,7 +13,10 @@
 
 #include "../h/playervision.h"  // Hyperion: the slots past 7
 #include "../h/hxrules.h"       // Hyperion: HxRules
+#include "../h/playertables.h"  // Hyperion: PlayerGasGatheredTable (dword_526430)
 #include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
+
+extern PlayerGasGatheredTable dword_526430;  // the gas gathered, CUnitInv.cpp's name
 
 // Include order matters. src117/gen/globals117.h is generated with no includes of
 // its own and relies on its includer having BYTE, DWORD and its rows' struct
@@ -3315,6 +3318,36 @@ void CUnit::DamageApply(int nDamage, CUnit *pAttacker, int nSourcePlayer, int a4
   if ((glCheatBits & 4) && gPlayerData[nSourcePlayer].nType != 2)
     nApplied = 0;
   if (nApplied >= lHitPoints) {
+    // Hyperion: Massacre pays the killer before the blow lands, allied or not
+    // (weapon_damage.cpp:446-449).
+    if (PortCosmonarchy() && CosmoGameKind() == COSMO_KIND_MASSACRE &&
+        pAttacker != NULL && pAttacker->IsEnemyUnit(this)) {
+      gPlayerGas[pAttacker->bPlayer] += 3;
+      dword_526430[pAttacker->bPlayer] += 3;
+    }
+    // Hyperion: the mod's Zerg regression turns the killing blow into the
+    // previous form, or a new worker beside a real death (weapon_damage.cpp:1602,
+    // api.cpp:3185-3278).
+    if (PortCosmonarchy() && nDamage > 0) {
+      const unsigned wRegress = CosmoZergRegression(this);
+      if (wRegress != 0xFFFF && wRegress != 0xFFFFu) {
+        if (CosmoRegressionSpawns(wRegress)) {
+          // the old form dies; the worker or larva is made beside it
+          CUnit *pNew = CreateUnitAt(wRegress, pSprite->wPosX, PosS(pSprite->wPosY), bPlayer);
+          if (pNew != NULL)
+            pNew->FinishedMaking();
+        } else {
+          count_add_killed(this, nSourcePlayer);
+          if (pAttacker != NULL && pAttacker->IsEnemyUnit(this))
+            pAttacker->AddKill();
+          TransformType(static_cast<WORD>(wRegress));
+          lHitPoints = HandicapLife(gxUnitLife[wType], bPlayer);
+          ModUnitStateOf(this).nStun = 24;  // 1 second, as the mod's TimerStun
+          tai_assign_unit_strength(this);
+          return;
+        }
+      }
+    }
     if (IsATransport()) {
       if (!(gulUnitTypeFlags[wType] & 1)) {
         for (int i = 0; i < 8; ++i) {

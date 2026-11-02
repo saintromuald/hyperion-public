@@ -11,6 +11,7 @@
 
 #include "../h/CUnitZBuild.h"
 #include "../port/data/port_moddata.h"  // Hyperion: ModMorphTarget, a mod's morphs
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 #include "../h/CUnitBuild.h"
 #include "../h/CUnitTSpells.h"
 #include "../h/CUnitZSpells.h"
@@ -674,11 +675,40 @@ void CUnit::DispatchZergBirth()
       register_unit_for_ai(this, pTwin);
   }
 
+  // Hyperion: the mod's extra hatchlings (unit_morph.cpp:70-126): the Gathtelosk's
+  // Swarmhold adds one to every egg, Massacre doubles the lot and adds one, and the
+  // Sovrokor is a triple birth. Each copy is a real unit with its own gas and supply.
+  if (PortCosmonarchy()) {
+    int nExtra = 0;
+    if (!CosmoIsLarva(this->wType) && this->pUnion80 != NULL &&
+        CosmoSwarmholdBuilding(this->pUnion80->wType))
+      nExtra += 1;
+    if (CosmoGameKind() == COSMO_KIND_MASSACRE && !CosmoIsLarva(this->wType))
+      nExtra = nExtra * 2 + 1;
+    if (CosmoTripleBirth(this->wType) && !(ModUnitStateOf(this).nFlags & 1))
+      nExtra += this->pUnion80 != NULL && CosmoSwarmholdBuilding(this->pUnion80->wType) ? 2 : 1;
+    for (int k = 0; k < nExtra; ++k) {
+      CUnit *pNew = CreateUnitAt(this->wType, PosS(this->pSprite->wPosX),
+                                 PosS(this->pSprite->wPosY), this->bPlayer);
+      if (pNew != NULL) {
+        pNew->FinishedMaking();
+        pNew->RallyToFactoryTarget(this->pUnion80);
+        register_unit_for_ai(this, pNew);
+      }
+    }
+    // an Ocsal larva's hatchlings cannot regress again (ValueRegressionUnstable)
+    if (this->wPrevUnitType == CosmoUnit("zerg_ocsal_larva"))
+      ModUnitStateOf(this).nFlags |= 1;
+  }
+
   if (this->wType != 0x29 && this->wType != 0x2A)
     register_unit_for_ai(this, this);
 
   SyncConstructionGraphic(0);
   FinishedMaking();
+  // Hyperion: the mod's broodspawn live 119 frames off cagra (unit_constants.h:406)
+  if (PortCosmonarchy() && CosmoBroodspawn(this->wType))
+    this->wTimeToLive = 119;
 
   wOrigX = this->pSprite->wPosX;
   wOrigY = PosU(this->pSprite->wPosY);

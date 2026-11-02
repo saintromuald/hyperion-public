@@ -815,7 +815,8 @@ BYTE spread_creep(WORD nType, int nX, int nY)
   // Hyperion: the mod's spreaders grow cagra in their own 320x200 ellipse
   // (larva_creep_spawn.cpp:172-245), not in 1.17's per-type box.
   const bool bCosmo = PortCosmonarchy() &&
-                      (CosmoCreepSpreader(nType) || CosmoCreepSpreaderDone(nType));
+                      (CosmoCreepSpreader(nType) || CosmoCreepSpreaderDone(nType) ||
+                       CosmoBurrowedSpreader(nType));
   int bEllipse = bCosmo ? CosmoCreepBox(nX, nY, aBox)
                         : get_max_creep_bounding_box((short)nType, nX, nY, aBox, 1);
 

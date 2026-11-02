@@ -39,9 +39,12 @@
 #include "../h/CUnitProtoss.h"    // UpdateProtossPowerGrid
 #include "../h/CUnitSpells.h"     // CloakUpdate
 #include "../gen/globals117.h"
+
+extern unsigned int oc_dwReplayFrame;  // Hyperion: the mod's 15-frame creep cadence
 #include "../h/typelimits.h"  // Hyperion: OrderTypeMod
 #include "../h/selectlimits.h"  // Hyperion: SELECTION_MAX
 #include "../h/handicap.h"  // Hyperion: a player's handicap
+#include "../h/creep.h"     // Hyperion: spread_creep (the mod's burrowed spreaders)
 #include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 
 // EntityUpdate's order-sequence countdowns (CUnitInit.cpp's globals) and the
@@ -1090,6 +1093,17 @@ void CUnit::StepUpdate()
       st.nShieldRegen++;
     if (st.nDamageTaken != 0xFFFFFFFFu)
       st.nDamageTaken++;
+    if (st.nStun != 0)
+      st.nStun--;
+    // the mod's burrowed cagra spreaders (tick_burrowed_cagra_spread): the
+    // burrow/unburrow signal covers their footprint, and every 15th frame they
+    // spread a tile as the Gathtelosk would (game_hooks.cpp:3619-3624).
+    if (CosmoBurrowedSpreader(wType)) {
+      if ((bOrderFlags & 4) && !(dwFlags & CUnit::UF_Burrowed))
+        CosmoCoverCreep(this);
+      if ((dwFlags & CUnit::UF_Burrowed) && (oc_dwReplayFrame % 15) == 0)
+        spread_creep(wType, PosS(pSprite->wPosX), PosS(pSprite->wPosY));
+    }
   }
   for (int i = 0; i < 3; i++) {
     if ((&bUnion54)[i])

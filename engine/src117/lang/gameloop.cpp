@@ -42,6 +42,7 @@ void accel_apply_profile();  // Hyperion: event_Win.cpp (the hotkeys milestone K
 #include "../gen/globals117.h"
 #include "../port/tools/port_bench.h"  // Hyperion
 #include "../port/gameplay/port_watchgame.h"  // Hyperion: a skirmish watched
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 #include "../port/loop/port_clock.h"  // Hyperion: PortGameTicks, PortClockGameFrame, PortClockRest
 #include "../port/render/port_console.h"  // Hyperion: PortConsoleUpdate
 #include "../port/front/port_gamemenu.h"   // Hyperion: PortGameMenuStep
@@ -461,6 +462,7 @@ void gameloop_update_ui()
 void gameloop_update_game()
 {
     set_rand_enabled(1);
+    CosmoPerFrame();  // Hyperion: the mod's once-at-start mode init (its first frame)
     // Hyperion: HYPERION_PERF's parts (port_perf.cpp)
     PortPerfBegin(PERF_CREEP);
     sub_4B4010();
