@@ -1375,12 +1375,24 @@ BOOL __stdcall CreateProcessA(LPCSTR lpApplicationName, LPSTR lpCommandLine, LPS
     if (bActions) {
       const HANDLE ah[3] = {lpStartupInfo->hStdInput, lpStartupInfo->hStdOutput,
                             lpStartupInfo->hStdError};
+      // All the dup2s first, then one close per distinct fd: a handle shared by
+      // two std slots (the bridge's stderr riding its stdout pipe) must not be
+      // closed between its dup2s, or posix_spawn dies with EBADF.
       for (int i = 0; i < 3; ++i) {
         const int fd = reinterpret_cast<intptr_t>(ah[i]);
-        if (fd >= 0) {
+        if (fd >= 0)
           posix_spawn_file_actions_adddup2(&actions, fd, i);
+      }
+      for (int i = 0; i < 3; ++i) {
+        const int fd = reinterpret_cast<intptr_t>(ah[i]);
+        if (fd < 0)
+          continue;
+        bool bSeen = false;
+        for (int j = 0; j < i; ++j)
+          if (reinterpret_cast<intptr_t>(ah[j]) == fd)
+            bSeen = true;
+        if (!bSeen)
           posix_spawn_file_actions_addclose(&actions, fd);
-        }
       }
     }
   }
