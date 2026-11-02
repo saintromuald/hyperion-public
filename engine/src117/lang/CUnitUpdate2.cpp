@@ -1172,6 +1172,16 @@ skip:
   if (GetRace() == 1 && ((dwFlags & 2) || (gulUnitTypeFlags[wType] & 0x20)) &&
       IsBurning())
     DamageApply(0x14, NULL, bUnion90, 1);
+  // Hyperion: the mod's Terran buildings burn down in their red zone, 1.875hp a
+  // second, and go once the damage would (update_unit_state.cpp:351-375).
+  if (PortCosmonarchy() && GetRace() == 0 && (dwFlags & CUnit::UF_Building) &&
+      lHitPoints > 0 &&
+      lHitPoints < HandicapLife(gxUnitLife[wType], bPlayer) / 3) {
+    if (lHitPoints <= 20)
+      Suicide();
+    else
+      DamageApply(20, NULL, bUnion90, 1);
+  }
 }
 
 // CUnit::Stop, oracle 0x43A490 (68 B)

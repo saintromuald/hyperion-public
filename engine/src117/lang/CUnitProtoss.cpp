@@ -14,6 +14,7 @@
 #include "../h/playervision.h"  // Hyperion: the slots past 7
 #include "../h/CUnitProtoss.h"
 #include "../h/CUnit.h"
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 #include "../h/CSprite.h"        // CSprite::Create/SetMask/SetAnimation, +0x0E
 #include "../h/CImage.h"         // ours: GetJuiceFrame, frame_clickable_at
 #include "../h/grp.h"            // FRAME::bWidth/bHeight by VALUE -- CImage.h only
@@ -568,7 +569,10 @@ BOOL IsCellPowered(WORD wType, int x, int y, BYTE bPlayer)
 
   for (CUnit *pUnit = sgJuiceLink_g; pUnit != NULL;
        pUnit = pUnit->pPsiLinkNext) {
-    if (bPlayer != pUnit->bPlayer)
+    // Hyperion: the mod's psi fields are shared with allies
+    // (unit_can_show_power_for, psi_field.cpp:12-20).
+    if (bPlayer != pUnit->bPlayer &&
+        !(PortCosmonarchy() && sgbAlliances_g[pUnit->bPlayer][bPlayer] != 0))
       continue;
 
     CSprite *pSprite = pUnit->pSprite;
@@ -652,7 +656,10 @@ void UpdateProtossPowerGrid()
 BOOL CUnit::CanRechargeShieldsAt(CUnit *pTarget)
 {
   BOOL bResult;
-  if (this->bPlayer == pTarget->bPlayer &&
+  // Hyperion: the mod's batteries serve the owner's allies too
+  // (unit_can_recharge_shields, recharge_shields.cpp:34-57).
+  if ((this->bPlayer == pTarget->bPlayer ||
+       (PortCosmonarchy() && sgbAlliances_g[pTarget->bPlayer][this->bPlayer] != 0)) &&
       gbUnitHasShields[this->wType] != 0 &&
       (this->dwFlags & 0x1) &&
       (this->dwFlags & 0x20000) &&

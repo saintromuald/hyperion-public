@@ -175,10 +175,16 @@ Hyperion.exe --mod cosmonarchy                     # play it
    - Selecting these types still needs the mod's game-type templates in the lobby (the
      engine reads `gGameHeader.bGameType`, as the mod's exe does); the sim side is
      complete.
+   - **Protoss, first hooks**: psi fields are shared with allies
+     (unit_can_show_power_for); shield batteries recharge the owner's allies; a warped
+     building starts with three shield points so its bar reads (building_protoss.cpp).
+   - **Terran, first hook**: completed buildings burn down at 1.875 hp a second in their
+     red zone and go when the damage would (update_unit_state.cpp:351-375).
    - **Pending, later**: the MiningEfficiency setter (AI cheat levels), trigger-driven
      yields, worker wandering, gas-node display amounts, the Rilirokor pause-on-cagra,
-     broodling 3-to-5 on cagra, Vilgoleth's missing corpse, Swarming Spite, the
-     Protoss and Terran race hooks, and Askosi last.
+     broodling 3-to-5 on cagra, Vilgoleth's missing corpse, Swarming Spite, and the
+     deep unit hooks of all three races (Wyvern, Facade, Paladin, Artisan, recall,
+     mind control, the Archon merges, the bunker and nuke paths) before Askosi last.
 8. **QoL port — LAST, and slow.** The GPTP/Plus plugin features (saturation
    overlays, Tab cycling, F11 HUD, idle-worker key, larva picker, custom
    triggers, Lua melee AI, the game modes). Some are already in Hyperion
