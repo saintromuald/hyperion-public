@@ -76,3 +76,47 @@ Classic net commands appended to StarCraft's TurnBuffer (0x654880, byte count at
    command layer is the classic one).
 4. The level: `AI_LEVEL_PLUTO` in `port_ai.h`, the skirmish row, `--ai-levels`, the
    replay/save record — and the room's computer seat rides the same level.
+
+## The bridge protocol (Hyperion <-> pluto-bridge.exe)
+
+The bridge (`engine/tools/pluto-bridge/`) runs the fork's DLL under Wine and owns
+the obs build; Hyperion only feeds game frames and receives net commands, over the
+bridge's stdin/stdout. All little-endian.
+
+### Frame in (stdin, per game frame)
+
+| Field | Bytes | What |
+|---|---|---|
+| magic | 4 | `HXPF` = 0x50465848 |
+| frame | 4 | the game frame number |
+| nUnits | 4 | the unit count (<= 9999) |
+| mapW, mapH | 8 | the map size in tiles |
+| nPlayers | 4 | the player count (<= 12) |
+| units | nUnits * 40 | one `{u32 id,type,player,x,y,hp,shields,energy,order; u8 visible,completed,pad[2]}` a unit |
+| players | nPlayers * 28 | one `{u32 race,minerals,gas,supplyTotal,supplyUsed,startX,startY}` a player |
+
+Traps learned the hard way:
+
+- `order` must be a real, alive order (the rig sends `PlayerGuard`). Sending 0
+  (`Die`) makes the fork's engine drop every unit from its model: the obs stays at
+  N=1 and no commands ever come back.
+- The unit `id`s are the positions in the list (0..n-1), sent fresh each frame.
+  The bridge maps slot = id, so the fork's model index equals the Hyperion list
+  position, and the commands' unit ids (9363 + index) map straight back.
+- The bridge applies the frame to the fork's *SC image*, never to the fork's
+  GameData: the fork's own server converts the image into the GameData every
+  frame, and the bridge writing it concurrently broke the server's unit sync.
+- Frame 0 is not applied: the start-up image is already complete before the
+  fork's threads first read it.
+
+### Reply out (stdout, per frame)
+
+| Field | Bytes | What |
+|---|---|---|
+| magic | 4 | `HXRP` = 0x50525848 |
+| frame | 4 | the frame the commands belong to |
+| n | 4 | the command bytes that follow |
+| cmds | n | the bot's classic net commands, appended to StarCraft's TurnBuffer; the bridge scans the self-describing opcode stream and sends the delta, because the bot's byte count does not land reliably in the harness |
+| win | 4 | 0 for now |
+
+`port_pluto.cpp` reads `12 + n + 4` per reply and re-syncs on the magic.
