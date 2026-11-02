@@ -101,13 +101,25 @@ bool PlutoStart() {
   s_hToBridge = hToWrite;
   s_hFromBridge = hFromRead;
 
+  // The bridge's stderr rides its stdout pipe no more: the client's reply reader
+  // skips it, so the bridge's startup sequence was invisible. It now goes to a
+  // log file beside the bridge.
+  static int s_errFd = -1;
+  if (s_errFd < 0) {
+    const std::string errPath = folder + "/bridge.log";
+    FILE *fErr = fopen(errPath.c_str(), "wb");
+    if (fErr) {
+      setvbuf(fErr, NULL, _IONBF, 0);
+      s_errFd = fileno(fErr);
+    }
+  }
   STARTUPINFOA si;
   memset(&si, 0, sizeof si);
   si.cb = sizeof si;
   si.dwFlags = STARTF_USESTDHANDLES;
   si.hStdInput = hToRead;
   si.hStdOutput = hFromWrite;
-  si.hStdError = hFromWrite;
+  si.hStdError = reinterpret_cast<HANDLE>(static_cast<intptr_t>(s_errFd));
   PROCESS_INFORMATION pi;
   memset(&pi, 0, sizeof pi);
   const std::string cmd = "\"" + wine + "\" \"" + exe + "\"";
@@ -359,11 +371,19 @@ void PlutoFrame() {
   // The bridge's frame 0 is the fork's MatchStart: it runs the bot's onStart
   // then. The first frame must therefore be 0 (sending 1 first left the fork's
   // game unstarted -- it loaded and idled while the game played on).
-  if (!PlutoSendFrame())  // sends s_dwFrame
+  if (s_dwFrame < 3 || s_dwFrame % 600 == 0)
+    Log("Pluto: sending frame %u", s_dwFrame);
+  if (!PlutoSendFrame()) {  // sends s_dwFrame
+    Log("Pluto: frame %u did not send", s_dwFrame);
     return;
+  }
   ++s_dwFrame;
-  if (!PlutoReadAndApply())
+  if (!PlutoReadAndApply()) {
+    Log("Pluto: the reply at frame %u did not arrive", s_dwFrame - 1);
     return;
+  }
+  if (s_dwFrame < 4)
+    Log("Pluto: frame %u and back", s_dwFrame - 1);
 }
 
 void PlutoGameEnd() {
