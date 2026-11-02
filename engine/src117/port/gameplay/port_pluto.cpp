@@ -24,6 +24,7 @@
 #include "../../h/CUnit.h"
 #include "../../h/net_cmds.h"      // the net command structs, the receivers, sub_477E00
 #include "../../h/playerlimits.h"  // PLAYER_SLOTS_MAX, PlayerLobbySlots
+#include "../../h/playervision.h"  // SpriteSeenBy, VisionHxTileSeen, VisionHxTileExplored
 #include "../../gen/globals117.h"  // gPlayerData, gPlayerMinerals, gPlayerGas, gwMapWidth, gStartLocations
 #include "../platform/port_log.h"  // PortLogger
 #include "../platform/port_paths.h"  // PortDataFolder
@@ -189,7 +190,9 @@ bool PlutoSendFrame() {
     x.shields = u->lShields / 256;
     x.energy = u->wEnergy / 256;
     x.order = static_cast<unsigned>(u->bOrderId);
-    x.visible = 1;     // v1: the bot sees every unit (no fog for it yet)
+    // The bot plays with fog-of-war, as its training had: a unit is visible
+    // when its sprite's visibility flag for the Pluto slot is set.
+    x.visible = (u->pSprite != NULL && SpriteSeenBy(u->pSprite, s_nPlutoSlot)) ? 1 : 0;
     x.completed = 1;
     units.push_back(x);
   }
@@ -219,11 +222,24 @@ bool PlutoSendFrame() {
   const unsigned nPlayers = static_cast<unsigned>(players.size());
   unsigned hdr[3] = {0x50465848, s_dwFrame, nUnits};  // 'HXPF'
   unsigned mapWH[2] = {gwMapWidth, gwMapHeight};
+  // The fog planes: one bit a tile, in the map's row order, for the Pluto slot
+  // (seen = not hidden from it; explored = its explored fog).
+  const unsigned nTiles = static_cast<unsigned>(gwMapWidth) * gwMapHeight;
+  const unsigned nPlaneBytes = (nTiles + 7) / 8;
+  std::vector<unsigned char> seen(nPlaneBytes, 0), explored(nPlaneBytes, 0);
+  for (unsigned t = 0; t < nTiles; ++t) {
+    if (VisionHxTileSeen(static_cast<int>(t), s_nPlutoSlot))
+      seen[t >> 3] |= static_cast<unsigned char>(1u << (t & 7));
+    if (VisionHxTileExplored(static_cast<int>(t), s_nPlutoSlot))
+      explored[t >> 3] |= static_cast<unsigned char>(1u << (t & 7));
+  }
   if (!WriteAll(s_hToBridge, hdr, sizeof hdr) ||
       !WriteAll(s_hToBridge, mapWH, sizeof mapWH) ||
       !WriteAll(s_hToBridge, &nPlayers, sizeof nPlayers) ||
       !WriteAll(s_hToBridge, units.data(), nUnits * sizeof(Unit)) ||
-      !WriteAll(s_hToBridge, players.data(), nPlayers * sizeof(Player)))
+      !WriteAll(s_hToBridge, players.data(), nPlayers * sizeof(Player)) ||
+      !WriteAll(s_hToBridge, seen.data(), nPlaneBytes) ||
+      !WriteAll(s_hToBridge, explored.data(), nPlaneBytes))
     return false;
   return true;
 }
