@@ -962,7 +962,8 @@ void MutatorsMapLoaded(void) {
     // the no-cap mutator (the user, 2026-11-02): the supply buildings are built for their
     // tech, not their supply, so they cost 40 minerals and hold half their life, a pylon's
     // half its shields. The tables hold what every reader and the save then have, as the
-    // build times above.
+    // build times above: a save carries the changed values in its own table copies, which
+    // the load puts back, so only a new game changes them here.
     for (const int t : kNoCapTypes) {
       guwUnitMineralsCost[t] = kNoCapMinerals;
       gxUnitLife[t] = static_cast<LONG>(gxUnitLife[t] / 2);
@@ -1015,7 +1016,8 @@ void MutatorsSave(unsigned char *pbOut) {
 }
 
 bool MutatorRecordBytesRead(int nBytes) {
-  return nBytes == MUTATOR_RECORD_BYTES || nBytes == MUTATOR_RECORD_BYTES_RADIUS || nBytes == MUTATOR_RECORD_BYTES_RICH ||
+  return nBytes == MUTATOR_RECORD_BYTES || nBytes == MUTATOR_RECORD_BYTES_UNITS ||
+         nBytes == MUTATOR_RECORD_BYTES_RADIUS || nBytes == MUTATOR_RECORD_BYTES_RICH ||
          nBytes == MUTATOR_RECORD_BYTES_REVISION ||
          nBytes == MUTATOR_RECORD_BYTES_TEN || nBytes == MUTATOR_RECORD_BYTES_FIRST;
 }

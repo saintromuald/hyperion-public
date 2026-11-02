@@ -314,7 +314,7 @@ void __fastcall group_modify(BYTE nGroup, BOOL bAdd)
 
     nGroupIdx = nGroup;
     pFirst = CUnit::FromIdAlive(GroupRow(g_ActiveHumanID, nGroupIdx)[0]);
-    if (pFirst != NULL && !pFirst->IsMultiSelectable())
+    if (pFirst != NULL && !GroupAble(pFirst))  // Hyperion: a building may sit in a group
       return;
 
     nFilled = 0;
@@ -350,7 +350,7 @@ void __fastcall group_modify(BYTE nGroup, BOOL bAdd)
           goto next;
       }
       if (nFilled != 0 &&
-          !SelectedRow(g_ActiveHumanID)[i]->IsMultiSelectable())
+          !GroupAble(SelectedRow(g_ActiveHumanID)[i]))  // Hyperion: a building may sit in a group
         continue;
     }
 

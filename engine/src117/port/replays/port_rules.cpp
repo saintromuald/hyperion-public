@@ -87,6 +87,10 @@ void RulesForGame() {
     g_hxRulesGame = ChosenHyperion() || g_hxModGame || TeamsThisGame() || AiChosenThisGame() ||
                     PortBenchStressChosen() || HandicapChosenThisGame() || MutatorsChosenThisGame();
     g_hxRuleOptions = ChosenOptions();
+    // a game by Hyperion's rules splits its start workers (port_mineinfo.cpp), and its
+    // replay records the option so its playback splits the same way
+    if (g_hxRulesGame)
+      g_hxRuleOptions |= HX_OPT_START_SPLIT;
   }
 }
 

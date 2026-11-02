@@ -40,6 +40,7 @@ void GoTo(const int an[2])
 }  // namespace
 
 // A game begins: every location the start view, which 1.17's three were (gamemap.cpp).
+// port_camera.cpp calls it for a new game, a replay's and a loaded one's alike.
 void PortCamKeysInit(void)
 {
   for (int n = 0; n < 8; ++n)

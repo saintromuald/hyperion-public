@@ -20,6 +20,7 @@
 #include "port_hud.h"                    // PortHudStatsPlaced
 #include "../../h/CUnitMisc.h"           // get_unit_name_from_type
 #include "../../h/count.h"               // count_get_supplies_used, count_get_supplies_available
+#include "../../h/mutators.h"            // Hyperion: MutatorFoodUsed, the no-cap mutator's
 #include "../../h/grp.h"                 // FRAME
 #include "../../h/net_cmds.h"            // PlayerData
 #include "../../h/playerlimits.h"        // PlayerLobbySlots, PlayerIsLobby
@@ -246,7 +247,7 @@ void PortHudStatsFigures(PortHudState *s) {
   for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
     if (p->bPlayer >= PORT_HUD_PLAYERS || !IsArmyUnit(p))
       continue;
-    s_anHalves[p->bPlayer] += gubUnitFoodUsed[p->wType];
+    s_anHalves[p->bPlayer] += MutatorFoodUsed(gubUnitFoodUsed[p->wType]);  // Hyperion: none with no cap
     s_anValue[p->bPlayer] += Cost(p->wType);
     unsigned short &n = s_aanCount[p->bPlayer][p->wType];
     n = n < 0xFFFF ? static_cast<unsigned short>(n + 1) : n;

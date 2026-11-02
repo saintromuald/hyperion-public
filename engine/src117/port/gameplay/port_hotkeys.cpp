@@ -275,7 +275,7 @@ char PortKeyGroupShown(int nGroup)
     return '0';
   if (g_anGroupKey[nGroup] != 0)
     return static_cast<char>(g_anGroupKey[nGroup]);
-  return nGroup < 10 ? static_cast<char>('0' + (nGroup + 1) % 10) : kGroupLetters[nGroup - 10];
+  return nGroup < 10 ? static_cast<char>('0' + nGroup) : kGroupLetters[nGroup - 10];
 }
 
 // The key a group selects on, lower case, 0 for its own. Saved to the profile's
