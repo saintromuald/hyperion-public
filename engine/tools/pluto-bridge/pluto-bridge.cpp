@@ -965,12 +965,13 @@ int main(int argc, char **argv) {
   ArmTaps();
   int nFramesDone = 0;
   for (;;) {
+    DWORD t0 = GetTickCount();
     unsigned hdr[3];
     if (!ReadN(hdr, sizeof hdr)) {
       fprintf(stderr, "[bridge] stdin closed after %d frames\n", nFramesDone);
       break;
     }
-    if (hdr[0] != 0x46505048) {  // 'HXPF'
+    if (hdr[0] != 0x50465848) {  // 'HXPF'
       fprintf(stderr, "[bridge] bad magic %08x after %d frames\n", hdr[0], nFramesDone);
       break;
     }
@@ -986,7 +987,9 @@ int main(int argc, char **argv) {
     static HxPlayer players[12];
     ReadN(units, nUnits * sizeof(HxUnit));
     ReadN(players, nPlayers * sizeof(HxPlayer));
-    ApplyFrameState(units, nUnits, players, nPlayers, frame);
+    DWORD t1 = GetTickCount();
+    if (getenv("HX_NOAPPLY") == NULL)
+      ApplyFrameState(units, nUnits, players, nPlayers, frame);
     if (frame == 0) {
       fprintf(stderr, "[bridge] sizes: HxUnit=%u HxPlayer=%u\n",
               static_cast<unsigned>(sizeof(HxUnit)),
@@ -1001,6 +1004,14 @@ int main(int argc, char **argv) {
               static_cast<unsigned>(offsetof(PlayerData, gas)),
               static_cast<unsigned>(offsetof(PlayerData, supplyTotal)),
               static_cast<unsigned>(sizeof(PlayerData)));
+      {
+        unsigned vis = *ScT<unsigned>(0x628430);
+        unsigned iu = *ScT<unsigned>(0x59CCA8) & 0xFFFF;  // unit 0's type
+        unsigned ip = *ScT<unsigned char>(0x59CCA8 + 0x4C) & 0xFF;  // unit 0's player
+        unsigned it = *ScT<unsigned short>(0x59CCA8 + 0x64) & 0xFFFF;  // unit 0's type
+        fprintf(stderr, "[bridge] sc: vislist=%08x u0type=%u u0player=%u u0type64=%u\n",
+                vis, iu, ip, it);
+      }
       FILE *pf = fopen("dump/pdata0.bin", "wb");
       if (pf) {
         fwrite(&g->players[0], 1, 0x169C, pf);
@@ -1093,16 +1104,45 @@ int main(int argc, char **argv) {
       gates[0x21] = 1;                                  // engine "ready"
     }
     ++nFramesDone;
-    if (frame % 60 == 0)
-      fprintf(stderr, "[bridge] replying f%d\n", static_cast<int>(frame));
+    DWORD t2 = GetTickCount();
+    if (frame % 6 == 0 || frame < 3)
+      fprintf(stderr, "[bridge] f%d: read=%lums fill=%lums frame=%lums\n",
+              static_cast<int>(frame), t1 - t0, t2 - t1, GetTickCount() - t2);
     {
-      unsigned used = *ScT<unsigned>(0x654AA0);
-      if (used > 0x10000)
-        used = 0;
-      unsigned out[4] = {0x50524858, frame, used, 0};  // 'HXRP'
+      // The bot appends its commands to the TurnBuffer but its byte count does
+      // not land reliably in the harness; the commands are self-describing (the
+      // classic opcode sizes), so scan the stream and send only the new bytes.
+      static unsigned s_nSent = 0;
+      unsigned char *tb = Sc(0x654880);
+      unsigned end = s_nSent;
+      while (end < 0x10000) {
+        const unsigned char op = tb[end];
+        unsigned sz = 0;
+        if (op == 0x09 || op == 0x0A || op == 0x0B) {
+          sz = 2 + static_cast<unsigned>(tb[end + 1]) * 2;
+        } else if (op == 0x14) {
+          sz = 10;
+        } else if (op == 0x15) {
+          sz = 12;
+        } else if (op == 0x16) {
+          sz = 1;
+        } else {
+          break;  // a partial command at the tail: wait for the next frame
+        }
+        end += sz;
+      }
+      const unsigned used = end - s_nSent;
+      if (used)
+        fprintf(stderr, "[bridge] f%d: %u new turn bytes: %02x %02x %02x %02x %02x %02x\n",
+                static_cast<int>(frame), used,
+                tb[s_nSent], tb[s_nSent + 1], tb[s_nSent + 2],
+                tb[s_nSent + 3], tb[s_nSent + 4], tb[s_nSent + 5]);
+      unsigned out[3] = {0x50525848, frame, used};  // 'HXRP'
       WriteN(out, sizeof out);
-      WriteN(Sc(0x654880), used);
-      *ScT<unsigned>(0x654AA0) = 0;
+      WriteN(tb + s_nSent, used);
+      unsigned win = 0;
+      WriteN(&win, 4);
+      s_nSent = end;
       fflush(stdout);
     }
     DumpShm(f);
@@ -1121,6 +1161,15 @@ int main(int argc, char **argv) {
     }
   }
   onEnd(mod, 1);
+  {
+    unsigned char *tb = Sc(0x654880);
+    unsigned char *cn = Sc(0x654A90);
+    fprintf(stderr, "[bridge] end: turn buffer: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+            tb[0], tb[1], tb[2], tb[3], tb[4], tb[5], tb[6], tb[7]);
+    fprintf(stderr, "[bridge] end: count region: %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x\n",
+            cn[0], cn[1], cn[2], cn[3], cn[4], cn[5], cn[6], cn[7],
+            cn[8], cn[9], cn[10], cn[11], cn[12], cn[13], cn[14], cn[15]);
+  }
   {
     HANDLE h = OpenFileMappingA(FILE_MAP_READ, FALSE, "BWRL_SHM");
     fprintf(stderr, "[bridge] BWRL_SHM open: %p err=%lu\n", reinterpret_cast<void *>(h), GetLastError());
