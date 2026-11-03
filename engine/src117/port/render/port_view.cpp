@@ -997,13 +997,14 @@ void PortViewCameraCentre(double fX, double fY)
   double gx, gy;
   CameraGameMiddle(&gx, &gy);
   // Hyperion: the camera lands on the point at once at any zoom, as 1.17's locations do (the
-  // user, 2026-11-02): its anchor is set for the target, and the ease's aim is that anchor,
-  // so no glide follows
+  // user, 2026-11-02): the camera's own values are the aim, the map point the view's middle
+  // shows (CameraUpdate hands each to PortViewCameraPlace as the scroll), so the aim takes
+  // the point - half the raise down, which the sight shows below its middle - and the ease's
+  // aim follows it, so no glide comes after
   if (CameraOff()) {
-    const PortView &view = g_bRendering ? g_saved.view : g_portView;
     const double z = PortCameraShown();
-    g_fCamX = fX - (g_fSideL + ViewShown(view) * 0.5) * z;
-    g_fCamY = fY - (ViewShownRows(view) - g_fCamRaise) * 0.5 * z;
+    g_fCamX = fX;
+    g_fCamY = fY - g_fCamRaise * 0.5 * z;
     g_fCamOffX = g_fCamX - gx;
     g_fCamOffY = g_fCamY - gy;
   } else {

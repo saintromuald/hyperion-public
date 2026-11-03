@@ -4,13 +4,10 @@
 // tables and units give every figure, and the mathematics is Hyperion's.
 //
 // Over each of the local player's town halls two simple numbers show, the minerals' and
-// the gas': the workers on the base's patches over the number that would saturate them,
-// 20 / 20 for a base fully mining and 3 / 3 for its geysers, in SC2's green, amber and
-// red. A mineral patch's saturation count comes from its distance: a worker's trip is the
-// walk there and back - at the worker's speed, from the game's own direction table - plus
-// its harvest, and the patch is saturated when enough harvests fill the trip, at most
-// three a patch; a geyser takes three. The number is the indicator: green at the optimum,
-// amber from half of it, red below.
+// the gas', as StarCraft II's clean worker count: the workers on the base's patches over
+// the optimum, three a mineral patch and three a geyser - 1 / 24 for one worker on an
+// eight-patch base - and at the optimum the number takes the player's own colour, the one
+// their race starts in; under it the number is plain white.
 //
 // Above the minimap's terrain toggle, as SC2's, a small fixed icon shows the idle workers
 // when there are any, with the count; a click takes the view to the next idle worker, as
@@ -31,8 +28,11 @@
 #include "../render/port_overlay.h"
 #include "../render/port_view.h"
 #include "../front/port_ui.h"
-#include "../hud/port_hudstate.h"  // PortHudPressButton, the idle icon's click
+#include "../hud/port_hudstate.h"  // PortHudPressButton, the idle icon's click; PortSelectLarva
+#include "../front/port_text.h"   // PortText, the pick's words
+#include "../../h/net_cmds.h"     // PlayerData, the saturated number's colour
 #include "../../h/hxrules.h"  // HX_OPT_START_SPLIT, the start workers split's option
+#include "../render/port_teamcolor.h"  // PortTeamColorGet, the saturated number's colour
 #include "../../h/rect32.h"   // rect32_t, the minimap's cage
 #include "../../gen/globals117.h"
 
@@ -54,10 +54,10 @@ bool IsMineralField(int nType) { return nType >= 0xB0 && nType <= 0xB2; }
 bool IsGeyser(int nType) { return nType == 0xBC; }
 bool IsRefinery(int nType) { return nType == 0x6E || nType == 0x95 || nType == 0x9D; }
 
-// The harvest the saturation count shares: how many frames a worker is on the patch taking
-// its load. The game's own harvest is longer; this is the steady share of a trip the patch
-// is busy for, which is what another worker would queue behind.
-const int kDockFrames = 64;
+// The workers a patch takes to saturate: three a mineral patch and three a geyser, the
+// figure the user's Cosmonarchy works with and StarCraft II's own optimum (the user,
+// 2026-11-02). The number over the town hall is the workers on the base's patches over the
+// optimum: 1 / 24 for one worker on an eight-patch base, and the same for the geysers'.
 
 // A patch the base mines: its position, the town hall it belongs to, how many workers it
 // takes to saturate, and how many are on it now.
@@ -66,30 +66,9 @@ struct Patch {
   bool bGas;
   int nBase;
   int nX, nY;   // its centre, in map pixels
-  int nSat;     // the workers that saturate it
+  int nSat;     // the workers that saturate it: three
   int nOn;      // the workers on it now
 };
-
-// The distance a worker walks in a frame: the game's own velocity, the direction table's
-// cardinal entry times the worker's top speed shifted to whole pixels (the flingy keeps its
-// position in 24.8 and moves a 256th of this a frame, so two shifts of 8); 0 for none.
-int WorkerPxPerFrame(const CUnit *pWorker)
-{
-  if (pWorker->lTopSpeed <= 0)
-    return 0;
-  return static_cast<int>((DIRECTIONS[0] * static_cast<LONGLONG>(pWorker->lTopSpeed)) >> 16);
-}
-
-// The workers a mineral patch takes to saturate: the trip, the walk there and back plus one
-// dock, over the dock; at least one, at most three. A geyser takes three.
-int Saturate(int nDistPx, int nPxPerFrame)
-{
-  if (nDistPx <= 0 || nPxPerFrame <= 0)
-    return 2;
-  const int nFrames = (2 * nDistPx + nPxPerFrame / 2) / nPxPerFrame + kDockFrames;
-  const int nSat = (nFrames + kDockFrames - 1) / kDockFrames;
-  return nSat < 1 ? 1 : nSat > 3 ? 3 : nSat;
-}
 
 // The worker's target as one of the patches, or -1; a refinery target finds the geyser it
 // sits on.
@@ -116,10 +95,67 @@ bool Shown(void)
   return gwGameMode == 3 && gPlayback == 0;
 }
 
+// The local player's own colour, the one their race starts in: the slot's full-RGB colour,
+// its chosen one or the classic ramp's. The saturated numbers take it (the user, 2026-11-02).
+UiColor RaceColour(void)
+{
+  const int nSlot = static_cast<int>(g_LocalNationID);
+  unsigned char abRgb[3] = {255, 255, 255};
+  if (nSlot >= 0 && nSlot < 12)
+    PortTeamColorGet(nSlot, abRgb);
+  return UiColor{abRgb[0] / 255.0f, abRgb[1] / 255.0f, abRgb[2] / 255.0f, 1.0f};
+}
+
 // The idle workers' icon's place, fixed above the minimap's corner, as SC2's; the count
 // beside the little worker drawn in the box. The Mouse hook answers clicks there.
 bool g_bIdleBadge;
 float g_fIdleX, g_fIdleY, g_fIdleW, g_fIdleH;
+
+// The larvae the player asked for, by Ctrl+Space: a small box above the console with the
+// count they type; Enter selects that many larvae (all, with none typed), Escape closes.
+bool g_bLarvaPick;
+std::string g_larvaText;
+
+// The pick's keys: everything waits while it is up. Enter, Backspace and Escape come on the
+// key going down (a taken keydown makes no character), the digits as the characters the
+// keyboard's input makes.
+bool Key(unsigned vk, bool bDown, bool bRepeat)
+{
+  if (!g_bLarvaPick)
+    return false;
+  if (bDown) {
+    if (!bRepeat && vk == VK_RETURN) {  // Enter: the count typed, or all with none
+      g_bLarvaPick = false;
+      const char *pszWhy = NULL;
+      PortSelectLarva(g_larvaText.empty() ? -1 : atoi(g_larvaText.c_str()), &pszWhy);
+    } else if (!bRepeat && vk == VK_BACK && !g_larvaText.empty()) {  // Backspace
+      g_larvaText.pop_back();
+    } else if (!bRepeat && vk == VK_ESCAPE) {
+      g_bLarvaPick = false;
+    }
+    return true;
+  }
+  if (vk >= '0' && vk <= '9' && g_larvaText.size() < 3)
+    g_larvaText += static_cast<char>(vk);
+  return true;
+}
+
+// The pick's box: the count so far, and its two keys.
+void LarvaPick(float fX, float fY, float fW, float fH)
+{
+  const float fScale = fH / 480.0f;
+  const float bw = 200.0f * fScale, bh = 52.0f * fScale;
+  const float bx = fX + (fW - bw) * 0.5f, by = fY + fH - 170.0f * fScale;
+  UiFill(bx, by, bw, bh, UiColor{0.0f, 0.0f, 0.0f, 0.8f});
+  UiRing(bx, by, bw, bh, RaceColour(), 5.0f, 1.5f);
+  const std::string s = PortText("Larvae: ") + (g_larvaText.empty() ? std::string("_") : g_larvaText);
+  UiText(bx + 14.0f * fScale, by + 20.0f * fScale, UI_FACE_BOLD, 15.0f * fScale, 0.0f,
+         UiColor{1.0f, 1.0f, 1.0f, 1.0f}, s.c_str());
+  const std::string hint = PortText("Enter selects Â· Esc cancels");
+  UiText(bx + 14.0f * fScale, by + 40.0f * fScale, UI_FACE_TEXT, 11.0f * fScale, 0.0f,
+         UiColor{0.75f, 0.75f, 0.75f, 1.0f}, hint.c_str());
+}
+
 
 // The small badge: a box, a worker (a head and a body), and the count; drawn always, the
 // worker and the count in SC2's idle colour when there are idle workers, grey at none, so
@@ -149,29 +185,24 @@ void IdleBadge(float fX, float fY, float fW, float fH, int nCount, float fScale)
 bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
 {
   g_bIdleBadge = false;
-  if (!Shown() || fW <= 0 || fH <= 0)
+  if (!Shown() || fW <= 0 || fH <= 0) {
+    g_bLarvaPick = false;
     return false;
+  }
   const int nPlayer = static_cast<int>(g_LocalNationID);
 
   // the local player's completed town halls, one worker for the walk's speed, and the
   // idle workers (the ones standing guard, as the HUD's count takes them)
   std::vector<CUnit *> abase;
-  const CUnit *pWorker = NULL;
   int nIdle = 0;
   for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
     if (p->bPlayer != nPlayer || p->pSprite == NULL)
       continue;
     if ((p->dwFlags & 1) != 0 && IsTownHall(p->wType))
       abase.push_back(p);
-    if (IsWorkerType(p->wType)) {
-      if (pWorker == NULL)
-        pWorker = p;
-      if ((p->dwFlags & 1) != 0 && (p->bOrderId == 0x02 || p->bOrderId == 0x03))
-        ++nIdle;
-    }
+    if (IsWorkerType(p->wType) && (p->dwFlags & 1) != 0 && (p->bOrderId == 0x02 || p->bOrderId == 0x03))
+      ++nIdle;
   }
-  const int nPxFrame = pWorker != NULL ? WorkerPxPerFrame(pWorker) : 0;
-
   // the patches, each the nearest town hall's; a geyser's three workers are its own count
   std::vector<Patch> ap;
   for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
@@ -194,16 +225,13 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
         nBest = static_cast<int>(b);
       }
     }
-    long long nDist = 0;
-    if (llBest > 0)
-      nDist = static_cast<long long>(sqrt(static_cast<double>(llBest)));
     Patch patch;
     patch.pUnit = p;
     patch.bGas = IsGeyser(p->wType);
     patch.nBase = nBest;
     patch.nX = x;
     patch.nY = y;
-    patch.nSat = patch.bGas ? 3 : Saturate(static_cast<int>(nDist), nPxFrame);
+    patch.nSat = 3;  // a patch takes three workers at its optimum
     patch.nOn = 0;
     ap.push_back(patch);
   }
@@ -259,11 +287,11 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     if (nMinOpt <= 0 && nGasOpt <= 0)
       continue;
     const auto colour = [](int nOn, int nOpt) -> UiColor {
-      if (nOpt <= 0)
-        return UiColor{0.24f, 0.83f, 0.24f, 1.0f};
+      // fully saturated: the player's own colour, the one their race starts in; under it,
+      // plain white, as StarCraft II's counter sits (the user, 2026-11-02)
       if (nOn >= nOpt)
-        return UiColor{0.24f, 0.83f, 0.24f, 1.0f};
-      return nOn * 2 >= nOpt ? UiColor{0.95f, 0.75f, 0.1f, 1.0f} : UiColor{0.9f, 0.3f, 0.2f, 1.0f};
+        return RaceColour();
+      return UiColor{1.0f, 1.0f, 1.0f, 0.95f};
     };
     const double fXw = static_cast<int>(abase[b]->pSprite->wPosX);
     const double fYw = static_cast<int>(abase[b]->pSprite->wPosY);
@@ -295,18 +323,27 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   }
 
   // the idle workers' icon, fixed just above the minimap's terrain toggle (the minimap's
-  // top-left corner), always, the count on it, in the window's own pixels, so it stays put
-  // and seen at any zoom; half the size it was (the user, 2026-11-02)
+  // top-left corner, a little higher off it), always, the count on it, in the window's own
+  // pixels, so it stays put and seen at any zoom; half the size it was (the user,
+  // 2026-11-02)
   const float fScale = static_cast<float>(fH) / 480.0f;
-  const float fBadgeTop = fY + sgMinimapArea_g.top * fScale;
-  IdleBadge(fX + sgMinimapArea_g.left * fScale + 2.0f, fBadgeTop, fW, fH, nIdle, fScale);
+  const int nCageTop = sgMinimapArea_g.top;
+  if (nCageTop >= 0 && nCageTop <= 480) {
+    const float fBadgeTop = fY + (nCageTop - 6.0f) * fScale;
+    IdleBadge(fX + sgMinimapArea_g.left * fScale + 2.0f, fBadgeTop, fW, fH, nIdle, fScale);
+  }
+  if (g_bLarvaPick)
+    LarvaPick(fX, fY, fW, fH);
   bDrew = true;
   return bDrew;
 }
 
-// A click on the idle workers' icon selects the next idle worker, as the ` key does.
+// A click on the idle workers' icon selects the next idle worker, as the ` key does; a
+// click anywhere waits while the larvae' pick is up.
 bool Mouse(unsigned uMsg, unsigned long long wParam, long long lParam)
 {
+  if (g_bLarvaPick)
+    return true;
   if (!g_bIdleBadge || uMsg != 0x201)  // WM_LBUTTONDOWN
     return false;
   const float mx = static_cast<float>(lParam & 0xFFFF);
@@ -320,11 +357,25 @@ bool Mouse(unsigned uMsg, unsigned long long wParam, long long lParam)
 
 // The layer over the game (port_overlay.h): nothing holds the player's input, and the
 // picture is just the numbers over the buildings and the idle workers' icon.
-const PortOverlayLayer kLayer = {"mineinfo", PORT_OVERLAY_DEBUG + 20, 0, Shown, NULL, Draw,
-                                 NULL, Mouse, NULL, NULL, NULL};
+const PortOverlayLayer kLayer = {"mineinfo", PORT_OVERLAY_DEBUG + 20, PORT_OVERLAY_BEFORE_ACCEL, Shown, NULL, Draw,
+                                 NULL, Mouse, Key, NULL, NULL};
 PORT_OVERLAY_LAYER(kLayer);
 
 }  // namespace
+
+// The larvae' pick, Ctrl+Space's box: the count the player types, Enter to take it.
+void PortLarvaPickOpen(void)
+{
+  g_bLarvaPick = true;
+  g_larvaText.clear();
+}
+
+// A game begins (port_camkeys.cpp's seed calls it): the pick does not follow into the new game.
+void PortLarvaPickClose(void)
+{
+  g_bLarvaPick = false;
+  g_larvaText.clear();
+}
 
 // A start worker's first order, SC2's split (the user, 2026-11-02): each worker of the
 // start goes to its own mineral field, the base's nearest ones in the round, where 1.17's

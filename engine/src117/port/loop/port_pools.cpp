@@ -47,8 +47,9 @@ int UnitsForGame(int nSlots, int nPlayers, bool bWide) {
   const MutatorSet &m = MutatorsOfGame();
   if (m.nUnits > 0)
     return m.nUnits > nSlots ? m.nUnits : nSlots;
-  // no cap counts as 1,000 supply
-  const int nCap = m.nSupplyCap == 0 ? 1000 : m.nSupplyCap;
+  // no cap counts as 1,000 supply, the no-cap mutator's too: the players build without
+  // supply, and the table holds the room their armies take
+  const int nCap = (m.nSupplyCap == 0 || m.nNoCap != 0) ? 1000 : m.nSupplyCap;
   if (!bWide && nCap <= 200)
     return nSlots;
   long long ll = g_nMapUnits + static_cast<long long>(nPlayers) * (nCap + 100);

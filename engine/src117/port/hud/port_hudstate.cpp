@@ -750,9 +750,10 @@ bool SelectArmy(const char **ppszWhy) {
 
 }  // namespace
 
-// The larva key (Hyperion's, Ctrl+Space): the player's larvae, selected as a drag box over
-// them selects them, up to as many as a selection holds.
-bool PortSelectLarva(const char **ppszWhy) {
+// The larva key (Hyperion's, Q, or Ctrl+Space's pick): the player's larvae, selected as a
+// drag box over them selects them, up to nCount when one was asked (all for none), and up
+// to as many as a selection holds.
+bool PortSelectLarva(int nCount, const char **ppszWhy) {
   if (!InGame()) {
     *ppszWhy = "no game";
     return false;
@@ -766,14 +767,18 @@ bool PortSelectLarva(const char **ppszWhy) {
     *ppszWhy = "no larvae";
     return false;
   }
+  if (nCount == 0)
+    return true;  // none asked for: the selection left as it was
+  if (nCount > 0 && nCount < static_cast<int>(larvae.size()))
+    larvae.resize(static_cast<size_t>(nCount));
   larvae.push_back(NULL);
   CUnit *apUnits[USEL_SELECT_CAPACITY] = {};
-  const int nCount = sub_4BC5B0(larvae.data(), apUnits, NULL);
-  if (nCount == 0) {
+  const int nSel = sub_4BC5B0(larvae.data(), apUnits, NULL);
+  if (nSel == 0) {
     *ppszWhy = "no larvae to select";
     return false;
   }
-  select_units(nCount, apUnits, 1, 1);
+  select_units(nSel, apUnits, 1, 1);
   return true;
 }
 

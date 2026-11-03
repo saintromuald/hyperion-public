@@ -15,6 +15,7 @@
 #include <string.h>
 #include "port_camkeys.h"
 #include "port_keys.h"
+#include "port_mineinfo.h"  // PortLarvaPickClose, a game's start closes the pick
 #include "../front/port_text.h"
 #include "../render/port_view.h"
 #include "../../h/TrigAct.h"     // map_msg_default
@@ -58,6 +59,7 @@ void GoTo(const int an[2])
 // port_camera.cpp calls it for a new game, a replay's and a loaded one's alike.
 void PortCamKeysInit(void)
 {
+  PortLarvaPickClose();  // the larvae' pick does not follow into the new game
   for (int n = 0; n < 8; ++n)
     Seed(s_anLoc[n]);
 }
