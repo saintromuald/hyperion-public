@@ -13,23 +13,22 @@
 enum {
   PORT_HOTKEY_ART,
   PORT_HOTKEY_VIEW,
-  PORT_HOTKEY_ZOOM_OUT,  // the camera: F9, Shift+F9, Ctrl+F9, Ctrl+Shift+F9, F11, F12
+  PORT_HOTKEY_ZOOM_OUT,  // the camera: F11, F12, Ctrl+F11, Ctrl+F12, Shift+F11, Shift+F12
   PORT_HOTKEY_ZOOM_IN,
   PORT_HOTKEY_ZOOM_RESET,
   PORT_HOTKEY_ZOOM_FIT,
   PORT_HOTKEY_FOLLOW,
   PORT_HOTKEY_TV,
-  PORT_HOTKEY_DEBUG_VIEW,  // F3: Debug Tools' overlay (port_debugview.cpp)
+  PORT_HOTKEY_DEBUG_VIEW,  // Shift+F9: Debug Tools' overlay (port_debugview.cpp)
   PORT_HOTKEY_SUBGROUP,    // Tab: the next subgroup, with Shift the one before
   PORT_HOTKEY_TERRAIN,     // Ctrl+Tab: the minimap's terrain, 1.17's Tab
   PORT_HOTKEY_IDLE,        // `: the next idle worker (SC2's, the user, 2026-11-02)
-  PORT_HOTKEY_ARMY,        // Shift+F12: the army
-  // the eight camera locations, SC2's (port_camkeys.cpp): F5 to F8 jump to the first four,
-  // Ctrl+F5 to Ctrl+F8 save them; 5 to 8 have no key until the player gives them one
-  PORT_HOTKEY_CAMGO1, PORT_HOTKEY_CAMGO2, PORT_HOTKEY_CAMGO3, PORT_HOTKEY_CAMGO4,
-  PORT_HOTKEY_CAMGO5, PORT_HOTKEY_CAMGO6, PORT_HOTKEY_CAMGO7, PORT_HOTKEY_CAMGO8,
-  PORT_HOTKEY_CAMSET1, PORT_HOTKEY_CAMSET2, PORT_HOTKEY_CAMSET3, PORT_HOTKEY_CAMSET4,
-  PORT_HOTKEY_CAMSET5, PORT_HOTKEY_CAMSET6, PORT_HOTKEY_CAMSET7, PORT_HOTKEY_CAMSET8,
+  PORT_HOTKEY_ARMY,        // Ctrl+Shift+F12: the army
+  // the eight camera locations, SC2's (port_camkeys.cpp): F1 to F8 jump to them, and
+  // Ctrl with the same key saves the location, so there are eight keys in all (the user,
+  // 2026-11-02)
+  PORT_HOTKEY_CAM1, PORT_HOTKEY_CAM2, PORT_HOTKEY_CAM3, PORT_HOTKEY_CAM4,
+  PORT_HOTKEY_CAM5, PORT_HOTKEY_CAM6, PORT_HOTKEY_CAM7, PORT_HOTKEY_CAM8,
   PORT_HOTKEYS
 };
 enum { PORT_KEY_CTRL = 0x100, PORT_KEY_SHIFT = 0x200, PORT_KEY_ALT = 0x400 };

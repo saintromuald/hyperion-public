@@ -90,24 +90,22 @@ enum Bind {
   BIND_KEY_TERRAIN,     // the minimap terrain's
   BIND_KEY_IDLE,        // the idle worker's
   BIND_KEY_ARMY,        // the army's
-  BIND_KEY_CAMGO1,      // the eight camera locations' (port_camkeys.cpp): jump to each
-  BIND_KEY_CAMGO2,
-  BIND_KEY_CAMGO3,
-  BIND_KEY_CAMGO4,
-  BIND_KEY_CAMGO5,
-  BIND_KEY_CAMGO6,
-  BIND_KEY_CAMGO7,
-  BIND_KEY_CAMGO8,
-  BIND_KEY_CAMSET1,     // and save each
-  BIND_KEY_CAMSET2,
-  BIND_KEY_CAMSET3,
-  BIND_KEY_CAMSET4,
-  BIND_KEY_CAMSET5,
-  BIND_KEY_CAMSET6,
-  BIND_KEY_CAMSET7,
-  BIND_KEY_CAMSET8,
+  BIND_KEY_ZOOM_OUT,    // the camera's zoom's four
+  BIND_KEY_ZOOM_IN,
+  BIND_KEY_ZOOM_RESET,
+  BIND_KEY_ZOOM_FIT,
+  BIND_KEY_FOLLOW,      // and the follow and replay TV
+  BIND_KEY_TV,
+  BIND_KEY_CAM1,        // the eight camera locations' (port_camkeys.cpp): F1 to F8 jump,
+  BIND_KEY_CAM2,        // Ctrl with the same key saves
+  BIND_KEY_CAM3,
+  BIND_KEY_CAM4,
+  BIND_KEY_CAM5,
+  BIND_KEY_CAM6,
+  BIND_KEY_CAM7,
+  BIND_KEY_CAM8,
   BIND_KEY_GROUP0,      // the control groups' keys (port_hotkeys.cpp): the ten digits,
-  BIND_KEY_GROUP1,      // then the six letters R, F, V, T, G and B
+  BIND_KEY_GROUP1,      // then the six letters R, F, V, T, G and B, the groups 11 to 16
   BIND_KEY_GROUP2,
   BIND_KEY_GROUP3,
   BIND_KEY_GROUP4,
@@ -727,22 +725,20 @@ int HotkeyOf(int bind)
     case BIND_KEY_TERRAIN: return PORT_HOTKEY_TERRAIN;
     case BIND_KEY_IDLE: return PORT_HOTKEY_IDLE;
     case BIND_KEY_ARMY: return PORT_HOTKEY_ARMY;
-    case BIND_KEY_CAMGO1: return PORT_HOTKEY_CAMGO1;
-    case BIND_KEY_CAMGO2: return PORT_HOTKEY_CAMGO2;
-    case BIND_KEY_CAMGO3: return PORT_HOTKEY_CAMGO3;
-    case BIND_KEY_CAMGO4: return PORT_HOTKEY_CAMGO4;
-    case BIND_KEY_CAMGO5: return PORT_HOTKEY_CAMGO5;
-    case BIND_KEY_CAMGO6: return PORT_HOTKEY_CAMGO6;
-    case BIND_KEY_CAMGO7: return PORT_HOTKEY_CAMGO7;
-    case BIND_KEY_CAMGO8: return PORT_HOTKEY_CAMGO8;
-    case BIND_KEY_CAMSET1: return PORT_HOTKEY_CAMSET1;
-    case BIND_KEY_CAMSET2: return PORT_HOTKEY_CAMSET2;
-    case BIND_KEY_CAMSET3: return PORT_HOTKEY_CAMSET3;
-    case BIND_KEY_CAMSET4: return PORT_HOTKEY_CAMSET4;
-    case BIND_KEY_CAMSET5: return PORT_HOTKEY_CAMSET5;
-    case BIND_KEY_CAMSET6: return PORT_HOTKEY_CAMSET6;
-    case BIND_KEY_CAMSET7: return PORT_HOTKEY_CAMSET7;
-    case BIND_KEY_CAMSET8: return PORT_HOTKEY_CAMSET8;
+    case BIND_KEY_ZOOM_OUT: return PORT_HOTKEY_ZOOM_OUT;
+    case BIND_KEY_ZOOM_IN: return PORT_HOTKEY_ZOOM_IN;
+    case BIND_KEY_ZOOM_RESET: return PORT_HOTKEY_ZOOM_RESET;
+    case BIND_KEY_ZOOM_FIT: return PORT_HOTKEY_ZOOM_FIT;
+    case BIND_KEY_FOLLOW: return PORT_HOTKEY_FOLLOW;
+    case BIND_KEY_TV: return PORT_HOTKEY_TV;
+    case BIND_KEY_CAM1: return PORT_HOTKEY_CAM1;
+    case BIND_KEY_CAM2: return PORT_HOTKEY_CAM2;
+    case BIND_KEY_CAM3: return PORT_HOTKEY_CAM3;
+    case BIND_KEY_CAM4: return PORT_HOTKEY_CAM4;
+    case BIND_KEY_CAM5: return PORT_HOTKEY_CAM5;
+    case BIND_KEY_CAM6: return PORT_HOTKEY_CAM6;
+    case BIND_KEY_CAM7: return PORT_HOTKEY_CAM7;
+    case BIND_KEY_CAM8: return PORT_HOTKEY_CAM8;
   }
   return -1;
 }
@@ -979,61 +975,8 @@ const Setting kSettings[] = {
      ReadFlag, WriteChatFilter, "chatFilter", PT_("Players\xE2\x80\x99"" chat, in a game, a replay and the lobbies, shown with the words on Remastered\xE2\x80\x99""s English list starred out, the list read from the StarCraft: Remastered install. A replay keeps what was sent.")},
     {"interface", PT_("Language"), CTL_CHOICE, g_szLanguageWords, 0.0f, false, "SC:R", NULL, "restart", BIND_LANGUAGE,
      ReadLanguage, WriteLanguage, NULL, PT_("Hyperion\xE2\x80\x99s menus and the game\xE2\x80\x99s text, as in Remastered. The install\xE2\x80\x99s is the language StarCraft: Remastered was installed in. The game\xE2\x80\x99s text in another language needs that language\xE2\x80\x99s text in the install, which Battle.net installs for its chosen language alone, else the game stays in English. Hyperion\xE2\x80\x99s own text is a first translation, which players are welcome to correct.")},
-    {"hotkeys", PT_("Hotkey editor"), CTL_BUTTON, PT_("Open"), 0.0f, false, "SC:R", PT_("hotkeys you can change"), "live", BIND_NONE,
-     NULL, NULL, NULL, PT_("Per race and unit, on the unit\xE2\x80\x99""s own command card (one card a mode: siege, burrowed, lifted); the default key shown; conflicts flagged on the race\xE2\x80\x99""s tab.")},
-    {"hotkeys", PT_("Layout"), CTL_CHOICE, PT_("Classic|Grid"), 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
-     ReadCardLayout, WriteCardLayout, NULL, PT_("Grid puts the command card on the left hand\xE2\x80\x99""s 3 \xC3\x97"" 3 keys, as StarCraft II can. Remastered has no presets.")},
-    {"hotkeys", PT_("Toggle art"), CTL_KEYS, "F5", 116.0f, false, "SC:R", NULL, "live", BIND_KEY_ART,
-     ReadKeyArt, WriteKeyArt, NULL, PT_("Classic or HD art in a game, F5 as in Remastered. Click the key and press another: F5 to F9, F11 or F12, with Ctrl, Shift or Alt if you like (the original keeps F1 to F4 and F10). Escape leaves it as it was.")},
-    {"hotkeys", PT_("Toggle view shape"), CTL_KEYS, "Ctrl+F5", 372.0f, false, "Hyperion", NULL, "live", BIND_KEY_VIEW,
-     ReadKeyView, WriteKeyView, NULL, PT_("640 \xC3\x97"" 480 or the wide view in a game. Set as the art\xE2\x80\x99""s key is.")},
-    {"hotkeys", PT_("Debug Tools\xE2\x80\x99 overlay"), CTL_KEYS, "F6", 117.0f, false, "Hyperion", NULL, "live", BIND_KEY_DEBUG_VIEW,
-     ReadKeyDebugView, WriteKeyDebugView, NULL, PT_("Debug Tools\xE2\x80\x99 overlay in a game while its live channel is open: the game in a window with its readings round it, full screen, a counter, then off. Set as the art\xE2\x80\x99""s key is; with no key, the Overlay button at the top of the game opens it.")},
-    {"hotkeys", PT_("Next subgroup"), CTL_KEYS, "Tab", 9.0f, false, "Hyperion", NULL, "live", BIND_KEY_SUBGROUP,
-     ReadKey, WriteKey, NULL, PT_("In a game by Hyperion\xE2\x80\x99""s rules, the next kind of unit in the selection: the console shows its card and the page that holds it, as StarCraft II\xE2\x80\x99""s Tab. With Shift, the kind before. Click the key and press another: Tab, F5 to F9, F11 or F12, with Ctrl, Shift or Alt if you like.")},
-    {"hotkeys", PT_("Minimap terrain"), CTL_KEYS, "Ctrl+Tab", 265.0f, false, "Hyperion", NULL, "live", BIND_KEY_TERRAIN,
-     ReadKey, WriteKey, NULL, PT_("The minimap\xE2\x80\x99""s terrain on or off, as its button does; with Shift, the units\xE2\x80\x99"" colours, as the original\xE2\x80\x99""s Shift+Tab. In a game by classic rules Tab still does it, as in the original; in a game by Hyperion\xE2\x80\x99""s rules Tab is the subgroup\xE2\x80\x99""s.")},
-    {"hotkeys", PT_("Idle worker"), CTL_KEYS, "`", 192.0f, false, "Hyperion", NULL, "live", BIND_KEY_IDLE,
-     ReadKey, WriteKey, NULL, PT_("Selects your next idle worker and takes the view to it, as the HUD\xE2\x80\x99""s idle worker button does. The ` key, as StarCraft II\xE2\x80\x99""s players set it.")},
-    {"hotkeys", PT_("Select army"), CTL_KEYS, "Shift+F12", 635.0f, false, "Hyperion", NULL, "live", BIND_KEY_ARMY,
-     ReadKey, WriteKey, NULL, PT_("In a game by Hyperion\xE2\x80\x99""s rules, selects your army, every unit that fights, up to 255, as the HUD\xE2\x80\x99""s army button does. A game by classic rules keeps the original\xE2\x80\x99""s selections and has no army key.")},
-
-    {"hotkeys", PT_("Camera locations"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
-     NULL, NULL, NULL, PT_("As StarCraft II\xE2\x80\x99""s: eight saved views. F5 to F8 jump to the first four and Ctrl+F5 to Ctrl+F8 save them, and 5 to 8 have no key until you give them one. A save says so on the map\xE2\x80\x99""s message. Each game starts the eight on the start view.")},
-    {"hotkeys", PT_("Jump to location 1"), CTL_KEYS, "F5", 116.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO1,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Jump to location 2"), CTL_KEYS, "F6", 117.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO2,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Jump to location 3"), CTL_KEYS, "F7", 118.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO3,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Jump to location 4"), CTL_KEYS, "F8", 119.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO4,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Jump to location 5"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO5,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Jump to location 6"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO6,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Jump to location 7"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO7,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Jump to location 8"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMGO8,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Save location 1"), CTL_KEYS, "Ctrl+F5", 372.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET1,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Save location 2"), CTL_KEYS, "Ctrl+F6", 373.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET2,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Save location 3"), CTL_KEYS, "Ctrl+F7", 374.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET3,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Save location 4"), CTL_KEYS, "Ctrl+F8", 375.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET4,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Save location 5"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET5,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Save location 6"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET6,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Save location 7"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET7,
-     ReadKey, WriteKey, NULL, NULL},
-    {"hotkeys", PT_("Save location 8"), CTL_KEYS, "None", 0.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAMSET8,
-     ReadKey, WriteKey, NULL, NULL},
     {"hotkeys", PT_("Control groups"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
-     NULL, NULL, NULL, PT_("The keys that select a group and, with Ctrl, make the selection a group (Shift adds to it, Alt selects and centres): the ten digits, then six more on R, F, V, T, G and B, which hold units and buildings alike. A letter a command card also uses selects the group instead; click a key and press another to change it.")},
+     NULL, NULL, NULL, PT_("The keys that select a group and, with Ctrl, make the selection a group (Shift adds to it, Alt selects and centres): the ten digits, then six more, the groups 11 to 16, on R, F, V, T, G and B, which hold units and buildings alike. A letter a command card also uses keeps its command on the card - press it with Ctrl, Shift or Alt for the group. Click a key and press another to change it.")},
     {"hotkeys", PT_("Group 1"), CTL_KEYS, "1", 49.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP1,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
     {"hotkeys", PT_("Group 2"), CTL_KEYS, "2", 50.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP2,
@@ -1054,18 +997,73 @@ const Setting kSettings[] = {
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
     {"hotkeys", PT_("Group 0"), CTL_KEYS, "0", 48.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP0,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group R"), CTL_KEYS, "R", 82.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP10,
+    {"hotkeys", PT_("Group 11"), CTL_KEYS, "R", 82.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP10,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group F"), CTL_KEYS, "F", 70.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP11,
+    {"hotkeys", PT_("Group 12"), CTL_KEYS, "F", 70.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP11,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group V"), CTL_KEYS, "V", 86.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP12,
+    {"hotkeys", PT_("Group 13"), CTL_KEYS, "V", 86.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP12,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group T"), CTL_KEYS, "T", 84.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP13,
+    {"hotkeys", PT_("Group 14"), CTL_KEYS, "T", 84.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP13,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group G"), CTL_KEYS, "G", 71.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP14,
+    {"hotkeys", PT_("Group 15"), CTL_KEYS, "G", 71.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP14,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
-    {"hotkeys", PT_("Group B"), CTL_KEYS, "B", 66.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP15,
-     ReadKeyGroup, WriteKeyGroup, NULL, NULL},    {"hotkeys", PT_("Screenshot"), CTL_KEYS, "Print", 0.0f, false, "Classic", NULL, "live", BIND_NONE,
+    {"hotkeys", PT_("Group 16"), CTL_KEYS, "B", 66.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP15,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Camera locations"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+     NULL, NULL, NULL, PT_("As StarCraft II's: eight saved views, and eight keys in all. F1 to F8 jump to them, and Ctrl with the same key saves, as SC2's Ctrl does; a save says so on the map's message. Each game starts the eight on the start view, and 1.17's Ctrl+F1 help moved to Ctrl+F10.")},
+    {"hotkeys", PT_("Camera location 1"), CTL_KEYS, "F1", 112.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAM1,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Camera location 2"), CTL_KEYS, "F2", 113.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAM2,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Camera location 3"), CTL_KEYS, "F3", 114.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAM3,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Camera location 4"), CTL_KEYS, "F4", 115.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAM4,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Camera location 5"), CTL_KEYS, "F5", 116.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAM5,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Camera location 6"), CTL_KEYS, "F6", 117.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAM6,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Camera location 7"), CTL_KEYS, "F7", 118.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAM7,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Camera location 8"), CTL_KEYS, "F8", 119.0f, false, "Hyperion", NULL, "live", BIND_KEY_CAM8,
+     ReadKey, WriteKey, NULL, NULL},
+    {"hotkeys", PT_("Selection"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+     NULL, NULL, NULL, PT_("The keys that work on the selection and the minimap.")},
+    {"hotkeys", PT_("Next subgroup"), CTL_KEYS, "Tab", 9.0f, false, "Hyperion", NULL, "live", BIND_KEY_SUBGROUP,
+     ReadKey, WriteKey, NULL, PT_("In a game by Hyperion\xE2\x80\x99""s rules, the next kind of unit in the selection: the console shows its card and the page that holds it, as StarCraft II\xE2\x80\x99""s Tab. With Shift, the kind before. Click the key and press another, with Ctrl, Shift or Alt if you like.")},
+    {"hotkeys", PT_("Minimap terrain"), CTL_KEYS, "Ctrl+Tab", 265.0f, false, "Hyperion", NULL, "live", BIND_KEY_TERRAIN,
+     ReadKey, WriteKey, NULL, PT_("The minimap\xE2\x80\x99""s terrain on or off, as its button does; with Shift, the units\xE2\x80\x99"" colours, as the original\xE2\x80\x99""s Shift+Tab. In a game by classic rules Tab still does it, as in the original; in a game by Hyperion\xE2\x80\x99""s rules Tab is the subgroup\xE2\x80\x99""s.")},
+    {"hotkeys", PT_("Idle worker"), CTL_KEYS, "`", 192.0f, false, "Hyperion", NULL, "live", BIND_KEY_IDLE,
+     ReadKey, WriteKey, NULL, PT_("Selects your next idle worker and takes the view to it, as the HUD\xE2\x80\x99""s idle worker button does, and as the small idle worker icon above the minimap does when clicked. The ` key, as StarCraft II\xE2\x80\x99""s players set it.")},
+    {"hotkeys", PT_("Select army"), CTL_KEYS, "Ctrl+Shift+F12", 891.0f, false, "Hyperion", NULL, "live", BIND_KEY_ARMY,
+     ReadKey, WriteKey, NULL, PT_("In a game by Hyperion\xE2\x80\x99""s rules, selects your army, every unit that fights, up to 255, as the HUD\xE2\x80\x99""s army button does. A game by classic rules keeps the original\xE2\x80\x99""s selections and has no army key.")},
+    {"hotkeys", PT_("View and camera"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+     NULL, NULL, NULL, PT_("The art, the view's shape, the zoom and the follow and TV keys.")},
+    {"hotkeys", PT_("Toggle art"), CTL_KEYS, "F9", 120.0f, false, "Hyperion", NULL, "live", BIND_KEY_ART,
+     ReadKey, WriteKey, NULL, PT_("Classic or HD art in a game, F5 as in Remastered before the camera locations took F1 to F8. Click the key and press another: any key, with Ctrl, Shift or Alt if you like.")},
+    {"hotkeys", PT_("Toggle view shape"), CTL_KEYS, "Ctrl+F9", 376.0f, false, "Hyperion", NULL, "live", BIND_KEY_VIEW,
+     ReadKey, WriteKey, NULL, PT_("640 \xC3\x97"" 480 or the wide view in a game. Set as the art\xE2\x80\x99""s key is.")},
+    {"hotkeys", PT_("Zoom out"), CTL_KEYS, "F11", 122.0f, false, "Hyperion", NULL, "live", BIND_KEY_ZOOM_OUT,
+     ReadKey, WriteKey, NULL, PT_("The camera zoomed out; held, it keeps zooming.")},
+    {"hotkeys", PT_("Zoom in"), CTL_KEYS, "F12", 123.0f, false, "Hyperion", NULL, "live", BIND_KEY_ZOOM_IN,
+     ReadKey, WriteKey, NULL, PT_("The camera zoomed in; held, it keeps zooming.")},
+    {"hotkeys", PT_("Zoom reset"), CTL_KEYS, "Ctrl+F11", 378.0f, false, "Hyperion", NULL, "live", BIND_KEY_ZOOM_RESET,
+     ReadKey, WriteKey, NULL, PT_("The zoom back to 1, the game\xE2\x80\x99""s view.")},
+    {"hotkeys", PT_("Zoom fit"), CTL_KEYS, "Ctrl+F12", 379.0f, false, "Hyperion", NULL, "live", BIND_KEY_ZOOM_FIT,
+     ReadKey, WriteKey, NULL, PT_("The whole map in view, as far as the zoom allows.")},
+    {"hotkeys", PT_("Follow selected unit"), CTL_KEYS, "Shift+F11", 634.0f, false, "Hyperion", NULL, "live", BIND_KEY_FOLLOW,
+     ReadKey, WriteKey, NULL, PT_("The camera follows the selected unit.")},
+    {"hotkeys", PT_("Replay TV"), CTL_KEYS, "Shift+F12", 635.0f, false, "Hyperion", NULL, "live", BIND_KEY_TV,
+     ReadKey, WriteKey, NULL, PT_("A replay\xE2\x80\x99""s TV camera, in a replay.")},
+    {"hotkeys", PT_("Debug and tools"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+     NULL, NULL, NULL, PT_("")},
+    {"hotkeys", PT_("Debug Tools' overlay"), CTL_KEYS, "Shift+F9", 632.0f, false, "Hyperion", NULL, "live", BIND_KEY_DEBUG_VIEW,
+     ReadKey, WriteKey, NULL, PT_("Debug Tools\xE2\x80\x99""s overlay in a game while its live channel is open: the game in a window with its readings round it, full screen, a counter, then off. With no key, the Overlay button at the top of the game opens it.")},
+    {"hotkeys", PT_("Interface"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+     NULL, NULL, NULL, PT_("The command card's and the screen's keys.")},
+    {"hotkeys", PT_("Layout"), CTL_CHOICE, PT_("Classic|Grid"), 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+     ReadCardLayout, WriteCardLayout, NULL, PT_("Grid puts the command card on the left hand\xE2\x80\x99""s 3 \xC3\x97"" 3 keys, as StarCraft II can. Remastered has no presets.")},
+    {"hotkeys", PT_("Screenshot"), CTL_KEYS, "Print", 0.0f, false, "Classic", NULL, "live", BIND_NONE,
      NULL, NULL, NULL, NULL},
     {"access", PT_("Allies blue, enemies red"), CTL_TOGGLE, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
      ReadFlag, WriteAllyColours, "allyColours", PT_("In a game you play, you are drawn in blue, your allies in teal and the other players in red, units, buildings and minimap alike, as StarCraft II\xE2\x80\x99""s team colours and Warcraft III\xE2\x80\x99""s ally colours do. The original\xE2\x80\x99""s minimap button does it for the minimap alone. Only what is drawn changes: replays and saved games keep every player\xE2\x80\x99""s own colour. Remastered has the string and no control.")},
@@ -1149,6 +1147,8 @@ Bind g_browseBind = BIND_NONE;      // the row whose Browse asked for a folder
 int g_nKeyCapture = -1;             // the hotkey whose key the next key press sets
 
 int g_nKeyNoteRow = -1;             // a hotkey row's note, why a key was not taken
+
+float g_fHotkeysScroll, g_fHotkeysMax;  // the Hotkeys tab's pane scroll, and how far it goes
 
 std::string g_keyNote;
 
@@ -1320,6 +1320,7 @@ void SettingsOpen(bool bInGame, const char *pszTab)
   g_modsPick = g_modsOpened = PortModsFolder();
   g_nKeyCapture = g_nKeyNoteRow = -1;
   g_keyNote.clear();
+  g_fHotkeysScroll = g_fHotkeysMax = 0.0f;  // the Hotkeys tab's pane from the top
   g_bSettings = true;
   g_bMenuOpen = false;
   g_nDrag = g_nDropOpen = g_nTip = -1;
@@ -2003,43 +2004,35 @@ void Confirm(void)
   }
 }
 
-// The Hotkeys tab's rows, which the well's two columns cannot all hold: two columns a
-// screen's worth, the wheel showing the rest (as the HUD tab's design list scrolls).
+// The Hotkeys tab's rows, which the well's two columns cannot all hold: one column of the
+// sections in their order, in a pane the wheel scrolls (as the HUD tab's pane scrolls), the
+// full height measured after layout.
 void HotkeysTab(const std::vector<int> &rows, void (*pfnRow)(int))
 {
-  const int kShown = 22;  // 11 a column, enough for the well's height
-  static int s_nFirst;
-  const int nMost = static_cast<int>(rows.size()) - kShown;
-  s_nFirst = SDL_max(0, SDL_min(s_nFirst + WheelRows(Over(Id("hotkeylist")), 2), nMost > 0 ? nMost : 0));
-  Decl cols;
-  cols.d.id = Id("hotkeylist");
-  cols.d.layout.layoutDirection = CLAY_LEFT_TO_RIGHT;
-  cols.d.layout.childGap = Gap(Fs(40));
-  Open(cols);
-  for (int c = 0; c < 2; ++c) {
-    Decl col;
-    col.d.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
-    col.d.layout.sizing.width = Grow();
-    Open(col);
-    for (int i = 0; i < kShown / 2; ++i) {
-      const int r = s_nFirst + c * (kShown / 2) + i;
-      if (r < static_cast<int>(rows.size()))
-        pfnRow(rows[r]);
-    }
-    Close();
-  }
+  Decl clip;
+  clip.d.id = Id("hotkeypane");
+  clip.d.layout.sizing.width = Grow();
+  clip.d.layout.sizing.height = Grow();
+  clip.d.clip.vertical = true;
+  g_fHotkeysScroll =
+      SDL_clamp(g_fHotkeysScroll + WheelPixels(Over(clip.d.id), Sc(90)), 0.0f, g_fHotkeysMax);
+  clip.d.clip.childOffset.y = -g_fHotkeysScroll;
+  Open(clip);
+  Decl pane;
+  pane.d.id = Id("hotkeyrows");
+  pane.d.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
+  pane.d.layout.sizing.width = Grow();
+  pane.d.layout.childGap = Gap(Fs(6));
+  pane.d.layout.padding = Pad(0, Fs(4), 0, Fs(16));
+  Open(pane);
+  for (int i : rows)
+    pfnRow(i);
   Close();
-  if (static_cast<int>(rows.size()) > kShown) {
-    Decl note;
-    note.d.layout.padding = Pad(Fs(20), Fs(0), Fs(8), Fs(0));
-    Open(note);
-    // {0} and {1} the rows shown, {2} how many there are
-    Text(Keep(PortTextF("{0}\xE2\x80\x93{1} of {2}. The wheel shows the rest.",
-                        {std::to_string(s_nFirst + 1), std::to_string(SDL_min(static_cast<int>(rows.size()), s_nFirst + kShown)),
-                         std::to_string(rows.size())})),
-         UI_FACE_TEXT, Fs(12), 0.0f, kScInkOff);
-    Close();
-  }
+  Close();
+  const Clay_ElementData in = Clay_GetElementData(Id("hotkeyrows")), out = Clay_GetElementData(Id("hotkeypane"));
+  g_fHotkeysMax = in.found && out.found && in.boundingBox.height > out.boundingBox.height
+                      ? in.boundingBox.height - out.boundingBox.height
+                      : 0.0f;
 }
 
 void SettingsDialog(void)

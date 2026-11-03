@@ -1,8 +1,9 @@
 // port_camkeys.cpp -- the eight camera locations, StarCraft II's (port_camkeys.h). The user,
-// 2026-11-02: the locations remade to be exactly SC2's, where F5 to F8 jump to the first four
-// and Ctrl+F5 to Ctrl+F8 save them, and four more (5 to 8) have no key until the player gives
-// them one in Settings, Hotkeys. 1.17's F2 to F4 locations are gone: their keys are taken off
-// the accelerator tables (event_Win.cpp), so every install plays the one camera system.
+// 2026-11-02: the locations remade to be exactly SC2's, eight keys in all: F1 to F8 jump to
+// them and Ctrl with the same key saves, as SC2's F-keys and Ctrl do. 1.17's F2 to F4
+// locations are gone: their keys are taken off the accelerator tables (event_Win.cpp), and
+// the keys F1 to F8 are the locations' alone - 1.17's Ctrl+F1 help moved to Ctrl+F10 there
+// too, so every install plays the one camera system.
 //
 // Each location holds the view's centre when it was saved, the point SC2 keeps. The game
 // seeds all eight with the start view, so a jump before a save lands on home; a save says
@@ -48,16 +49,19 @@ void PortCamKeysInit(void)
 }
 
 // Which camera action a key down is with the modifiers held now: 0 to 7 a jump to the
-// location, 8 to 15 a save of it (the action's location is n % 8), or -1 for none.
+// location, 8 to 15 a save of it (the action's location is n % 8), or -1 for none. The
+// eight keys are PORT_HOTKEY_CAM1 to 8 (port_keys.h), F1 to F8, which Settings' Hotkeys
+// tab changes; Ctrl with a location's key saves it, as SC2's Ctrl does.
 int PortCameraPressed(unsigned vk)
 {
   const unsigned nKey = PortHotkeyHeld(vk);
   for (int n = 0; n < 8; ++n) {
-    const unsigned nGo = PortHotkey(PORT_HOTKEY_CAMGO1 + n);
-    if (nGo != 0 && nGo == nKey)
+    const unsigned nGo = PortHotkey(PORT_HOTKEY_CAM1 + n);
+    if (nGo == 0)
+      continue;
+    if (nGo == nKey)
       return n;
-    const unsigned nSet = PortHotkey(PORT_HOTKEY_CAMSET1 + n);
-    if (nSet != 0 && nSet == nKey)
+    if (nKey == (nGo | PORT_KEY_CTRL) && (nGo & PORT_KEY_CTRL) == 0)
       return 8 + n;
   }
   return -1;

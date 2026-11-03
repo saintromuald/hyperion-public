@@ -34,6 +34,7 @@
 #include "../port/render/port_present.h"  // Hyperion
 #include "../port/replays/port_tv.h"  // Hyperion: PortFollowToggle, PortTvToggle
 #include "../port/render/port_view.h"  // Hyperion
+#include "../port/render/port_camera.h"  // Hyperion: PortCameraShown, the Ctrl+WASD step's zoom
 #include "../port/lan/port_lanfeed.h"  // Hyperion: PortLanWatchLive
 #include "../port/hud/port_hudinput.h"  // Hyperion: PortHudMouse
 #include "../port/hud/port_hudstate.h"  // Hyperion: PortHudPressButton
@@ -268,17 +269,38 @@ void accel_close()
 }
 
 // Hyperion: a table's entries less 1.17's screen-location keys (F2 to F4 and their Shift
-// forms, the commands 0x9C7C to 0x9C81), whose three locations SC2's eight replace
-// (port_camkeys.cpp). The install's own Local.dll tables hold them too, so they are taken
-// off wherever the table came from, and every install plays the one camera system.
+// forms, the commands 0x9C7C to 0x9C81), whose three locations SC2's eight replace, 1.17's
+// F1 help (0x9C74 on key 0x70), whose key is the locations' F1 now, and 1.17's Ctrl+S
+// sound toggle (0x9C67), whose key scrolls the camera down now. The help command moves to
+// Ctrl+F10 (kHelp); the sound toggle keeps the options dialog's own keys (the sound
+// table). The install's own Local.dll tables hold them too, so they are taken off wherever
+// the table came from, and every install plays the one camera system.
+static const accel_t kHelp = {0x0B, 0x79, 0x9C74};  // FCONTROL|FVIRTKEY, F10, help
 static int AccelCopy(const void *hTable, accel_t *pBuf, int nCap)
 {
   accel_t all[0x100];
   const int n = WinMsgCopyAccelerators(const_cast<void *>(hTable), all, 0x100);
   int nOut = 0;
-  for (int i = 0; i < n && nOut < nCap; ++i)
-    if (all[i].wCmd < 0x9C7C || all[i].wCmd > 0x9C81)
+  bool bHelp = false;
+  for (int i = 0; i < n; ++i) {
+    if (all[i].wCmd == 0x9C74 && all[i].wKey == 0x70)  // F1's help, the camera's key now
+      continue;
+    if (all[i].wCmd == 0x9C67)  // Ctrl+S's sound, the camera's down key now
+      continue;
+    if (all[i].wCmd >= 0x9C7C && all[i].wCmd <= 0x9C81)  // 1.17's screen locations
+      continue;
+    if (all[i].wCmd == 0x9C74) {
+      bHelp = bHelp || (all[i].wKey == 0x79 && all[i].fVirt == kHelp.fVirt);
+      if (nOut < nCap)
+        pBuf[nOut++] = all[i];
+      continue;
+    }
+    if (nOut < nCap)
       pBuf[nOut++] = all[i];
+  }
+  // the help command's new key, wherever the table came from, unless it has it
+  if (!bHelp && nOut < nCap)
+    pBuf[nOut++] = kHelp;
   return nOut;
 }
 
@@ -792,6 +814,26 @@ win_lparam_t __stdcall WndProc(void *hWnd, unsigned int uMsg, uintptr_t wParam, 
     }
     if (nHotkey == PORT_HOTKEY_VIEW) {
       PortViewToggle();
+      return 0;
+    }
+  }
+  // Hyperion: Ctrl held with A, W, S or D moves the camera, SC2's way (the user,
+  // 2026-11-02): left, up, down and right, as the arrow keys would. The repeat of a held
+  // key is the step's beat, the step is the screen's own at any zoom, and only Ctrl held
+  // alone takes it; not while a message is typed.
+  if ((uMsg == 0x100 || uMsg == 0x104) && gwGameMode == 3 && !gbInMsgMode) {
+    const unsigned nHeld = PortHotkeyHeld(static_cast<unsigned>(wParam));
+    if (nHeld == (PORT_KEY_CTRL | (static_cast<unsigned>(wParam) & 0xFF)) &&
+        (wParam == 0x41 || wParam == 0x57 || wParam == 0x53 || wParam == 0x44)) {
+      const int nStep = 16 * static_cast<int>(PortCameraShown() + 0.5);
+      if (wParam == 0x41)
+        cell_set_pos(glScrollPixelX - nStep, glScrollPixelY);
+      else if (wParam == 0x44)
+        cell_set_pos(glScrollPixelX + nStep, glScrollPixelY);
+      else if (wParam == 0x57)
+        cell_set_pos(glScrollPixelX, glScrollPixelY - nStep);
+      else
+        cell_set_pos(glScrollPixelX, glScrollPixelY + nStep);
       return 0;
     }
   }

@@ -65,7 +65,8 @@ const Command kCommands[] = {
     {"gameMenu", 40059, 1},
     // 1.17's F2 to F4 screen locations are gone (their keys came off the tables in
     // event_Win.cpp); SC2's eight camera locations are Hyperion's own hotkeys
-    // (port_keys.h, PORT_HOTKEY_CAMGO1 to CAMSET8), set in Settings rather than here.
+    // (port_keys.h, PORT_HOTKEY_CAM1 to CAM8, one key each, Ctrl to save), set in
+    // Settings rather than here.
 };
 
 // A command's id from its name: "speedUp", or "groupSet1" (the groups' 1 to 9 then 0, the
@@ -357,8 +358,27 @@ char PortCardKey(unsigned wStrId, int nSlot, const char *pszText)
   if (it != g_card.end())
     return it->second;
   if (g_nLayout == PORT_CARD_GRID && !gPlayback && nSlot >= 1 && nSlot <= 9 &&
-      isalnum(static_cast<unsigned char>(cOwn)))
+      isalnum(static_cast<unsigned char>(cOwn))) {
+    // Hyperion: Attack and Patrol are swapped (the user, 2026-11-02) before the grid's
+    // by-place keys, so Attack stays A and Patrol is E in either layout. The string's
+    // name follows its key and its cost's kind (a costless button's is 0).
+    if (pszText != NULL && pszText[0] != '\0' && pszText[2] != '\0') {
+      const char *pszName = pszText + 2;
+      if (_strnicmp(pszName, "patrol", 6) == 0)
+        return 'e';
+      if (_strnicmp(pszName, "attack", 6) == 0)
+        return 'a';
+    }
     return kGrid[nSlot - 1];
+  }
+  // the swap for the classic layout's keys too
+  if (pszText != NULL && pszText[0] != '\0' && pszText[2] != '\0') {
+    const char *pszName = pszText + 2;
+    if (_strnicmp(pszName, "patrol", 6) == 0)
+      return 'e';
+    if (_strnicmp(pszName, "attack", 6) == 0)
+      return 'a';
+  }
   return cOwn;
 }
 
