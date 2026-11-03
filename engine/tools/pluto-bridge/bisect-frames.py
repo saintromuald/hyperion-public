@@ -52,24 +52,30 @@ for fr in frames[:NFR]:
     out += fr[:24] + b''.join(kept) + tail
     use.append(bytes(out))
 
-os.system('rm -f ~/.wine/drive_c/fault.log')
-p = subprocess.Popen(['wine', 'pluto-bridge.exe'], stdin=subprocess.PIPE,
-                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd='.')
+os.system('rm -f ~/.wine/drive_c/fault.log frames.fifo replies.fifo')
+os.mkfifo('frames.fifo', 0o666)
+os.mkfifo('replies.fifo', 0o666)
+fenv = dict(os.environ)
+fenv['HX_DEBUG'] = '1'
+p = subprocess.Popen(['wine', 'pluto-bridge.exe'], stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=open('bridge-replay.log', 'w'),
+                     cwd='.', env=fenv)
+rr = os.open('replies.fifo', os.O_RDONLY)
+wf = os.open('frames.fifo', os.O_RDWR)
 buf = b''
 for i, fr in enumerate(use):
     try:
-        p.stdin.write(fr)
-        p.stdin.flush()
-    except BrokenPipeError:
+        os.write(wf, fr)
+    except OSError:
         print('bridge died at frame %d' % i)
         break
     deadline = time.time() + 6
     got = False
     while time.time() < deadline:
-        r, _, _ = select.select([p.stdout], [], [], 0.2)
+        r, _, _ = select.select([rr], [], [], 0.2)
         if not r:
             continue
-        chunk = p.stdout.read(4096)
+        chunk = os.read(rr, 4096)
         if not chunk:
             break
         buf += chunk

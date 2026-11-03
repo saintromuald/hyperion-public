@@ -575,6 +575,8 @@ BOOL __stdcall WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToW
       if (errno == EINTR)
         continue;
       FailErrno();
+      fprintf(stderr, "[compat] WriteFile fd %d: errno %d %s\n", f->fd, errno,
+              strerror(errno));
       if (lpNumberOfBytesWritten)
         *lpNumberOfBytesWritten = static_cast<DWORD>(done);
       return FALSE;
@@ -1336,11 +1338,25 @@ BOOL __stdcall CreatePipe(PHANDLE phRead, PHANDLE phWrite, LPSECURITY_ATTRIBUTES
   int fds[2];
   if (pipe(fds) != 0)
     return FALSE;
+  // The ends live on high fds: the engine's other subsystems close low fd
+  // numbers, and a reused number reads as EPERM on write (the Pluto bridge's
+  // pipe died at frame 3 of every real game until now).
+  const int r = fcntl(fds[0], F_DUPFD_CLOEXEC, 256);
+  const int w = fcntl(fds[1], F_DUPFD_CLOEXEC, 256);
+  close(fds[0]);
+  close(fds[1]);
+  if (r < 0 || w < 0) {
+    if (r >= 0)
+      close(r);
+    if (w >= 0)
+      close(w);
+    return FALSE;
+  }
   // The ends are FileObjects, not raw fds: WriteFile/ReadFile resolve handles
   // through the live-object table, and a raw fd cast to HANDLE reads as an
-  // invalid handle there (the Pluto bridge's pipe never worked until now).
-  *phRead = new FileObject(fds[0]);
-  *phWrite = new FileObject(fds[1]);
+  // invalid handle there.
+  *phRead = new FileObject(r);
+  *phWrite = new FileObject(w);
   return TRUE;
 }
 
@@ -1394,6 +1410,11 @@ BOOL __stdcall CreateProcessA(LPCSTR lpApplicationName, LPSTR lpCommandLine, LPS
         if (fd >= 0)
           posix_spawn_file_actions_adddup2(&actions, fd, i);
       }
+      // The stdin pipe also lands on fd 250, clear of the console fds: the Pluto
+      // bridge's fork detaches the console at start-up (killing 0/1/2), so the
+      // frame pipe must not depend on fd 0.
+      if (HandleFd(ah[0]) >= 0)
+        posix_spawn_file_actions_adddup2(&actions, HandleFd(ah[0]), 250);
       for (int i = 0; i < 3; ++i) {
         const int fd = HandleFd(ah[i]);
         if (fd < 0)

@@ -161,6 +161,9 @@ static Tap g_taps[] = {
   {reinterpret_cast<void *>(0x7b19d000), reinterpret_cast<void *>(0x7b19d01b), "driver-gate", 0},
   {reinterpret_cast<void *>(0x7b1b0000), reinterpret_cast<void *>(0x7b1b0130), "walk", 0},
   {reinterpret_cast<void *>(0x7b1c4000), reinterpret_cast<void *>(0x7b1c4960), "writer", 0},
+  // The obs-context global at 0x7b1a2034: every read/write (the guard fires on
+  // data access too) logs the instruction and the registers.
+  {reinterpret_cast<void *>(0x7b1a2000), reinterpret_cast<void *>(0x7b1a2034), "ctx-global", 0},
 };
 
 static void ArmTaps() {
@@ -876,25 +879,28 @@ static void ReserveScMemory() {
 // The frame pipe's own fd: the fork's threads close fd 0 during their start-up
 // (that is what cut the bridge's stdin at ~1-26 frames, in the harness and the
 // real game alike). Dup'd as the first thing in main, before the fork loads.
-static int s_frameIn = -1;
+// The frame transport: named FIFOs opened through the bridge's own CRT. The
+// fork's engine detaches the console at start-up, killing wine's stdin/stdout,
+// which is what cut the anonymous pipes at ~frame 2 of every real game.
+static FILE *s_fFrames = NULL;
+static FILE *s_fReplies = NULL;
+
 static bool ReadN(void *pv, size_t cb) {
   unsigned char *p = static_cast<unsigned char *>(pv);
   while (cb) {
-    int n = read(s_frameIn, p, cb);
-    if (n <= 0) {
-      fprintf(stderr, "[bridge] ReadN: %d on fd %d errno %d\n", n, s_frameIn, errno);
+    const int n = static_cast<int>(fread(p, 1, cb, s_fFrames));
+    if (n <= 0)
       return false;
-    }
     p += n;
-    cb -= n;
+    cb -= static_cast<size_t>(n);
   }
   return true;
 }
 static bool WriteN(const void *pv, size_t cb) {
   const unsigned char *p = static_cast<const unsigned char *>(pv);
   while (cb) {
-    int n = write(1, p, cb);
-    if (n <= 0)
+    const size_t n = fwrite(p, 1, cb, s_fReplies);
+    if (n == 0)
       return false;
     p += n;
     cb -= n;
@@ -941,13 +947,21 @@ static void FlushReply(unsigned frame) {
   unsigned win = 0;
   WriteN(&win, 4);
   s_nSent = end;
-  fflush(stdout);
+  fflush(s_fReplies);
 }
 
 
 int main(int argc, char **argv) {
-  s_frameIn = dup(0);  // before anything else: the fork's start-up closes fd 0
-  fprintf(stderr, "[bridge] frame fd %d (stdin %d)\n", s_frameIn, _fileno(stdin));
+  // The FIFOs, before anything else: the fork's console detach will kill the
+  // std fds, so the transport cannot ride them.
+  s_fFrames = fopen("frames.fifo", "rb");
+  s_fReplies = fopen("replies.fifo", "wb");
+  if (s_fFrames == NULL || s_fReplies == NULL) {
+    fprintf(stderr, "[bridge] the FIFOs did not open\n");
+    return 1;
+  }
+  setvbuf(s_fReplies, NULL, _IONBF, 0);
+  fprintf(stderr, "[bridge] FIFOs open\n");
   const bool bDebug = getenv("HX_DEBUG") != NULL;
   AddVectoredExceptionHandler(1, VecHandler);
   const int scenario = argc > 1 ? atoi(argv[1]) : 1;
@@ -1165,6 +1179,14 @@ int main(int argc, char **argv) {
   V0 onFrame = reinterpret_cast<V0>(vt[3]);
   fprintf(stderr, "[bridge] driving the module (vt[1]=%p vt[2]=%p vt[3]=%p)\n", vt[1], vt[2], vt[3]);
   fflush(stdout);
+  // The fork's own client object (base+0x54160) and its vtable's slot 0xE0.
+  {
+    const DWORD *client = reinterpret_cast<const DWORD *>(0x7b1e4160);
+    const DWORD vt = *client;
+    const DWORD slotE0 = *reinterpret_cast<const DWORD *>(vt + 0xE0);
+    fprintf(stderr, "[bridge] client %08x vtable %08x slotE0 %08x\n",
+            static_cast<unsigned>(reinterpret_cast<uintptr_t>(client)), vt, slotE0);
+  }
   // The bot's client (a static object at base+0x54160) never got its shm view
   // pointer (+0x18) or its send flag (+0x1C) from the handshake in the rig. The view
   // was set to the bot's own .data page (base+0x54000), but the writer writes the obs
