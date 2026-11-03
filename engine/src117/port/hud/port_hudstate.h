@@ -112,7 +112,7 @@ struct PortHudState {
   bool bShields, bEnergy, bKills;  // whether the panel shows each
   int nIdleWorkers;
   int nArmy;                    // army.count: the player's units that fight, not workers or Overlords
-  int anGroups[16];             // live units in the control groups, index 1 the key 1, index 0 the key 0
+  int anGroups[19];             // live units in the control groups, index 1 the key 1, index 0 the key 0
   int nGroupLast;               // group.last: the group recalled last, -1 for none
   bool bTerrain;                // minimap.terrain: the minimap shows the terrain, true until its button turns it off
   bool abButton[PORT_HUD_BTN_KINDS];  // each button shown, by 1.17's rules for the game
@@ -207,6 +207,8 @@ int PortHudButtonByName(const char *pszName);
 // on 1.17's own; a control group recalled as its key recalls it (nGroup 0 to 9).
 bool PortHudPress(int nPlace, const char **ppszWhy);
 bool PortHudPressButton(int nKind, const char **ppszWhy);
+// The larva key (Ctrl+Space): the player's larvae selected, as a drag box selects them.
+bool PortSelectLarva(const char **ppszWhy);
 // A player's eye on the players' board: what the player sees shown or hidden, as View Players'
 // box for them and its OK do (a replay; nSlot 0 to 7).
 bool PortHudPressEye(int nSlot, const char **ppszWhy);

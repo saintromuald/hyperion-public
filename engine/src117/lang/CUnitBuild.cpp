@@ -14,6 +14,7 @@
 
 #include "oc_data.h"  // Hyperion: OC_VA
 #include "../h/playertables.h"  // Hyperion: player slots past 11
+#include "../h/hxrules.h"  // Hyperion: HxRules, the constructing building's queue
 #include "platform.h"
 #include "CUnit.h"
 #include "CSprite.h"
@@ -660,6 +661,11 @@ void CUnit::DispatchTrain() {
   if (dwFlags & 0x400)
     return;
   if (bLockdownTimer != 0 || bStasisTimer != 0 || bParalyzeTimer != 0)
+    return;
+  // Hyperion: a building still building holds its queue's training until it is done, as
+  // StarCraft II's does (the user, 2026-11-02); 1.17 never lets such a queue exist, so a
+  // classic game and a game recorded before never take this
+  if (HxRules() && (gulUnitTypeFlags[wType] & 1) != 0 && (dwFlags & 1) == 0)
     return;
   if (GetRace() == 0 && wType != 0x82)
     return;

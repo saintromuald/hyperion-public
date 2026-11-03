@@ -982,6 +982,8 @@ void PortViewZoomFit(void)
   gamemap_force_redraw();
 }
 
+static bool CameraOff(void);  // below: the render camera is on (zoom, or columns)
+
 void PortViewCameraCentre(double fX, double fY)
 {
   if (gwGameMode != 3)
@@ -994,8 +996,20 @@ void PortViewCameraCentre(double fX, double fY)
   }
   double gx, gy;
   CameraGameMiddle(&gx, &gy);
-  g_fCamOffX = fX - gx;
-  g_fCamOffY = fY - gy;
+  // Hyperion: the camera lands on the point at once at any zoom, as 1.17's locations do (the
+  // user, 2026-11-02): its anchor is set for the target, and the ease's aim is that anchor,
+  // so no glide follows
+  if (CameraOff()) {
+    const PortView &view = g_bRendering ? g_saved.view : g_portView;
+    const double z = PortCameraShown();
+    g_fCamX = fX - (g_fSideL + ViewShown(view) * 0.5) * z;
+    g_fCamY = fY - (ViewShownRows(view) - g_fCamRaise) * 0.5 * z;
+    g_fCamOffX = g_fCamX - gx;
+    g_fCamOffY = g_fCamY - gy;
+  } else {
+    g_fCamOffX = fX - gx;
+    g_fCamOffY = fY - gy;
+  }
   g_fCamLastX = gx;
   g_fCamLastY = gy;
   gamemap_force_redraw();

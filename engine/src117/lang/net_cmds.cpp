@@ -458,7 +458,9 @@ void recv_net_cmd_ExitTransportWide(const net_cmd_dword_t *pCmd) {
 // compiles it.
 void __fastcall recv_net_cmd_GroupUnits(const net_cmd_group_t *pCmd) {
   BYTE nGroup = pCmd->bGroup;
-  if (nGroup > 18)
+  // Hyperion: a game of Hyperion's selection has groups up to 23 on the wire, the five
+  // recent selections past the nine letters'
+  if (nGroup > (SelectionWide() ? 23 : 18))
     return;
   switch (pCmd->bAction) {
     case 0:

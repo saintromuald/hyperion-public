@@ -402,8 +402,8 @@ void PortHudReplayWatch(void) {
 }
 
 void PortHudGroup(int nGroup, bool bSet) {
-  // the sixteen hotkey groups; 16 and 17 are the two recent selections left
-  if (nGroup < 0 || nGroup > 15 || g_ActiveNationID != g_LocalNationID)
+  // the ten digit groups, and in a game of Hyperion's selection the nine letter groups
+  if (nGroup < 0 || nGroup > (SelectionWide() ? 18 : 9) || g_ActiveNationID != g_LocalNationID)
     return;
   if (!bSet)
     g_nGroupLast = nGroup;
@@ -509,7 +509,7 @@ void PortHudGet(PortHudState *s) {
       ++s->nArmy;
   }
   if (g_LocalHumanID < 8)
-    for (int g = 0; g < 16; ++g)  // Hyperion: the six extra groups' letters are groups 10 to 15
+    for (int g = 0; g < (SelectionWide() ? 19 : 18); ++g)  // Hyperion: the nine extra groups' letters are groups 10 to 18
       for (int i = 0; i < SelectionMax(); ++i) {
         const DWORD dwId = GroupRow(g_LocalHumanID, g)[i];
         if (dwId == 0)
@@ -750,6 +750,33 @@ bool SelectArmy(const char **ppszWhy) {
 
 }  // namespace
 
+// The larva key (Hyperion's, Ctrl+Space): the player's larvae, selected as a drag box over
+// them selects them, up to as many as a selection holds.
+bool PortSelectLarva(const char **ppszWhy) {
+  if (!InGame()) {
+    *ppszWhy = "no game";
+    return false;
+  }
+  const int nPlayer = static_cast<int>(g_LocalNationID);
+  std::vector<CUnit *> larvae;
+  for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext)
+    if (p->bPlayer == nPlayer && p->wType == 0x23 && (p->dwFlags & 1) != 0)
+      larvae.push_back(p);
+  if (larvae.empty()) {
+    *ppszWhy = "no larvae";
+    return false;
+  }
+  larvae.push_back(NULL);
+  CUnit *apUnits[USEL_SELECT_CAPACITY] = {};
+  const int nCount = sub_4BC5B0(larvae.data(), apUnits, NULL);
+  if (nCount == 0) {
+    *ppszWhy = "no larvae to select";
+    return false;
+  }
+  select_units(nCount, apUnits, 1, 1);
+  return true;
+}
+
 bool PortHudPressButton(int nKind, const char **ppszWhy) {
   if (!InGame()) {
     *ppszWhy = "no game";
@@ -829,8 +856,8 @@ bool PortHudPressGroup(int nGroup, const char **ppszWhy, int nHow) {
     *ppszWhy = "no game the player plays";
     return false;
   }
-  if (nGroup < 0 || nGroup > 15) {
-    *ppszWhy = "a group is 0 to 15";
+  if (nGroup < 0 || nGroup > (SelectionWide() ? 18 : 9)) {
+    *ppszWhy = "no such group in this game";
     return false;
   }
   // as the group's key recalls it (game_keychar_hook), and as Ctrl and Shift with it make it of
@@ -892,7 +919,7 @@ std::string PortHudJson(void) {
   }
   j += ",\"stats.side\":" + Bool(s.bStatsSide) + ",\"stats.popup\":" + Bool(s.bStatsPopup) +
        ",\"teams.count\":" + Int(s.nTeams);
-  for (int g = 0; g < 16; ++g)
+  for (int g = 0; g < (SelectionWide() ? 19 : 18); ++g)
     j += ",\"group." + Int(g) + ".count\":" + Int(s.anGroups[g]);
   j += "}";
   j += ",\"player\":" + Int(s.nPlayer) + ",\"unit\":{\"shown\":" + Bool(s.bUnit) + ",\"type\":" +

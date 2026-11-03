@@ -18,13 +18,15 @@
 
 namespace {
 
-// The rows of a game of HX_OPT_SELECTION, in 1.17's shapes at 255.
+// The rows of a game of HX_OPT_SELECTION, in 1.17's shapes at 255, and its groups' at
+// SELECTION_GROUPS_WIDE (the ten hotkeys, the nine letter groups and five recent
+// selections).
 CUnit *g_apSelected[SELECTION_HUMANS * SELECTION_WIDE];
 CUnit *g_apNewUnits[SELECTION_WIDE];
 CUnit *g_apStatUnits[SELECTION_WIDE];
 CUnit *g_apNetSelected[SELECTION_WIDE];
 CUnit *g_apSavedSelected[SELECTION_WIDE];
-DWORD g_adwGroups[SELECTION_HUMANS * SELECTION_GROUPS * SELECTION_WIDE];
+DWORD g_adwGroups[SELECTION_HUMANS * SELECTION_GROUPS_WIDE * SELECTION_WIDE];
 int g_nPageFirst;
 
 }  // namespace
@@ -38,6 +40,7 @@ PORT_SNAP_KEEP(g_apSavedSelected);
 PORT_SNAP_KEEP(g_adwGroups);
 
 int g_nSelectionMax = SELECTION_MAX;
+int g_nSelectionGroups = SELECTION_GROUPS;
 CUnit **g_ppSelected = gSelected;
 CUnit **g_ppNewUnits = gpNewUnits;
 CUnit **g_ppStatUnits = gpStatUnits;
@@ -52,6 +55,7 @@ void SelectionForGame() {
   g_nPageFirst = 0;
   if (!bWide) {
     g_nSelectionMax = SELECTION_MAX;
+    g_nSelectionGroups = SELECTION_GROUPS;
     g_ppSelected = gSelected;
     g_ppNewUnits = gpNewUnits;
     g_ppStatUnits = gpStatUnits;
@@ -67,6 +71,7 @@ void SelectionForGame() {
   memset(g_apSavedSelected, 0, sizeof g_apSavedSelected);
   memset(g_adwGroups, 0, sizeof g_adwGroups);
   g_nSelectionMax = SELECTION_WIDE;
+  g_nSelectionGroups = SELECTION_GROUPS_WIDE;
   g_ppSelected = g_apSelected;
   g_ppNewUnits = g_apNewUnits;
   g_ppStatUnits = g_apStatUnits;

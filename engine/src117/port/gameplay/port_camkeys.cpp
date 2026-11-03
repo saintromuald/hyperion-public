@@ -25,17 +25,22 @@ namespace {
 
 int s_anLoc[8][2];  // each location's view centre, in map pixels; the start's until saved
 
-// The view's centre now, in map pixels.
+// The centre of the view as it shows now: the seen rectangle's middle, so the point saved
+// is exactly the screen's own middle at whatever zoom, side columns and raise it had (the
+// user, 2026-11-02).
 void Centre(int an[2])
 {
-  an[0] = static_cast<int>(glScrollPixelX) + PortViewShownWidth() / 2;
-  an[1] = static_cast<int>(glScrollPixelY) + g_portView.nViewRows / 2;
+  int anRect[4];
+  PortViewSeenRect(&anRect[0], &anRect[1], &anRect[2], &anRect[3]);
+  an[0] = (anRect[0] + anRect[2]) / 2;
+  an[1] = (anRect[1] + anRect[3]) / 2;
 }
 
-// The view over the point: the location's centre in the screen's middle.
+// The view over the point: the camera centred on it at once, as 1.17's locations jump
+// (no easing), at the zoom it has.
 void GoTo(const int an[2])
 {
-  cell_set_pos((an[0] - PortViewShownWidth() / 2) & ~7, (an[1] - g_portView.nViewRows / 2) & ~7);
+  PortViewCameraCentre(static_cast<double>(an[0]), static_cast<double>(an[1]));
 }
 
 }  // namespace

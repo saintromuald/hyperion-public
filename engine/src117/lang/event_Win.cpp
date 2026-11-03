@@ -12,7 +12,6 @@
 #include "../h/glues.h"      // CloseAllWindows
 #include "../h/net_cmds.h"   // gameloop_init, error_get_str, map_msg_chat_msg
 #include "../h/group_un.h"   // Hyperion: sub_463ED0, the letter groups' Alt
-#include "../h/hxrules.h"    // Hyperion: HxRules, the letter groups' game
 #include "../h/minimap.h"    // mou_cager
 #include "../h/snd.h"        // snd_update_streams
 #include "../h/victory.h"    // psnprintf
@@ -268,13 +267,13 @@ void accel_close()
   gAccelCur = 0;
 }
 
-// Hyperion: a table's entries less 1.17's screen-location keys (F2 to F4 and their Shift
-// forms, the commands 0x9C7C to 0x9C81), whose three locations SC2's eight replace, 1.17's
-// F1 help (0x9C74 on key 0x70), whose key is the locations' F1 now, and 1.17's Ctrl+S
-// sound toggle (0x9C67), whose key scrolls the camera down now. The help command moves to
-// Ctrl+F10 (kHelp); the sound toggle keeps the options dialog's own keys (the sound
-// table). The install's own Local.dll tables hold them too, so they are taken off wherever
-// the table came from, and every install plays the one camera system.
+// Hyperion: a table's entries less the keys the letter groups and the camera own now: 1.17's
+// screen-location keys (F2 to F4, 0x9C7C to 0x9C81), its F1 help and Alt+H help (0x9C74 on
+// 0x70 or 0x48), its Ctrl+R message log (0x9C75 on 0x52), whose keys are the groups' R and H
+// and the locations' F1, and its Ctrl+S sound toggle (0x9C67), whose key scrolls the camera
+// down. The help command moves to Ctrl+F10 (kHelp); the sound toggle keeps the options
+// dialog's own keys (the sound table). The install's own Local.dll tables hold them too, so
+// they are taken off wherever the table came from.
 static const accel_t kHelp = {0x0B, 0x79, 0x9C74};  // FCONTROL|FVIRTKEY, F10, help
 static int AccelCopy(const void *hTable, accel_t *pBuf, int nCap)
 {
@@ -283,7 +282,9 @@ static int AccelCopy(const void *hTable, accel_t *pBuf, int nCap)
   int nOut = 0;
   bool bHelp = false;
   for (int i = 0; i < n; ++i) {
-    if (all[i].wCmd == 0x9C74 && all[i].wKey == 0x70)  // F1's help, the camera's key now
+    if (all[i].wCmd == 0x9C74 && (all[i].wKey == 0x70 || all[i].wKey == 0x48))  // F1's and Alt+H's help
+      continue;
+    if (all[i].wCmd == 0x9C75 && all[i].wKey == 0x52)  // Ctrl+R's message log, the group's R
       continue;
     if (all[i].wCmd == 0x9C67)  // Ctrl+S's sound, the camera's down key now
       continue;
@@ -817,6 +818,16 @@ win_lparam_t __stdcall WndProc(void *hWnd, unsigned int uMsg, uintptr_t wParam, 
       return 0;
     }
   }
+  // Hyperion: Ctrl+Space selects the player's larvae, the Zerg's (the user, 2026-11-02).
+  if ((uMsg == 0x100 || uMsg == 0x104) && gwGameMode == 3 && !gbInMsgMode) {
+    const bool bRepeat = (lParam & 0x40000000) != 0;
+    const unsigned nHeld = PortHotkeyHeld(static_cast<unsigned>(wParam));
+    if (!bRepeat && nHeld == (PORT_KEY_CTRL | 0x20)) {
+      const char *pszWhy = NULL;
+      PortSelectLarva(&pszWhy);
+      return 0;
+    }
+  }
   // Hyperion: Ctrl held with A, W, S or D moves the camera, SC2's way (the user,
   // 2026-11-02): left, up, down and right, as the arrow keys would. The repeat of a held
   // key is the step's beat, the step is the screen's own at any zoom, and only Ctrl held
@@ -837,7 +848,8 @@ win_lparam_t __stdcall WndProc(void *hWnd, unsigned int uMsg, uintptr_t wParam, 
       return 0;
     }
   }
-  // Hyperion: a key of the six extra control groups (R, F, V, T, G and B; port_hotkeys.cpp)
+  // Hyperion: a key of the nine extra control groups (R, F, V, T, G, B, Y, H and N;
+  // port_hotkeys.cpp)
   // with Ctrl makes a group of the selection, Shift adds to it and Alt selects and centres,
   // as the digit groups' Ctrl, Shift and Alt work. Not while a message is typed.
   if ((uMsg == 0x100 || uMsg == 0x104) && gwGameMode == 3 && !gbInMsgMode) {
@@ -845,10 +857,9 @@ win_lparam_t __stdcall WndProc(void *hWnd, unsigned int uMsg, uintptr_t wParam, 
     const unsigned nHeld = PortHotkeyHeld(static_cast<unsigned>(wParam));
     if (!bRepeat && (nHeld & (PORT_KEY_CTRL | PORT_KEY_SHIFT | PORT_KEY_ALT)) != 0) {
       const int nGroup = PortKeyGroup(static_cast<unsigned>(wParam));
-      // the six extra groups' letters are a game by Hyperion's rules' own (the digits'
-      // modifiers 1.17's tables already take before this); a classic game keeps 1.17's
-      // letters, its Alt+R message log among them
-      if (nGroup >= 0 && (nGroup < 10 || HxRules())) {
+      // the nine extra groups' letters are a game of Hyperion's selection's own; the
+      // digits' modifiers 1.17's tables already take before this
+      if (nGroup >= 0) {
         if ((nHeld & PORT_KEY_CTRL) != 0)
           send_net_cmd_GroupUnits(0, static_cast<BYTE>(nGroup), NULL, 0);
         else if ((nHeld & PORT_KEY_SHIFT) != 0)

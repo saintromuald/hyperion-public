@@ -35,7 +35,8 @@ void __fastcall sub_49C7D0(DWORD dwHumanID);
 
 // 0x527140 sgGroupUnits_g -- twelve unit ids per group, eighteen groups per
 // player. group_un_init memsets 0x1B00 bytes here and 8 * 18 * 12 * 4 == 0x1B00;
-// every reader forms the address as (group + player * 18) * 48 + slot * 4.
+// every reader forms the address through GroupRow (selectlimits.h), whose stride is
+// g_nSelectionGroups: 18 in a classic game, 24 in one of Hyperion's selection.
 #ifndef OC_G_SGGROUPUNITS
 #define OC_G_SGGROUPUNITS
 #ifdef OC_DLL_MODE
@@ -64,11 +65,22 @@ static bool GroupAble(CUnit *pUnit)
   return pUnit->IsMultiSelectable() || (gulUnitTypeFlags[pUnit->wType] & 1) != 0;
 }
 
+// Hyperion: the first of a game's recent-selection groups. 1.17's rows 10 to 17 hold eight
+// of them; in a game of Hyperion's selection the rows 10 to 18 are the nine letter groups
+// (R F V T G B Y H N), and five recent selections follow them, in rows 19 to 23, of the
+// port's own rows (selectlimits.h, port_selwide.cpp).
+static int RecentFirst() {
+  return SelectionWide() ? 19 : 10;
+}
+static int RecentCount() {
+  return SelectionWide() ? 5 : 8;
+}
+
 // 0x463D60. Centres the view on the group the digit names.
-// Hyperion: the six extra groups' letters name groups 10 to 15, which centre too.
+// Hyperion: a game of Hyperion's selection has the letter groups 10 to 18, which centre too.
 void __fastcall CenterOnSelectionGroup(BYTE nGroup)
 {
-  if (nGroup >= 16)
+  if (nGroup >= (SelectionWide() ? 19 : 16))
     return;
 
   int nGroupIdx = nGroup;
@@ -170,14 +182,14 @@ void game_key_down_num(BYTE nDigit)
 }
 
 // 0x464360. Recycles the hotkey group whose stamp is oldest.
-// Hyperion: the six extra groups' letters took 10 to 15, so 1.17's eight recent selections
-// are two, the groups 16 and 17 (the array holds eighteen rows a player).
+// Hyperion: the recent selections follow the nine letter groups in a game of Hyperion's
+// selection (RecentFirst), and there are five of them there.
 void __fastcall sub_464360()
 {
   int h = g_ActiveHumanID;
   BYTE bBest = 0xFF;
   WORD wBest = 0xFFFF;
-  int k = 2;
+  int k = RecentCount();
 
   do {
     k--;
@@ -187,7 +199,7 @@ void __fastcall sub_464360()
     }
   } while (k != 0);
 
-  group_modify(bBest + 16, 1);
+  group_modify(bBest + RecentFirst(), 1);
   word_66CAD8[g_ActiveHumanID][bBest] = (WORD)dword_672658;
 }
 
@@ -228,8 +240,8 @@ void __fastcall group_recall(BYTE nGroup)
     }
   }
 
-  if (nGroup >= 16)
-    word_66CAD8[g_ActiveHumanID][nGroupIdx - 16] = (WORD)dword_672658;
+  if (nGroup >= RecentFirst())
+    word_66CAD8[g_ActiveHumanID][nGroupIdx - RecentFirst()] = (WORD)dword_672658;
   else
     sub_464360();
   PortHudGroup(nGroup, false);  // Hyperion: group.recall (port_hudstate.cpp)
@@ -245,12 +257,12 @@ int __fastcall sub_464030(int nUnitId)
   CUnit *apUnits[SELECTION_WIDE];
   int h = g_LocalHumanID;
   int nBest = -1;
-  int k = 2;  // Hyperion: the two recent-selection groups, 16 and 17
+  int k = RecentCount();  // Hyperion: the recent-selection groups, wherever they follow
 
   do {
     k--;
     for (int s = 0; s < SelectionMax(); s++) {
-      DWORD dwId = GroupRow(h, k + 16)[s];
+      DWORD dwId = GroupRow(h, k + RecentFirst())[s];
 
       if (dwId != 0 && dwId == (DWORD)nUnitId &&
           word_66CAD8[h][k] > word_66CAD8[g_LocalHumanID][nBest])
@@ -259,7 +271,7 @@ int __fastcall sub_464030(int nUnitId)
   } while (k != 0);
 
   if (nBest > -1) {
-    BYTE bGroup = (BYTE)(nBest + 16);
+    BYTE bGroup = (BYTE)(nBest + RecentFirst());
     int nGroupIdx = bGroup;
     int nFilled = 0;
 

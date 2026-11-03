@@ -22,6 +22,7 @@
 #include "../platform/port_log.h"  // PortLogger
 #include "../platform/port_json.h"
 #include "../front/port_frontscreens.h"  // ProfileFolder
+#include "../../h/selectlimits.h"  // SelectionWide, the letters' game
 #include "../../gen/globals117.h"
 
 namespace {
@@ -32,13 +33,15 @@ bool g_bLoaded;
 int g_nLayout;                      // PORT_CARD_CLASSIC or PORT_CARD_GRID
 std::map<unsigned, char> g_card;    // a string id's own key
 std::map<unsigned, std::vector<ACCEL>> g_accel;  // a command's own keys
-int g_anGroupKey[16];               // a group's key, lower case; 0 for its own
+int g_anGroupKey[19];               // a group's key, lower case; 0 for its own
 
-// The six extra groups' keys, SC2's letters the user picked (2026-11-02): groups 10 to 15
-// select on R, F, V, T, G and B, with Ctrl to make a group of the selection, Shift to add
-// to it and Alt to select and centre, as the digit groups' Ctrl, Shift and Alt work. A
-// profile may give any group any letter or digit in hotkeys.json's "keys".
-const char kGroupLetters[7] = "rfvtgb";
+// The nine extra groups' keys, the letters the user picked (2026-11-02): groups 11 to 19
+// select on R, F, V, T, G, B, Y, H and N, with Ctrl to make a group of the selection,
+// Shift to add to it and Alt to select and centre, as the digit groups' Ctrl, Shift and
+// Alt work. A profile may give any group any letter or digit in hotkeys.json's "keys".
+// The letters exist in a game of Hyperion's selection, whose group rows hold them
+// (selectlimits.h); a classic game keeps 1.17's rows and letters.
+const char kGroupLetters[10] = "rfvtgbyhn";
 
 // The accelerators' commands by name (dialog_accel, game_evt.cpp); the groups' and the
 // locations' with their digit after.
@@ -140,8 +143,8 @@ void Load(void)
   g_card.clear();
   g_accel.clear();
   memset(g_anGroupKey, 0, sizeof g_anGroupKey);
-  // the six extra groups' own letters, which a profile's keys may take off or move
-  for (int g = 10; g < 16; ++g)
+  // the nine extra groups' own letters, which a profile's keys may take off or move
+  for (int g = 10; g < 19; ++g)
     g_anGroupKey[g] = kGroupLetters[g - 10];
   const std::string path = FilePath();
   FILE *f = NULL;
@@ -190,7 +193,7 @@ void Load(void)
       }
       g = g * 10 + c - '0';
     }
-    if (bDigits && g >= 0 && g < 16)
+    if (bDigits && g >= 0 && g < 19)
       g_anGroupKey[g] = tolower(static_cast<unsigned char>(value[0]));
   }
   for (const auto &m : j["card"].members) {
@@ -222,7 +225,7 @@ void Save(void)
   // the groups' keys other than their own: a digit's stays 1.17's digit, the letters' the
   // letter (kGroupLetters)
   std::string keys;
-  for (int g = 0; g < 16; ++g) {
+  for (int g = 0; g < 19; ++g) {
     const char c = static_cast<char>(g_anGroupKey[g]);
     if (c == 0 || (g >= 10 && c == kGroupLetters[g - 10]))
       continue;
@@ -249,9 +252,16 @@ int PortKeyGroup(unsigned nChar)
   if (!g_bLoaded)
     Load();
   const int c = tolower(static_cast<int>(nChar & 0xFF));
-  for (int g = 0; g < 16; g++)
-    if (g_anGroupKey[g] != 0 && g_anGroupKey[g] == c)
-      return g;
+  for (int g = 0; g < 19; g++)
+    if (g_anGroupKey[g] != 0 && g_anGroupKey[g] == c) {
+      // the letters' rows exist only in a game of Hyperion's selection; a digit a profile
+      // gave a letter group keeps its own group's row there
+      if (g < 10 || SelectionWide())
+        return g;
+      if (c >= '0' && c <= '9')
+        break;
+      return -1;
+    }
   if (c >= '0' && c <= '9' && g_anGroupKey[c - '0'] == 0)
     return c - '0';
   return -1;
@@ -263,7 +273,7 @@ int PortKeyGroupGet(int nGroup)
 {
   if (!g_bLoaded)
     Load();
-  return nGroup >= 0 && nGroup < 16 ? g_anGroupKey[nGroup] : 0;
+  return nGroup >= 0 && nGroup < 19 ? g_anGroupKey[nGroup] : 0;
 }
 
 // The key a group shows and selects on, its own when the player gave it none: the digit for
@@ -272,7 +282,7 @@ char PortKeyGroupShown(int nGroup)
 {
   if (!g_bLoaded)
     Load();
-  if (nGroup < 0 || nGroup >= 16)
+  if (nGroup < 0 || nGroup >= 19)
     return '0';
   if (g_anGroupKey[nGroup] != 0)
     return static_cast<char>(g_anGroupKey[nGroup]);
@@ -285,7 +295,7 @@ bool PortKeyGroupSet(int nGroup, int nChar)
 {
   if (!g_bLoaded)
     Load();
-  if (nGroup < 0 || nGroup >= 16)
+  if (nGroup < 0 || nGroup >= 19)
     return false;
   if (nChar != 0 && !PortKeyGroupFree(nChar))
     return false;

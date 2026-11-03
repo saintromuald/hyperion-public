@@ -105,7 +105,7 @@ enum Bind {
   BIND_KEY_CAM7,
   BIND_KEY_CAM8,
   BIND_KEY_GROUP0,      // the control groups' keys (port_hotkeys.cpp): the ten digits,
-  BIND_KEY_GROUP1,      // then the six letters R, F, V, T, G and B, the groups 11 to 16
+  BIND_KEY_GROUP1,      // then the nine letters R, F, V, T, G, B, Y, H and N, the groups 11 to 19
   BIND_KEY_GROUP2,
   BIND_KEY_GROUP3,
   BIND_KEY_GROUP4,
@@ -120,6 +120,9 @@ enum Bind {
   BIND_KEY_GROUP13,
   BIND_KEY_GROUP14,
   BIND_KEY_GROUP15,
+  BIND_KEY_GROUP16,
+  BIND_KEY_GROUP17,
+  BIND_KEY_GROUP18,
   BIND_DATA_FOLDER,     // shown: PortDataFolder
   BIND_SETTINGS_FILE,   // shown: PortSettingsPath
   BIND_GAME_FILES,      // the kind of install the game's files come from (port_install.cpp)
@@ -746,7 +749,7 @@ int HotkeyOf(int bind)
 // The control group a row sets (port_hotkeys.cpp), or -1 for none.
 int GroupOf(int bind)
 {
-  return bind >= BIND_KEY_GROUP0 && bind <= BIND_KEY_GROUP15 ? bind - BIND_KEY_GROUP0 : -1;
+  return bind >= BIND_KEY_GROUP0 && bind <= BIND_KEY_GROUP18 ? bind - BIND_KEY_GROUP0 : -1;
 }
 
 SetValue ReadKey(const Setting &s) { return Value(static_cast<float>(PortHotkey(HotkeyOf(s.bind)))); }
@@ -976,7 +979,7 @@ const Setting kSettings[] = {
     {"interface", PT_("Language"), CTL_CHOICE, g_szLanguageWords, 0.0f, false, "SC:R", NULL, "restart", BIND_LANGUAGE,
      ReadLanguage, WriteLanguage, NULL, PT_("Hyperion\xE2\x80\x99s menus and the game\xE2\x80\x99s text, as in Remastered. The install\xE2\x80\x99s is the language StarCraft: Remastered was installed in. The game\xE2\x80\x99s text in another language needs that language\xE2\x80\x99s text in the install, which Battle.net installs for its chosen language alone, else the game stays in English. Hyperion\xE2\x80\x99s own text is a first translation, which players are welcome to correct.")},
     {"hotkeys", PT_("Control groups"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
-     NULL, NULL, NULL, PT_("The keys that select a group and, with Ctrl, make the selection a group (Shift adds to it, Alt selects and centres): the ten digits, then six more, the groups 11 to 16, on R, F, V, T, G and B, which hold units and buildings alike. A letter a command card also uses keeps its command on the card - press it with Ctrl, Shift or Alt for the group. Click a key and press another to change it.")},
+     NULL, NULL, NULL, PT_("The keys that select a group and, with Ctrl, make the selection a group (Shift adds to it, Alt selects and centres): the ten digits, then nine more, the groups 11 to 19, on R, F, V, T, G, B, Y, H and N, which hold units and buildings alike, and which win their letters outright: R no longer repairs, T no longer stims, and G, B and H are the groups' alone, the card keeping every other key. Click a key and press another to change it.")},
     {"hotkeys", PT_("Group 1"), CTL_KEYS, "1", 49.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP1,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
     {"hotkeys", PT_("Group 2"), CTL_KEYS, "2", 50.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP2,
@@ -1008,6 +1011,12 @@ const Setting kSettings[] = {
     {"hotkeys", PT_("Group 15"), CTL_KEYS, "G", 71.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP14,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
     {"hotkeys", PT_("Group 16"), CTL_KEYS, "B", 66.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP15,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group 17"), CTL_KEYS, "Y", 89.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP16,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group 18"), CTL_KEYS, "H", 72.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP17,
+     ReadKeyGroup, WriteKeyGroup, NULL, NULL},
+    {"hotkeys", PT_("Group 19"), CTL_KEYS, "N", 78.0f, false, "Hyperion", NULL, "live", BIND_KEY_GROUP18,
      ReadKeyGroup, WriteKeyGroup, NULL, NULL},
     {"hotkeys", PT_("Camera locations"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
      NULL, NULL, NULL, PT_("As StarCraft II's: eight saved views, and eight keys in all. F1 to F8 jump to them, and Ctrl with the same key saves, as SC2's Ctrl does; a save says so on the map's message. Each game starts the eight on the start view, and 1.17's Ctrl+F1 help moved to Ctrl+F10.")},
@@ -1798,7 +1807,9 @@ void SettingGroup(int i)
       LabelLine(i, bDim, NULL);
       Decl row;
       row.d.layout.childGap = Gap(Fs(8));
+      row.d.layout.sizing.width = Grow();
       Open(row);
+      Spacer();  // Hyperion: the key sits at the row's right, its column down the tab
       if (GroupOf(s.bind) >= 0) {
         // a control group's key, its own (the digit, or the letter for the six extra) until
         // the player gives it another; a click, then the key pressed (KeyCapture)
@@ -1868,10 +1879,25 @@ void SettingGroup(int i)
       v.f = static_cast<float>(n);
       break;
     }
-    case CTL_HEAD:
-      // a section's heading, as the benchmark's and the lobby's are
+    case CTL_HEAD: {
+      // a section's heading, with a rule under it and room above, so the tab's sections
+      // read as one (the user, 2026-11-02)
+      Decl head;
+      head.d.layout.sizing.width = Grow();
+      head.d.layout.padding = Pad(Fs(0), Fs(18), Fs(0), Fs(6));
+      head.d.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
+      head.d.layout.childGap = Gap(Fs(6));
+      Open(head);
       Text(Keep(Upper(PortText(s.pszLabel))), UI_FACE_WIDE, Fs(15), 0.04f, kScInkHead);
+      Decl rule;
+      rule.d.layout.sizing.width = Grow();
+      rule.d.layout.sizing.height = Fixed(Fs(1));
+      rule.d.backgroundColor = Col(kScWellRim);
+      Open(rule);
+      Close();
+      Close();
       break;
+    }
     case CTL_BUTTON: {
       LabelLine(i, bDim, NULL);
       Decl b;
