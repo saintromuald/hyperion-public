@@ -9,5 +9,10 @@ class CUnit;
 // start goes to its own mineral field, the base's nearest ones in the round; a replayed,
 // loaded or classic game keeps its own. placebox.cpp calls it as the workers are placed.
 void PortStartWorkerMine(CUnit *pWorker, int nWorker);
+// The larvae' pick, Ctrl+Space's box (the user, 2026-11-02): the player types the number
+// of larvae and Enter selects that many, all with none typed; Escape closes it.
+void PortLarvaPickOpen(void);
+// A game begins: the pick closes, it does not follow into the new game.
+void PortLarvaPickClose(void);
 
 #endif

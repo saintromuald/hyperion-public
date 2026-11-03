@@ -28,6 +28,7 @@
 #include "../port/gameplay/port_hotkeys.h"  // Hyperion: PortAccelRemap, PortAccelProfiled
 #include "../port/gameplay/port_keys.h"  // Hyperion
 #include "../port/gameplay/port_camkeys.h"  // Hyperion: PortCameraPressed, PortCameraRun
+#include "../port/gameplay/port_mineinfo.h"  // Hyperion: PortLarvaPickOpen, the larvae' pick
 #include "../port/loop/port_perf.h"  // Hyperion: PortPerfIdle
 #include "../port/render/port_overlay.h"  // Hyperion: PortOverlayHold, PortOverlayMouse, PortOverlayKey
 #include "../port/render/port_present.h"  // Hyperion
@@ -818,13 +819,19 @@ win_lparam_t __stdcall WndProc(void *hWnd, unsigned int uMsg, uintptr_t wParam, 
       return 0;
     }
   }
-  // Hyperion: Ctrl+Space selects the player's larvae, the Zerg's (the user, 2026-11-02).
+  // Hyperion: Q selects every larva the player has, across all the hatcheries, at once (the
+  // user, 2026-11-02); Ctrl+Space opens the pick, where the count typed and Enter take that
+  // many.
   if ((uMsg == 0x100 || uMsg == 0x104) && gwGameMode == 3 && !gbInMsgMode) {
     const bool bRepeat = (lParam & 0x40000000) != 0;
     const unsigned nHeld = PortHotkeyHeld(static_cast<unsigned>(wParam));
-    if (!bRepeat && nHeld == (PORT_KEY_CTRL | 0x20)) {
+    if (!bRepeat && nHeld == 0x51) {
       const char *pszWhy = NULL;
-      PortSelectLarva(&pszWhy);
+      PortSelectLarva(-1, &pszWhy);
+      return 0;
+    }
+    if (!bRepeat && nHeld == (PORT_KEY_CTRL | 0x20)) {
+      PortLarvaPickOpen();
       return 0;
     }
   }
