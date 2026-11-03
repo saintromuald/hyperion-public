@@ -278,6 +278,8 @@ void scroll_init_game() {
 // cardinal, key pairs is down. The keys are numpad 1/2/3/4/6/7/8/9 against
 // End / Down / PageDown / Left / Right / Home / Up / PageUp, and the diagonals
 // test the numpad first where the cardinals test the arrow first.
+extern BYTE gbInMsgMode;  // textbox.cpp: a message being typed takes the keys
+
 void scroll_get_shift(int *pnShiftX, int *pnShiftY) {
   if (sgbAutoScroll_g != 0) {
     *pnShiftY = 0;
@@ -315,6 +317,21 @@ void scroll_get_shift(int *pnShiftX, int *pnShiftY) {
       *pnShiftX = 1;
     else if (gKeyTbl[0x25] != 0 || gKeyTbl[0x64] != 0)
       *pnShiftX = -1;
+    // Hyperion: Ctrl alone held with W, A, S or D scrolls exactly as the arrows do,
+    // through the same shift, accumulator and speed, and only when no arrow is held and
+    // no message is being typed (the user, 2026-11-03)
+    if (*pnShiftX == 0 && *pnShiftY == 0 && gbInMsgMode == 0 &&
+        gKeyTbl[0x11] != 0 && gKeyTbl[0x10] == 0 && gKeyTbl[0x12] == 0 &&
+        (gKeyTbl[0x57] != 0 || gKeyTbl[0x53] != 0 || gKeyTbl[0x41] != 0 || gKeyTbl[0x44] != 0)) {
+      if (gKeyTbl[0x53] != 0)
+        *pnShiftY = 1;
+      else if (gKeyTbl[0x57] != 0)
+        *pnShiftY = -1;
+      if (gKeyTbl[0x44] != 0)
+        *pnShiftX = 1;
+      else if (gKeyTbl[0x41] != 0)
+        *pnShiftX = -1;
+    }
   }
 }
 

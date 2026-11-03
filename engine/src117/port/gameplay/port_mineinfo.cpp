@@ -209,9 +209,18 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   // again. A counter does not move more between the beats than a worker walks in a
   // quarter of a second, and the player's keys do not wait on the scan (the spell keys'
   // jank, the user, 2026-11-03).
+  // a base's number, gathered on the scan's beat: its group, the workers on its mineral
+  // patches over the maximum, and the hall nearest the minerals to show it on
+  struct BaseInfo {
+    int nShow;
+    int nOn;
+    int nOpt;
+  };
   static std::vector<CUnit *> s_abase;
   static std::vector<Patch> s_ap;
   static std::vector<int> s_anBack;
+  static std::vector<int> s_aGroup;
+  static std::vector<BaseInfo> s_aBase;
   static int s_nIdle = 0;
   static double s_fEnergyBars = 1.0;  // the Interface setting, on until it says no
   static unsigned int s_nLastFrame = 0;
@@ -244,7 +253,12 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
         continue;
       const int x = static_cast<int>(p->pSprite->wPosX);
       const int y = static_cast<int>(p->pSprite->wPosY);
-      int nBest = 0;
+      // only a base's own patches count: the nearest hall, and only within its reach,
+      // so the fields of the whole map never join the first base's number (the user,
+      // 2026-11-03). Eight tiles: a macro hatchery at the same mineral line shares it,
+      // the next mineral line over (ten tiles and more on the stock maps) does not.
+      const int kReach = 8 * 32;
+      int nBest = -1;
       long long llBest = -1;
       for (size_t b = 0; b < s_abase.size(); ++b) {
         if (s_abase[b]->pSprite == NULL)
@@ -252,11 +266,17 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
         const long long dx = x - static_cast<int>(s_abase[b]->pSprite->wPosX);
         const long long dy = y - static_cast<int>(s_abase[b]->pSprite->wPosY);
         const long long d = dx * dx + dy * dy;
+        if (d > static_cast<long long>(kReach) * kReach)
+          continue;
         if (llBest < 0 || d < llBest) {
           llBest = d;
           nBest = static_cast<int>(b);
         }
       }
+      if (nBest < 0 && !bRefinery)
+        continue;  // no base of the player's within reach: not its minerals. The
+                   // player's own refineries are collected wherever they stand, so a
+                   // built geyser always takes its number even far from a hall
       Patch patch;
       patch.pUnit = p;
       patch.bGas = IsGeyser(p->wType) || bRefinery;
@@ -304,6 +324,81 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
             break;
           }
     }
+    // the bases: halls within eight tiles of one another are one base (a macro hatchery
+    // at the same mineral line), each hall tested against any earlier hall of a group
+    // so a chain of halls merges however they are ordered
+    s_aGroup.assign(s_abase.size(), -1);
+    for (size_t k = 0; k < s_abase.size(); ++k) {
+      if (s_abase[k]->pSprite == NULL)
+        continue;
+      for (size_t j = 0; j < k; ++j) {
+        if (s_aGroup[j] < 0 || s_abase[j]->pSprite == NULL)
+          continue;
+        const double dx = static_cast<double>(s_abase[k]->pSprite->wPosX) - s_abase[j]->pSprite->wPosX;
+        const double dy = static_cast<double>(s_abase[k]->pSprite->wPosY) - s_abase[j]->pSprite->wPosY;
+        if (dx * dx + dy * dy > static_cast<double>(8 * 32) * (8 * 32))
+          continue;
+        if (s_aGroup[k] < 0) {
+          s_aGroup[k] = s_aGroup[j];  // the first base this hall touches
+        } else if (s_aGroup[k] != s_aGroup[j]) {
+          // it touches a second base too: the two are one, so the chain of halls merges
+          // however the halls are ordered (the critic's counterexample)
+          const int nOld = s_aGroup[k];
+          for (size_t m = 0; m <= k; ++m)
+            if (s_aGroup[m] == nOld)
+              s_aGroup[m] = s_aGroup[j];
+        }
+      }
+      if (s_aGroup[k] < 0)
+        s_aGroup[k] = static_cast<int>(k);
+    }
+    // each base's number: its workers over three a patch, capped, and the hall nearest
+    // its minerals' middle to show it on (the user, 2026-11-03)
+    s_aBase.clear();
+    for (size_t b = 0; b < s_abase.size(); ++b) {
+      if (s_aGroup[b] != static_cast<int>(b) || s_abase[b]->pSprite == NULL)
+        continue;
+      BaseInfo base;
+      base.nShow = static_cast<int>(b);
+      base.nOn = 0;
+      base.nOpt = 0;
+      double fMidX = 0.0, fMidY = 0.0;
+      int nPatches = 0;
+      for (const Patch &p : s_ap) {
+        if (p.nBase < 0 || p.nBase >= static_cast<int>(s_abase.size()) || s_aGroup[p.nBase] != static_cast<int>(b))
+          continue;
+        if (p.bGas)
+          continue;
+        base.nOn += p.nOn;
+        base.nOpt += p.nSat;
+        fMidX += p.nX;
+        fMidY += p.nY;
+        ++nPatches;
+      }
+      if (nPatches == 0 || base.nOpt <= 0)
+        continue;
+      for (size_t k = 0; k < s_abase.size(); ++k)
+        if (s_aGroup[k] == static_cast<int>(b))
+          base.nOn += s_anBack[k];
+      if (base.nOn > base.nOpt)
+        base.nOn = base.nOpt;
+      fMidX /= nPatches;
+      fMidY /= nPatches;
+      double fBest = -1.0;
+      for (size_t k = 0; k < s_abase.size(); ++k) {
+        if (s_aGroup[k] != static_cast<int>(b) || s_abase[k]->pSprite == NULL)
+          continue;
+        const double dx = static_cast<double>(s_abase[k]->pSprite->wPosX) - fMidX;
+        const double dy = static_cast<double>(s_abase[k]->pSprite->wPosY) - fMidY;
+        const double d = dx * dx + dy * dy;
+        if (fBest < 0.0 || d < fBest) {
+          fBest = d;
+          base.nShow = static_cast<int>(k);
+        }
+      }
+      s_aBase.push_back(base);
+    }
+
     s_nIdle = nIdle;
     double d = 1.0;  // on by default; Settings' "Spellcasters' energy bars" turns them off
     PortSettingNumber("hyperion", "energyBars", &d);
@@ -333,60 +428,53 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     return UiColor{1.0f, 1.0f, 1.0f, 0.95f};
   };
 
-  // over each town hall the minerals' number, the workers on the base's patches over
-  // three a patch - 0 / 24 on an eight-patch base - capped at the maximum, so a worker
-  // walking back does not push the counter past it (the user's clean count, 2026-11-03)
-  for (size_t b = 0; bCamOk && b < s_abase.size(); ++b) {
-    if (s_abase[b]->pSprite == NULL)
+  // over each base's main hall the minerals' number, the scan's finding: the workers on
+  // the base's patches over three a patch - 0 / 24 on an eight-patch base - capped at the
+  // maximum, so a worker walking back does not push the counter past it (the user,
+  // 2026-11-03)
+  for (const BaseInfo &base : s_aBase) {
+    if (!bCamOk || base.nShow < 0 || base.nShow >= static_cast<int>(s_abase.size()))
       continue;
-    int nMinOn = s_anBack[b], nMinOpt = 0;
-    for (const Patch &p : s_ap) {
-      if (p.nBase != static_cast<int>(b))
-        continue;
-      if (p.bGas)
-        continue;
-      nMinOn += p.nOn;
-      nMinOpt += p.nSat;
-    }
-    if (nMinOpt <= 0)
+    CUnit *pHall = s_abase[base.nShow];
+    if (pHall->pSprite == NULL)
       continue;
-    if (nMinOn > nMinOpt)
-      nMinOn = nMinOpt;
-    const double fXw = static_cast<int>(s_abase[b]->pSprite->wPosX);
-    const double fYw = static_cast<int>(s_abase[b]->pSprite->wPosY);
+    const double fXw = static_cast<int>(pHall->pSprite->wPosX);
+    const double fYw = static_cast<int>(pHall->pSprite->wPosY);
     const double fSx0 = fX + (fXw - fCamX) * fSx;
     const double fSy0 = fY + (fYw - fCamY) * fSy;
     if (fSx0 < fX - 80 || fSx0 > fX + fW + 80 || fSy0 < fY - 60 || fSy0 > fY + fH)
       continue;
     char sz[16];
     const float fYLine = static_cast<float>(fSy0) - 46.0f;
-    if (nMinOpt > 0) {
-      snprintf(sz, sizeof sz, "%d / %d", nMinOn, nMinOpt);
-      const float fWid = UiTextWidth(UI_FACE_BOLD, 13.0f, 0.0f, sz);
-      const float fX0 = static_cast<float>(fSx0) - fWid / 2;
-      const UiColor c = colour(nMinOn, nMinOpt);
-      UiText(fX0 + 1.0f, fYLine + 1.0f, UI_FACE_BOLD, 13.0f, 0.0f, UiColor{0.0f, 0.0f, 0.0f, 0.7f}, sz);
-      UiText(fX0, fYLine, UI_FACE_BOLD, 13.0f, 0.0f, c, sz);
-    }
+    snprintf(sz, sizeof sz, "%d / %d", base.nOn, base.nOpt);
+    const float fWid = UiTextWidth(UI_FACE_BOLD, 13.0f, 0.0f, sz);
+    const float fX0 = static_cast<float>(fSx0) - fWid / 2;
+    const UiColor c = colour(base.nOn, base.nOpt);
+    UiText(fX0 + 1.0f, fYLine + 1.0f, UI_FACE_BOLD, 13.0f, 0.0f, UiColor{0.0f, 0.0f, 0.0f, 0.7f}, sz);
+    UiText(fX0, fYLine, UI_FACE_BOLD, 13.0f, 0.0f, c, sz);
     bDrew = true;
   }
 
   // over each vespene geyser its own number: the workers on it over three, the same
-  // principle as the town halls' (the user, 2026-11-03). Only the geysers of the player's
-  // own bases show - the ones whose assigned town hall lies within a base's reach - so a
-  // scouted enemy's geyser does not take a 0 / 3.
+  // principle as the bases' (the user, 2026-11-03). The player's own refineries always
+  // show - they are the built geysers, for all three races - and an unbuilt geyser
+  // shows only near one of the player's bases, so a scouted enemy's geyser takes no
+  // 0 / 3.
   const int kBaseReach = 15 * 32;  // map pixels: a geyser sits a few tiles from its hall
   for (const Patch &p : s_ap) {
     if (!bCamOk)
       break;
-    if (!p.bGas || p.nBase < 0 || p.nBase >= static_cast<int>(s_abase.size()))
+    if (!p.bGas)
       continue;
-    if (s_abase[p.nBase]->pSprite == NULL)
-      continue;
-    const double fDx = p.nX - static_cast<int>(s_abase[p.nBase]->pSprite->wPosX);
-    const double fDy = p.nY - static_cast<int>(s_abase[p.nBase]->pSprite->wPosY);
-    if (fDx * fDx + fDy * fDy > static_cast<double>(kBaseReach) * kBaseReach)
-      continue;
+    const bool bBuilt = p.pUnit->wType != 0xBC;  // the refinery's own unit on the geyser
+    if (!bBuilt) {
+      if (p.nBase < 0 || p.nBase >= static_cast<int>(s_abase.size()) || s_abase[p.nBase]->pSprite == NULL)
+        continue;
+      const double fDx = p.nX - static_cast<int>(s_abase[p.nBase]->pSprite->wPosX);
+      const double fDy = p.nY - static_cast<int>(s_abase[p.nBase]->pSprite->wPosY);
+      if (fDx * fDx + fDy * fDy > static_cast<double>(kBaseReach) * kBaseReach)
+        continue;
+    }
     const double fXw = p.nX;
     const double fYw = p.nY;
     const double fSx0 = fX + (fXw - fCamX) * fSx;
@@ -442,7 +530,7 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   // 2026-11-03)
   const int nConsoleTop = static_cast<int>(sgConsoleAreaRect_g.top);
   if (nConsoleTop >= 0 && nConsoleTop <= 480) {
-    const float fBadgeBottom = fY + (nConsoleTop - 10.0f) * fScale;
+    const float fBadgeBottom = fY + (nConsoleTop - 22.0f) * fScale;
     const float fBadgeX = fX + (sgMinimapArea_g.right + 6.0f) * fScale;
     IdleBadge(fBadgeX, fBadgeBottom, fW, fH, s_nIdle, fScale);
   }

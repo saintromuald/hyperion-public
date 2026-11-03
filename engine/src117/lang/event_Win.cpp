@@ -34,7 +34,6 @@
 #include "../port/render/port_present.h"  // Hyperion
 #include "../port/replays/port_tv.h"  // Hyperion: PortFollowToggle, PortTvToggle
 #include "../port/render/port_view.h"  // Hyperion
-#include "../port/render/port_camera.h"  // Hyperion: PortCameraShown, the Ctrl+WASD step's zoom
 #include "../port/lan/port_lanfeed.h"  // Hyperion: PortLanWatchLive
 #include "../port/hud/port_hudinput.h"  // Hyperion: PortHudMouse
 #include "../port/hud/port_hudstate.h"  // Hyperion: PortHudPressButton
@@ -834,26 +833,6 @@ win_lparam_t __stdcall WndProc(void *hWnd, unsigned int uMsg, uintptr_t wParam, 
     }
     if (!bRepeat && nHeld == (PORT_KEY_CTRL | 0x20)) {
       PortLarvaPickOpen();
-      return 0;
-    }
-  }
-  // Hyperion: Ctrl held with A, W, S or D moves the camera, SC2's way (the user,
-  // 2026-11-02): left, up, down and right, as the arrow keys would. The repeat of a held
-  // key is the step's beat, the step is the screen's own at any zoom, and only Ctrl held
-  // alone takes it; not while a message is typed.
-  if ((uMsg == 0x100 || uMsg == 0x104) && gwGameMode == 3 && !gbInMsgMode) {
-    const unsigned nHeld = PortHotkeyHeld(static_cast<unsigned>(wParam));
-    if (nHeld == (PORT_KEY_CTRL | (static_cast<unsigned>(wParam) & 0xFF)) &&
-        (wParam == 0x41 || wParam == 0x57 || wParam == 0x53 || wParam == 0x44)) {
-      const int nStep = 16 * static_cast<int>(PortCameraShown() + 0.5);
-      if (wParam == 0x41)
-        cell_set_pos(glScrollPixelX - nStep, glScrollPixelY);
-      else if (wParam == 0x44)
-        cell_set_pos(glScrollPixelX + nStep, glScrollPixelY);
-      else if (wParam == 0x57)
-        cell_set_pos(glScrollPixelX, glScrollPixelY - nStep);
-      else
-        cell_set_pos(glScrollPixelX, glScrollPixelY + nStep);
       return 0;
     }
   }
