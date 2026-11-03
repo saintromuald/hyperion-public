@@ -44,14 +44,17 @@ SCV, SCV, marine — the rig's scenario 1) unless noted.
 
 | Offset | Field (as named) |
 |---|---|
-| +0x00, +0x04 | position x, y, scaled by 1/4096 |
-| +0x08 | exists (1.0) |
-| +0x28, +0x30, +0x40, +0x58, +0x70 | flags (completed and friends, all 1.0) |
-| +0x48 | hit points, scaled by 1/1600, clamped to 1.0 (drone's 40 = 0.025) |
+| +0x00, +0x04 | position x, y, scaled by 1/4096 (verified by the teleport differential) |
+| +0x08 | hit points / the unit's max hp (a half-hp hatchery reads 0.5; NOT 1/1600) |
+| +0x28, +0x30, +0x40, +0x48, +0x58, +0x70 | flags, all 1.0 in the captures |
+| +0x3C | isMoving (0 -> 1 when the unit starts moving) |
 | +0x50, +0x5C | a race bit (1.0 for zerg, 0.0 for terran) |
-| +0x78, +0xB0, +0xB4 | flags true only for the bot's first selected unit in the capture |
-| +0x134..+0x190 | direction embeddings, sin/cos pairs (the ±0.707/±0.924/±0.383 family) |
-| +0x194..+0x1B0 | normalized-vector embeddings (values like ±0.95..0.99) |
+| +0x0C..+0x24, +0x54..+0x134 | zeros in the captures (cooldowns, shields, energy, orders) |
+| +0x134..+0x1B0 | 32 floats of direction embeddings (sin/cos pairs): position- and heading-derived -- a teleport changes them without a facing change; the exact bucket formula is the writer's (base+0x34960), still to be read |
+
+There is NO per-unit type one-hot: the net learns the unit identity from these
+features plus the globals' per-type counts. The unit entries carry x, y,
+hp/maxHP, the race, the flags and the embeddings only.
 | the rest | the one-hots (unit type, player), cooldowns, shields, energy, order and target — to be read from the per-unit writer's disassembly (the fstp [esi+off] sequence from base+0x307F0) |
 
 ## The reply (the actions)
