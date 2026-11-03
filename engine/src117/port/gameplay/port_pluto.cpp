@@ -22,6 +22,7 @@
 #include "port_pluto.h"
 #include "port_ai.h"  // AiProfileOf, AI_LEVEL_PLUTO
 #include "../../h/CUnit.h"
+#include "../../h/count.h"        // count_get_supplies_used/available
 #include "../../h/net_cmds.h"      // the net command structs, the receivers, sub_477E00
 #include "../../h/playerlimits.h"  // PLAYER_SLOTS_MAX, PlayerLobbySlots
 #include "../../h/playervision.h"  // SpriteSeenBy, VisionHxTileSeen, VisionHxTileExplored
@@ -272,8 +273,12 @@ bool PlutoSendFrame() {
     p.race = gPlayerData[s].nRace;
     p.minerals = static_cast<unsigned>(gPlayerMinerals[s]);
     p.gas = static_cast<unsigned>(gPlayerGas[s]);
-    p.supplyTotal = 200;  // v1: the supply lookup is not wired yet
-    p.supplyUsed = 0;
+    // The supplies in the hud's halves (a zergling is 1); the bridge expects
+    // the same totals the fork reads from the real game.
+    p.supplyTotal = static_cast<unsigned>(
+        (count_get_supplies_available(static_cast<BYTE>(p.race), static_cast<BYTE>(s)) + 1) / 2);
+    p.supplyUsed = static_cast<unsigned>(
+        (count_get_supplies_used(static_cast<BYTE>(p.race), static_cast<BYTE>(s)) + 1) / 2);
     p.startX = gStartLocations[s].x;
     p.startY = gStartLocations[s].y;
     players.push_back(p);
@@ -469,6 +474,18 @@ void PlutoFrame() {
 void PlutoGameEnd() {
   if (!s_bUp)
     return;
+  // The frame transport is the FIFOs: close them so the bridge sees EOF and
+  // runs its own clean shutdown (the bot's onEnd sets the engine's quit flag,
+  // and pluto_infer.exe exits). Killing the bridge hard left the engine
+  // lingering, and the next game's bridge then handshook the stale engine.
+  if (s_fifoFrames >= 0) {
+    close(s_fifoFrames);
+    s_fifoFrames = -1;
+  }
+  if (s_fifoReplies >= 0) {
+    close(s_fifoReplies);
+    s_fifoReplies = -1;
+  }
   if (s_hToBridge != NULL) {
     CloseHandle(s_hToBridge);  // the bridge's stdin closes; it exits
     s_hToBridge = NULL;
@@ -478,7 +495,10 @@ void PlutoGameEnd() {
     s_hFromBridge = NULL;
   }
   if (s_hProc != NULL) {
-    TerminateProcess(s_hProc, 0);
+    if (WaitForSingleObject(s_hProc, 3000) == WAIT_TIMEOUT) {
+      TerminateProcess(s_hProc, 0);  // only when the clean exit does not come
+      Log("Pluto: the bridge was forced closed");
+    }
     CloseHandle(s_hProc);
     s_hProc = NULL;
   }
