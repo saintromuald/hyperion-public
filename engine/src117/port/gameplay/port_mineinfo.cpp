@@ -5,9 +5,9 @@
 //
 // Over each of the local player's town halls two simple numbers show, the minerals' and
 // the gas', as StarCraft II's clean worker count: the workers on the base's patches over
-// the optimum, three a mineral patch and three a geyser - 1 / 24 for one worker on an
-// eight-patch base - and at the optimum the number takes the player's own colour, the one
-// their race starts in; under it the number is plain white.
+// Brood War's efficient optimum, two a mineral patch and three a geyser - 1 / 16 for one
+// worker on an eight-patch base - and at the optimum the number takes the player's own
+// colour, the one their race starts in; under it the number is plain white.
 //
 // Above the minimap's terrain toggle, as SC2's, a small fixed icon shows the idle workers
 // when there are any, with the count; a click takes the view to the next idle worker, as
@@ -54,10 +54,12 @@ bool IsMineralField(int nType) { return nType >= 0xB0 && nType <= 0xB2; }
 bool IsGeyser(int nType) { return nType == 0xBC; }
 bool IsRefinery(int nType) { return nType == 0x6E || nType == 0x95 || nType == 0x9D; }
 
-// The workers a patch takes to saturate: three a mineral patch and three a geyser, the
-// figure the user's Cosmonarchy works with and StarCraft II's own optimum (the user,
-// 2026-11-02). The number over the town hall is the workers on the base's patches over the
-// optimum: 1 / 24 for one worker on an eight-patch base, and the same for the geysers'.
+// The workers a patch takes to its efficient optimum, Brood War's own figures (the user,
+// 2026-11-03; Liquipedia's Mining page): a mineral patch's third worker mines at about half
+// the first two's rate - two a patch bring 78 to 90 a minute, the third some 20 more - so
+// two a mineral patch is the efficient saturation the community's "16 on minerals" works
+// from, and a geyser takes three. The number over the town hall is the workers on the
+// base's patches over that optimum: 1 / 16 for one worker on an eight-patch base.
 
 // A patch the base mines: its position, the town hall it belongs to, how many workers it
 // takes to saturate, and how many are on it now.
@@ -66,7 +68,7 @@ struct Patch {
   bool bGas;
   int nBase;
   int nX, nY;   // its centre, in map pixels
-  int nSat;     // the workers that saturate it: three
+  int nSat;     // the workers at its efficient optimum: two a mineral patch, three a geyser
   int nOn;      // the workers on it now
 };
 
@@ -231,7 +233,7 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     patch.nBase = nBest;
     patch.nX = x;
     patch.nY = y;
-    patch.nSat = 3;  // a patch takes three workers at its optimum
+    patch.nSat = patch.bGas ? 3 : 2;  // the geyser's three, the mineral patch's two
     patch.nOn = 0;
     ap.push_back(patch);
   }
