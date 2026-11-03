@@ -25,6 +25,9 @@
 #include "../../h/net_cmds.h"      // the net command structs, the receivers, sub_477E00
 #include "../../h/playerlimits.h"  // PLAYER_SLOTS_MAX, PlayerLobbySlots
 #include "../../h/playervision.h"  // SpriteSeenBy, VisionHxTileSeen, VisionHxTileExplored
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "../../gen/globals117.h"  // gPlayerData, gPlayerMinerals, gPlayerGas, gwMapWidth, gStartLocations
 #include "../platform/port_log.h"  // PortLogger
 #include "../platform/port_paths.h"  // PortDataFolder
@@ -76,6 +79,21 @@ std::string PlutoFolder() {
   return s + "pluto";
 }
 
+// The FIFO fds: frames out, replies in (see PlutoStart).
+static int s_fifoFrames = -1;
+static int s_fifoReplies = -1;
+
+// The game's paths are wine-shaped (Z:\...); the raw POSIX calls want unix ones.
+static std::string UnixPath(const std::string &s) {
+  std::string r = s;
+  for (char &c : r)
+    if (c == '\\')
+      c = '/';
+  if (r.size() >= 2 && r[1] == ':')
+    r.erase(0, 2);
+  return r;
+}
+
 // The bridge's process, once the game starts.
 bool PlutoStart() {
   if (s_bUp || s_bFailed)
@@ -87,6 +105,19 @@ bool PlutoStart() {
   if (const char *psz = getenv("HYPERION_PLUTO_WINE"))
     wine = psz;
 
+  // The frame transport: named FIFOs in the bridge's folder. The fork's engine
+  // detaches the console at start-up, which kills wine's stdin/stdout -- the
+  // anonymous pipes died at ~frame 2 of every real game. The bridge opens the
+  // FIFOs itself through its own CRT, so no console fd is involved.
+  const std::string ff = UnixPath(folder) + "/frames.fifo";
+  const std::string rf = UnixPath(folder) + "/replies.fifo";
+  unlink(ff.c_str());
+  unlink(rf.c_str());
+  if (mkfifo(ff.c_str(), 0666) != 0 || mkfifo(rf.c_str(), 0666) != 0) {
+    Log("Pluto: the FIFOs were not made (%s, %s): %s", ff.c_str(), rf.c_str(),
+        strerror(errno));
+    return false;
+  }
   SECURITY_ATTRIBUTES sa = {sizeof sa, NULL, TRUE};  // inheritable
   HANDLE hToRead = NULL, hToWrite = NULL;            // the bridge's stdin ends
   HANDLE hFromRead = NULL, hFromWrite = NULL;        // the bridge's stdout ends
@@ -140,35 +171,50 @@ bool PlutoStart() {
   CloseHandle(hFromWrite);
   s_hProc = pi.hProcess;
   CloseHandle(pi.hThread);
+  // The bridge's FIFO opens block until our opens arrive, and vice versa: the
+  // handshake completes both. The frames side is O_RDWR -- it never blocks,
+  // and the bridge sees EOF only at the game's end.
+  s_fifoReplies = open(rf.c_str(), O_RDONLY | O_CLOEXEC);
+  s_fifoFrames = open(ff.c_str(), O_RDWR | O_CLOEXEC);
+  if (s_fifoFrames < 0 || s_fifoReplies < 0) {
+    Log("Pluto: the FIFOs did not open");
+    s_bFailed = true;
+    return false;
+  }
   s_bUp = true;
   Log("Pluto: the bridge runs (%s)", cmd.c_str());
   return true;
 }
 
 bool WriteAll(HANDLE h, const void *pv, size_t cb) {
+  // The frames go to the FIFO, not the pipe: the bridge's console detach killed
+  // the anonymous pipes at ~frame 2 of every real game.
   const char *p = static_cast<const char *>(pv);
   while (cb) {
-    DWORD n = 0;
-    if (!WriteFile(h, p, static_cast<DWORD>(cb > 0x7FFFFFFF ? 0x7FFFFFFF : cb), &n,
-                   NULL) ||
-        n == 0)
+    const ssize_t n = write(s_fifoFrames, p, cb);
+    if (n < 0) {
+      if (errno == EINTR)
+        continue;
       return false;
+    }
     p += n;
-    cb -= n;
+    cb -= static_cast<size_t>(n);
   }
   return true;
 }
 
 bool ReadAll(HANDLE h, void *pv, size_t cb) {
+  // The replies come from the FIFO (see WriteAll).
   char *p = static_cast<char *>(pv);
   while (cb) {
-    DWORD n = 0;
-    if (!ReadFile(h, p, static_cast<DWORD>(cb > 0x7FFFFFFF ? 0x7FFFFFFF : cb), &n,
-                  NULL) ||
-        n == 0)
+    const ssize_t n = read(s_fifoReplies, p, cb);
+    if (n <= 0) {
+      if (n < 0 && errno == EINTR)
+        continue;
       return false;
+    }
     p += n;
-    cb -= n;
+    cb -= static_cast<size_t>(n);
   }
   return true;
 }
@@ -183,17 +229,24 @@ bool PlutoSendFrame() {
     unsigned race, minerals, gas, supplyTotal, supplyUsed;
     unsigned startX, startY;
   };
-  // The units: the used list, in its order (the bot's ids follow it).
+  // The units: the used list, with the engine's STABLE table slot as the id
+  // (the bot's ids are kPlutoIdBase + that slot). The used list reorders every
+  // frame, so position-based ids churned -- the bot's model saw its units
+  // vanish each step and its orders targeted stale positions.
   s_nFrame = 0;
+  memset(s_aFrame, 0, sizeof s_aFrame);
   std::vector<Unit> units;
   units.reserve(256);
   for (CUnit *u = CUnit::GetUsedList(); u != NULL && s_nFrame < kFrameUnitsMax;
        u = u->pNext) {
-    s_aFrame[s_nFrame] = u;
+    const unsigned slot = static_cast<unsigned>((u->GetUnitID() & 0x7FF) - 1);
+    if (slot >= kFrameUnitsMax)
+      continue;
+    s_aFrame[slot] = u;
     ++s_nFrame;
     Unit x;
     memset(&x, 0, sizeof x);
-    x.id = static_cast<unsigned>(s_nFrame - 1);
+    x.id = slot;
     x.type = u->wType;
     x.player = u->bPlayer;
     x.x = u->wPositionX;
@@ -309,6 +362,9 @@ bool PlutoReadAndApply() {
   const unsigned nCmd = out[2] < 0x10000 ? out[2] : 0;
   std::vector<unsigned char> cmd(nCmd);
   unsigned win = 0;
+  static int s_nCmdFrames = 0;
+  if (nCmd > 0 && s_nCmdFrames++ < 12)
+    Log("Pluto: frame %u has %u cmd bytes", out[1], nCmd);
   if (!ReadAll(s_hFromBridge, cmd.data(), nCmd) || !ReadAll(s_hFromBridge, &win, 4))
     return false;
 
@@ -326,9 +382,11 @@ bool PlutoReadAndApply() {
         const unsigned id = static_cast<unsigned>(p[2 + i * 2]) |
                             (static_cast<unsigned>(p[3 + i * 2]) << 8);
         const int idx = static_cast<int>(id) - kPlutoIdBase;
-        if (idx < 0 || idx >= s_nFrame)
+        if (idx < 0 || idx >= kFrameUnitsMax)
           continue;
         CUnit *pu = s_aFrame[idx];
+        if (pu == NULL)
+          continue;
         if (pu != NULL)
           select_insert(pu, g_ActiveHumanID, i);
       }
@@ -394,7 +452,9 @@ void PlutoFrame() {
   if (s_dwFrame < 3 || s_dwFrame % 600 == 0)
     Log("Pluto: sending frame %u", s_dwFrame);
   if (!PlutoSendFrame()) {  // sends s_dwFrame
-    Log("Pluto: frame %u did not send", s_dwFrame);
+    static int s_fails = 0;
+    if (s_fails++ < 3)
+      Log("Pluto: frame %u did not send (err %lu)", s_dwFrame, GetLastError());
     return;
   }
   ++s_dwFrame;
