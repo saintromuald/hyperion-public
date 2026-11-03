@@ -760,7 +760,7 @@ bool PortSelectLarva(const char **ppszWhy) {
   const int nPlayer = static_cast<int>(g_LocalNationID);
   std::vector<CUnit *> larvae;
   for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext)
-    if (p->bPlayer == nPlayer && p->wType == 0x23 && (p->dwFlags & 1) != 0)
+    if (p->bPlayer == nPlayer && p->wType == 0x23)
       larvae.push_back(p);
   if (larvae.empty()) {
     *ppszWhy = "no larvae";
