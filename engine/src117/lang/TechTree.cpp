@@ -13,6 +13,7 @@
 #include "../gen/globals117.h"
 #include "../h/typelimits.h"  // Hyperion: a mod's types
 #include "../h/mutators.h"    // Hyperion: MutatorAddon, the one add-on's
+#include "../h/hxrules.h"     // Hyperion: HxRules, the building queue's game
 #include "../port/data/port_moddata.h"  // Hyperion: ModUnitTree, ModTreeEdit
 
 int TTAllowed(WORD wUnitId, int nPlayer, CUnit *pUnit);
@@ -105,7 +106,9 @@ int TTAllowed(WORD wUnitId, int nPlayer, CUnit *pUnit) {
     return 0;
   }
 
-  if (!(pUnit->dwFlags & 1)) {
+  // Hyperion: a building still building keeps its card's production in a game by Hyperion's
+  // rules (the user, 2026-11-02): the queue waits for the building, as StarCraft II's does.
+  if (!(pUnit->dwFlags & 1) && (!HxRules() || (gulUnitTypeFlags[pUnit->wType] & 1) == 0)) {
     allowed_errcode_g = 0x14;
     return 0;
   }

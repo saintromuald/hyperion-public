@@ -113,7 +113,9 @@ bool Shown(void)
 bool g_bIdleBadge;
 float g_fIdleX, g_fIdleY, g_fIdleW, g_fIdleH;
 
-// The small badge: a box, a worker (a head and a body), and the count.
+// The small badge: a box, a worker (a head and a body), and the count; drawn always, the
+// worker and the count in SC2's idle colour when there are idle workers, grey at none, so
+// "idle 0" is as visible as any count (the user, 2026-11-02).
 void IdleBadge(float fX, float fY, float fW, float fH, int nCount, float fScale)
 {
   const float fSize = 22.0f * fScale;
@@ -122,18 +124,18 @@ void IdleBadge(float fX, float fY, float fW, float fH, int nCount, float fScale)
   g_fIdleW = fSize + 34.0f * fScale;
   g_fIdleH = fSize;
   g_bIdleBadge = true;
+  const UiColor c = nCount > 0 ? UiColor{0.9f, 0.7f, 0.15f, 1.0f} : UiColor{0.5f, 0.5f, 0.5f, 0.75f};
   UiFill(g_fIdleX, g_fIdleY, g_fIdleW, g_fIdleH, UiColor{0.0f, 0.0f, 0.0f, 0.55f});
-  UiRing(g_fIdleX, g_fIdleY, g_fIdleW, g_fIdleH, UiColor{0.9f, 0.7f, 0.15f, 0.9f}, 4.0f, 1.5f);
-  // the worker: a head above a body, in SC2's idle colour
+  UiRing(g_fIdleX, g_fIdleY, g_fIdleW, g_fIdleH, c, 4.0f, 1.5f);
+  // the worker: a head above a body
   const float cx = g_fIdleX + fSize / 2;
-  UiFill(cx - fSize * 0.12f, g_fIdleY + fSize * 0.28f, fSize * 0.24f, fSize * 0.5f,
-         UiColor{0.9f, 0.7f, 0.15f, 1.0f});
-  UiRing(cx, g_fIdleY + fSize * 0.16f, fSize * 0.3f, fSize * 0.3f, UiColor{0.9f, 0.7f, 0.15f, 1.0f},
+  UiFill(cx - fSize * 0.12f, g_fIdleY + fSize * 0.28f, fSize * 0.24f, fSize * 0.5f, c);
+  UiRing(cx, g_fIdleY + fSize * 0.16f, fSize * 0.3f, fSize * 0.3f, c,
          fSize * 0.15f, fSize * 0.11f);
   char sz[8];
   snprintf(sz, sizeof sz, "%d", nCount);
   UiText(g_fIdleX + fSize + 8.0f * fScale, g_fIdleY + fSize * 0.62f, UI_FACE_BOLD, fSize * 0.62f, 0.0f,
-         UiColor{1.0f, 1.0f, 1.0f, 0.95f}, sz);
+         nCount > 0 ? UiColor{1.0f, 1.0f, 1.0f, 0.95f} : UiColor{0.7f, 0.7f, 0.7f, 0.8f}, sz);
 }
 
 bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
@@ -281,11 +283,10 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     bDrew = true;
   }
 
-  // the idle workers' icon, fixed above the minimap's corner, only while there are some
-  if (nIdle > 0) {
-    IdleBadge(fX + 6.0f, fY + fH - fH * 90.0f / 480.0f - 4.0f, fW, fH, nIdle, static_cast<float>(fH) / 480.0f);
-    bDrew = true;
-  }
+  // the idle workers' icon, fixed above the minimap's corner, always, the count on it; it
+  // sits in the window's own pixels, so it stays put and seen at any zoom
+  IdleBadge(fX + 6.0f, fY + fH - fH * 90.0f / 480.0f - 4.0f, fW, fH, nIdle, static_cast<float>(fH) / 480.0f);
+  bDrew = true;
   return bDrew;
 }
 

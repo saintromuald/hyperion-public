@@ -25,7 +25,6 @@
 #include "../h/save_dlg.h"   // do_multi_save_dlg, do_multi_load_dlg
 #include "../h/opt_dlgs.h"   // the game menu dialogs
 #include "../gen/globals117.h"
-#include "../h/hxrules.h"  // Hyperion: HxRules, the letter groups' game
 #include "../port/gameplay/port_hotkeys.h"  // Hyperion: PortKeyGroup
 #include "../port/render/port_view.h"  // Hyperion: g_portView
 #include "../port/hud/port_hudinput.h"  // Hyperion: PortHudConsoleCursor
@@ -181,12 +180,12 @@ void game_keychar_hook(dlgevt_t *pEvent)
   unsigned int nKey = evt_vkey(pEvent);
 
   // Hyperion: the key that selects a group as the profile binds it, 1.17's digit
-  // unless it says otherwise (the hotkeys milestone K3, port_hotkeys.cpp); the six extra
-  // groups' letters are a game by Hyperion's rules' own. With a modifier held the press
+  // unless it says otherwise (the hotkeys milestone K3, port_hotkeys.cpp); the nine extra
+  // groups' letters are a game of Hyperion's selection's own. With a modifier held the press
   // already made the group (event_Win.cpp), and the character it makes must not select it
   // again.
   const int nGroup = PortKeyGroup(nKey);
-  if (nGroup >= 0 && (evt_mods(pEvent) & 0x0F) == 0 && (nGroup < 10 || HxRules()))
+  if (nGroup >= 0 && (evt_mods(pEvent) & 0x0F) == 0)
     game_key_down_num(static_cast<BYTE>(nGroup));
 
   if (nKey == 0x1B)

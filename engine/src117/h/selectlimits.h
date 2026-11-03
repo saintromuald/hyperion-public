@@ -23,13 +23,16 @@
 #define SELECTION_MAX 12     // the units one selection holds in 1.17
 #define SELECTION_WIDE 255   // and in a game of HX_OPT_SELECTION
 #define SELECTION_HUMANS 8   // the humans gSelected keeps a row for
-#define SELECTION_GROUPS 18  // a human's groups: the ten hotkeys, then eight recent selections
+#define SELECTION_GROUPS 18  // a human's groups in 1.17's rows: the ten hotkeys, then eight recent selections
+#define SELECTION_GROUPS_WIDE 24  // and in a game of Hyperion's selection: the ten hotkeys, nine more
+                                  // on R F V T G B Y H N, and five recent selections (selectlimits.h)
 #define SELECTION_PAGE 12    // the units the console's selection shows at a time
 
 class CUnit;
 
 // The arrays the game uses now, set as each game starts (SelectionForGame).
 extern int g_nSelectionMax;         // 12, or 255 in a game of HX_OPT_SELECTION
+extern int g_nSelectionGroups;      // SELECTION_GROUPS, or SELECTION_GROUPS_WIDE in one
 extern CUnit **g_ppSelected;        // gSelected: a row of g_nSelectionMax for each human
 extern CUnit **g_ppNewUnits;        // gpNewUnits: the local selection, as last committed
 extern CUnit **g_ppStatUnits;       // gpStatUnits: the units the console shows
@@ -45,7 +48,7 @@ static inline CUnit **StatUnits() { return g_ppStatUnits; }
 static inline CUnit **NetSelected() { return g_ppNetSelected; }
 static inline CUnit **SavedSelected() { return g_ppSavedSelected; }
 static inline DWORD *GroupRow(int nHuman, int nGroup) {
-  return g_pdwGroups + (nHuman * SELECTION_GROUPS + nGroup) * g_nSelectionMax;
+  return g_pdwGroups + (nHuman * g_nSelectionGroups + nGroup) * g_nSelectionMax;
 }
 
 // As a game starts, ahead of the selection's own start (select_init): 1.17's arrays and 12,

@@ -487,6 +487,13 @@ int statcmd_dlg_char_evn(dlgevt_t *pEvent)
     ctrl_t *pDlg = sgpStatCmdDlg;
     ch = (char)c;
 
+    // Hyperion: a key of a control group selects the group before the card takes it, so
+    // the nine extra groups' letters work as 1 to 0 do (the user, 2026-11-02); the card
+    // keeps every other key. A classic game has no letter groups, so its card keeps its
+    // letters, its R for repair among them.
+    if (PortKeyGroup(static_cast<unsigned>(ch)) >= 0)
+      return 0;
+
     if (ctrl_chainr(pDlg->pChildren,
                     reinterpret_cast<dlgevt_t *>(&ch),
                     reinterpret_cast<PFN_CTRL_EVT>(statcmd_hotkey_cmp_fn)) == 0)
