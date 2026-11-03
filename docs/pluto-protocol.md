@@ -60,6 +60,14 @@ fog r=24->40 / one drone moved), diffed dword-by-dword:
   variant (two new p0 units: bytes 1 and 2 of each plane flip 0 -> 1) --
   unit-derived summaries, not fog and not a plain position grid. One more
   differential batch (single-unit adds, enemy-unit adds) finishes them.
+- **The second batch solved the 32x32 blocks**: they are per-slot unit masks
+  over the visible-unit list, only the first N bytes used -- +0x79100 =
+  "the slot holds a real unit" (byte 0, the sentinel, is 0; base = bytes
+  1..4 for the four zerg units; one more p0 unit flips byte 5; a p1 unit and
+  a unit move change nothing, and fog changes nothing). +0x79500 mirrors it
+  exactly (the per-slot visibility mask -- equal in the rig, where every own
+  unit is visible). The map-u16 plane also carries a per-tile unit bit
+  (0x0100) beside the fog bits.
 - **+0x79A40 (the 1216-byte vector) and the globals tail** move with every
   variant and, for the globals, even across runs of the same scenario: they
   hold the bot's own policy state (arm picks, deploy lambda, counts) mixed
