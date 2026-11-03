@@ -49,8 +49,9 @@ SCV, SCV, marine — the rig's scenario 1) unless noted.
 | +0x28, +0x30, +0x40, +0x48, +0x58, +0x70 | flags, all 1.0 in the captures |
 | +0x3C | isMoving (0 -> 1 when the unit starts moving) |
 | +0x50, +0x5C | a race bit (1.0 for zerg, 0.0 for terran) |
-| +0x0C..+0x24, +0x54..+0x134 | zeros in the captures (cooldowns, shields, energy, orders) |
-| +0x134..+0x1B0 | 32 floats of direction embeddings (sin/cos pairs): position- and heading-derived -- a teleport changes them without a facing change; the exact bucket formula is the writer's (base+0x34960), still to be read |
+| +0x0C..+0x20, +0x2C..+0x3B, +0x54..+0x134 | zeros in the captures (cooldowns, shields, energy, orders) |
+| +0x24, +0x28 | the facing pair: (sin, cos) of the facing byte (unit +0x21) times the scale at 0x63FDCB2C; the rig's scripted units face 0, so both read (0, 1) |
+| +0x134..+0x1B0 | 32 floats: 8 blocks of 4, one per scale k = 0..7: (sin θk, cos θk, sin φk, cos φk) with θk = x·π/(16·2^k), φk = y·π/(16·2^k) -- the raw x and y as multi-scale positional encodings (a period of 32·2^k px). Solved and verified: see "the embedding formula" below |
 
 There is NO per-unit type one-hot: the net learns the unit identity from these
 features plus the globals' per-type counts. The unit entries carry x, y,
@@ -148,3 +149,40 @@ Traps learned the hard way:
   22.5-degree bucket family (1, 0.707, 0.924, 0.383, 0.556, 0.831, 0.981,
   0.195), and the pairs do not fit any fixed anchor -- the target per pair is
   still to be solved.
+
+## The embedding formula, solved (2026-11-03, the sincos trace)
+
+The sincos helpers have no static callers in the DLL -- the calls are
+materialized at runtime. The bridge now traces them (`HX_DEBUG` +
+`ArmSincosTrace`: the helpers' prologues are patched at runtime to stubs in the
+bridge exe that log `(return address, angle)` into `dump/sincos.log`), which
+named the call sites and their angle arguments directly:
+
+- `0x30A94`/`0x30AD8` -- the facing pair at entry +0x24/+0x28:
+  angle = facing byte (unit +0x21) × the scale at 0x63FDCB2C.
+- `0x3153F`/`0x31587` -- the embedding loop, 8 iterations k = 0..7, each
+  storing four floats at entry +0x134+16k:
+  `[sin θk, cos θk, sin φk, cos φk]`.
+
+The traced angles are exact multiples: for the scenario units
+(608,928), (672,1064), (640,864), (512,1224) the k=0 angles were
+119.3805, 131.9469, 125.6637, 100.5310 (= x·π/16) and
+182.2124, 208.9159, 169.6460, 240.3318 (= y·π/16), each halving per k.
+So:
+
+- θk = x·π/(16·2^k), φk = y·π/(16·2^k) -- sin/cos of the raw pixel
+  coordinates scaled by 2^-k; period 32·2^k px (one tile at k=0).
+- The "bucket family" the captures showed (multiples of 11.25° = π/16, with
+  5.625° = π/32 appearing at k=1) is the coordinate folding itself -- not a
+  lookup table. Every captured pair from the rig's dumps matches the formula
+  exactly (e.g. the hatchery's pairs: sin 38π = 0, cos 38π = 1, sin 58π = 0,
+  cos 58π = 1, then cos 19π = -1 at k=1, ...).
+- The two scale constants at 0x63FDCB3C/0x63FDCB40 cancel out of the result
+  (their ratio is 1); they live between the DLL's sections at its preferred
+  base and the fork resolves them through its own fault-tolerant path under
+  the harness, so a Hyperion-side port should use the formula, not the
+  storage.
+
+The loop's helper call (`0x1CB0` with args `(2.0f, k)`) is the 2^k factor.
+The facing pair's scale constant reads 0 in the harness (the scripted units
+face 0 anyway); the byte source is the CUnit-facing at +0x21.
