@@ -44,6 +44,30 @@ own log sizes the vector at **303 floats** ("globals 303 incl. deploy lambda").
 field naming is the mechanical differential pass: run two scripted scenarios
 that differ in one count at a time and diff this region.
 
+### The differential pass (2026-11-03): what each region is
+
+Six scripted variants (base / minerals 777+333 / supply 6->7 / +2 units /
+fog r=24->40 / one drone moved), diffed dword-by-dword:
+
+- **+0x79F00 (the 128x128 u16 plane) = the fog/visibility plane.** The fog
+  variant's 1006 changed dwords are exactly the r=24..40 annulus tiles;
+  a tile reads 0x03 (seen/explored) or 0xC3 (fogged) -- 0xC0 = the hidden
+  bits, 0x03 = the seen+explored bits. Hyperion fills it from
+  VisionHxTileSeen/Explored.
+- **+0x81F00 (the 128x128 byte plane) = not fog**: unchanged across every
+  variant (same map) -- terrain/height derived.
+- **+0x79100/+0x79500 (the 32x32 byte planes)** change only in the units
+  variant (two new p0 units: bytes 1 and 2 of each plane flip 0 -> 1) --
+  unit-derived summaries, not fog and not a plain position grid. One more
+  differential batch (single-unit adds, enemy-unit adds) finishes them.
+- **+0x79A40 (the 1216-byte vector) and the globals tail** move with every
+  variant and, for the globals, even across runs of the same scenario: they
+  hold the bot's own policy state (arm picks, deploy lambda, counts) mixed
+  with the game scalars. A Hyperion-side builder cannot reproduce them from
+  the game state alone -- the obs's globals are the fork's internal state,
+  which is exactly why the bridge (the real DLL) is the architecture and a
+  direct Hyperion-to-pluto_infer mode is not faithful.
+
 ## The unit entry (436 bytes, 109 floats)
 
 Each field is a float32. Offsets are within the entry; values are from a live
