@@ -12,9 +12,9 @@
 // three a patch; a geyser takes three. The number is the indicator: green at the optimum,
 // amber from half of it, red below.
 //
-// Above the minimap, as SC2's, a small fixed icon shows the idle workers when there are
-// any, with the count; a click takes the view to the next idle worker, as the ` key and
-// the HUD's button do.
+// Above the minimap's terrain toggle, as SC2's, a small fixed icon shows the idle workers
+// when there are any, with the count; a click takes the view to the next idle worker, as
+// the ` key and the HUD's button do.
 //
 // Presentation only: no game value is read or written that a replay does not already keep,
 // and nothing here changes what the workers do.
@@ -33,7 +33,15 @@
 #include "../front/port_ui.h"
 #include "../hud/port_hudstate.h"  // PortHudPressButton, the idle icon's click
 #include "../../h/hxrules.h"  // HX_OPT_START_SPLIT, the start workers split's option
+#include "../../h/rect32.h"   // rect32_t, the minimap's cage
 #include "../../gen/globals117.h"
+
+// the minimap's cage rectangle, as port_hudinput.cpp spells it (minimap.cpp, 0x508BB0)
+#ifdef OC_DLL_MODE
+#define sgMinimapArea_g (*reinterpret_cast<rect32_t *>(OC_VA(0x508BB0u)))
+#else
+extern rect32_t sgMinimapArea_g;
+#endif
 
 namespace {
 
@@ -118,7 +126,7 @@ float g_fIdleX, g_fIdleY, g_fIdleW, g_fIdleH;
 // "idle 0" is as visible as any count (the user, 2026-11-02).
 void IdleBadge(float fX, float fY, float fW, float fH, int nCount, float fScale)
 {
-  const float fSize = 22.0f * fScale;
+  const float fSize = 11.0f * fScale;  // half its first size (the user, 2026-11-02)
   g_fIdleX = fX;
   g_fIdleY = fY - fSize;
   g_fIdleW = fSize + 34.0f * fScale;
@@ -221,15 +229,18 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
 
   // the camera's anchor and zoom put each world point on the window: the game box shows
   // nWidth by 480 game pixels, and a map pixel is a game pixel divided by the zoom, off
-  // the anchor.
+  // the anchor. The picture's motion can scale the zoom to nothing for a moment, which
+  // would put the numbers where no number is (and the layout cannot take that), so the
+  // numbers wait for a finite camera.
   double fCamX, fCamY, fZoom;
   PortViewCamera(&fCamX, &fCamY, &fZoom);
-  const double fSx = fW / g_portView.nWidth / fZoom;
-  const double fSy = fH / 480.0 / fZoom;
+  const bool bCamOk = fZoom > 0.0 && isfinite(fZoom) && isfinite(fCamX) && isfinite(fCamY);
+  const double fSx = bCamOk ? fW / g_portView.nWidth / fZoom : 0.0;
+  const double fSy = bCamOk ? fH / 480.0 / fZoom : 0.0;
   bool bDrew = false;
 
   // over each town hall the two numbers: the minerals', then the gas'
-  for (size_t b = 0; b < abase.size(); ++b) {
+  for (size_t b = 0; bCamOk && b < abase.size(); ++b) {
     if (abase[b]->pSprite == NULL)
       continue;
     int nMinOn = anBack[b], nMinOpt = 0;
@@ -283,9 +294,12 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     bDrew = true;
   }
 
-  // the idle workers' icon, fixed above the minimap's corner, always, the count on it; it
-  // sits in the window's own pixels, so it stays put and seen at any zoom
-  IdleBadge(fX + 6.0f, fY + fH - fH * 90.0f / 480.0f - 4.0f, fW, fH, nIdle, static_cast<float>(fH) / 480.0f);
+  // the idle workers' icon, fixed just above the minimap's terrain toggle (the minimap's
+  // top-left corner), always, the count on it, in the window's own pixels, so it stays put
+  // and seen at any zoom; half the size it was (the user, 2026-11-02)
+  const float fScale = static_cast<float>(fH) / 480.0f;
+  const float fBadgeTop = fY + sgMinimapArea_g.top * fScale;
+  IdleBadge(fX + sgMinimapArea_g.left * fScale + 2.0f, fBadgeTop, fW, fH, nIdle, fScale);
   bDrew = true;
   return bDrew;
 }

@@ -25,6 +25,15 @@ namespace {
 
 int s_anLoc[8][2];  // each location's view centre, in map pixels; the start's until saved
 
+// The game's own view centre, the seed at a game's start: the camera is not up yet, and
+// asking the seen rectangle there would run the camera's game-start again (the camera
+// asks back), so the seed reads the game's view directly, as it was at zoom 1.
+void Seed(int an[2])
+{
+  an[0] = static_cast<int>(glScrollPixelX) + PortViewShownWidth() / 2;
+  an[1] = static_cast<int>(glScrollPixelY) + g_portView.nViewRows / 2;
+}
+
 // The centre of the view as it shows now: the seen rectangle's middle, so the point saved
 // is exactly the screen's own middle at whatever zoom, side columns and raise it had (the
 // user, 2026-11-02).
@@ -50,7 +59,7 @@ void GoTo(const int an[2])
 void PortCamKeysInit(void)
 {
   for (int n = 0; n < 8; ++n)
-    Centre(s_anLoc[n]);
+    Seed(s_anLoc[n]);
 }
 
 // Which camera action a key down is with the modifiers held now: 0 to 7 a jump to the
