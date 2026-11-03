@@ -23,6 +23,9 @@
 #include "port_ui.h"
 #include "../platform/port_posix.h"  // PortNativePath
 #include "port_frontscreens.h"  // FrontLog
+namespace FrontKit {
+extern int g_nElements;  // port_frontkit.cpp: the layout's declared elements this frame
+}
 #include "../render/port_maptext.h"  // MapTextFace
 
 namespace {
@@ -295,10 +298,25 @@ Clay_Dimensions ClayMeasure(Clay_StringSlice text, Clay_TextElementConfig *pConf
   return d;
 }
 
+// The first five clay errors of a frame in full, the rest counted: a runaway layout must
+// not flood the log and the console (seen 2026-11-02: an in-game frame outgrew Clay's
+// default 8192-element arena and wrote 200,000 identical lines).
+static int s_nClayThisFrame;
+
 void ClayError(Clay_ErrorData error)
 {
-  SDL_Log("clay: %.*s", static_cast<int>(error.errorText.length), error.errorText.chars);
-  FrontKit::FrontLog("clay: %.*s\n", static_cast<int>(error.errorText.length), error.errorText.chars);
+  if (s_nClayThisFrame++ < 5) {
+    SDL_Log("clay: %.*s (at %d elements this frame)",
+            static_cast<int>(error.errorText.length), error.errorText.chars, FrontKit::g_nElements);
+    FrontKit::FrontLog("clay: %.*s (at %d elements this frame)\n",
+                       static_cast<int>(error.errorText.length), error.errorText.chars,
+                       FrontKit::g_nElements);
+  }
+}
+
+void ResetClayErrorFrame(void)
+{
+  s_nClayThisFrame = 0;
 }
 
 struct Motion {
@@ -836,11 +854,16 @@ void UiPicturesClean(void)
 
 void UiLayoutBegin(float fPointerX, float fPointerY, bool bPointerDown)
 {
+  FrontKit::g_nElements = 0;
+  ResetClayErrorFrame();
   Clay_Dimensions dims;
   dims.width = static_cast<float>(g_nWidth);
   dims.height = static_cast<float>(g_nHeight);
   if (g_pClay == NULL) {
-    const uint32_t nMemory = Clay_MinMemorySize();
+    // The arena's size is Clay's budget for one frame's elements: its minimum holds
+    // 8,192, which the game's layers (a HUD design, the mineinfo numbers, the menus)
+    // outgrew; eight times the minimum holds 65,536, plenty for any screen.
+    const uint32_t nMemory = Clay_MinMemorySize() * 8;
     g_pClayMemory = SDL_malloc(nMemory);
     Clay_ErrorHandler handler;
     SDL_zero(handler);

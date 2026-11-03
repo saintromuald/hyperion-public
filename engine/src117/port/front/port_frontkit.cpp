@@ -252,6 +252,9 @@ Clay_BorderElementConfig Border(UiColor c, float l, float r, float t, float b)
 // The frame's open elements, so that a Close with none of them open (which would close
 // Clay's root and leave its children buffer short) is refused and named in the log.
 int g_nDepth;
+// The frame's declared elements, counted here and read by the clay error handler, so an
+// overflow says how many the layout had made before Clay ran out of its arena.
+int g_nElements;
 
 void LayoutCheckBegin(void)
 {
@@ -267,6 +270,7 @@ void LayoutCheckEnd(const char *pszWhere)
 void Open(const Decl &x)
 {
   ++g_nDepth;
+  ++g_nElements;
   Clay__OpenElement();
   Clay__ConfigureOpenElement(x.d);
 }
