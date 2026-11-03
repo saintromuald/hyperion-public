@@ -132,3 +132,19 @@ Traps learned the hard way:
 | win | 4 | 0 for now |
 
 `port_pluto.cpp` reads `12 + n + 4` per reply and re-syncs on the magic.
+
+## The obs architecture, mapped (2026-11-03)
+
+- The writer at base+0x34960 is a serializer: it memcpys the fork's prebuilt
+  vectors into the view (the units at +0xC100, the planes at +0x79100/+0x79500,
+  the small vectors at +0x79900/+0x79940/+0x79A40).
+- The floats are computed in the feature builders (x87 chains) that push into
+  those vectors; the whole DLL holds only 27 float-store sites.
+- The direction embeddings are sin/cos pairs of computed angles: the fork's
+  sincos helpers are at 0x2C210 (double out) and 0x2C250 (float out), called
+  indirectly from the builders (no direct call sites).
+- Six marine-position scenarios (1/4/5/6/7/8) are captured in the rig's
+  dump-s*/ for the angle-solving pass; the embedding angles quantize to the
+  22.5-degree bucket family (1, 0.707, 0.924, 0.383, 0.556, 0.831, 0.981,
+  0.195), and the pairs do not fit any fixed anchor -- the target per pair is
+  still to be solved.
