@@ -235,6 +235,81 @@ static __attribute__((naked)) void StubRet12() {
   __asm__("movl $1, %eax\n\tret $12");
 }
 
+// --- The sincos-caller trace -------------------------------------------------
+// The fork's direction embeddings are sin/cos pairs, but the helpers at
+// base+0x2C210 (double out) and base+0x2C250 (float out) have no static
+// callers -- the call targets are materialized at runtime. These stubs replace
+// the helpers' prologues: each appends its (return address, angle argument)
+// pair to a ring in the bridge's LOW stand-in (0x2103C000, pointer at
+// 0x2103FFF0 -- SC addrs below 0x400000, which the bot never reads), replays
+// the clobbered prologue, and jumps back into the DLL at the fsincos. (The DLL
+// loads at a fixed 0x7B190000 in this harness; ArmSincosTrace asserts that
+// before patching.) Clobbers eax/ecx only -- the same set a normal cdecl call
+// may clobber.
+__attribute__((naked)) static void SincosTraceFlt(void) {
+  __asm__(
+      "movl  $0x2103FFF0, %ecx\n\t"       // the pointer slot
+      "movl  (%ecx), %ecx\n\t"            // the log pointer
+      "cmpl  $0x2103EE00, %ecx\n\t"       // the ring's top: don't overflow
+      "jae   1f\n\t"
+      "movl  (%esp), %eax\n\t"            // the return address
+      "movl  %eax, (%ecx)\n\t"
+      "movl  4(%esp), %eax\n\t"           // the angle argument
+      "movl  %eax, 4(%ecx)\n\t"
+      "addl  $8, %ecx\n\t"
+      "movl  %ecx, 0x2103FFF0\n\t"
+      "1:\n\t"
+      "pushl %ebp\n\t"                    // replay the clobbered prologue
+      "movl  %esp, %ebp\n\t"
+      "flds  8(%ebp)\n\t"                 // the float angle
+      "movl  $0x7B1BC256, %eax\n\t"       // DLL base 0x7B190000 + 0x2C256: fsincos
+      "jmp   *%eax");
+}
+__attribute__((naked)) static void SincosTraceDbl(void) {
+  __asm__(
+      "movl  $0x2103FFF4, %ecx\n\t"       // the pointer slot (double ring)
+      "movl  (%ecx), %ecx\n\t"
+      "cmpl  $0x21037E00, %ecx\n\t"
+      "jae   1f\n\t"
+      "movl  (%esp), %eax\n\t"
+      "movl  %eax, (%ecx)\n\t"
+      "movl  4(%esp), %eax\n\t"           // the angle argument (double: low word)
+      "movl  %eax, 4(%ecx)\n\t"
+      "addl  $8, %ecx\n\t"
+      "movl  %ecx, 0x2103FFF4\n\t"
+      "1:\n\t"
+      "pushl %ebp\n\t"
+      "movl  %esp, %ebp\n\t"
+      "fldl  8(%ebp)\n\t"                 // the double angle
+      "movl  $0x7B1BC216, %eax\n\t"       // DLL base 0x7B190000 + 0x2C216: fsincos
+      "jmp   *%eax");
+}
+
+// Patch the fork's sincos helpers to route through the trace stubs.
+static void ArmSincosTrace() {
+  unsigned char *img =
+      reinterpret_cast<unsigned char *>(GetModuleHandleA("pluto.patched.dll"));
+  if (img != reinterpret_cast<unsigned char *>(0x7B190000u)) {
+    fprintf(stderr, "[bridge] sincos trace skipped: DLL at %p\n", img);
+    return;
+  }
+  DWORD old;
+  if (VirtualProtect(img + 0x2C200, 0x100, PAGE_EXECUTE_READWRITE, &old)) {
+    img[0x2C250] = 0xE9;
+    *reinterpret_cast<int *>(img + 0x2C251) =
+        static_cast<int>(reinterpret_cast<unsigned char *>(&SincosTraceFlt) -
+                         (img + 0x2C255));
+    img[0x2C210] = 0xE9;
+    *reinterpret_cast<int *>(img + 0x2C211) =
+        static_cast<int>(reinterpret_cast<unsigned char *>(&SincosTraceDbl) -
+                         (img + 0x2C215));
+    VirtualProtect(img + 0x2C200, 0x100, old, &old);
+    fprintf(stderr, "[bridge] sincos trace armed (stubs %p %p)\n",
+            reinterpret_cast<void *>(&SincosTraceFlt),
+            reinterpret_cast<void *>(&SincosTraceDbl));
+  }
+}
+
 static LONG CALLBACK VecHandler(EXCEPTION_POINTERS *e) {
   // The bot calls through garbage pointers (an exec fault at e.g. 0x7B1A2000):
   // answer "ready" (eax=1) and continue, so the engine-poll loop settles.
@@ -874,6 +949,10 @@ static void ReserveScMemory() {
                           MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
   fprintf(stderr, "[bridge] SC stand-in: low %p, data %p\n", low, sc);
   fflush(stdout);
+  // The sincos-caller trace rings (see SincosTraceFlt/Dbl): pointer slots at
+  // 0x2103FFF0 (float ring 0x2103C000) / 0x2103FFF4 (double ring 0x21038000).
+  *reinterpret_cast<unsigned *>(0x2103FFF0) = 0x2103C000u;
+  *reinterpret_cast<unsigned *>(0x2103FFF4) = 0x21038000u;
 }
 
 // The frame pipe's own fd: the fork's threads close fd 0 during their start-up
@@ -1081,6 +1160,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "[bridge] loaded: %s\n", path);
     fflush(stdout);
   }
+  ArmSincosTrace();
   fprintf(stderr, "[bridge] ctx-global after load: %08x\n",
           *reinterpret_cast<unsigned *>(0x7b1a2034));
   if (getenv("HX_DEBUG") != NULL)
@@ -1339,6 +1419,46 @@ int main(int argc, char **argv) {
     if (getenv("HX_NODRIVE") == NULL) {
       handoff.onMatchFrame();
       onFrame(mod);
+    }
+    // Drain the sincos trace into dump/sincos.log: (frame, which, count,
+    // (ret, angle) entries...) per record, one record per helper per frame.
+    if (bDebug) {
+      for (int k = 0; k < 2; ++k) {
+        unsigned ptr = *reinterpret_cast<unsigned *>(k ? 0x2103FFF4u : 0x2103FFF0u);
+        unsigned base = k ? 0x21038000u : 0x2103C000u;
+        if (ptr > base) {
+          unsigned n = (ptr - base) / 8;  // 8-byte entries: (ret, angle)
+          static FILE *sf = NULL;
+          if (!sf)
+            sf = fopen("dump/sincos.log", "wb");
+          if (sf) {
+            unsigned hdr[3] = {static_cast<unsigned>(f), static_cast<unsigned>(k), n};
+            fwrite(hdr, 1, sizeof hdr, sf);
+            fwrite(reinterpret_cast<void *>(base), 1, n * 8, sf);
+            fflush(sf);
+          }
+        }
+        *reinterpret_cast<unsigned *>(k ? 0x2103FFF4u : 0x2103FFF0u) = base;
+      }
+    }
+    if (getenv("HX_PROBE") != NULL && f == 0) {
+      // The obs builders read f32 constants at absolute 0x63FDCB20-0x63FDCB40
+      // (between the DLL's sections at its preferred base). Probe them right
+      // after the first onFrame, when the first obs build has just run.
+      for (unsigned a = 0x63FDCB20; a <= 0x63FDCB40; a += 4) {
+        MEMORY_BASIC_INFORMATION m;
+        unsigned raw = 0;
+        if (VirtualQuery(reinterpret_cast<void *>(a), &m, sizeof m) == sizeof m &&
+            m.State == MEM_COMMIT && !(m.Protect & (PAGE_NOACCESS | PAGE_GUARD)))
+          raw = *reinterpret_cast<unsigned *>(a);
+        fprintf(stderr, "[probe] %08x: %08x (%.7f) state=%lx prot=%lx\n",
+                a, raw, static_cast<double>(*reinterpret_cast<float *>(&raw)),
+                m.State, m.Protect);
+      }
+      MEMORY_BASIC_INFORMATION m;
+      if (VirtualQuery(reinterpret_cast<void *>(0x63F90000), &m, sizeof m) == sizeof m)
+        fprintf(stderr, "[probe] 0x63F90000: state=%lx prot=%lx type=%lx size=%lx\n",
+                m.State, m.Protect, m.Type, m.RegionSize);
     }
     if (frame < 3)
       fprintf(stderr, "[bridge] ctx-global f%d: %08x\n", static_cast<int>(frame),
