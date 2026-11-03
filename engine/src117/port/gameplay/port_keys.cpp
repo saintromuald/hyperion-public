@@ -1,13 +1,14 @@
 // port_keys.cpp -- Hyperion's own hotkeys (docs/front-end.md, F3): the keys that switch
-// the art between classic and HD (F2, as the camera locations moved to F5 to F8 took
-// Remastered's F5; the user, 2026-11-02) and the view between 640 and the wide view (Ctrl+F2),
-// and the camera's (F9 and Shift+F9 zoom out and in, Ctrl+F9 back to 1, Ctrl+Shift+F9 the
-// whole map, F11 follows the selected unit, F12 replay TV; F3 Debug Tools' overlay),
-// and the selection's (Tab the next subgroup, Ctrl+Tab the minimap's terrain,
-// ` the next idle worker, Shift+F12 the army), and the eight camera locations' keys
-// (port_camkeys.cpp). Settings' Hotkeys tab changes them; they are kept in the settings
-// file's "hyperion" section as numbers, the virtual key in the low byte with
-// PORT_KEY_CTRL, PORT_KEY_SHIFT and PORT_KEY_ALT or'ed in. Presentation only.
+// the art between classic and HD (F9) and the view between 640 and the wide view (Ctrl+F9),
+// and the camera's (F11 and F12 zoom out and in, Ctrl+F11 back to 1, Ctrl+F12 the whole
+// map, Shift+F11 follows the selected unit, Shift+F12 replay TV; Shift+F9 Debug Tools'
+// overlay), and the selection's (Tab the next subgroup, Ctrl+Tab the minimap's terrain,
+// ` the next idle worker, Ctrl+Shift+F12 the army), and the eight camera locations' keys,
+// F1 to F8, which Ctrl saves (port_camkeys.cpp); the keys F1 to F8 are theirs alone, so
+// 1.17's Ctrl+F1 help moved to Ctrl+F10 (event_Win.cpp). Settings' Hotkeys tab changes
+// them; they are kept in the settings file's "hyperion" section as numbers, the virtual
+// key in the low byte with PORT_KEY_CTRL, PORT_KEY_SHIFT and PORT_KEY_ALT or'ed in.
+// Presentation only.
 //
 // Any key the window reports can be taken now (the user, 2026-11-02: every hotkey is
 // rebindable), except the system's own Alt+Tab and the game menu's Alt+F4.
@@ -24,37 +25,27 @@ struct Hotkey {
   unsigned nDefault;
 };
 
-// A default of 0: no key until the player gives the hotkey one (the camera locations
-// 5 to 8, as SC2 leaves them).
-const Hotkey kHotkeys[PORT_HOTKEYS] = {{"keyArt", 0x71},
-                                       {"keyView", PORT_KEY_CTRL | 0x71},
-                                       {"keyZoomOut", 0x78},
-                                       {"keyZoomIn", PORT_KEY_SHIFT | 0x78},
-                                       {"keyZoomReset", PORT_KEY_CTRL | 0x78},
-                                       {"keyZoomFit", PORT_KEY_CTRL | PORT_KEY_SHIFT | 0x78},
-                                       {"keyFollow", 0x7A},
-                                       {"keyTv", 0x7B},
-                                       {"keyDebugView", 0x72},
+const Hotkey kHotkeys[PORT_HOTKEYS] = {{"keyArt", 0x78},
+                                       {"keyView", PORT_KEY_CTRL | 0x78},
+                                       {"keyZoomOut", 0x7A},
+                                       {"keyZoomIn", 0x7B},
+                                       {"keyZoomReset", PORT_KEY_CTRL | 0x7A},
+                                       {"keyZoomFit", PORT_KEY_CTRL | 0x7B},
+                                       {"keyFollow", PORT_KEY_SHIFT | 0x7A},
+                                       {"keyTv", PORT_KEY_SHIFT | 0x7B},
+                                       {"keyDebugView", PORT_KEY_SHIFT | 0x78},
                                        {"keySubgroup", 0x09},
                                        {"keyTerrain", PORT_KEY_CTRL | 0x09},
                                        {"keyIdle", 0xC0},
-                                       {"keyArmy", PORT_KEY_SHIFT | 0x7B},
-                                       {"keyCamGo1", 0x74},
-                                       {"keyCamGo2", 0x75},
-                                       {"keyCamGo3", 0x76},
-                                       {"keyCamGo4", 0x77},
-                                       {"keyCamGo5", 0},
-                                       {"keyCamGo6", 0},
-                                       {"keyCamGo7", 0},
-                                       {"keyCamGo8", 0},
-                                       {"keyCamSet1", PORT_KEY_CTRL | 0x74},
-                                       {"keyCamSet2", PORT_KEY_CTRL | 0x75},
-                                       {"keyCamSet3", PORT_KEY_CTRL | 0x76},
-                                       {"keyCamSet4", PORT_KEY_CTRL | 0x77},
-                                       {"keyCamSet5", 0},
-                                       {"keyCamSet6", 0},
-                                       {"keyCamSet7", 0},
-                                       {"keyCamSet8", 0}};
+                                       {"keyArmy", PORT_KEY_CTRL | PORT_KEY_SHIFT | 0x7B},
+                                       {"keyCam1", 0x70},
+                                       {"keyCam2", 0x71},
+                                       {"keyCam3", 0x72},
+                                       {"keyCam4", 0x73},
+                                       {"keyCam5", 0x74},
+                                       {"keyCam6", 0x75},
+                                       {"keyCam7", 0x76},
+                                       {"keyCam8", 0x77}};
 
 // The key the player set for one, or 0.
 unsigned HotkeySet(int nWhich)
