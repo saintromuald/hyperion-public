@@ -1081,6 +1081,10 @@ int main(int argc, char **argv) {
     fprintf(stderr, "[bridge] loaded: %s\n", path);
     fflush(stdout);
   }
+  fprintf(stderr, "[bridge] ctx-global after load: %08x\n",
+          *reinterpret_cast<unsigned *>(0x7b1a2034));
+  if (getenv("HX_DEBUG") != NULL)
+    ArmTaps();  // armed before the fork's start-up runs, so its writes are seen
   BWAPI::BWAPIClient.data = g;  // connect() would set this; the impls read it directly
   GameImpl handoff(g);  // what the bot's own connect() later replaces with its own GameImpl
   BWAPI::BroodwarPtr = &handoff;  // the GameWrapper forwards through this
@@ -1109,7 +1113,7 @@ int main(int argc, char **argv) {
     VirtualProtect(vt, 0x200, PAGE_READWRITE, &old);
     vt[slot] = reinterpret_cast<void *>(&GamePrint2);
     VirtualProtect(vt, 0x200, old, &old);
-    fprintf(stderr, "[bridge] GameImpl vPrintf slot %d -> %p\\n", slot,
+    fprintf(stderr, "[bridge] GameImpl vPrintf slot %d -> %p\n", slot,
            reinterpret_cast<void *>(&GamePrint2));
   }
 
@@ -1152,6 +1156,21 @@ int main(int argc, char **argv) {
   fprintf(stderr, "[bridge] module %p\n", static_cast<void *>(mod));
   gameInit(&handoff);
   fprintf(stderr, "[bridge] gameInit handed over\n");
+  fprintf(stderr, "[bridge] ctx-global after gameInit: %08x\n",
+          *reinterpret_cast<unsigned *>(0x7b1a2034));
+  // The fork's obs walk calls [gameImpl_vtable + 0xE0] (slot 56); in the fork's
+  // real flow that slot holds the fork's own method, but the fork's gameInit
+  // has just reset the handoff's vtable slot. HX_SLOT56 names the fork's
+  // method to put there.
+  if (const char *psz = getenv("HX_SLOT56")) {
+    void *fn = reinterpret_cast<void *>(static_cast<uintptr_t>(strtoul(psz, NULL, 0)));
+    void **vt = *reinterpret_cast<void ***>(&handoff);
+    DWORD old;
+    VirtualProtect(vt, 0x200, PAGE_READWRITE, &old);
+    vt[56] = fn;
+    VirtualProtect(vt, 0x200, old, &old);
+    fprintf(stderr, "[bridge] slot 56 -> %p (HX_SLOT56)\n", fn);
+  }
   fflush(stdout);
   // The bridge runs these when its update() sees the events; the rig drives them itself.
   handoff.onMatchStart();
@@ -1305,7 +1324,7 @@ int main(int argc, char **argv) {
     g->events[0].type = f == 0 ? EventType::Enum::MatchStart : EventType::Enum::MatchFrame;
     g->events[0].v1 = f;
     g->events[0].v2 = 0;
-    if (f == 0)
+    if (f == 0 && getenv("HX_NODRIVE") == NULL)
       onStart(mod);
     // Force the obs gates open before the frame, in case the bot's pump resets them
     // at the start of its update (they are forced again after onFrame below).
@@ -1317,8 +1336,13 @@ int main(int argc, char **argv) {
     }
     if (bDebug)
       ArmTaps();
-    handoff.onMatchFrame();
-    onFrame(mod);
+    if (getenv("HX_NODRIVE") == NULL) {
+      handoff.onMatchFrame();
+      onFrame(mod);
+    }
+    if (frame < 3)
+      fprintf(stderr, "[bridge] ctx-global f%d: %08x\n", static_cast<int>(frame),
+              *reinterpret_cast<unsigned *>(0x7b1a2034));
     if (bDebug && frame == 1) {
       fprintf(stderr, "[bridge] GameData units after onFrame f1 (initialUnitCount=%d):\n", g->initialUnitCount);
       for (int i = 0; i < 14; ++i) {
