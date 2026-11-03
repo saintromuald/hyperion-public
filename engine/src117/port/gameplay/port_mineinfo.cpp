@@ -3,10 +3,10 @@
 // 2026-11-02, asked for a clean-room one (their Cosmonarchy has its own): the game's own
 // tables and units give every figure, and the mathematics is Hyperion's.
 //
-// Over each of the local player's town halls two simple numbers show, the minerals' and
-// the gas', as StarCraft II's clean worker count: the workers on the base's patches over
-// Brood War's efficient optimum, two a mineral patch and three a geyser - 1 / 16 for one
-// worker on an eight-patch base - and at the optimum the number takes the player's own
+// Over each of the local player's town halls one simple number shows, the minerals', as
+// StarCraft II's clean worker count: the workers on the base's mineral patches over the
+// maximum, three a patch - 1 / 24 for one worker on an eight-patch base - and each vespene
+// geyser shows its own over three. At the maximum the number takes the player's own
 // colour, the one their race starts in; under it the number is plain white.
 //
 // Above the minimap's terrain toggle, as SC2's, a small fixed icon shows the idle workers
@@ -54,12 +54,12 @@ bool IsMineralField(int nType) { return nType >= 0xB0 && nType <= 0xB2; }
 bool IsGeyser(int nType) { return nType == 0xBC; }
 bool IsRefinery(int nType) { return nType == 0x6E || nType == 0x95 || nType == 0x9D; }
 
-// The workers a patch takes to its efficient optimum, Brood War's own figures (the user,
-// 2026-11-03; Liquipedia's Mining page): a mineral patch's third worker mines at about half
-// the first two's rate - two a patch bring 78 to 90 a minute, the third some 20 more - so
-// two a mineral patch is the efficient saturation the community's "16 on minerals" works
-// from, and a geyser takes three. The number over the town hall is the workers on the
-// base's patches over that optimum: 1 / 16 for one worker on an eight-patch base.
+// The workers a patch takes to its maximum, Brood War's own figure (the user, 2026-11-03;
+// Liquipedia's Mining page): a mineral patch's third worker mines slightly more than the
+// first two do, at about half the rate - some 102 a minute against 78 to 90 - so three a
+// patch is the patch's maximum, and a geyser takes three. The number over the town hall is
+// the workers on the base's mineral patches over that maximum: 1 / 24 for one worker on an
+// eight-patch base, and each geyser's over its own three.
 
 // A patch the base mines: its position, the town hall it belongs to, how many workers it
 // takes to saturate, and how many are on it now.
@@ -68,7 +68,7 @@ struct Patch {
   bool bGas;
   int nBase;
   int nX, nY;   // its centre, in map pixels
-  int nSat;     // the workers at its efficient optimum: two a mineral patch, three a geyser
+  int nSat;     // the workers at its maximum: three a mineral patch, three a geyser
   int nOn;      // the workers on it now
 };
 
@@ -233,7 +233,7 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     patch.nBase = nBest;
     patch.nX = x;
     patch.nY = y;
-    patch.nSat = patch.bGas ? 3 : 2;  // the geyser's three, the mineral patch's two
+    patch.nSat = 3;  // the maximum: three a mineral patch, three a geyser (the user, 2026-11-03)
     patch.nOn = 0;
     ap.push_back(patch);
   }
@@ -249,7 +249,7 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
       ++ap[nPatch].nOn;
       continue;
     }
-    if (p->pOrderTarget != NULL)
+    if (p->pOrderTarget != NULL && p->bCarryResource != 1)  // the gas carriers, off
       for (size_t b = 0; b < abase.size(); ++b)
         if (p->pOrderTarget == abase[b]) {
           ++anBack[b];
@@ -269,32 +269,29 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   const double fSy = bCamOk ? fH / 480.0 / fZoom : 0.0;
   bool bDrew = false;
 
-  // over each town hall the two numbers: the minerals', then the gas'
+  // the number's colour: fully saturated, the player's own colour, the one their race
+  // starts in; under it, plain white, as StarCraft II's counter sits (the user, 2026-11-02)
+  const auto colour = [](int nOn, int nOpt) -> UiColor {
+    if (nOn >= nOpt)
+      return RaceColour();
+    return UiColor{1.0f, 1.0f, 1.0f, 0.95f};
+  };
+
+  // over each town hall the minerals' number, the workers on the base's patches over three
   for (size_t b = 0; bCamOk && b < abase.size(); ++b) {
     if (abase[b]->pSprite == NULL)
       continue;
     int nMinOn = anBack[b], nMinOpt = 0;
-    int nGasOn = 0, nGasOpt = 0;
     for (const Patch &p : ap) {
       if (p.nBase != static_cast<int>(b))
         continue;
-      if (p.bGas) {
-        nGasOn += p.nOn;
-        nGasOpt += p.nSat;
-      } else {
-        nMinOn += p.nOn;
-        nMinOpt += p.nSat;
-      }
+      if (p.bGas)
+        continue;
+      nMinOn += p.nOn;
+      nMinOpt += p.nSat;
     }
-    if (nMinOpt <= 0 && nGasOpt <= 0)
+    if (nMinOpt <= 0)
       continue;
-    const auto colour = [](int nOn, int nOpt) -> UiColor {
-      // fully saturated: the player's own colour, the one their race starts in; under it,
-      // plain white, as StarCraft II's counter sits (the user, 2026-11-02)
-      if (nOn >= nOpt)
-        return RaceColour();
-      return UiColor{1.0f, 1.0f, 1.0f, 0.95f};
-    };
     const double fXw = static_cast<int>(abase[b]->pSprite->wPosX);
     const double fYw = static_cast<int>(abase[b]->pSprite->wPosY);
     const double fSx0 = fX + (fXw - fCamX) * fSx;
@@ -302,9 +299,7 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     if (fSx0 < fX - 80 || fSx0 > fX + fW + 80 || fSy0 < fY - 60 || fSy0 > fY + fH)
       continue;
     char sz[16];
-    float fYLine = static_cast<float>(fSy0) - 46.0f;
-    if (nGasOpt > 0)
-      fYLine -= 12.0f;
+    const float fYLine = static_cast<float>(fSy0) - 46.0f;
     if (nMinOpt > 0) {
       snprintf(sz, sizeof sz, "%d / %d", nMinOn, nMinOpt);
       const float fWid = UiTextWidth(UI_FACE_BOLD, 13.0f, 0.0f, sz);
@@ -313,14 +308,39 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
       UiText(fX0 + 1.0f, fYLine + 1.0f, UI_FACE_BOLD, 13.0f, 0.0f, UiColor{0.0f, 0.0f, 0.0f, 0.7f}, sz);
       UiText(fX0, fYLine, UI_FACE_BOLD, 13.0f, 0.0f, c, sz);
     }
-    if (nGasOpt > 0) {
-      snprintf(sz, sizeof sz, "%d / %d", nGasOn, nGasOpt);
-      const float fWid = UiTextWidth(UI_FACE_BOLD, 11.0f, 0.0f, sz);
-      const float fX0 = static_cast<float>(fSx0) - fWid / 2;
-      const UiColor c = colour(nGasOn, nGasOpt);
-      UiText(fX0 + 1.0f, fYLine + 12.0f + 1.0f, UI_FACE_BOLD, 11.0f, 0.0f, UiColor{0.0f, 0.0f, 0.0f, 0.7f}, sz);
-      UiText(fX0, fYLine + 12.0f, UI_FACE_BOLD, 11.0f, 0.0f, c, sz);
-    }
+    bDrew = true;
+  }
+
+  // over each vespene geyser its own number: the workers on it over three, the same
+  // principle as the town halls' (the user, 2026-11-03). Only the geysers of the player's
+  // own bases show - the ones whose assigned town hall lies within a base's reach - so a
+  // scouted enemy's geyser does not take a 0 / 3.
+  const int kBaseReach = 15 * 32;  // map pixels: a geyser sits a few tiles from its hall
+  for (const Patch &p : ap) {
+    if (!bCamOk)
+      break;
+    if (!p.bGas || p.nBase < 0 || p.nBase >= static_cast<int>(abase.size()))
+      continue;
+    if (abase[p.nBase]->pSprite == NULL)
+      continue;
+    const double fDx = p.nX - static_cast<int>(abase[p.nBase]->pSprite->wPosX);
+    const double fDy = p.nY - static_cast<int>(abase[p.nBase]->pSprite->wPosY);
+    if (fDx * fDx + fDy * fDy > static_cast<double>(kBaseReach) * kBaseReach)
+      continue;
+    const double fXw = p.nX;
+    const double fYw = p.nY;
+    const double fSx0 = fX + (fXw - fCamX) * fSx;
+    const double fSy0 = fY + (fYw - fCamY) * fSy;
+    if (fSx0 < fX - 60 || fSx0 > fX + fW + 60 || fSy0 < fY - 40 || fSy0 > fY + fH)
+      continue;
+    char sz[16];
+    snprintf(sz, sizeof sz, "%d / %d", p.nOn, p.nSat);
+    const float fWid = UiTextWidth(UI_FACE_BOLD, 11.0f, 0.0f, sz);
+    const float fX0 = static_cast<float>(fSx0) - fWid / 2;
+    const float fY0 = static_cast<float>(fSy0) - 30.0f;
+    const UiColor c = colour(p.nOn, p.nSat);
+    UiText(fX0 + 1.0f, fY0 + 1.0f, UI_FACE_BOLD, 11.0f, 0.0f, UiColor{0.0f, 0.0f, 0.0f, 0.7f}, sz);
+    UiText(fX0, fY0, UI_FACE_BOLD, 11.0f, 0.0f, c, sz);
     bDrew = true;
   }
 
