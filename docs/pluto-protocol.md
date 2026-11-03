@@ -36,6 +36,14 @@ args = the built obs objects and the global at base+0x73254):
 | +0x81F00 | 16384 | a 128x128 byte map plane |
 | +0x85F00 | — | the globals and the per-type counts |
 
+The globals tail (2026-11-03, from the bridge's live captures): the engine's
+own log sizes the vector at **303 floats** ("globals 303 incl. deploy lambda").
++0x85F00 = the player count (2); +0x85F40..+0x85F58 = integer counters
+(3 / 229 / 1 in the 4-zerg-units scenario -- not yet individually named);
++0x85F60+ = float scalars; +0x86000+ = a map-name/checksum block. The full
+field naming is the mechanical differential pass: run two scripted scenarios
+that differ in one count at a time and diff this region.
+
 ## The unit entry (436 bytes, 109 floats)
 
 Each field is a float32. Offsets are within the entry; values are from a live
