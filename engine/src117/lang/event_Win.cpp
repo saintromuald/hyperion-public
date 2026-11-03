@@ -289,6 +289,8 @@ static int AccelCopy(const void *hTable, accel_t *pBuf, int nCap)
       continue;
     if (all[i].wCmd == 0x9C67)  // Ctrl+S's sound, the camera's down key now
       continue;
+    if (all[i].wCmd == 0x9C6D)  // Ctrl+Q's and Alt+Q's quit to menu, Ctrl+Q the larvae' key now
+      continue;
     if (all[i].wCmd >= 0x9C7C && all[i].wCmd <= 0x9C81)  // 1.17's screen locations
       continue;
     if (all[i].wCmd == 0x9C74) {
@@ -819,13 +821,13 @@ win_lparam_t __stdcall WndProc(void *hWnd, unsigned int uMsg, uintptr_t wParam, 
       return 0;
     }
   }
-  // Hyperion: Q selects every larva the player has, across all the hatcheries, at once (the
-  // user, 2026-11-02); Ctrl+Space opens the pick, where the count typed and Enter take that
-  // many.
+  // Hyperion: Ctrl+Q selects every larva the player has, across all the hatcheries, at
+  // once (the user, 2026-11-03); Ctrl+Space opens the pick, where the count typed and
+  // Enter take that many.
   if ((uMsg == 0x100 || uMsg == 0x104) && gwGameMode == 3 && !gbInMsgMode) {
     const bool bRepeat = (lParam & 0x40000000) != 0;
     const unsigned nHeld = PortHotkeyHeld(static_cast<unsigned>(wParam));
-    if (!bRepeat && nHeld == 0x51) {
+    if (!bRepeat && nHeld == (PORT_KEY_CTRL | 0x51)) {
       const char *pszWhy = NULL;
       PortSelectLarva(-1, &pszWhy);
       return 0;

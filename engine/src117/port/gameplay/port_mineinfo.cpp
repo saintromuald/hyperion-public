@@ -9,9 +9,9 @@
 // geyser shows its own over three. At the maximum the number takes the player's own
 // colour, the one their race starts in; under it the number is plain white.
 //
-// Above the minimap's terrain toggle, as SC2's, a small fixed icon shows the idle workers
-// when there are any, with the count; a click takes the view to the next idle worker, as
-// the ` key and the HUD's button do.
+// Above the bottom console - on top of it, not on it - a small fixed icon shows the idle
+// workers when there are any, with the count, as SC2's does; a click takes the view to the
+// next idle worker, as the ` key and the HUD's button do.
 //
 // Presentation only: no game value is read or written that a replay does not already keep,
 // and nothing here changes what the workers do.
@@ -33,14 +33,23 @@
 #include "../../h/net_cmds.h"     // PlayerData, the saturated number's colour
 #include "../../h/hxrules.h"  // HX_OPT_START_SPLIT, the start workers split's option
 #include "../render/port_teamcolor.h"  // PortTeamColorGet, the saturated number's colour
-#include "../../h/rect32.h"   // rect32_t, the minimap's cage
+#include "../../h/rect32.h"   // rect32_t, the minimap's cage and the console's
 #include "../../gen/globals117.h"
+#include "../platform/port_globals117.h"  // oc_dwReplayFrame, the frame the scan runs on
+#include "../platform/port_settings.h"  // PortSettingNumber, the bars' Interface setting
 
 // the minimap's cage rectangle, as port_hudinput.cpp spells it (minimap.cpp, 0x508BB0)
 #ifdef OC_DLL_MODE
 #define sgMinimapArea_g (*reinterpret_cast<rect32_t *>(OC_VA(0x508BB0u)))
 #else
 extern rect32_t sgMinimapArea_g;
+#endif
+// the console's panel rectangle, the command card's (port_view.cpp, 0x5033D0): its top
+// is the bottom console's top edge, which the idle workers' icon hangs above
+#ifdef OC_DLL_MODE
+#define sgConsoleAreaRect_g (*reinterpret_cast<rect32_t *>(OC_VA(0x5033D0u)))
+#else
+extern rect32_t sgConsoleAreaRect_g;
 #endif
 
 namespace {
@@ -108,8 +117,9 @@ UiColor RaceColour(void)
   return UiColor{abRgb[0] / 255.0f, abRgb[1] / 255.0f, abRgb[2] / 255.0f, 1.0f};
 }
 
-// The idle workers' icon's place, fixed above the minimap's corner, as SC2's; the count
-// beside the little worker drawn in the box. The Mouse hook answers clicks there.
+// The idle workers' icon's place, fixed above the bottom console, right of the minimap,
+// as SC2's; the count beside the little worker drawn in the box. The Mouse hook answers
+// clicks there.
 bool g_bIdleBadge;
 float g_fIdleX, g_fIdleY, g_fIdleW, g_fIdleH;
 
@@ -193,69 +203,114 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   }
   const int nPlayer = static_cast<int>(g_LocalNationID);
 
-  // the local player's completed town halls, one worker for the walk's speed, and the
-  // idle workers (the ones standing guard, as the HUD's count takes them)
-  std::vector<CUnit *> abase;
-  int nIdle = 0;
-  for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
-    if (p->bPlayer != nPlayer || p->pSprite == NULL)
-      continue;
-    if ((p->dwFlags & 1) != 0 && IsTownHall(p->wType))
-      abase.push_back(p);
-    if (IsWorkerType(p->wType) && (p->dwFlags & 1) != 0 && (p->bOrderId == 0x02 || p->bOrderId == 0x03))
-      ++nIdle;
-  }
-  // the patches, each the nearest town hall's; a geyser's three workers are its own count
-  std::vector<Patch> ap;
-  for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
-    if (!IsMineralField(p->wType) && !IsGeyser(p->wType))
-      continue;
-    if (p->pSprite == NULL)
-      continue;
-    const int x = static_cast<int>(p->pSprite->wPosX);
-    const int y = static_cast<int>(p->pSprite->wPosY);
-    int nBest = 0;
-    long long llBest = -1;
-    for (size_t b = 0; b < abase.size(); ++b) {
-      if (abase[b]->pSprite == NULL)
-        continue;
-      const long long dx = x - static_cast<int>(abase[b]->pSprite->wPosX);
-      const long long dy = y - static_cast<int>(abase[b]->pSprite->wPosY);
-      const long long d = dx * dx + dy * dy;
-      if (llBest < 0 || d < llBest) {
-        llBest = d;
-        nBest = static_cast<int>(b);
-      }
-    }
-    Patch patch;
-    patch.pUnit = p;
-    patch.bGas = IsGeyser(p->wType);
-    patch.nBase = nBest;
-    patch.nX = x;
-    patch.nY = y;
-    patch.nSat = 3;  // the maximum: three a mineral patch, three a geyser (the user, 2026-11-03)
-    patch.nOn = 0;
-    ap.push_back(patch);
-  }
+  // The scan of the unit table is the picture's whole cost - three walks of the used
+  // list, and a big no-cap game holds thousands of units - so it runs on a beat, every
+  // sixth frame, and the frames between draw what it found; a fresh game starts it
+  // again. A counter does not move more between the beats than a worker walks in a
+  // quarter of a second, and the player's keys do not wait on the scan (the spell keys'
+  // jank, the user, 2026-11-03).
+  static std::vector<CUnit *> s_abase;
+  static std::vector<Patch> s_ap;
+  static std::vector<int> s_anBack;
+  static int s_nIdle = 0;
+  static double s_fEnergyBars = 1.0;  // the Interface setting, on until it says no
+  static unsigned int s_nLastFrame = 0;
+  static unsigned int s_nNextScan = 0;
+  const unsigned int nFrame = oc_dwReplayFrame;
+  if ((s_abase.empty() && s_ap.empty()) || nFrame < s_nLastFrame || nFrame >= s_nNextScan) {
+    s_abase.clear();
+    s_ap.clear();
 
-  // the workers on each patch, and the ones walking back to a town hall (their load is
-  // the minerals', most often)
-  std::vector<int> anBack(abase.size(), 0);
-  for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
-    if (p->bPlayer != nPlayer || !IsWorkerType(p->wType))
-      continue;
-    const int nPatch = PatchOf(p, ap);
-    if (nPatch >= 0) {
-      ++ap[nPatch].nOn;
-      continue;
+    // the local player's completed town halls and the idle workers (the ones standing
+    // guard, as the HUD's count takes them)
+    int nIdle = 0;
+    for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
+      if (p->bPlayer != nPlayer || p->pSprite == NULL)
+        continue;
+      if ((p->dwFlags & 1) != 0 && IsTownHall(p->wType))
+        s_abase.push_back(p);
+      if (IsWorkerType(p->wType) && (p->dwFlags & 1) != 0 && (p->bOrderId == 0x02 || p->bOrderId == 0x03))
+        ++nIdle;
     }
-    if (p->pOrderTarget != NULL && p->bCarryResource != 1)  // the gas carriers, off
-      for (size_t b = 0; b < abase.size(); ++b)
-        if (p->pOrderTarget == abase[b]) {
-          ++anBack[b];
-          break;
+
+    // the patches, each the nearest town hall's. A geyser whose refinery is built is the
+    // refinery itself now - ReplaceGeyser turns the geyser's unit into it - so the built
+    // geysers take their number too, the refinery's patch in the geyser's place.
+    for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
+      const bool bRefinery = IsRefinery(p->wType);
+      if (!IsMineralField(p->wType) && !IsGeyser(p->wType) && !(bRefinery && p->bPlayer == nPlayer))
+        continue;
+      if (p->pSprite == NULL)
+        continue;
+      const int x = static_cast<int>(p->pSprite->wPosX);
+      const int y = static_cast<int>(p->pSprite->wPosY);
+      int nBest = 0;
+      long long llBest = -1;
+      for (size_t b = 0; b < s_abase.size(); ++b) {
+        if (s_abase[b]->pSprite == NULL)
+          continue;
+        const long long dx = x - static_cast<int>(s_abase[b]->pSprite->wPosX);
+        const long long dy = y - static_cast<int>(s_abase[b]->pSprite->wPosY);
+        const long long d = dx * dx + dy * dy;
+        if (llBest < 0 || d < llBest) {
+          llBest = d;
+          nBest = static_cast<int>(b);
         }
+      }
+      Patch patch;
+      patch.pUnit = p;
+      patch.bGas = IsGeyser(p->wType) || bRefinery;
+      patch.nBase = nBest;
+      patch.nX = x;
+      patch.nY = y;
+      patch.nSat = 3;  // the maximum: three a mineral patch, three a geyser (the user, 2026-11-03)
+      patch.nOn = 0;
+      s_ap.push_back(patch);
+    }
+    // a geyser a refinery stands on is in the list twice, as itself and as its refinery;
+    // the refinery's patch stays, the geyser's goes
+    std::vector<Patch> apKeep;
+    for (const Patch &q : s_ap) {
+      if (q.bGas && q.pUnit->wType == 0xBC) {
+        bool bCovered = false;
+        for (const Patch &r : s_ap)
+          if (r.bGas && r.pUnit->wType != 0xBC &&
+              abs(r.nX - q.nX) < 64 && abs(r.nY - q.nY) < 64) {
+            bCovered = true;
+            break;
+          }
+        if (bCovered)
+          continue;
+      }
+      apKeep.push_back(q);
+    }
+    s_ap.swap(apKeep);
+
+    // the workers on each patch, and the ones walking back to a town hall (their load is
+    // the minerals', most often)
+    s_anBack.assign(s_abase.size(), 0);
+    for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
+      if (p->bPlayer != nPlayer || !IsWorkerType(p->wType))
+        continue;
+      const int nPatch = PatchOf(p, s_ap);
+      if (nPatch >= 0) {
+        ++s_ap[nPatch].nOn;
+        continue;
+      }
+      if (p->pOrderTarget != NULL && p->bCarryResource != 1)  // the gas carriers, off
+        for (size_t b = 0; b < s_abase.size(); ++b)
+          if (p->pOrderTarget == s_abase[b]) {
+            ++s_anBack[b];
+            break;
+          }
+    }
+    s_nIdle = nIdle;
+    double d = 1.0;  // on by default; Settings' "Spellcasters' energy bars" turns them off
+    PortSettingNumber("hyperion", "energyBars", &d);
+    s_fEnergyBars = d;
+    s_nNextScan = nFrame + 6;
   }
+  s_nLastFrame = nFrame;
 
   // the camera's anchor and zoom put each world point on the window: the game box shows
   // nWidth by 480 game pixels, and a map pixel is a game pixel divided by the zoom, off
@@ -267,6 +322,7 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   const bool bCamOk = fZoom > 0.0 && isfinite(fZoom) && isfinite(fCamX) && isfinite(fCamY);
   const double fSx = bCamOk ? fW / g_portView.nWidth / fZoom : 0.0;
   const double fSy = bCamOk ? fH / 480.0 / fZoom : 0.0;
+  const float fScale = static_cast<float>(fH) / 480.0f;
   bool bDrew = false;
 
   // the number's colour: fully saturated, the player's own colour, the one their race
@@ -277,12 +333,14 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     return UiColor{1.0f, 1.0f, 1.0f, 0.95f};
   };
 
-  // over each town hall the minerals' number, the workers on the base's patches over three
-  for (size_t b = 0; bCamOk && b < abase.size(); ++b) {
-    if (abase[b]->pSprite == NULL)
+  // over each town hall the minerals' number, the workers on the base's patches over
+  // three a patch - 0 / 24 on an eight-patch base - capped at the maximum, so a worker
+  // walking back does not push the counter past it (the user's clean count, 2026-11-03)
+  for (size_t b = 0; bCamOk && b < s_abase.size(); ++b) {
+    if (s_abase[b]->pSprite == NULL)
       continue;
-    int nMinOn = anBack[b], nMinOpt = 0;
-    for (const Patch &p : ap) {
+    int nMinOn = s_anBack[b], nMinOpt = 0;
+    for (const Patch &p : s_ap) {
       if (p.nBase != static_cast<int>(b))
         continue;
       if (p.bGas)
@@ -292,8 +350,10 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     }
     if (nMinOpt <= 0)
       continue;
-    const double fXw = static_cast<int>(abase[b]->pSprite->wPosX);
-    const double fYw = static_cast<int>(abase[b]->pSprite->wPosY);
+    if (nMinOn > nMinOpt)
+      nMinOn = nMinOpt;
+    const double fXw = static_cast<int>(s_abase[b]->pSprite->wPosX);
+    const double fYw = static_cast<int>(s_abase[b]->pSprite->wPosY);
     const double fSx0 = fX + (fXw - fCamX) * fSx;
     const double fSy0 = fY + (fYw - fCamY) * fSy;
     if (fSx0 < fX - 80 || fSx0 > fX + fW + 80 || fSy0 < fY - 60 || fSy0 > fY + fH)
@@ -316,15 +376,15 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   // own bases show - the ones whose assigned town hall lies within a base's reach - so a
   // scouted enemy's geyser does not take a 0 / 3.
   const int kBaseReach = 15 * 32;  // map pixels: a geyser sits a few tiles from its hall
-  for (const Patch &p : ap) {
+  for (const Patch &p : s_ap) {
     if (!bCamOk)
       break;
-    if (!p.bGas || p.nBase < 0 || p.nBase >= static_cast<int>(abase.size()))
+    if (!p.bGas || p.nBase < 0 || p.nBase >= static_cast<int>(s_abase.size()))
       continue;
-    if (abase[p.nBase]->pSprite == NULL)
+    if (s_abase[p.nBase]->pSprite == NULL)
       continue;
-    const double fDx = p.nX - static_cast<int>(abase[p.nBase]->pSprite->wPosX);
-    const double fDy = p.nY - static_cast<int>(abase[p.nBase]->pSprite->wPosY);
+    const double fDx = p.nX - static_cast<int>(s_abase[p.nBase]->pSprite->wPosX);
+    const double fDy = p.nY - static_cast<int>(s_abase[p.nBase]->pSprite->wPosY);
     if (fDx * fDx + fDy * fDy > static_cast<double>(kBaseReach) * kBaseReach)
       continue;
     const double fXw = p.nX;
@@ -333,26 +393,58 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     const double fSy0 = fY + (fYw - fCamY) * fSy;
     if (fSx0 < fX - 60 || fSx0 > fX + fW + 60 || fSy0 < fY - 40 || fSy0 > fY + fH)
       continue;
+    const int nOn = p.nOn > p.nSat ? p.nSat : p.nOn;  // capped, as the town halls'
     char sz[16];
-    snprintf(sz, sizeof sz, "%d / %d", p.nOn, p.nSat);
+    snprintf(sz, sizeof sz, "%d / %d", nOn, p.nSat);
     const float fWid = UiTextWidth(UI_FACE_BOLD, 11.0f, 0.0f, sz);
     const float fX0 = static_cast<float>(fSx0) - fWid / 2;
     const float fY0 = static_cast<float>(fSy0) - 30.0f;
-    const UiColor c = colour(p.nOn, p.nSat);
+    const UiColor c = colour(nOn, p.nSat);
     UiText(fX0 + 1.0f, fY0 + 1.0f, UI_FACE_BOLD, 11.0f, 0.0f, UiColor{0.0f, 0.0f, 0.0f, 0.7f}, sz);
     UiText(fX0, fY0, UI_FACE_BOLD, 11.0f, 0.0f, c, sz);
     bDrew = true;
   }
 
-  // the idle workers' icon, fixed just above the minimap's terrain toggle (the minimap's
-  // top-left corner, a little higher off it), always, the count on it, in the window's own
-  // pixels, so it stays put and seen at any zoom; half the size it was (the user,
-  // 2026-11-02)
-  const float fScale = static_cast<float>(fH) / 480.0f;
-  const int nCageTop = sgMinimapArea_g.top;
-  if (nCageTop >= 0 && nCageTop <= 480) {
-    const float fBadgeTop = fY + (nCageTop - 6.0f) * fScale;
-    IdleBadge(fX + sgMinimapArea_g.left * fScale + 2.0f, fBadgeTop, fW, fH, nIdle, fScale);
+  // each of the player's spellcasters' energy as a small bar over it, SC2's, so what the
+  // casters have shows at a glance; Settings' Interface can turn the bars off, on by
+  // default (the user, 2026-11-03). Only the player's own units: the game never shows
+  // another player's energy.
+  if (s_fEnergyBars > 0.5 && bCamOk) {
+    for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
+      if (p->bPlayer != nPlayer || p->pSprite == NULL || p->wEnergy == 0)
+        continue;
+      if ((gulUnitTypeFlags[p->wType] & 0x200000) == 0)  // no caster, no energy
+        continue;
+      const double fSx0 = fX + (static_cast<int>(p->pSprite->wPosX) - fCamX) * fSx;
+      const double fSy0 = fY + (static_cast<int>(p->pSprite->wPosY) - fCamY) * fSy;
+      if (fSx0 < fX - 40 || fSx0 > fX + fW + 40 || fSy0 < fY - 60 || fSy0 > fY + fH)
+        continue;
+      const int nMax = p->GetMaxEnergyReal();
+      if (nMax <= 0)
+        continue;
+      int nNow = static_cast<int>(p->wEnergy) >> 8;
+      if (nNow > nMax)
+        nNow = nMax;
+      const float fBarW = static_cast<float>(SpriteGrpWidth(p->pSprite) * fSx * 0.6);
+      if (fBarW < 8.0f)
+        continue;
+      const float fBarH = 2.5f * fScale;
+      const float fTop = static_cast<float>(fSy0 - SpriteGrpHeight(p->pSprite) * fSy - fBarH - 4.0);
+      const float fX0 = static_cast<float>(fSx0) - fBarW / 2;
+      UiFill(fX0, fTop, fBarW, fBarH, UiColor{0.02f, 0.05f, 0.12f, 0.75f});
+      UiFill(fX0, fTop, fBarW * static_cast<float>(nNow) / nMax, fBarH, UiColor{0.25f, 0.6f, 1.0f, 0.95f});
+    }
+  }
+
+  // the idle workers' icon, fixed above the bottom console's top edge - on top of it,
+  // not on it - and right of the minimap's cage, clear of its clicks, always, the count
+  // on it, in the window's own pixels, so it stays put and seen at any zoom (the user,
+  // 2026-11-03)
+  const int nConsoleTop = static_cast<int>(sgConsoleAreaRect_g.top);
+  if (nConsoleTop >= 0 && nConsoleTop <= 480) {
+    const float fBadgeBottom = fY + (nConsoleTop - 10.0f) * fScale;
+    const float fBadgeX = fX + (sgMinimapArea_g.right + 6.0f) * fScale;
+    IdleBadge(fBadgeX, fBadgeBottom, fW, fH, s_nIdle, fScale);
   }
   if (g_bLarvaPick)
     LarvaPick(fX, fY, fW, fH);
