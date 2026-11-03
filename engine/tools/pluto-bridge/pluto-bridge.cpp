@@ -873,12 +873,18 @@ static void ReserveScMemory() {
   fflush(stdout);
 }
 
+// The frame pipe's own fd: the fork's threads close fd 0 during their start-up
+// (that is what cut the bridge's stdin at ~1-26 frames, in the harness and the
+// real game alike). Dup'd as the first thing in main, before the fork loads.
+static int s_frameIn = -1;
 static bool ReadN(void *pv, size_t cb) {
   unsigned char *p = static_cast<unsigned char *>(pv);
   while (cb) {
-    int n = read(0, p, cb);
-    if (n <= 0)
+    int n = read(s_frameIn, p, cb);
+    if (n <= 0) {
+      fprintf(stderr, "[bridge] ReadN: %d on fd %d errno %d\n", n, s_frameIn, errno);
       return false;
+    }
     p += n;
     cb -= n;
   }
@@ -940,6 +946,8 @@ static void FlushReply(unsigned frame) {
 
 
 int main(int argc, char **argv) {
+  s_frameIn = dup(0);  // before anything else: the fork's start-up closes fd 0
+  fprintf(stderr, "[bridge] frame fd %d (stdin %d)\n", s_frameIn, _fileno(stdin));
   const bool bDebug = getenv("HX_DEBUG") != NULL;
   AddVectoredExceptionHandler(1, VecHandler);
   const int scenario = argc > 1 ? atoi(argv[1]) : 1;
