@@ -750,9 +750,9 @@ bool SelectArmy(const char **ppszWhy) {
 
 }  // namespace
 
-// The larva key (Hyperion's, Q, or Ctrl+Space's pick): the player's larvae, selected as a
-// drag box over them selects them, up to nCount when one was asked (all for none), and up
-// to as many as a selection holds.
+// The larva key (Hyperion's, Ctrl+Q, or Ctrl+Space's pick): the player's larvae, selected
+// as a drag box over them selects them, up to nCount when one was asked (all for none),
+// and up to as many as a selection holds.
 bool PortSelectLarva(int nCount, const char **ppszWhy) {
   if (!InGame()) {
     *ppszWhy = "no game";

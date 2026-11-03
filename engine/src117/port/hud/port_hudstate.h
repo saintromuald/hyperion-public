@@ -207,8 +207,8 @@ int PortHudButtonByName(const char *pszName);
 // on 1.17's own; a control group recalled as its key recalls it (nGroup 0 to 9).
 bool PortHudPress(int nPlace, const char **ppszWhy);
 bool PortHudPressButton(int nKind, const char **ppszWhy);
-// The larva key (Q): the player's larvae selected, as a drag box selects them, up to nCount
-// when one was asked (all for none).
+// The larva key (Ctrl+Q): the player's larvae selected, as a drag box selects them, up to
+// nCount when one was asked (all for none).
 bool PortSelectLarva(int nCount, const char **ppszWhy);
 // A player's eye on the players' board: what the player sees shown or hidden, as View Players'
 // box for them and its OK do (a replay; nSlot 0 to 7).

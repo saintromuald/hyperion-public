@@ -1569,6 +1569,45 @@ bool GridPrims(const HudDesign *pDesign, const HudLayerDef &ld, const SlotAt &at
     return false;  // more a page than the sheet holds
   GridSheet(nFirst, nCount);
   const bool bKinds = SelectionSubgroups() > 1;
+  // Hyperion: a selection of more than one shows one card, the active unit's, with the
+  // selection's count on it; the subgroup's key (Tab) steps the type between them, so a
+  // mixed selection reads cleanly at a glance (the user, 2026-11-03)
+  if (gpStatUnit != NULL) {
+    int nActive = -1;
+    for (int i = 0; i < nCount; ++i)
+      if (StatUnits()[nFirst + i] == gpStatUnit)
+        nActive = i;
+    if (nActive >= 0 && g_gridWires[nActive].bOk) {
+      double q[4], fit[4];
+      g.Cell(0, q);
+      int b = 0;
+      while (b < 3 && kBoxFrames[b] != StatDataBoxFrame(gpStatUnit))
+        ++b;
+      const GridBox &box = g_gridBoxes[b];
+      HudFit(box.bOk ? box.w : 33, box.bOk ? box.h : 34, q[0] + 1, q[1] + 1, q[2] - 2, q[3] - 2, fit);
+      const double s = fit[2] / (box.bOk ? box.w : 33);
+      if (box.bOk) {
+        const SDL_FRect r = Rect(at, fit[0], fit[1], fit[2], fit[3]);
+        const float u0 = static_cast<float>((b * 2 + 1) * kBoxW);  // the active's lit frame
+        UiPicturePart(r.x, r.y, r.w, r.h, kGridSlot, u0, 0.0f, u0 + box.w, static_cast<float>(box.h),
+                      UiColor{1, 1, 1, at.fAlpha}, true);
+      }
+      const GridWire &wire = g_gridWires[nActive];
+      const double ww = wire.w * s, wh = wire.h * s;
+      const SDL_FRect r = Rect(at, fit[0] + (fit[2] - ww) / 2, fit[1] + (fit[3] - wh) / 2, ww, wh);
+      const float u0 = static_cast<float>((nActive % nAcross) * kWireCell), v0 = static_cast<float>(kWireTop + (nActive / nAcross) * kWireCell);
+      UiPicturePart(r.x, r.y, r.w, r.h, kGridSlot, u0, v0, u0 + wire.w, v0 + wire.h, UiColor{1, 1, 1, at.fAlpha}, true);
+      // the selection's count on the card's corner
+      char sz[16];
+      snprintf(sz, sizeof sz, "x%d", n);
+      const float fSize = 11.0f * static_cast<float>(at.k);
+      const SDL_FRect rc = Rect(at, q[0], q[1], q[2], q[3]);
+      const float wText = UiTextWidth(UI_FACE_BOLD, fSize, 0.0f, sz);
+      UiText(rc.x + rc.w - wText - 3.0f, rc.y + 2.0f, UI_FACE_BOLD, fSize, 0.0f,
+             UiColor{1.0f, 1.0f, 1.0f, 0.95f}, sz);
+      return true;
+    }
+  }
   for (int i = 0; i < nCount; ++i) {
     CUnit *pUnit = StatUnits()[nFirst + i];
     if (pUnit == NULL)
