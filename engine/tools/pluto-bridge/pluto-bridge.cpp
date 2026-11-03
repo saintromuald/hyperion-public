@@ -225,6 +225,13 @@ __attribute__((naked)) static void RetOneStub(void) {
   __asm__("movl $1, %eax\n\tret");
 }
 
+// The fork's obs walk dispatches a per-unit callback through a vtable in the
+// bridge's own exe (0x200e59c0, slot 0xE0) that is NULL in our harness; the
+// stub answers 1 and cleans the walk's four args.
+static __attribute__((naked)) void StubRet12() {
+  __asm__("movl $1, %eax\n\tret $12");
+}
+
 static LONG CALLBACK VecHandler(EXCEPTION_POINTERS *e) {
   // The bot calls through garbage pointers (an exec fault at e.g. 0x7B1A2000):
   // answer "ready" (eax=1) and continue, so the engine-poll loop settles.
@@ -233,8 +240,33 @@ static LONG CALLBACK VecHandler(EXCEPTION_POINTERS *e) {
     static int s_exec;
     FILE *f = fopen("c:\\fault.log", "a");
     if (f) {
-      fprintf(f, "exec fault #%d at eip=%p\\n", ++s_exec,
-              e->ExceptionRecord->ExceptionAddress);
+      DWORD *esp = reinterpret_cast<DWORD *>(e->ContextRecord->Esp);
+      fprintf(f, "exec fault #%d at eip=%p ret=%08x [%08x %08x %08x]\\n",
+              ++s_exec, e->ExceptionRecord->ExceptionAddress,
+              esp[0], esp[1], esp[2], esp[3]);
+      // The fork's obs walk calls vtable slots that are NULL in our harness
+      // (call [vt + 0xE0] with vt in ebx, the call's return at esp[0]). Patch
+      // the slot with a stub that answers 1 and cleans the four args, then
+      // re-execute the call -- the walk completes as the fork expects.
+      const DWORD vt = e->ContextRecord->Ebx;
+      if (vt > 0x10000) {
+        MEMORY_BASIC_INFORMATION m;
+        void *slot = reinterpret_cast<void *>(vt + 0xE0);
+        if (VirtualQuery(slot, &m, sizeof m) == sizeof m &&
+            m.State == MEM_COMMIT && (m.Protect & (PAGE_NOACCESS | PAGE_GUARD)) == 0 &&
+            *reinterpret_cast<DWORD *>(slot) == 0) {
+          DWORD old;
+          if (VirtualProtect(slot, 4, PAGE_READWRITE, &old)) {
+            *reinterpret_cast<DWORD *>(slot) = reinterpret_cast<DWORD>(&StubRet12);
+            VirtualProtect(slot, 4, old, &old);
+            e->ContextRecord->Eip = esp[0] - 5;  // re-run the call
+            fprintf(f, "  healed slot %08x -> %p\\n", vt + 0xE0,
+                    reinterpret_cast<void *>(&StubRet12));
+            fclose(f);
+            return EXCEPTION_CONTINUE_EXECUTION;
+          }
+        }
+      }
       fclose(f);
     }
     if (s_exec < 500) {
@@ -558,20 +590,25 @@ static void ApplyImageState(const HxUnit *units, unsigned nUnits, const HxPlayer
                             const unsigned char *seen, const unsigned char *explored,
                             unsigned nPlaneBytes) {
   // ActiveTileArray: the same one-time setup UpdateScMemory does.
+  // The tile array, sized for the map (the bench's Big Game Hunters maps are
+  // wider than the old fixed 256-tile buffer): 4 bytes a tile, the fork indexes
+  // it by the map's width.
   static void *s_tiles;
-  if (!s_tiles) {
-    s_tiles = VirtualAlloc(NULL, 256 * 256 * 4, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    unsigned char *t = static_cast<unsigned char *>(s_tiles);
-    for (int i = 0; i < 256 * 256; ++i) {
-      t[i * 4 + 0] = 1;  // visibility flags: visible
-      t[i * 4 + 1] = 1;  // explored flags: explored
-      t[i * 4 + 2] = 1;  // walkable
-      t[i * 4 + 3] = 0;
+  static unsigned s_tileBytes = 0;
+  const unsigned need = mapW * mapH * 4;
+  if (s_tileBytes < need) {
+    void *bigger = VirtualAlloc(NULL, need, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (bigger) {
+      s_tiles = bigger;
+      s_tileBytes = need;
+      fprintf(stderr, "[bridge] tile array: %u bytes for %ux%u\n", need, mapW, mapH);
     }
-    // The fog planes, one bit a tile in the map's row order (the fork indexes
-    // the array by the map's width): byte 0 = the seen bit (the bot's player is
-    // 0), byte 1 = the explored bit, byte 2 = walkable.
-    for (unsigned ti = 0; ti < nPlaneBytes * 8u; ++ti) {
+  }
+  if (s_tiles) {
+    unsigned char *t = static_cast<unsigned char *>(s_tiles);
+    // The fog planes, one bit a tile in the map's row order: byte 0 = the seen
+    // bit (the bot's player is 0), byte 1 = the explored bit, byte 2 = walkable.
+    for (unsigned ti = 0; ti < nPlaneBytes * 8u && ti < mapW * mapH; ++ti) {
       const bool bSeen = (seen[ti >> 3] >> (ti & 7)) & 1;
       const bool bExplored = (explored[ti >> 3] >> (ti & 7)) & 1;
       t[ti * 4 + 0] = bSeen ? 1 : 0;
@@ -1205,6 +1242,23 @@ int main(int argc, char **argv) {
     int f = static_cast<int>(frame);
     g->frameCount = f;
     g->elapsedTime = f * 42;
+    // The fork's per-unit obs walk dispatches through a vtable in the bridge's
+    // exe whose slot 0xE0 is NULL in our harness (the call chain faults to 0).
+    // Fill the slot with a stub that answers 1 and cleans the four args.
+    {
+      static bool s_patched = false;
+      if (!s_patched) {
+        void **slot = reinterpret_cast<void **>(0x200e59c0 + 0xE0);
+        DWORD old;
+        if (VirtualProtect(slot, 4, PAGE_READWRITE, &old)) {
+          *slot = reinterpret_cast<void *>(&StubRet12);
+          VirtualProtect(slot, 4, old, &old);
+          s_patched = true;
+          fprintf(stderr, "[bridge] obs-walk slot 0xE0 -> %p\n",
+                  reinterpret_cast<void *>(&StubRet12));
+        }
+      }
+    }
     if (getenv("HX_NOAPPLY") != NULL)
       UpdateScMemory();  // the scripted debug path; the production path applied the image above
     if (bDebug && frame == 0) {

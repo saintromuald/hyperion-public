@@ -245,6 +245,26 @@ bool PlutoSendFrame() {
     if (VisionHxTileExplored(static_cast<int>(t), s_nPlutoSlot))
       explored[t >> 3] |= static_cast<unsigned char>(1u << (t & 7));
   }
+  static FILE *s_dump = NULL;
+  static int s_dumpCount = 0;
+  if (getenv("HYPERION_PLUTO_DUMP") != NULL) {
+    if (s_dump == NULL)
+      s_dump = fopen((PlutoFolder() + "/frames.bin").c_str(), "wb");
+    if (s_dump != NULL) {
+      fwrite(hdr, sizeof hdr, 1, s_dump);
+      fwrite(mapWH, sizeof mapWH, 1, s_dump);
+      fwrite(&nPlayers, sizeof nPlayers, 1, s_dump);
+      fwrite(units.data(), nUnits * sizeof(Unit), 1, s_dump);
+      fwrite(players.data(), nPlayers * sizeof(Player), 1, s_dump);
+      fwrite(seen.data(), nPlaneBytes, 1, s_dump);
+      fwrite(explored.data(), nPlaneBytes, 1, s_dump);
+      ++s_dumpCount;
+      if (s_dumpCount == 60) {  // enough for the offline replay
+        fclose(s_dump);
+        s_dump = NULL;
+      }
+    }
+  }
   if (!WriteAll(s_hToBridge, hdr, sizeof hdr) ||
       !WriteAll(s_hToBridge, mapWH, sizeof mapWH) ||
       !WriteAll(s_hToBridge, &nPlayers, sizeof nPlayers) ||
