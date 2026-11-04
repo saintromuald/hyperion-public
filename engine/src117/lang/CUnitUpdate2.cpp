@@ -792,6 +792,9 @@ BOOL CUnit::IsBurning()
 }
 
 // CUnit::EnergyUpdate, oracle 0x438E20 (187 B)
+#include "../port/gameplay/port_mutators.h"  // Hyperion: MutatorsOfGame, the x3 regen
+#include "../h/mutators.h"   // Hyperion: g_hxMutatorsOn
+
 void CUnit::EnergyUpdate()
 {
   if ((gulUnitTypeFlags[wType] & 0x200000u) == 0)
@@ -804,7 +807,8 @@ void CUnit::EnergyUpdate()
     int nMax = GetMaxEnergyInProgress();
     if (wEnergy == nMax)
       return;
-    this->wEnergy = static_cast<WORD>(wEnergy + 8);
+    // Hyperion: the x3 energy regeneration mutator (the user, 2026-11-04)
+    this->wEnergy = static_cast<WORD>(wEnergy + (g_hxMutatorsOn && MutatorsOfGame().nEnergyRegen != 0 ? 24 : 8));
     if (this->wEnergy > GetMaxEnergyInProgress())
       this->wEnergy = static_cast<WORD>(GetMaxEnergyInProgress());
   } else {

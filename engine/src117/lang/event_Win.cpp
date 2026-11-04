@@ -28,6 +28,8 @@
 #include "../port/gameplay/port_hotkeys.h"  // Hyperion: PortAccelRemap, PortAccelProfiled
 #include "../port/gameplay/port_keys.h"  // Hyperion
 #include "../port/gameplay/port_camkeys.h"  // Hyperion: PortCameraPressed, PortCameraRun
+#include "../port/gameplay/port_mutators.h"  // Hyperion: MutatorsOfGame, the no-army-key mutator
+#include "../h/mutators.h"   // Hyperion: g_hxMutatorsOn
 #include "../port/gameplay/port_mineinfo.h"  // Hyperion: PortLarvaPickOpen, the larvae' pick
 #include "../port/loop/port_perf.h"  // Hyperion: PortPerfIdle
 #include "../port/render/port_overlay.h"  // Hyperion: PortOverlayHold, PortOverlayMouse, PortOverlayKey
@@ -800,7 +802,8 @@ win_lparam_t __stdcall WndProc(void *hWnd, unsigned int uMsg, uintptr_t wParam, 
       return 0;
     }
     const int nHotkey = PortHotkeyPressed(static_cast<unsigned>(wParam));
-    if (nHotkey == PORT_HOTKEY_IDLE || nHotkey == PORT_HOTKEY_ARMY) {
+    if (nHotkey == PORT_HOTKEY_IDLE ||
+        (nHotkey == PORT_HOTKEY_ARMY && !(g_hxMutatorsOn && MutatorsOfGame().nNoArmyKey != 0))) {
       const char *pszWhy = NULL;
       if (!bRepeat)
         PortHudPressButton(nHotkey == PORT_HOTKEY_IDLE ? PORT_HUD_BTN_IDLE : PORT_HUD_BTN_ARMY, &pszWhy);

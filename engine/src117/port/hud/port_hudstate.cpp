@@ -27,6 +27,8 @@
 #include "../../h/filters.h"    // do_ally_filter_dlg, do_msg_filter_dlg (through minimap_btn_command)
 #include "../../h/game_evt.h"   // game_key_down_num
 #include "../../h/hxrules.h"    // HxRules
+#include "../gameplay/port_mutators.h"  // MutatorsOfGame, the no-army-key mutator
+#include "../../h/mutators.h"   // g_hxMutatorsOn
 #include "../../h/minimap.h"    // minimap_btn_command
 #include "../../h/select.h"     // select_units
 #include "../../h/selectlimits.h"  // the selection's arrays, 12 units or 255
@@ -529,7 +531,8 @@ void PortHudGet(PortHudState *s) {
   s->abButton[PORT_HUD_BTN_MESSAGING] = Shown(MinimapButton(MINIMAP_MESSAGING));
   s->abButton[PORT_HUD_BTN_IDLE] = !s->bReplay;
   // the army button is Hyperion's: a game by classic rules keeps 1.17's selections and has none
-  s->abButton[PORT_HUD_BTN_ARMY] = !s->bReplay && HxRules();
+  s->abButton[PORT_HUD_BTN_ARMY] = !s->bReplay && HxRules() &&
+                                   !(g_hxMutatorsOn && MutatorsOfGame().nNoArmyKey != 0);  // the mutator takes it off
   ReadCard(s);
 
   // a replay's buttons as its card shows and greys them (bf_replay_play and the rest: 1 shown, -1

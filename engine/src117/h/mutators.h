@@ -44,7 +44,7 @@ bool MutatorStartResources(int *pnMinerals, int *pnGas);
 
 // The fog mutator's choices, and the tech mutator's: all to research, all researched from the
 // start, no upgrades, or neither upgrades nor the abilities that need research.
-enum { MUTATOR_FOG_CLASSIC, MUTATOR_FOG_EXPLORED, MUTATOR_FOG_NONE };
+enum { MUTATOR_FOG_CLASSIC, MUTATOR_FOG_EXPLORED, MUTATOR_FOG_NONE, MUTATOR_FOG_RESOURCES };
 enum { MUTATOR_TECH_CLASSIC, MUTATOR_TECH_ALL, MUTATOR_TECH_NO_UPGRADES, MUTATOR_TECH_NO_RESEARCH };
 int MutatorTechOf(void);
 

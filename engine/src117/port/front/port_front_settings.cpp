@@ -1113,15 +1113,60 @@ const Setting kSettings[] = {
      NULL, NULL, NULL, NULL},
 };
 
-const int kSettingCount = static_cast<int>(sizeof kSettings / sizeof kSettings[0]);
+// The upgrades in upgrades.dat's order (BWAPI's UpgradeType), for the Newbie mode tab's
+// per-upgrade auto-research toggles; a "-" marks an unused slot the game never researches.
+const char *const kUpgradeNames[61] = {
+    "Terran Infantry Armor", "Terran Vehicle Plating", "Terran Ship Plating", "Zerg Carapace",
+    "Zerg Flyer Carapace", "Protoss Ground Armor", "Protoss Air Armor", "Terran Infantry Weapons",
+    "Terran Vehicle Weapons", "Terran Ship Weapons", "Zerg Melee Attacks", "Zerg Missile Attacks",
+    "Zerg Flyer Attacks", "Protoss Ground Weapons", "Protoss Air Weapons", "Protoss Plasma Shields",
+    "U-238 Shells", "Ion Thrusters", "-", "Titan Reactor", "Ocular Implants", "Moebius Reactor",
+    "Apollo Reactor", "Colossus Reactor", "Ventral Sacs", "Antennae", "Pneumatized Carapace",
+    "Metabolic Boost", "Adrenal Glands", "Muscular Augments", "Grooved Spines", "Gamete Meiosis",
+    "Metasynaptic Node", "Singularity Charge", "Leg Enhancements", "Scarab Damage", "Reaver Capacity",
+    "Gravitic Drive", "Sensor Array", "Gravitic Boosters", "Khaydarin Amulet", "Apial Sensors",
+    "Gravitic Thrusters", "Carrier Capacity", "Khaydarin Core", "-", "-", "Argus Jewel", "-",
+    "Argus Talisman", "-", "Caduceus Reactor", "Chitinous Plating", "Anabolic Synthesis",
+    "Charon Boosters", "-", "-", "-", "-", "-", "-"};
+
+// The settings' rows as a runtime list: kSettings plus the Newbie mode tab's rows (the
+// user, 2026-11-04). Built once, on the dialog's first use.
+const std::vector<Setting> &SettingsRows()
+{
+  static std::vector<Setting> a;
+  if (!a.empty())
+    return a;
+  a.assign(kSettings, kSettings + sizeof kSettings / sizeof kSettings[0]);
+  static char aKeys[61][24];
+  a.push_back({"newbie", PT_("Newbie mode"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+               NULL, NULL, NULL, PT_("Helpers for a player learning the game: workers, mining and research by themselves.")});
+  a.push_back({"newbie", PT_("Newbie mode"), CTL_TOGGLE, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+               ReadFlag, WriteFlag, "newbie", PT_("Turn the helpers on or off. Each helper below has its own toggle.")});
+  a.push_back({"newbie", PT_("Train workers automatically"), CTL_TOGGLE, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+               ReadFlag, WriteFlag, "newbieWorkers", PT_("A completed town hall with nothing training and supply to spare trains its worker by itself.")});
+  a.push_back({"newbie", PT_("Mine efficiently automatically"), CTL_TOGGLE, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+               ReadFlag, WriteFlag, "newbieMine", PT_("Each base's patches take up to three workers, each geyser three; once a base is full, the workers that are free go to the next base with room, and to the built geysers.")});
+  a.push_back({"newbie", PT_("Research automatically"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+               NULL, NULL, NULL, PT_("One toggle per upgrade: it is researched by itself when a building that can do it is free, level after level until it is done.")});
+  for (int u = 0; u < 61; ++u) {
+    if (kUpgradeNames[u][0] == '-')
+      continue;
+    snprintf(aKeys[u], sizeof aKeys[u], "autoUpg%d", u);
+    a.push_back({"newbie", kUpgradeNames[u], CTL_TOGGLE, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+                 ReadFlag, WriteFlag, aKeys[u], PT_("Research this upgrade by itself, level after level until it is done.")});
+  }
+  return a;
+}
+
+int SettingsCount(void) { return static_cast<int>(SettingsRows().size()); }
 
 bool g_bSettings;                   // the dialog is open
 
 int g_nTab;                         // kTabs
 
-SetValue g_set[kSettingCount];      // what the dialog shows
+std::vector<SetValue> g_set;        // what the dialog shows
 
-SetValue g_setOpened[kSettingCount];  // as it was when the dialog opened
+std::vector<SetValue> g_setOpened;  // as it was when the dialog opened
 
 int g_nDrag = -1;                   // the slider being dragged
 
@@ -1287,8 +1332,8 @@ bool SameValue(const Setting &s, const SetValue &a, const SetValue &b)
 
 int RowOf(Bind bind)
 {
-  for (int i = 0; i < kSettingCount; ++i)
-    if (kSettings[i].bind == bind)
+  for (int i = 0; i < SettingsCount(); ++i)
+    if (SettingsRows()[i].bind == bind)
       return i;
   return -1;
 }
@@ -1317,8 +1362,10 @@ void SettingsOpen(bool bInGame, const char *pszTab)
   for (int t = 0; pszTab != NULL && t < kTabCount; ++t)
     if (strcmp(kTabs[t].pszId, pszTab) == 0)
       g_nTab = t;
-  for (int i = 0; i < kSettingCount; ++i)
-    g_set[i] = g_setOpened[i] = ReadSetting(kSettings[i]);
+  g_set.assign(SettingsCount(), SetValue());
+  g_setOpened.assign(SettingsCount(), SetValue());
+  for (int i = 0; i < SettingsCount(); ++i)
+    g_set[i] = g_setOpened[i] = ReadSetting(SettingsRows()[i]);
   g_custom = g_customOpened = ThemeCustomSaved();
   ThemePickerReset();
   int nKind;
@@ -1356,8 +1403,8 @@ void SettingsAccept(void)
   PortSettingsHold();
   bool bAny = false;
   bool bDisplay = false;
-  for (int i = 0; i < kSettingCount; ++i) {
-    const Setting &s = kSettings[i];
+  for (int i = 0; i < SettingsCount(); ++i) {
+    const Setting &s = SettingsRows()[i];
     if (!Editable(s) || SameValue(s, g_set[i], g_setOpened[i]))
       continue;
     if (s.bind == BIND_DISPLAY || s.bind == BIND_RESOLUTION) {
@@ -1410,15 +1457,15 @@ void SettingsRestoreTab(void)
 {
   if (strcmp(kTabs[g_nTab].pszId, "hud") == 0)
     HudTabRestore();
-  for (int i = 0; i < kSettingCount; ++i)
-    if (strcmp(kSettings[i].pszTab, kTabs[g_nTab].pszId) == 0 && !Locked(kSettings[i])) {
-      g_set[i].f = kSettings[i].fDefault;
+  for (int i = 0; i < SettingsCount(); ++i)
+    if (strcmp(SettingsRows()[i].pszTab, kTabs[g_nTab].pszId) == 0 && !Locked(SettingsRows()[i])) {
+      g_set[i].f = SettingsRows()[i].fDefault;
       g_set[i].bOn = true;
-      if (kSettings[i].bind == BIND_THEME)
+      if (SettingsRows()[i].bind == BIND_THEME)
         g_custom = kThemeCustomStart;
       // the primary display at the desktop's size
       PortDisplayPick picks[1];
-      if (kSettings[i].bind == BIND_RESOLUTION && PortDisplayChoices(PORT_DISPLAY_BORDERLESS, picks, 1) == 1)
+      if (SettingsRows()[i].bind == BIND_RESOLUTION && PortDisplayChoices(PORT_DISPLAY_BORDERLESS, picks, 1) == 1)
         g_resPick = picks[0];
     }
 }
@@ -1445,9 +1492,9 @@ void Query(int i)
 // who picked a language they cannot read still finds the way back.
 const char *RowLabel(int i)
 {
-  std::string label = PortText(kSettings[i].pszLabel);
-  if (kSettings[i].bind == BIND_LANGUAGE && label != kSettings[i].pszLabel)
-    label += std::string(" \xC2\xB7 ") + kSettings[i].pszLabel;
+  std::string label = PortText(SettingsRows()[i].pszLabel);
+  if (SettingsRows()[i].bind == BIND_LANGUAGE && label != SettingsRows()[i].pszLabel)
+    label += std::string(" \xC2\xB7 ") + SettingsRows()[i].pszLabel;
   return Keep(label);
 }
 
@@ -1475,7 +1522,7 @@ bool CheckLine(int i, const char *pszId, bool bOn, bool bLive, bool bDim)
 
 void Slider(int i, bool bLive, bool bDim)
 {
-  const Setting &s = kSettings[i];
+  const Setting &s = SettingsRows()[i];
   const int nSteps = StepsOf(s);
   SetValue &v = g_set[i];
   const Clay_ElementId id = Id("setslider", i);
@@ -1576,7 +1623,7 @@ int ResolutionWords(std::vector<std::string> *pWords, std::vector<PortDisplayPic
 
 void Choices(int i, bool bLive, bool bDim)
 {
-  const Setting &s = kSettings[i];
+  const Setting &s = SettingsRows()[i];
   std::vector<std::string> words;
   std::vector<PortDisplayPick> picks;
   int nAt;
@@ -1756,7 +1803,7 @@ void Field(const char *psz, bool bGrow, bool bDim, int nId = -1)
 
 void SettingGroup(int i)
 {
-  const Setting &s = kSettings[i];
+  const Setting &s = SettingsRows()[i];
   const bool bLive = Editable(s);
   const bool bDim = NeedsOf(s) != NULL || Locked(s);
   SetValue &v = g_set[i];
@@ -1930,7 +1977,7 @@ void Tip(int i, bool bLeft)
   static const char *const kFrom[][2] = {{"Classic", PT_("In the original\xE2\x80\x99s option dialogs.")},
                                          {"SC:R", PT_("Added by Remastered.")},
                                          {"Hyperion", PT_("New in Hyperion.")}};
-  const Setting &s = kSettings[i];
+  const Setting &s = SettingsRows()[i];
   // its sentences, a space apart
   std::string meta;
   const auto add = [&meta](const std::string &sentence) { meta += (meta.empty() ? "" : " ") + sentence; };
@@ -2013,7 +2060,7 @@ void Confirm(void)
     std::string body = g_nConfirm == CONFIRM_MOD_RESTART
                            ? ModsRestartText()
                            : PortTextF("The setting \xE2\x80\x9C{0}\xE2\x80\x9D changes when Hyperion next starts.",
-                                       {PortText(kSettings[g_nRestartRow].pszLabel)});
+                                       {PortText(SettingsRows()[g_nRestartRow].pszLabel)});
     // over a game there is no restarting now, only the word
     const char *const kButtons[] = {PortText("Restart now"), PortText("Later")};
     const char *const kGameButtons[] = {PortText("OK")};
@@ -2146,16 +2193,20 @@ void SettingsDialog(void)
   const bool bHudTab = strcmp(kTabs[g_nTab].pszId, "hud") == 0;
   // the Hotkeys tab lays out its own too: its rows are more than the well holds
   const bool bHotkeysTab = strcmp(kTabs[g_nTab].pszId, "hotkeys") == 0;
+  const bool bNewbieTab = strcmp(kTabs[g_nTab].pszId, "newbie") == 0;
   std::vector<int> rows, later;
   int nTotal = 0;
-  for (int i = 0; i < kSettingCount; ++i)
-    if (strcmp(kSettings[i].pszTab, kTabs[g_nTab].pszId) == 0) {
-      (NotYet(kSettings[i]) && !bHudTab ? later : rows).push_back(i);
-      nTotal += SettingHeight(kSettings[i]);
+  for (int i = 0; i < SettingsCount(); ++i)
+    if (strcmp(SettingsRows()[i].pszTab, kTabs[g_nTab].pszId) == 0) {
+      (NotYet(SettingsRows()[i]) && !bHudTab ? later : rows).push_back(i);
+      nTotal += SettingHeight(SettingsRows()[i]);
     }
   if (!later.empty()) {
-    rows.push_back(kSettingCount - 1);
-    nTotal += SettingHeight(kSettings[kSettingCount - 1]);
+    // the heading's index in the runtime list is the last original row's, not the last
+    // runtime row's (the Newbie tab's rows come after it)
+    const int nNotYet = static_cast<int>(sizeof kSettings / sizeof kSettings[0]) - 1;
+    rows.push_back(nNotYet);
+    nTotal += SettingHeight(SettingsRows()[nNotYet]);
     rows.insert(rows.end(), later.begin(), later.end());
   }
   Decl cols = Floating(NULL, 0, 0, Sc(76), 63, CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_TOP);
@@ -2167,7 +2218,7 @@ void SettingsDialog(void)
   Open(cols);
   int nAcc = 0;
   size_t r = 0;
-  std::vector<bool> leftColumn(kSettingCount, true);
+  std::vector<bool> leftColumn(SettingsCount(), true);
   // the HUD tab lays its own out: the designs, and the chosen one's settings beside them
   if (bHudTab) {
     for (int i : rows)
@@ -2176,13 +2227,13 @@ void SettingsDialog(void)
     r = rows.size();
   }
   // the Hotkeys tab's own out: its rows scroll, two columns a screen's worth
-  if (bHotkeysTab) {
+  if (bHotkeysTab || bNewbieTab) {
     for (int i : rows)
       leftColumn[i] = false;
     HotkeysTab(rows, SettingGroup);
     r = rows.size();
   }
-  for (int c = 0; c < 2 && !bHudTab && !bHotkeysTab; ++c) {
+  for (int c = 0; c < 2 && !bHudTab && !bHotkeysTab && !bNewbieTab; ++c) {
     Decl col;
     col.d.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
     col.d.layout.sizing.width = Grow();
@@ -2191,9 +2242,9 @@ void SettingsDialog(void)
       if (c == 0 && nAcc >= nTotal / 2)
         break;
       // a heading goes with its first row: to the next column when that row would start it
-      if (c == 0 && kSettings[rows[r]].control == CTL_HEAD && nAcc + SettingHeight(kSettings[rows[r]]) >= nTotal / 2)
+      if (c == 0 && SettingsRows()[rows[r]].control == CTL_HEAD && nAcc + SettingHeight(SettingsRows()[rows[r]]) >= nTotal / 2)
         break;
-      nAcc += SettingHeight(kSettings[rows[r]]);
+      nAcc += SettingHeight(SettingsRows()[rows[r]]);
       leftColumn[rows[r]] = c == 0;
       SettingGroup(rows[r]);
     }
@@ -2251,7 +2302,7 @@ void KeyCapture(void)
       continue;
     g_nKeyNoteRow = g_nKeyCapture;
     // a control group's key: a letter or a digit alone
-    const int nGroup = GroupOf(kSettings[g_nKeyCapture].bind);
+    const int nGroup = GroupOf(SettingsRows()[g_nKeyCapture].bind);
     if (nGroup >= 0) {
       const int c = (k >= 'A' && k <= 'Z') || (k >= '0' && k <= '9') ? tolower(k) : 0;
       if (!PortKeyGroupFree(c)) {
@@ -2259,15 +2310,15 @@ void KeyCapture(void)
         continue;
       }
       int nOther = -1;
-      for (int r = 0; r < kSettingCount; ++r)
-        if (r != g_nKeyCapture && GroupOf(kSettings[r].bind) >= 0 &&
-            PortKeyGroupShown(GroupOf(kSettings[r].bind)) == c)
+      for (int r = 0; r < SettingsCount(); ++r)
+        if (r != g_nKeyCapture && GroupOf(SettingsRows()[r].bind) >= 0 &&
+            PortKeyGroupShown(GroupOf(SettingsRows()[r].bind)) == c)
           nOther = r;
       if (nOther >= 0) {
         char szKey[2];
         szKey[0] = static_cast<char>(toupper(c));
         szKey[1] = '\0';
-        g_keyNote = PortTextF("{0} is {1}\xE2\x80\x99s key.", {std::string(szKey), PortText(kSettings[nOther].pszLabel)});
+        g_keyNote = PortTextF("{0} is {1}\xE2\x80\x99s key.", {std::string(szKey), PortText(SettingsRows()[nOther].pszLabel)});
         continue;
       }
       g_set[g_nKeyCapture].f = static_cast<float>(c);
@@ -2281,15 +2332,15 @@ void KeyCapture(void)
       continue;
     }
     int nOther = -1;
-    for (int r = 0; r < kSettingCount; ++r)
+    for (int r = 0; r < SettingsCount(); ++r)
       if (r != g_nKeyCapture &&
-          HotkeyOf(kSettings[r].bind) >= 0 &&
+          HotkeyOf(SettingsRows()[r].bind) >= 0 &&
           static_cast<unsigned>(lroundf(g_set[r].f)) == nKey)
         nOther = r;
     if (nOther >= 0) {
       char szKey[48];
       PortHotkeyName(nKey, szKey, sizeof szKey);
-      g_keyNote = PortTextF("{0} is {1}\xE2\x80\x99s key.", {szKey, PortText(kSettings[nOther].pszLabel)});
+      g_keyNote = PortTextF("{0} is {1}\xE2\x80\x99s key.", {szKey, PortText(SettingsRows()[nOther].pszLabel)});
       continue;
     }
     g_set[g_nKeyCapture].f = static_cast<float>(nKey);
@@ -2425,7 +2476,7 @@ std::string LiveText(const char *psz)
 
 std::string LiveRowJson(int i)
 {
-  const Setting &s = kSettings[i];
+  const Setting &s = SettingsRows()[i];
   const SetValue v = ReadSetting(s);
   static const char *const kKinds[] = {"toggle", "slider", "steps", "choice"};
   std::string words = "[";
@@ -2451,8 +2502,8 @@ std::string PortSettingsLiveJson(void)
 {
   std::string s = "\"settings\":[";
   bool bFirst = true;
-  for (int i = 0; i < kSettingCount; ++i) {
-    if (!LiveRow(kSettings[i]))
+  for (int i = 0; i < SettingsCount(); ++i) {
+    if (!LiveRow(SettingsRows()[i]))
       continue;
     s += (bFirst ? "" : ",") + LiveRowJson(i);
     bFirst = false;
@@ -2464,8 +2515,8 @@ std::string PortSettingsLiveJson(void)
 // a slider's per cent); empty when there is no such row.
 std::string PortSettingLiveWord(const char *pszName, float *pf)
 {
-  for (int i = 0; i < kSettingCount; ++i) {
-    const Setting &s = kSettings[i];
+  for (int i = 0; i < SettingsCount(); ++i) {
+    const Setting &s = SettingsRows()[i];
     if (!LiveRow(s) || _stricmp(s.pszLabel, pszName) != 0)
       continue;
     const SetValue v = ReadSetting(s);
@@ -2491,13 +2542,13 @@ std::string PortSettingLiveWord(const char *pszName, float *pf)
 bool PortSettingLiveSet(const std::string &name, double fValue, int nOn, std::string *pAnswer)
 {
   int i = 0;
-  while (i < kSettingCount && (!LiveRow(kSettings[i]) || _stricmp(kSettings[i].pszLabel, name.c_str()) != 0))
+  while (i < SettingsCount() && (!LiveRow(SettingsRows()[i]) || _stricmp(SettingsRows()[i].pszLabel, name.c_str()) != 0))
     ++i;
-  if (i == kSettingCount) {
+  if (i == SettingsCount()) {
     *pAnswer = "no setting named " + name + "; settings names them";
     return false;
   }
-  const Setting &s = kSettings[i];
+  const Setting &s = SettingsRows()[i];
   if (!Editable(s) || NeedsOf(s) != NULL) {
     *pAnswer = name + " cannot be changed yet" + (NeedsOf(s) != NULL ? std::string(": it waits on ") + NeedsOf(s) : "");
     return false;

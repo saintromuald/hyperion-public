@@ -11,6 +11,9 @@
 
 #include "port_mutators.h"
 #include "port_richbases.h"     // RichBasesMapLoaded
+#include "../../h/CUnit.h"
+#include "../../h/CSprite.h"
+#include "../../h/CThingy.h"    // the doodads' pool, for Explored + resources
 #include "../front/port_text.h"
 #include "../platform/port_json.h"  // PortJson
 #include "../platform/port_log.h"   // PortLogger
@@ -46,7 +49,9 @@ const int kCaps[] = {100, 200, 300, 400, 500, 600};
 const int kBoosts[] = {0, 25, 50, 75, 100};
 const int kWorkers[] = {2, 4, 6, 8, 10, 12};
 const int kWorkersMost = 12;
-const char *const kFogs[] = {PT_("Normal"), PT_("Explored"), PT_("None")};      // MUTATOR_FOG_*
+const char *const kFogs[] = {PT_("Normal"), PT_("Explored"), PT_("None"), PT_("Explored + resources")};  // MUTATOR_FOG_*
+const char *const kNoArmyKeys[] = {PT_("Off"), PT_("On")};                       // the army hotkey's mutator
+const char *const kEnergyRegens[] = {PT_("Normal"), PT_("x3")};                  // the energy regen's mutator
 const int kBuilds[] = {25, 50, 75, 100};                        // a percent of 1.17's times
 const char *const kTechs[] = {PT_("Normal"), PT_("Researched"), PT_("No upgrades"),
                               PT_("No research")};  // MUTATOR_TECH_*
@@ -74,7 +79,8 @@ const int kNoCapMinerals = 40;
 const char *const kNames[MUT_COUNT] = {PT_("Mineral fields"), PT_("Vespene geysers"), PT_("Start resources"),
                                        PT_("Supply cap"),     PT_("Start workers"),   PT_("Supply boost"),
                                        PT_("Fog of war"),     PT_("Build time"),      PT_("Tech and upgrades"),
-                                       PT_("Rich resources"), PT_("No cap"),         PT_("One add-on")};
+                                       PT_("Rich resources"), PT_("No cap"),         PT_("One add-on"),
+                                       PT_("No army key"), PT_("Energy regeneration"), PT_("Newbie mode")};
 const char *const kLines[MUT_COUNT] = {
     PT_("What each mineral field holds, or that it never runs dry. Classic: 1,500, the small ones 750."),
     PT_("What each geyser holds before it runs dry, or that it never does. Classic: 5,000."),
@@ -98,6 +104,10 @@ const char *const kLines[MUT_COUNT] = {
     PT_("One add-on of a kind serves every building: one Machine Shop lets any Factory build Siege Tanks, "
         "and the same for the Control Tower's, the Covert Ops' and the Physics Lab's. Classic: each "
         "building needs its own."),
+    PT_("No select-army key and no army button, for a game played without them. Classic: the key and the button."),
+    PT_("Every unit's energy comes back three times as fast. Classic: the usual rate."),
+    PT_("Newbie helpers for a player learning the game: workers, mining and research by themselves. The "
+        "toggles are in Settings' Newbie mode tab."),
 };
 
 // the presets' names, which --mutators also reads (MutatorsChooseList) from the English
@@ -182,7 +192,9 @@ bool Same(const MutatorSet &a, const MutatorSet &b) {
          (!RichRolled(a) || (a.nRichChance == b.nRichChance && a.nRichRules == b.nRichRules)) &&
          (a.nRich == MUTATOR_RICH_OFF || (a.nRichRules & MUTATOR_RICH_QUIET) == (b.nRichRules & MUTATOR_RICH_QUIET)) &&
          (a.nRich != MUTATOR_RICH_RADIUS || a.nRichRadius == b.nRichRadius) && a.nUnits == b.nUnits &&
-         a.nNoCap == b.nNoCap && a.nAddon == b.nAddon;
+         a.nNoCap == b.nNoCap && a.nAddon == b.nAddon && a.nNoArmyKey == b.nNoArmyKey &&
+         a.nEnergyRegen == b.nEnergyRegen && a.nNewbie == b.nNewbie && a.nAutoWorkers == b.nAutoWorkers &&
+         a.nAutoMine == b.nAutoMine && a.dwAutoUpgLo == b.dwAutoUpgLo && a.dwAutoUpgHi == b.dwAutoUpgHi;
 }
 
 // A radius in words: "48 tiles", "a quarter of the map"; in English for a log or a key.
@@ -211,6 +223,8 @@ std::string RadiusChip(int nRadius) {
 // "explored", "none" or a number for the fog; "all", "noupgrades", "noresearch" or a number
 // for the tech; anything else the classic one.
 int ParseFog(const char *psz) {
+  if (_strnicmp(psz, "resources", 9) == 0 || _strnicmp(psz, "exploredresources", 16) == 0)
+    return MUTATOR_FOG_RESOURCES;
   if (_strnicmp(psz, "exp", 3) == 0)
     return MUTATOR_FOG_EXPLORED;
   if (_strnicmp(psz, "none", 4) == 0 || _strnicmp(psz, "off", 3) == 0)
@@ -290,9 +304,11 @@ struct Record {
   DWORD dwRichRadius;
   DWORD dwUnits;
   DWORD dwNoCap, dwAddon;
+  DWORD dwNoArmyKey, dwEnergyRegen;
+  DWORD dwNewbie, dwAutoWorkers, dwAutoMine, dwAutoUpgLo, dwAutoUpgHi;
 };
 #pragma pack(pop)
-static_assert(sizeof(Record) == MUTATOR_RECORD_BYTES, "the record's size is fixed");
+static_assert(sizeof(Record) == MUTATOR_RECORD_BYTES_NEWBIE, "the record's size is fixed");
 
 }  // namespace
 
@@ -309,7 +325,7 @@ MutatorSet MutatorsClamp(const MutatorSet &m) {
   c.nSupplyCap = m.nSupplyCap == 0 ? 0 : Clamp(m.nSupplyCap, 1, 100000);
   c.nWorkers = Clamp(m.nWorkers, 1, kWorkersMost);
   c.nSupplyBoost = (Clamp(m.nSupplyBoost, 0, 100) + 12) / 25 * 25;
-  c.nFog = Clamp(m.nFog, MUTATOR_FOG_CLASSIC, MUTATOR_FOG_NONE);
+  c.nFog = Clamp(m.nFog, MUTATOR_FOG_CLASSIC, MUTATOR_FOG_RESOURCES);
   c.nBuildTime = Clamp(m.nBuildTime, 10, 400);
   c.nTech = Clamp(m.nTech, MUTATOR_TECH_CLASSIC, MUTATOR_TECH_NO_RESEARCH);
   c.nRich = Clamp(m.nRich, MUTATOR_RICH_OFF, MUTATOR_RICH_EVERY);
@@ -321,6 +337,13 @@ MutatorSet MutatorsClamp(const MutatorSet &m) {
   c.nUnits = m.nUnits <= 0 ? 0 : Clamp(m.nUnits, POOL_UNITS_117, POOL_UNITS_MAX);
   c.nNoCap = m.nNoCap != 0;
   c.nAddon = m.nAddon != 0;
+  c.nNoArmyKey = m.nNoArmyKey != 0;
+  c.nEnergyRegen = m.nEnergyRegen != 0;
+  c.nNewbie = m.nNewbie != 0;
+  c.nAutoWorkers = m.nAutoWorkers != 0;
+  c.nAutoMine = m.nAutoMine != 0;
+  c.dwAutoUpgLo = m.dwAutoUpgLo;
+  c.dwAutoUpgHi = m.dwAutoUpgHi;
   return c;
 }
 
@@ -368,6 +391,8 @@ int MutatorChoices(int nMut) {
   case MUT_RICH: return static_cast<int>(sizeof kRiches / sizeof kRiches[0]);
   case MUT_NOCAP: return static_cast<int>(sizeof kNocaps / sizeof kNocaps[0]);
   case MUT_ADDON: return static_cast<int>(sizeof kAddons / sizeof kAddons[0]);
+  case MUT_NOARMYKEY: return static_cast<int>(sizeof kNoArmyKeys / sizeof kNoArmyKeys[0]);
+  case MUT_ENERGY: return static_cast<int>(sizeof kEnergyRegens / sizeof kEnergyRegens[0]);
   case MUT_RICH_CHANCE: return static_cast<int>(sizeof kChances / sizeof kChances[0]);
   case MUT_RICH_RADIUS: return static_cast<int>(sizeof kRadii / sizeof kRadii[0]);
   }
@@ -390,6 +415,8 @@ std::string MutatorChoiceName(int nMut, int i) {
   case MUT_RICH: return PortText(kRiches[i]);
   case MUT_NOCAP: return PortText(kNocaps[i]);
   case MUT_ADDON: return PortText(kAddons[i]);
+  case MUT_NOARMYKEY: return PortText(kNoArmyKeys[i]);
+  case MUT_ENERGY: return PortText(kEnergyRegens[i]);
   case MUT_RICH_CHANCE: return PortTextF("{0}% chance", {std::to_string(kChances[i])});
   case MUT_RICH_RADIUS: return RadiusChip(kRadii[i]);
   }
@@ -413,6 +440,8 @@ int MutatorChoiceOf(const MutatorSet &m, int nMut) {
   case MUT_WORKERS: return Nearest(kWorkers, MutatorChoices(nMut), m.nWorkers);
   case MUT_BOOST: return Nearest(kBoosts, MutatorChoices(nMut), m.nSupplyBoost);
   case MUT_FOG: return Clamp(m.nFog, 0, MutatorChoices(nMut) - 1);
+  case MUT_NOARMYKEY: return m.nNoArmyKey != 0 ? 1 : 0;
+  case MUT_ENERGY: return m.nEnergyRegen != 0 ? 1 : 0;
   case MUT_BUILD: return Nearest(kBuilds, MutatorChoices(nMut), m.nBuildTime);
   case MUT_TECH: return Clamp(m.nTech, 0, MutatorChoices(nMut) - 1);
   case MUT_RICH: return Clamp(m.nRich, 0, MutatorChoices(nMut) - 1);
@@ -442,6 +471,8 @@ void MutatorChoose(MutatorSet *pm, int nMut, int i) {
   case MUT_WORKERS: pm->nWorkers = kWorkers[i]; break;
   case MUT_BOOST: pm->nSupplyBoost = kBoosts[i]; break;
   case MUT_FOG: pm->nFog = i; break;
+  case MUT_NOARMYKEY: pm->nNoArmyKey = i != 0 ? 1 : 0; break;
+  case MUT_ENERGY: pm->nEnergyRegen = i != 0 ? 1 : 0; break;
   case MUT_BUILD: pm->nBuildTime = kBuilds[i]; break;
   case MUT_TECH: pm->nTech = i; break;
   case MUT_RICH: pm->nRich = i; break;
@@ -495,6 +526,8 @@ bool MutatorOn(const MutatorSet &m, int nMut) {
   case MUT_RICH: return m.nRich != c.nRich;
   case MUT_NOCAP: return m.nNoCap != c.nNoCap;
   case MUT_ADDON: return m.nAddon != c.nAddon;
+  case MUT_NOARMYKEY: return m.nNoArmyKey != c.nNoArmyKey;
+  case MUT_ENERGY: return m.nEnergyRegen != c.nEnergyRegen;
   }
   return false;
 }
@@ -606,6 +639,8 @@ std::string MutatorsText(const MutatorSet &m, bool bShown) {
     add(PT_("the map explored"));
   else if (m.nFog == MUTATOR_FOG_NONE)
     add(PT_("no fog of war"));
+  else if (m.nFog == MUTATOR_FOG_RESOURCES)
+    add(PT_("the map and its resources explored"));
   if (m.nBuildTime != s.nBuildTime)
     add(PT_("build time {0}"), {Share(m.nBuildTime)});
   if (m.nTech == MUTATOR_TECH_ALL)
@@ -641,6 +676,12 @@ std::string MutatorsText(const MutatorSet &m, bool bShown) {
     add(PT_("no supply, cheap depots and pylons"));
   if (m.nAddon != s.nAddon)
     add(PT_("one add-on serves every building"));
+  if (m.nNoArmyKey != s.nNoArmyKey)
+    add(PT_("no army hotkey"));
+  if (m.nEnergyRegen != s.nEnergyRegen)
+    add(PT_("energy x3"));
+  if (m.nNewbie != s.nNewbie)
+    add(PT_("newbie helpers"));
   return out;
 }
 
@@ -653,7 +694,10 @@ std::string MutatorsJson(const MutatorSet &m) {
          ",\"rich\":" + std::to_string(m.nRich) + ",\"richChance\":" + std::to_string(m.nRichChance) +
          ",\"richRules\":" + std::to_string(m.nRichRules) + ",\"richRadius\":" + std::to_string(m.nRichRadius) +
          ",\"units\":" + std::to_string(m.nUnits) + ",\"noCap\":" + std::to_string(m.nNoCap) +
-         ",\"addon\":" + std::to_string(m.nAddon) + "}";
+         ",\"addon\":" + std::to_string(m.nAddon) + ",\"noArmyKey\":" + std::to_string(m.nNoArmyKey) +
+         ",\"energyRegen\":" + std::to_string(m.nEnergyRegen) + ",\"newbie\":" + std::to_string(m.nNewbie) +
+         ",\"autoWorkers\":" + std::to_string(m.nAutoWorkers) + ",\"autoMine\":" + std::to_string(m.nAutoMine) +
+         ",\"autoUpgLo\":" + std::to_string(m.dwAutoUpgLo) + ",\"autoUpgHi\":" + std::to_string(m.dwAutoUpgHi) + "}";
 }
 
 MutatorSet MutatorsFromJson(const PortJson &j) {
@@ -676,6 +720,13 @@ MutatorSet MutatorsFromJson(const PortJson &j) {
   m.nUnits = static_cast<int>(j["units"].Num(s.nUnits));
   m.nNoCap = static_cast<int>(j["noCap"].Num(s.nNoCap));
   m.nAddon = static_cast<int>(j["addon"].Num(s.nAddon));
+  m.nNoArmyKey = static_cast<int>(j["noArmyKey"].Num(s.nNoArmyKey));
+  m.nEnergyRegen = static_cast<int>(j["energyRegen"].Num(s.nEnergyRegen));
+  m.nNewbie = static_cast<int>(j["newbie"].Num(s.nNewbie));
+  m.nAutoWorkers = static_cast<int>(j["autoWorkers"].Num(s.nAutoWorkers));
+  m.nAutoMine = static_cast<int>(j["autoMine"].Num(s.nAutoMine));
+  m.dwAutoUpgLo = static_cast<unsigned>(j["autoUpgLo"].Num(s.dwAutoUpgLo));
+  m.dwAutoUpgHi = static_cast<unsigned>(j["autoUpgHi"].Num(s.dwAutoUpgHi));
   return MutatorsClamp(m);
 }
 
@@ -748,6 +799,30 @@ bool MutatorsChooseList(const char *pszList) {
                                                          : m.nRichRules & ~MUTATOR_RICH_SAME_MAP;
     } else if (lstrcmpiA(key.c_str(), "nocap") == 0 || lstrcmpiA(key.c_str(), "nosupply") == 0) {
       m.nNoCap = ParseOn(pszValue) ? 1 : 0;
+    } else if (lstrcmpiA(key.c_str(), "noarmy") == 0 || lstrcmpiA(key.c_str(), "noarmykey") == 0) {
+      m.nNoArmyKey = ParseOn(pszValue) ? 1 : 0;
+    } else if (lstrcmpiA(key.c_str(), "energy") == 0 || lstrcmpiA(key.c_str(), "energyregen") == 0) {
+      m.nEnergyRegen = ParseOn(pszValue) ? 1 : 0;
+    } else if (lstrcmpiA(key.c_str(), "newbie") == 0) {
+      m.nNewbie = ParseOn(pszValue) ? 1 : 0;
+    } else if (lstrcmpiA(key.c_str(), "autoworkers") == 0) {
+      m.nAutoWorkers = ParseOn(pszValue) ? 1 : 0;
+    } else if (lstrcmpiA(key.c_str(), "automine") == 0) {
+      m.nAutoMine = ParseOn(pszValue) ? 1 : 0;
+    } else if (lstrcmpiA(key.c_str(), "autoupg") == 0) {
+      // the upgrades to research by themselves, by id or by a '+'-joined list of ids
+      const char *p = pszValue;
+      while (*p != ' ') {
+        const int u = atoi(p);
+        if (u >= 0 && u < 32)
+          m.dwAutoUpgLo |= 1u << u;
+        else if (u >= 32 && u < 61)
+          m.dwAutoUpgHi |= 1u << (u - 32);
+        const char *pNext = strchr(p, '+');
+        if (pNext == NULL)
+          break;
+        p = pNext + 1;
+      }
     } else if (lstrcmpiA(key.c_str(), "addon") == 0 || lstrcmpiA(key.c_str(), "oneaddon") == 0) {
       m.nAddon = ParseOn(pszValue) ? 1 : 0;
     } else {
@@ -816,6 +891,26 @@ std::string MutatorsList(const MutatorSet &m) {
     add("nocap", "on");
   if (m.nAddon != c.nAddon)
     add("addon", "on");
+  if (m.nNoArmyKey != c.nNoArmyKey)
+    add("noarmy", "on");
+  if (m.nEnergyRegen != c.nEnergyRegen)
+    add("energy", "on");
+  if (m.nNewbie != c.nNewbie)
+    add("newbie", "on");
+  if (m.nAutoWorkers != c.nAutoWorkers)
+    add("autoworkers", "on");
+  if (m.nAutoMine != c.nAutoMine)
+    add("automine", "on");
+  if (m.dwAutoUpgLo != 0 || m.dwAutoUpgHi != 0) {
+    // the upgrades to research by themselves, as a '+'-joined list of ids (the parser reads it back)
+    std::string ids;
+    for (int u = 0; u < 61; ++u) {
+      const bool bOn = u < 32 ? (m.dwAutoUpgLo & (1u << u)) != 0 : (m.dwAutoUpgHi & (1u << (u - 32))) != 0;
+      if (bOn)
+        ids += (ids.empty() ? "" : "+") + std::to_string(u);
+    }
+    add("autoupg", ids);
+  }
   return s;
 }
 
@@ -981,6 +1076,8 @@ void MutatorsMapLoaded(void) {
       g_game.nTech, g_game.nFog);
 }
 
+static void RevealTilesFor(PlayerSet *pHidden, PlayerSet *pUnexplored, int nX, int nY);
+
 void MutatorsVisionRefresh(void) {
   if (!g_hxMutatorsOn || g_game.nFog == MUTATOR_FOG_CLASSIC || gpSquareMap == NULL)
     return;
@@ -992,13 +1089,56 @@ void MutatorsVisionRefresh(void) {
     gpSquareMap[i] &= ~dwOpen;
   PlayerSet *pHidden = VisionHxHidden();
   PlayerSet *pUnexplored = VisionHxUnexplored();
-  if (pHidden == NULL || pUnexplored == NULL)
-    return;
   for (int s = PLAYER_LOBBY_117; s < PlayerSlots(); s++)
     for (int i = 0; i < nTiles; i++) {
-      pUnexplored[i].Remove(s);
-      if (bSeen)
+      if (pUnexplored != NULL)
+        pUnexplored[i].Remove(s);
+      if (bSeen && pHidden != NULL)
         pHidden[i].Remove(s);
+    }
+  // Explored + resources (the user, 2026-11-04): the land is known, as Explored, and the
+  // mineral fields, the geysers, the eggs and the doodads show for every player from the
+  // start. The resource tiles open for every player, so the resources themselves stay
+  // visible (CalcVisibility keeps them so); the rest of the map's units stay in the fog.
+  if (g_game.nFog == MUTATOR_FOG_RESOURCES) {
+    for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
+      if (p->pSprite == NULL)
+        continue;
+      const WORD wType = p->wType;
+      if ((wType >= 0xB0 && wType <= 0xB2) || wType == 0xBC || wType == 0x24)
+        RevealTilesFor(pHidden, pUnexplored, static_cast<int>(p->pSprite->wPosX), static_cast<int>(p->pSprite->wPosY));
+    }
+    // the doodads: the rocks and the other obstacles, in the thingy pool
+    for (int n = 1; n <= 500; ++n) {
+      CThingy *pT = CThingy::GetDoodadThingy(n);
+      if (pT == NULL || pT->pSprite == NULL)
+        continue;
+      RevealTilesFor(pHidden, pUnexplored, static_cast<int>(pT->pSprite->wPosX), static_cast<int>(pT->pSprite->wPosY));
+    }
+  }
+}
+
+// Clear a unit's tiles' hidden and unexplored bits for one player: a small area round its
+// centre, enough for its sprite to show. The classic players' bits live in gpSquareMap
+// (bits 0-7), the Hyperion slots past 1.17's eight in the vision tables.
+static void RevealTilesFor(PlayerSet *pHidden, PlayerSet *pUnexplored, int nX, int nY) {
+  const int nTx = nX / 32, nTy = nY / 32;
+  for (int dy = -1; dy <= 1; ++dy)
+    for (int dx = -1; dx <= 1; ++dx) {
+      const int x = nTx + dx, y = nTy + dy;
+      if (x < 0 || y < 0 || x >= gwMapWidth || y >= gwMapHeight)
+        continue;
+      const int i = y * gwMapWidth + x;
+      // every player's hidden and unexplored bits on the square map, not just the extra
+      // slots': the classic eight are bits 0 to 7, so 0x00FF, and the Hyperion slots past
+      // them have their own tables
+      gpSquareMap[i] &= ~0x00FFu;
+      for (int s = PLAYER_LOBBY_117; s < PlayerSlots(); ++s) {
+        if (pHidden != NULL)
+          pHidden[i].Remove(s);
+        if (pUnexplored != NULL)
+          pUnexplored[i].Remove(s);
+      }
     }
 }
 
@@ -1011,12 +1151,16 @@ void MutatorsSave(unsigned char *pbOut) {
                     static_cast<DWORD>(g_nRevision),           static_cast<DWORD>(g_game.nRich),
                     static_cast<DWORD>(g_game.nRichChance),    static_cast<DWORD>(g_game.nRichRules),
                     static_cast<DWORD>(g_game.nRichRadius),    static_cast<DWORD>(g_game.nUnits),
-                    static_cast<DWORD>(g_game.nNoCap),         static_cast<DWORD>(g_game.nAddon)};
+                    static_cast<DWORD>(g_game.nNoCap),         static_cast<DWORD>(g_game.nAddon),
+                    static_cast<DWORD>(g_game.nNoArmyKey),     static_cast<DWORD>(g_game.nEnergyRegen),
+                    static_cast<DWORD>(g_game.nNewbie),        static_cast<DWORD>(g_game.nAutoWorkers),
+                    static_cast<DWORD>(g_game.nAutoMine),      static_cast<DWORD>(g_game.dwAutoUpgLo),
+                    static_cast<DWORD>(g_game.dwAutoUpgHi)};
   memcpy(pbOut, &r, sizeof r);
 }
 
 bool MutatorRecordBytesRead(int nBytes) {
-  return nBytes == MUTATOR_RECORD_BYTES || nBytes == MUTATOR_RECORD_BYTES_UNITS ||
+  return nBytes == MUTATOR_RECORD_BYTES_NEWBIE || nBytes == MUTATOR_RECORD_BYTES || nBytes == MUTATOR_RECORD_BYTES_UNITS ||
          nBytes == MUTATOR_RECORD_BYTES_RADIUS || nBytes == MUTATOR_RECORD_BYTES_RICH ||
          nBytes == MUTATOR_RECORD_BYTES_REVISION ||
          nBytes == MUTATOR_RECORD_BYTES_TEN || nBytes == MUTATOR_RECORD_BYTES_FIRST;
@@ -1034,7 +1178,7 @@ bool MutatorsRecorded(const unsigned char *pbIn, int nBytes) {
   // without the radius 48 tiles, one without the unit limit Automatic, and one without the no-cap
   // mutator and the one add-on's has neither
   Record r = {0, 0, 0, 0, 0, 0, 0, MUTATOR_FOG_CLASSIC, 100, MUTATOR_TECH_CLASSIC, 0, MUTATOR_RICH_OFF, 50,
-              MUTATOR_RICH_FAIR | MUTATOR_RICH_AT_LEAST_ONE, 48, 0, 0, 0};
+              MUTATOR_RICH_FAIR | MUTATOR_RICH_AT_LEAST_ONE, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   memcpy(&r, pbIn, nBytes);
   g_nRecordedRevision = static_cast<int>(r.dwRevision);
   MutatorSet m;
@@ -1055,6 +1199,13 @@ bool MutatorsRecorded(const unsigned char *pbIn, int nBytes) {
   m.nUnits = static_cast<int>(r.dwUnits);
   m.nNoCap = static_cast<int>(r.dwNoCap);
   m.nAddon = static_cast<int>(r.dwAddon);
+  m.nNoArmyKey = static_cast<int>(r.dwNoArmyKey);
+  m.nEnergyRegen = static_cast<int>(r.dwEnergyRegen);
+  m.nNewbie = static_cast<int>(r.dwNewbie);
+  m.nAutoWorkers = static_cast<int>(r.dwAutoWorkers);
+  m.nAutoMine = static_cast<int>(r.dwAutoMine);
+  m.dwAutoUpgLo = r.dwAutoUpgLo;
+  m.dwAutoUpgHi = r.dwAutoUpgHi;
   g_recorded = MutatorsClamp(m);
   g_bRecorded = true;
   return true;

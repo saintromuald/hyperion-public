@@ -580,7 +580,7 @@ int HxSaveSetUp(void *pFile) {
       !(PortSaveSection(pFile, kHandicaps) && pfwrite(&dwSlots, 4, pFile) &&
         pfwrite(abHandicaps, sizeof abHandicaps, pFile)))
     return 0;
-  BYTE abMutators[MUTATOR_RECORD_BYTES];
+  BYTE abMutators[MUTATOR_RECORD_BYTES_NEWBIE];
   MutatorsSave(abMutators);
   if ((g_hxRuleOptions & HX_OPT_MUTATORS) != 0 &&
       !(PortSaveSection(pFile, kMutators) && pfwrite(abMutators, sizeof abMutators, pFile)))
@@ -658,7 +658,7 @@ int HxLoadSetUp(void *pFile) {
   if (nHandicaps > 0)
     HandicapsRecorded(abHandicaps, PLAYER_SLOTS_MAX);
   const int nMutators = PortLoadSectionIf(pFile, kMutators);
-  BYTE abMutators[MUTATOR_RECORD_BYTES];
+  BYTE abMutators[MUTATOR_RECORD_BYTES_NEWBIE];
   // 0.6.9 and its first builds wrote shorter records
   const int nMutatorBytes = nMutators > 0 ? PortLoadSectionBytes() : 0;
   if (nMutators < 0 ||

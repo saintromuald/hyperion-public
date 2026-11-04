@@ -33,6 +33,8 @@
 #include "../h/selectlimits.h"  // Hyperion: SELECTION_MAX
 #include "../h/handicap.h"  // Hyperion: a player's handicap
 #include "../h/mutators.h"  // Hyperion: the supply boost
+#include "../port/gameplay/port_onecard.h"  // Hyperion: the one-card selection display
+extern BYTE byte_6AB4C0;  // the selection's count, for the one-card display
 
 // The globals this TU reaches, dual-spelled: one #ifndef per name, never one
 // over the block, so adding a name cannot undeclare the ones below it.
@@ -811,6 +813,37 @@ void __fastcall statdraw_draw_multi(ctrl_t *pDlg) {
   ctrl_t *p = ctrl_find_ndx(pDlg, 0x21);
   if (!p)
     return;
+  // Hyperion: a selection of more than one shows one card, the active unit's, with the
+  // selection's count on it; the subgroup's key (Tab) steps the type between them (the
+  // user, 2026-11-04)
+  g_nOneCardCount = 0;
+  if (byte_6AB4C0 > 1 && gpStatUnit != NULL) {
+    int nActive = -1;
+    for (int i = 0; i < SELECTION_PAGE; ++i)
+      if (PageUnit(i) == gpStatUnit)
+        nActive = i;
+    if (nActive >= 0) {
+      int i = 0;
+      for (ctrl_t *q = p; q != NULL; q = q->pNext, ++i) {
+        if (i == nActive) {
+          // the one card must be filled as the normal path fills each button, or it shows
+          // a stale unit (and the click handlers would read it)
+          statdata_select_t *pSel = static_cast<statdata_select_t *>(ctrl_data26(q));
+          pSel->pUnit = gpStatUnit;
+          pSel->wFrame = ModUnitArtFrame(MOD_ART_GRPWIRE, gpStatUnit->wType);
+          g_rcOneCard = q->rc;
+          g_nOneCardCount = byte_6AB4C0;
+          ctrl_show(q);
+          ctrl_set_update(q);
+        } else {
+          ctrl_hide(q);
+        }
+        if (q->nIndex == 0x2C)
+          break;
+      }
+      return;
+    }
+  }
   for (int i = 0; p; i++) {
     if (i >= SELECTION_PAGE) {
       while (p) {

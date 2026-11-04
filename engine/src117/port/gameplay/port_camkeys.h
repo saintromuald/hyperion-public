@@ -11,5 +11,7 @@ int PortCameraPressed(unsigned vk);
 // The action runs (event_Win.cpp): the jump puts the view over the location, the save
 // takes the view's centre and says so on the map's message.
 void PortCameraRun(int nAction);
+// A location the player saved, for the minimap's small c1 to c8 labels.
+bool PortCamKeysLocation(int n, int *pnX, int *pnY);
 
 #endif

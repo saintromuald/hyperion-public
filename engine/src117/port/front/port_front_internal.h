@@ -50,7 +50,7 @@ const Tab kTabs[] = {{"game", PT_("Game"), 'G'},          {"graphics", PT_("Grap
                      {"sound", PT_("Sound"), 'S'},        {"interface", PT_("Interface"), 'I'},
                      {"hotkeys", PT_("Hotkeys"), 'H'},    {"access", PT_("Accessibility"), 'A'},
                      {"hyperion", PT_("Data and mods"), 'D'}, {"performance", PT_("Performance"), 'F'},
-                     {"hud", PT_("HUD"), 'U'}};
+                     {"hud", PT_("HUD"), 'U'}, {"newbie", PT_("Newbie mode"), 'N'}};
 
 const int kTabCount = static_cast<int>(sizeof kTabs / sizeof kTabs[0]);
 
