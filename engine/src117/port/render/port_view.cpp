@@ -997,10 +997,11 @@ void PortViewCameraCentre(double fX, double fY)
   double gx, gy;
   CameraGameMiddle(&gx, &gy);
   // Hyperion: the camera lands on the point at once at any zoom, as 1.17's locations do (the
-  // user, 2026-11-02): the camera's own values are the aim, the map point the view's middle
-  // shows (CameraUpdate hands each to PortViewCameraPlace as the scroll), so the aim takes
-  // the point - half the raise down, which the sight shows below its middle - and the ease's
-  // aim follows it, so no glide comes after
+  // user, 2026-11-02): the seen rect's centre is the aim in X and the aim plus half the raise
+  // in Y (PortViewSeenRect), so the aim takes the point - half the raise down - and the ease's
+  // aim follows it, so no glide comes after. Any glide kept from the scroll before is dropped
+  // too, or the snap would land off by it (the user, 2026-11-04)
+  g_nGlide = 0;
   if (CameraOff()) {
     const double z = PortCameraShown();
     g_fCamX = fX;

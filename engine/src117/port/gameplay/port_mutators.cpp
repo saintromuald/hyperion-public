@@ -52,6 +52,9 @@ const int kWorkersMost = 12;
 const char *const kFogs[] = {PT_("Normal"), PT_("Explored"), PT_("None"), PT_("Explored + resources")};  // MUTATOR_FOG_*
 const char *const kNoArmyKeys[] = {PT_("Off"), PT_("On")};                       // the army hotkey's mutator
 const char *const kEnergyRegens[] = {PT_("Normal"), PT_("x3")};                  // the energy regen's mutator
+const char *const kNewbies[] = {PT_("Off"), PT_("On")};                          // the newbie mode's mutator
+const char *const kAutoWorkers[] = {PT_("Off"), PT_("On")};                      // auto-train workers
+const char *const kAutoMines[] = {PT_("Off"), PT_("On")};                        // auto-mine efficiently
 const int kBuilds[] = {25, 50, 75, 100};                        // a percent of 1.17's times
 const char *const kTechs[] = {PT_("Normal"), PT_("Researched"), PT_("No upgrades"),
                               PT_("No research")};  // MUTATOR_TECH_*
@@ -80,7 +83,8 @@ const char *const kNames[MUT_COUNT] = {PT_("Mineral fields"), PT_("Vespene geyse
                                        PT_("Supply cap"),     PT_("Start workers"),   PT_("Supply boost"),
                                        PT_("Fog of war"),     PT_("Build time"),      PT_("Tech and upgrades"),
                                        PT_("Rich resources"), PT_("No cap"),         PT_("One add-on"),
-                                       PT_("No army key"), PT_("Energy regeneration"), PT_("Newbie mode")};
+                                       PT_("No army key"), PT_("Energy regeneration"), PT_("Newbie mode"),
+                                       PT_("Auto train workers"), PT_("Auto mine efficiently")};
 const char *const kLines[MUT_COUNT] = {
     PT_("What each mineral field holds, or that it never runs dry. Classic: 1,500, the small ones 750."),
     PT_("What each geyser holds before it runs dry, or that it never does. Classic: 5,000."),
@@ -108,6 +112,9 @@ const char *const kLines[MUT_COUNT] = {
     PT_("Every unit's energy comes back three times as fast. Classic: the usual rate."),
     PT_("Newbie helpers for a player learning the game: workers, mining and research by themselves. The "
         "toggles are in Settings' Newbie mode tab."),
+    PT_("A completed town hall with nothing training and supply to spare trains its worker by itself."),
+    PT_("Each base's patches take up to three workers, each geyser three; once a base is full, the workers "
+        "that are free go to the next base with room, and to the built geysers."),
 };
 
 // the presets' names, which --mutators also reads (MutatorsChooseList) from the English
@@ -393,6 +400,9 @@ int MutatorChoices(int nMut) {
   case MUT_ADDON: return static_cast<int>(sizeof kAddons / sizeof kAddons[0]);
   case MUT_NOARMYKEY: return static_cast<int>(sizeof kNoArmyKeys / sizeof kNoArmyKeys[0]);
   case MUT_ENERGY: return static_cast<int>(sizeof kEnergyRegens / sizeof kEnergyRegens[0]);
+  case MUT_NEWBIE: return static_cast<int>(sizeof kNewbies / sizeof kNewbies[0]);
+  case MUT_AUTOWORKERS: return static_cast<int>(sizeof kAutoWorkers / sizeof kAutoWorkers[0]);
+  case MUT_AUTOMINE: return static_cast<int>(sizeof kAutoMines / sizeof kAutoMines[0]);
   case MUT_RICH_CHANCE: return static_cast<int>(sizeof kChances / sizeof kChances[0]);
   case MUT_RICH_RADIUS: return static_cast<int>(sizeof kRadii / sizeof kRadii[0]);
   }
@@ -417,6 +427,9 @@ std::string MutatorChoiceName(int nMut, int i) {
   case MUT_ADDON: return PortText(kAddons[i]);
   case MUT_NOARMYKEY: return PortText(kNoArmyKeys[i]);
   case MUT_ENERGY: return PortText(kEnergyRegens[i]);
+  case MUT_NEWBIE: return PortText(kNewbies[i]);
+  case MUT_AUTOWORKERS: return PortText(kAutoWorkers[i]);
+  case MUT_AUTOMINE: return PortText(kAutoMines[i]);
   case MUT_RICH_CHANCE: return PortTextF("{0}% chance", {std::to_string(kChances[i])});
   case MUT_RICH_RADIUS: return RadiusChip(kRadii[i]);
   }
@@ -442,6 +455,9 @@ int MutatorChoiceOf(const MutatorSet &m, int nMut) {
   case MUT_FOG: return Clamp(m.nFog, 0, MutatorChoices(nMut) - 1);
   case MUT_NOARMYKEY: return m.nNoArmyKey != 0 ? 1 : 0;
   case MUT_ENERGY: return m.nEnergyRegen != 0 ? 1 : 0;
+  case MUT_NEWBIE: return m.nNewbie != 0 ? 1 : 0;
+  case MUT_AUTOWORKERS: return m.nAutoWorkers != 0 ? 1 : 0;
+  case MUT_AUTOMINE: return m.nAutoMine != 0 ? 1 : 0;
   case MUT_BUILD: return Nearest(kBuilds, MutatorChoices(nMut), m.nBuildTime);
   case MUT_TECH: return Clamp(m.nTech, 0, MutatorChoices(nMut) - 1);
   case MUT_RICH: return Clamp(m.nRich, 0, MutatorChoices(nMut) - 1);
@@ -473,6 +489,9 @@ void MutatorChoose(MutatorSet *pm, int nMut, int i) {
   case MUT_FOG: pm->nFog = i; break;
   case MUT_NOARMYKEY: pm->nNoArmyKey = i != 0 ? 1 : 0; break;
   case MUT_ENERGY: pm->nEnergyRegen = i != 0 ? 1 : 0; break;
+  case MUT_NEWBIE: pm->nNewbie = i != 0 ? 1 : 0; break;
+  case MUT_AUTOWORKERS: pm->nAutoWorkers = i != 0 ? 1 : 0; break;
+  case MUT_AUTOMINE: pm->nAutoMine = i != 0 ? 1 : 0; break;
   case MUT_BUILD: pm->nBuildTime = kBuilds[i]; break;
   case MUT_TECH: pm->nTech = i; break;
   case MUT_RICH: pm->nRich = i; break;
@@ -528,6 +547,9 @@ bool MutatorOn(const MutatorSet &m, int nMut) {
   case MUT_ADDON: return m.nAddon != c.nAddon;
   case MUT_NOARMYKEY: return m.nNoArmyKey != c.nNoArmyKey;
   case MUT_ENERGY: return m.nEnergyRegen != c.nEnergyRegen;
+  case MUT_NEWBIE: return m.nNewbie != c.nNewbie;
+  case MUT_AUTOWORKERS: return m.nAutoWorkers != c.nAutoWorkers;
+  case MUT_AUTOMINE: return m.nAutoMine != c.nAutoMine;
   }
   return false;
 }
@@ -682,6 +704,10 @@ std::string MutatorsText(const MutatorSet &m, bool bShown) {
     add(PT_("energy x3"));
   if (m.nNewbie != s.nNewbie)
     add(PT_("newbie helpers"));
+  if (m.nAutoWorkers != s.nAutoWorkers)
+    add(PT_("workers trained by themselves"));
+  if (m.nAutoMine != s.nAutoMine)
+    add(PT_("mining balanced by itself"));
   return out;
 }
 
@@ -1081,9 +1107,11 @@ static void RevealTilesFor(PlayerSet *pHidden, PlayerSet *pUnexplored, int nX, i
 void MutatorsVisionRefresh(void) {
   if (!g_hxMutatorsOn || g_game.nFog == MUTATOR_FOG_CLASSIC || gpSquareMap == NULL)
     return;
-  // a tile's bits 0 to 7 hide it from players 0 to 7, bits 8 to 15 leave it unexplored
+  // a tile's bits 0 to 7 hide it from players 0 to 7, bits 8 to 15 leave it unexplored.
+  // Explored + resources does NOT open the land: the fog of war stays as Classic, and only
+  // the resources, the eggs and the doodads show through it (the user, 2026-11-04)
   const bool bSeen = g_game.nFog == MUTATOR_FOG_NONE;
-  const DWORD dwOpen = bSeen ? 0xFFFFu : 0xFF00u;
+  const DWORD dwOpen = bSeen ? 0xFFFFu : g_game.nFog == MUTATOR_FOG_RESOURCES ? 0u : 0xFF00u;
   const int nTiles = static_cast<int>(gwMapWidth) * gwMapHeight;
   for (int i = 0; i < nTiles; i++)
     gpSquareMap[i] &= ~dwOpen;
@@ -1091,7 +1119,9 @@ void MutatorsVisionRefresh(void) {
   PlayerSet *pUnexplored = VisionHxUnexplored();
   for (int s = PLAYER_LOBBY_117; s < PlayerSlots(); s++)
     for (int i = 0; i < nTiles; i++) {
-      if (pUnexplored != NULL)
+      // Explored and None open the extra slots' unexplored bits; Explored + resources does
+      // not, so the land stays fogged there too (the user, 2026-11-04)
+      if ((bSeen || g_game.nFog == MUTATOR_FOG_EXPLORED) && pUnexplored != NULL)
         pUnexplored[i].Remove(s);
       if (bSeen && pHidden != NULL)
         pHidden[i].Remove(s);
@@ -1130,9 +1160,9 @@ static void RevealTilesFor(PlayerSet *pHidden, PlayerSet *pUnexplored, int nX, i
         continue;
       const int i = y * gwMapWidth + x;
       // every player's hidden and unexplored bits on the square map, not just the extra
-      // slots': the classic eight are bits 0 to 7, so 0x00FF, and the Hyperion slots past
-      // them have their own tables
-      gpSquareMap[i] &= ~0x00FFu;
+      // slots': the classic eight are bits 0 to 7, so 0x00FF, and the unexplored ones are
+      // bits 8 to 15, so 0xFF00; the Hyperion slots past them have their own tables
+      gpSquareMap[i] &= ~0xFFFFu;
       for (int s = PLAYER_LOBBY_117; s < PlayerSlots(); ++s) {
         if (pHidden != NULL)
           pHidden[i].Remove(s);
