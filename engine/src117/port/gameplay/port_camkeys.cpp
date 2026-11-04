@@ -25,6 +25,7 @@
 namespace {
 
 int s_anLoc[8][2];  // each location's view centre, in map pixels; the start's until saved
+bool s_abSaved[8];    // whether the player saved it, for the minimap's small labels
 
 // The game's own view centre, the seed at a game's start: the camera is not up yet, and
 // asking the seen rectangle there would run the camera's game-start again (the camera
@@ -60,8 +61,10 @@ void GoTo(const int an[2])
 void PortCamKeysInit(void)
 {
   PortLarvaPickClose();  // the larvae' pick does not follow into the new game
-  for (int n = 0; n < 8; ++n)
+  for (int n = 0; n < 8; ++n) {
+    s_abSaved[n] = false;  // a saved location does not follow into the new game either
     Seed(s_anLoc[n]);
+  }
 }
 
 // Which camera action a key down is with the modifiers held now: 0 to 7 a jump to the
@@ -95,7 +98,18 @@ void PortCameraRun(int nAction)
     return;
   }
   Centre(s_anLoc[n]);
+  s_abSaved[n] = true;
   // "Location N saved" on the map's message, for eight seconds
   const std::string msg = PortTextFill(PortText("Location {0} saved."), {std::to_string(n + 1)});
   map_msg_default(msg.c_str(), 8000);
+}
+
+// The saved location's centre, for the minimap's small label; false for one never saved.
+bool PortCamKeysLocation(int n, int *pnX, int *pnY)
+{
+  if (n < 0 || n >= 8 || !s_abSaved[n])
+    return false;
+  *pnX = s_anLoc[n][0];
+  *pnY = s_anLoc[n][1];
+  return true;
 }

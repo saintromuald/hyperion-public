@@ -58,8 +58,10 @@ UiColor Alpha(UiColor c, float a)
 
 // The list's order and its groups (mutators.js GROUPS), and what each one does in a sentence
 // over its picture (gist).
-const int kOrder[MUT_COUNT] = {MUT_MINERALS, MUT_GAS,  MUT_RICH,  MUT_START, MUT_WORKERS, MUT_SUPPLY,
-                               MUT_BOOST,    MUT_NOCAP, MUT_FOG, MUT_BUILD, MUT_TECH,    MUT_ADDON};
+const int kOrder[] = {MUT_MINERALS, MUT_GAS,  MUT_RICH,  MUT_START, MUT_WORKERS, MUT_SUPPLY,
+                      MUT_BOOST,    MUT_NOCAP, MUT_FOG, MUT_BUILD, MUT_TECH,    MUT_ADDON,
+                      MUT_NOARMYKEY, MUT_ENERGY};
+const int kOrderCount = static_cast<int>(sizeof kOrder / sizeof kOrder[0]);
 struct Group {
   const char *pszName;
   int nFirst, nCount;  // in kOrder
@@ -67,7 +69,8 @@ struct Group {
 const Group kGroups[] = {{PT_("Resources"), 0, 3},
                          {PT_("The start"), 3, 2},
                          {PT_("Supply"), 5, 3},
-                         {PT_("Fog, time and tech"), 8, 4}};
+                         {PT_("Fog, time and tech"), 8, 4},
+                         {PT_("Play"), 12, 2}};
 const char *const kGists[MUT_COUNT] = {
     PT_("How much each mineral field holds, so how long a base can be mined."),
     PT_("How much each geyser holds before it runs dry."),
@@ -81,6 +84,9 @@ const char *const kGists[MUT_COUNT] = {
     PT_("Some bases away from the starts get gold minerals and violet gas, which bring more each trip."),
     PT_("Units cost no supply and the cap is off; depots and pylons cost 40 minerals at half their life."),
     PT_("One Machine Shop serves every Factory, and the same for the other add-ons."),
+    PT_("No select-army key or button, for a game without them."),
+    PT_("Every unit's energy comes back three times as fast."),
+    PT_("Newbie helpers for a player learning the game: workers, mining and research by themselves."),
 };
 
 int g_nSel = MUT_MINERALS;  // the mutator briefed
@@ -528,7 +534,17 @@ std::string Effect(const MutatorSet &m, int nMut)
       return PortText("Every player knows the map\xe2\x80\x99s land from the start. Units still show only in sight.");
     if (m.nFog == MUTATOR_FOG_NONE)
       return PortText("Every player sees the whole map all game.");
+    if (m.nFog == MUTATOR_FOG_RESOURCES)
+      return PortText("Every player knows the map\xe2\x80\x99s land, its mineral fields, geysers, eggs and obstacles from the start. Other units show only in sight.");
     return PortText("The fog of war, as Classic plays it.");
+  case MUT_NOARMYKEY:
+    if (m.nNoArmyKey != 0)
+      return PortText("The select-army key and its button do nothing, for a game played without them.");
+    return PortText("The select-army key and its button, as Hyperion has them.");
+  case MUT_ENERGY:
+    if (m.nEnergyRegen != 0)
+      return PortText("Every unit\xe2\x80\x99s energy comes back three times as fast.");
+    return PortText("Energy comes back as Classic.");
   case MUT_BUILD: {
     const std::string sp = PortText(g_shown.speed.c_str());  // the game's speed, named
     if (m.nBuildTime == 100)
@@ -1058,17 +1074,45 @@ void StillFog(const Paint &p, const MutatorSet &m)
 {
   const bool bOn = m.nFog != MUTATOR_FOG_CLASSIC;
   static const char *const kSay[] = {PT_("Black until scouted"), PT_("Land known, units in sight"),
-                                     PT_("The whole map, all game")};
+                                     PT_("The whole map, all game"), PT_("Land, minerals, eggs and rocks known")};
   Half h[2];
   Halves(p, bOn, h);
   for (int i = 0; i < 2; ++i) {
     const Half &b = h[i];
-    const int nFog = std::min(std::max(i ? m.nFog : MUTATOR_FOG_CLASSIC, 0), 2);
+    const int nFog = i && m.nFog == MUTATOR_FOG_RESOURCES ? 1 : std::min(std::max(i ? m.nFog : MUTATOR_FOG_CLASSIC, 0), 2);
     FogZone(p, {b.x + 8, b.y + 26, b.w - 16, b.h - 26 - 32}, nFog, i ? SIDE_GAME : SIDE_CLASSIC, i && bOn);
     const std::string say = PortText(kSay[nFog]);
     Say(p, say, b.x + b.w / 2, b.y + b.h - 15, Width(p, say, 12) <= b.w - 8 ? 12.0f : 10.5f,
         i && bOn ? p.gold : kLbInkDesc, 1);
   }
+}
+
+// No army hotkey: the key's button, crossed out when the mutator is on.
+void StillNoArmyKey(const Paint &p, const MutatorSet &m)
+{
+  const bool bOn = m.nNoArmyKey != 0;
+  Say(p, PortText("Army"), 46, 26, 30, bOn ? p.gold : kLbInkInfo, 0, UI_FACE_BOLD);
+  const std::string what = bOn ? PortText("no select-army key or button")
+                               : PortText("the select-army key and button, as Hyperion has them");
+  Say(p, what, 16, 58, 12, bOn ? p.gold : kLbInkDesc);
+  Bar(p, 16, 84, p.W - 32, 4, 0, kLbInkDesc, kLbInkDesc);
+  if (bOn) {
+    const std::string say = PortText("off: the army is selected by hand, as Classic");
+    Say(p, say, 16, 100, 12, p.gold);
+  }
+}
+
+// Energy x3: three bars for the regen, one filled as Classic's and the mutator's three.
+void StillEnergy(const Paint &p, const MutatorSet &m)
+{
+  const bool bOn = m.nEnergyRegen != 0;
+  Say(p, bOn ? std::string(PortText("x3")) : std::string(PortText("Energy")), 46, 26, 30,
+      bOn ? p.gold : kLbInkInfo, 0, UI_FACE_BOLD);
+  const std::string what = bOn ? PortText("energy comes back three times as fast")
+                               : PortText("energy comes back as Classic");
+  Say(p, what, 16, 58, 12, bOn ? p.gold : kLbInkDesc);
+  for (int k = 0; k < 3; ++k)
+    Bar(p, 16, 84 + k * 18, p.W - 32, 10, 0, kLbInkDesc, bOn ? p.gold : kLbInkDesc);
 }
 
 // Build time: an SCV's training, Classic's beside this game's, each line as long as its time
@@ -1189,6 +1233,8 @@ void DrawPicture(float x, float y, float w, float h, void *pCtx)
   case MUT_BUILD: StillBuild(p, m); break;
   case MUT_TECH: StillTech(p, m); break;
   case MUT_ADDON: StillTech(p, m); break;  // the add-ons unlock what the tech picture's icons show
+  case MUT_NOARMYKEY: StillNoArmyKey(p, m); break;
+  case MUT_ENERGY: StillEnergy(p, m); break;
   }
   UiPopClip();
 }
@@ -1491,7 +1537,7 @@ void Tag(const char *psz, bool bOn)
 int OnCount(const MutatorSet &m)
 {
   int n = 0;
-  for (int i = 0; i < MUT_COUNT; ++i)
+  for (int i = 0; i < kOrderCount; ++i)
     n += MutatorOn(m, i) ? 1 : 0;
   return n;
 }
@@ -1565,7 +1611,7 @@ bool MutatorsTab(float x, float y, float w, float h, const MutatorsSetUp &s)
   // the row pointed at is briefed until the pointer leaves the list; a chip pointed at shows its
   // choice in the picture and the line before it is taken
   int nHotRow = -1;
-  for (int i = 0; i < MUT_COUNT; ++i)
+  for (int i = 0; i < kOrderCount; ++i)
     if (Over(Id("skmutrow", i)))
       nHotRow = i;
   const int nShown = nHotRow >= 0 ? nHotRow : g_nSel;
@@ -1657,7 +1703,7 @@ bool MutatorsTab(float x, float y, float w, float h, const MutatorsSetUp &s)
   // the list and the briefing
   const float fBodyH = h - 18 - 20 - 26 - 16 - 38 - 18;
   const float fHeads = 22 + 3 * 34.0f;
-  const float fRow = fmaxf(30.0f, fminf(42.0f, (fBodyH - fHeads - MUT_COUNT * 5) / MUT_COUNT));
+  const float fRow = fmaxf(30.0f, fminf(42.0f, (fBodyH - fHeads - kOrderCount * 5) / kOrderCount));
   Decl body;
   body.d.layout.sizing.width = Grow();
   body.d.layout.sizing.height = Grow();
@@ -1889,7 +1935,7 @@ bool MutatorsSummary(const MutatorsSetUp &s)
     std::vector<int> on;
     std::vector<float> widths;
     std::vector<std::string> values;
-    for (int j = 0; j < MUT_COUNT; ++j) {
+    for (int j = 0; j < kOrderCount; ++j) {
       const int i = kOrder[j];
       if (!MutatorOn(m, i))
         continue;
@@ -1935,7 +1981,7 @@ bool MutatorsSummary(const MutatorsSetUp &s)
 
 void MutatorsTabBrief(int nAt)
 {
-  g_nSel = kOrder[(nAt % MUT_COUNT + MUT_COUNT) % MUT_COUNT];
+  g_nSel = kOrder[(nAt % kOrderCount + kOrderCount) % kOrderCount];
 }
 
 bool MutatorsTabKeys(const MutatorsSetUp &s, bool *pbChanged)
@@ -1944,9 +1990,9 @@ bool MutatorsTabKeys(const MutatorsSetUp &s, bool *pbChanged)
   const bool bUp = Key(VK_UP), bDown = Key(VK_DOWN), bLeft = Key(VK_LEFT), bRight = Key(VK_RIGHT);
   if (bUp || bDown) {
     int j = 0;
-    while (j < MUT_COUNT && kOrder[j] != g_nSel)
+    while (j < kOrderCount && kOrder[j] != g_nSel)
       ++j;
-    g_nSel = kOrder[(j + (bDown ? 1 : MUT_COUNT - 1)) % MUT_COUNT];
+    g_nSel = kOrder[(j + (bDown ? 1 : kOrderCount - 1)) % kOrderCount];
     return true;
   }
   if (!(bLeft || bRight))

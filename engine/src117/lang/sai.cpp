@@ -144,7 +144,9 @@ int GetRegionNeighbors(WORD wRegion, WORD **pPaths)
 
 int NumAreas()
 {
-  return ((const ep_glob_t *)epGlob)->nRegions;
+  // Hyperion: the sync hash reads this at any moment of a game, and the pathing block is
+  // not always allocated yet (or any more), so a null block reads as no regions
+  return epGlob != NULL ? ((const ep_glob_t *)epGlob)->nRegions : 0;
 }
 
 // A minitile's column and row inside its 32-pixel tile, 0..3 each.

@@ -33,6 +33,8 @@
 #include "../../h/net_cmds.h"     // PlayerData, the saturated number's colour
 #include "../../h/hxrules.h"  // HX_OPT_START_SPLIT, the start workers split's option
 #include "../render/port_teamcolor.h"  // PortTeamColorGet, the saturated number's colour
+#include "port_camkeys.h"  // PortCamKeysLocation, the saved cameras' minimap labels
+#include "port_onecard.h"  // the console's one-card selection display
 #include "../../h/rect32.h"   // rect32_t, the minimap's cage and the console's
 #include "../../gen/globals117.h"
 #include "../platform/port_globals117.h"  // oc_dwReplayFrame, the frame the scan runs on
@@ -51,6 +53,11 @@ extern rect32_t sgMinimapArea_g;
 #else
 extern rect32_t sgConsoleAreaRect_g;
 #endif
+
+// The console's one-card selection display: statdraw_draw_multi sets these when it shows
+// the active unit's one card (port_onecard.h).
+int g_nOneCardCount = 0;
+rect16_t g_rcOneCard = {0, 0, 0, 0};
 
 namespace {
 
@@ -219,6 +226,14 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   static std::vector<CUnit *> s_abase;
   static std::vector<Patch> s_ap;
   static std::vector<int> s_anBack;
+  // a nydus canal of the player's, for its number and the minimap's link: its place and
+  // its exit's, in map pixels; the exit is the canal's pUnionD0 (CanTravelThroughNydus)
+  struct NydusLink {
+    int nX, nY;
+    int nExitX, nExitY;
+    bool bExit;
+  };
+  static std::vector<NydusLink> s_aNydus;
   static std::vector<int> s_aGroup;
   static std::vector<BaseInfo> s_aBase;
   static int s_nIdle = 0;
@@ -399,6 +414,22 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
       s_aBase.push_back(base);
     }
 
+    // the player's completed nydus canals (0x86), numbered in the used list's order: the
+    // number over each, and on the minimap the exit's N and the line linking them (the
+    // user, 2026-11-04)
+    s_aNydus.clear();
+    for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
+      if (p->bPlayer != nPlayer || p->wType != 0x86 || (p->dwFlags & 1) == 0 || p->pSprite == NULL)
+        continue;
+      NydusLink link;
+      link.nX = static_cast<int>(p->pSprite->wPosX);
+      link.nY = static_cast<int>(p->pSprite->wPosY);
+      link.bExit = p->pUnionD0 != NULL && p->pUnionD0->pSprite != NULL;
+      link.nExitX = link.bExit ? static_cast<int>(p->pUnionD0->pSprite->wPosX) : 0;
+      link.nExitY = link.bExit ? static_cast<int>(p->pUnionD0->pSprite->wPosY) : 0;
+      s_aNydus.push_back(link);
+    }
+
     s_nIdle = nIdle;
     double d = 1.0;  // on by default; Settings' "Spellcasters' energy bars" turns them off
     PortSettingNumber("hyperion", "energyBars", &d);
@@ -491,6 +522,93 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     UiText(fX0 + 1.0f, fY0 + 1.0f, UI_FACE_BOLD, 11.0f, 0.0f, UiColor{0.0f, 0.0f, 0.0f, 0.7f}, sz);
     UiText(fX0, fY0, UI_FACE_BOLD, 11.0f, 0.0f, c, sz);
     bDrew = true;
+  }
+
+  // the minimap's window rect, and a map point on it: the cage in the console's design
+  // pixels, scaled to the window, the map's tiles spanning it
+  auto minimapAt = [&](int nMapX, int nMapY, float *pfX, float *pfY) {
+    const float fw = static_cast<float>(sgMinimapArea_g.right - sgMinimapArea_g.left + 1);
+    const float fh = static_cast<float>(sgMinimapArea_g.bottom - sgMinimapArea_g.top + 1);
+    if (fw <= 0.0f || fh <= 0.0f || gwMapWidth <= 0 || gwMapHeight <= 0)
+      return;
+    const float fx = static_cast<float>(sgMinimapArea_g.left) + nMapX / 32.0f * fw / gwMapWidth;
+    const float fy = static_cast<float>(sgMinimapArea_g.top) + nMapY / 32.0f * fh / gwMapHeight;
+    *pfX = fX + fx * fScale;
+    *pfY = fY + fy * fScale;
+  };
+  auto minimapText = [&](int nMapX, int nMapY, const char *psz, const UiColor &c) {
+    float fx = 0.0f, fy = 0.0f;
+    minimapAt(nMapX, nMapY, &fx, &fy);
+    if (fx == 0.0f && fy == 0.0f)
+      return;
+    const float fSize = 8.0f * fScale;
+    const float fWid = UiTextWidth(UI_FACE_BOLD, fSize, 0.0f, psz);
+    UiText(fx - fWid / 2 + 0.5f, fy - fSize * 0.5f + 0.5f, UI_FACE_BOLD, fSize, 0.0f,
+           UiColor{0.0f, 0.0f, 0.0f, 0.75f}, psz);
+    UiText(fx - fWid / 2, fy - fSize * 0.5f, UI_FACE_BOLD, fSize, 0.0f, c, psz);
+  };
+  auto minimapLine = [&](int nX0, int nY0, int nX1, int nY1, const UiColor &c) {
+    float ax = 0.0f, ay = 0.0f, bx = 0.0f, by = 0.0f;
+    minimapAt(nX0, nY0, &ax, &ay);
+    minimapAt(nX1, nY1, &bx, &by);
+    if ((ax == 0.0f && ay == 0.0f) || (bx == 0.0f && by == 0.0f))
+      return;
+    const double dx = bx - ax, dy = by - ay;
+    const double len = sqrt(dx * dx + dy * dy);
+    const int nSteps = len > 1.0 ? static_cast<int>(len / 2.5) : 1;
+    const int nMax = nSteps < 119 ? nSteps : 119;
+    for (int k = 0; k <= nMax; ++k) {
+      const double t = nMax > 0 ? static_cast<double>(k) / nMax : 0.0;
+      UiFill(static_cast<float>(ax + dx * t), static_cast<float>(ay + dy * t), 1.5f * fScale, 1.5f * fScale, c);
+    }
+  };
+
+  // the player's nydus canals, numbered: the number over each, and on the minimap the
+  // exit's N and the line linking them, for up to nine (the user, 2026-11-04)
+  for (size_t k = 0; k < s_aNydus.size() && k < 9; ++k) {
+    const NydusLink &link = s_aNydus[k];
+    char sz[8];
+    snprintf(sz, sizeof sz, "%zu", k + 1);
+    if (bCamOk) {
+      const double fSx0 = fX + (link.nX - fCamX) * fSx;
+      const double fSy0 = fY + (link.nY - fCamY) * fSy;
+      if (fSx0 > fX - 40 && fSx0 < fX + fW + 40 && fSy0 > fY - 40 && fSy0 < fY + fH) {
+        const float fWid = UiTextWidth(UI_FACE_BOLD, 12.0f, 0.0f, sz);
+        const float fX0 = static_cast<float>(fSx0) - fWid / 2;
+        const float fY0 = static_cast<float>(fSy0) - 30.0f;
+        UiText(fX0 + 1.0f, fY0 + 1.0f, UI_FACE_BOLD, 12.0f, 0.0f, UiColor{0.0f, 0.0f, 0.0f, 0.75f}, sz);
+        UiText(fX0, fY0, UI_FACE_BOLD, 12.0f, 0.0f, RaceColour(), sz);
+      }
+    }
+    if (link.bExit) {
+      char szN[8];
+      snprintf(szN, sizeof szN, "N%zu", k + 1);
+      minimapText(link.nExitX, link.nExitY, szN, RaceColour());
+      minimapLine(link.nX, link.nY, link.nExitX, link.nExitY, UiColor{RaceColour().r, RaceColour().g, RaceColour().b, 0.6f});
+    }
+  }
+  // the saved camera locations' small labels on the minimap: c1 for F1, c2 for F2, and so
+  // on, so a newcomer sees where each camera key goes (the user, 2026-11-04)
+  for (int n = 0; n < 8; ++n) {
+    int nx = 0, ny = 0;
+    if (!PortCamKeysLocation(n, &nx, &ny))
+      continue;
+    char sz[8];
+    snprintf(sz, sizeof sz, "c%d", n + 1);
+    minimapText(nx, ny, sz, UiColor{1.0f, 1.0f, 1.0f, 0.9f});
+  }
+
+  // the console's one-card selection display: the selection's count on the active unit's
+  // card, as the strip showed it (the user, 2026-11-04)
+  if (g_nOneCardCount > 1 && byte_6AB4C0 > 1) {
+    char sz[16];
+    snprintf(sz, sizeof sz, "x%d", g_nOneCardCount);
+    const float fSize = 11.0f * fScale;
+    const float fWid = UiTextWidth(UI_FACE_BOLD, fSize, 0.0f, sz);
+    const float fx = fX + (g_rcOneCard.right - 1) * fScale - fWid - 2.0f;
+    const float fy = fY + g_rcOneCard.top * fScale + 2.0f;
+    UiText(fx + 1.0f, fy + 1.0f, UI_FACE_BOLD, fSize, 0.0f, UiColor{0.0f, 0.0f, 0.0f, 0.8f}, sz);
+    UiText(fx, fy, UI_FACE_BOLD, fSize, 0.0f, UiColor{1.0f, 1.0f, 1.0f, 0.95f}, sz);
   }
 
   // each of the player's spellcasters' energy as a small bar over it, SC2's, so what the

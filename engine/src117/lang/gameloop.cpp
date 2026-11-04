@@ -42,6 +42,7 @@ void accel_apply_profile();  // Hyperion: event_Win.cpp (the hotkeys milestone K
 #include "../gen/globals117.h"
 #include "../port/tools/port_bench.h"  // Hyperion
 #include "../port/gameplay/port_watchgame.h"  // Hyperion: a skirmish watched
+#include "../port/gameplay/port_newbie.h"  // Hyperion: the newbie helpers
 #include "../port/loop/port_clock.h"  // Hyperion: PortGameTicks, PortClockGameFrame, PortClockRest
 #include "../port/render/port_console.h"  // Hyperion: PortConsoleUpdate
 #include "../port/front/port_gamemenu.h"   // Hyperion: PortGameMenuStep
@@ -385,6 +386,7 @@ int gameloop_update(int bFlag)
                 PortRecordFrame();  // Hyperion: --record's end
                 PortBenchFrame();   // Hyperion: a benchmark's two games' ends
                 PortWatchFrame();  // Hyperion: a watched skirmish's two games' ends
+                PortNewbieFrame();  // Hyperion: the newbie helpers, once a frame (the user, 2026-11-04)
                 PortSnapProbeFrame();  // Hyperion: the trainer's memory probe
                 PortSnapFrame();       // Hyperion: the trainer's snapshots
                 PortReplaySeekFrame();  // Hyperion: a replay's snapshots and seek

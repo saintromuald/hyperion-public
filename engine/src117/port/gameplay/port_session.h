@@ -59,6 +59,18 @@ struct MutatorSet {
   // with one Machine Shop anywhere may build Siege Tanks in any Factory, and the same for
   // the Control Tower's, the Covert Ops' and the Physics Lab's.
   int nAddon = 0;
+  // No army hotkey (the user, 2026-11-04): the select-army key and its button do nothing.
+  int nNoArmyKey = 0;
+  // Energy regeneration x3 (the user, 2026-11-04): every unit's energy comes back three
+  // times as fast.
+  int nEnergyRegen = 0;
+  // Newbie mode (the user, 2026-11-04): the helpers for a new player - workers trained by
+  // themselves, mining balanced by itself and upgrades researched by themselves, each a
+  // toggle of its own; dwAutoUpg is the upgrades to research by themselves, one bit each.
+  int nNewbie = 0;
+  int nAutoWorkers = 0;
+  int nAutoMine = 0;
+  unsigned dwAutoUpgLo = 0, dwAutoUpgHi = 0;
 };
 
 struct PortSession {
