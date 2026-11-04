@@ -1138,16 +1138,8 @@ const std::vector<Setting> &SettingsRows()
     return a;
   a.assign(kSettings, kSettings + sizeof kSettings / sizeof kSettings[0]);
   static char aKeys[61][24];
-  a.push_back({"newbie", PT_("Newbie mode"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
-               NULL, NULL, NULL, PT_("Helpers for a player learning the game: workers, mining and research by themselves.")});
-  a.push_back({"newbie", PT_("Newbie mode"), CTL_TOGGLE, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
-               ReadFlag, WriteFlag, "newbie", PT_("Turn the helpers on or off. Each helper below has its own toggle.")});
-  a.push_back({"newbie", PT_("Train workers automatically"), CTL_TOGGLE, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
-               ReadFlag, WriteFlag, "newbieWorkers", PT_("A completed town hall with nothing training and supply to spare trains its worker by itself.")});
-  a.push_back({"newbie", PT_("Mine efficiently automatically"), CTL_TOGGLE, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
-               ReadFlag, WriteFlag, "newbieMine", PT_("Each base's patches take up to three workers, each geyser three; once a base is full, the workers that are free go to the next base with room, and to the built geysers.")});
   a.push_back({"newbie", PT_("Research automatically"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
-               NULL, NULL, NULL, PT_("One toggle per upgrade: it is researched by itself when a building that can do it is free, level after level until it is done.")});
+               NULL, NULL, NULL, PT_("One toggle per upgrade: with the Newbie mode mutator on, it is researched by itself when a building that can do it is free, level after level until it is done. The mutator and its worker-training and mining helpers are in the mutators' Play group.")});
   for (int u = 0; u < 61; ++u) {
     if (kUpgradeNames[u][0] == '-')
       continue;

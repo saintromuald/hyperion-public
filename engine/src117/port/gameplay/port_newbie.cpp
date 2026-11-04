@@ -19,6 +19,7 @@
 #include "CSprite.h"
 #include "port_newbie.h"
 #include "../platform/port_settings.h"  // PortSettingNumber, the newbie tab's toggles
+#include "port_mutators.h"  // MutatorsOfGame, the newbie mode's mutator
 #include "../../h/net_cmds.h"    // SelectOnlySet, send_net_cmd_*
 #include "../../h/count.h"       // count_get_supplies_used, count_get_supplies_available
 #include "../../h/statbtn.h"     // UpgradeAllowed
@@ -247,12 +248,12 @@ void PortNewbieFrame(void)
   const int nPlayer = static_cast<int>(g_LocalNationID);
   if (nPlayer < 0 || nPlayer >= 12)
     return;
-  if (!Flag("newbie"))
+  if (MutatorsOfGame().nNewbie == 0)
     return;
   // one action a beat, with its own override at execution: a batch would all take the last
   // override, so the helpers go one at a time (the critic's finding)
-  if (Flag("newbieWorkers") && AutoWorkersOne(nPlayer)) {
-  } else if (Flag("newbieMine") && AutoMineOne(nPlayer)) {
+  if (MutatorsOfGame().nAutoWorkers != 0 && AutoWorkersOne(nPlayer)) {
+  } else if (MutatorsOfGame().nAutoMine != 0 && AutoMineOne(nPlayer)) {
   } else {
     AutoResearchOne(nPlayer);
   }

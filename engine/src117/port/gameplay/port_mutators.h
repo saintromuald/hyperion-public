@@ -22,7 +22,7 @@ MutatorSet MutatorsClamp(const MutatorSet &m);
 // choices on its card, the radius and the chance (MUT_RICH_RADIUS, MUT_RICH_CHANCE, past the
 // cards' count).
 enum { MUT_MINERALS, MUT_GAS, MUT_START, MUT_SUPPLY, MUT_WORKERS, MUT_BOOST, MUT_FOG, MUT_BUILD, MUT_TECH, MUT_RICH,
-       MUT_NOCAP, MUT_ADDON, MUT_NOARMYKEY, MUT_ENERGY, MUT_NEWBIE, MUT_COUNT, MUT_RICH_CHANCE = MUT_COUNT, MUT_RICH_RADIUS };
+       MUT_NOCAP, MUT_ADDON, MUT_NOARMYKEY, MUT_ENERGY, MUT_NEWBIE, MUT_AUTOWORKERS, MUT_AUTOMINE, MUT_COUNT, MUT_RICH_CHANCE = MUT_COUNT, MUT_RICH_RADIUS };
 // Rich bases' radius in tiles on a map nMapW by nMapH tiles: m's tiles, or its share of the
 // map's size, its width and height averaged.
 int MutatorRichRadiusTiles(const MutatorSet &m, int nMapW, int nMapH);
