@@ -10,6 +10,7 @@
 
 #include "oc_data.h"  // Hyperion: OC_VA
 #include "../h/playertables.h"  // Hyperion: player slots past 11
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 #include "../h/Allowed.h"
 #include "../h/CUnit.h"          // ours: the predicates below and the fields they read
 #include "../h/statbtn.h"        // ours: the four Allowed entry points, is_tech_in_progress
@@ -18,6 +19,7 @@
 #include "../gen/globals117.h"
 #include "../h/typelimits.h"  // Hyperion: a mod's types
 #include "../port/data/port_moddata.h"  // Hyperion: ModTechUseTree, ModTechResearchTree, ModUpgradeTree, ModTreeEdit
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 #include "../h/mutators.h"  // Hyperion: MutatorResearchForbidden, MutatorUpgradesForbidden
 
 // The four dependency trees, and the four index tables they fill. A tree's

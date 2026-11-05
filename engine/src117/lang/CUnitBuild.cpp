@@ -15,6 +15,7 @@
 #include "oc_data.h"  // Hyperion: OC_VA
 #include "../h/playertables.h"  // Hyperion: player slots past 11
 #include "../h/hxrules.h"  // Hyperion: HxRules, the constructing building's queue
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 #include "platform.h"
 #include "CUnit.h"
 #include "CSprite.h"
@@ -212,6 +213,20 @@ void CUnit::CancelBuild() {
     refund_unit_partial(bPlayer, wType);
   } else if (nType == 0x24 || nType == 0x3B || nType == 0x61) {
     bldg_add_resources(bPlayer, wBuildQueue[bBuildQueueSlot % 5]);
+    // Hyperion: the mod's egg cancel reverts to the larva it came from (when fewer
+    // than three remain by its building) or to the morph source, instead of dying
+    // (unit_morph_inject.cpp:125-208, unit_morph.cpp:586-609).
+    if (PortCosmonarchy() && (nType == 0x24 || nType == 0x3B)) {
+      const unsigned wRevert = CosmoCancelMorphRevert(this);
+      if (wRevert != 0xFFFF) {
+        TransformType(static_cast<WORD>(wRevert));
+        wRemainingBuildTime = 0;
+        wBuildQueue[bBuildQueueSlot] = 0xE4;
+        bOrderFlags &= ~4;
+        SetOrder(0x29);
+        return;
+      }
+    }
   } else {
     bldg_add_resources(bPlayer, nType);
   }
@@ -683,6 +698,18 @@ void CUnit::DispatchTrain() {
           pBuilt->Hide();
         else
           pBuilt->RallyToFactoryTarget(this);
+        // Hyperion: Massacre trains two of everything, the second a tile west
+        // (unit_train.cpp:118-123).
+        if (PortCosmonarchy() && CosmoGameKind() == COSMO_KIND_MASSACRE) {
+          CUnit *pCopy = CreateUnitAt(pBuilt->wType,
+                                      PosS(pBuilt->pSprite->wPosX) - 32,
+                                      PosS(pBuilt->pSprite->wPosY), pBuilt->bPlayer);
+          if (pCopy != NULL) {
+            pCopy->FinishedMaking();
+            pCopy->RallyToFactoryTarget(this);
+            register_unit_for_ai(this, pCopy);
+          }
+        }
         bldg_clear_slot(this, bBuildQueueSlot);
         wBuildQueue[bBuildQueueSlot] = 0xE4;
         bBuildQueueSlot = (BYTE)(bBuildQueueSlot + 1) % 5;

@@ -39,9 +39,13 @@
 #include "../h/CUnitProtoss.h"    // UpdateProtossPowerGrid
 #include "../h/CUnitSpells.h"     // CloakUpdate
 #include "../gen/globals117.h"
+
+extern unsigned int oc_dwReplayFrame;  // Hyperion: the mod's 15-frame creep cadence
 #include "../h/typelimits.h"  // Hyperion: OrderTypeMod
 #include "../h/selectlimits.h"  // Hyperion: SELECTION_MAX
 #include "../h/handicap.h"  // Hyperion: a player's handicap
+#include "../h/creep.h"     // Hyperion: spread_creep (the mod's burrowed spreaders)
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 
 // EntityUpdate's order-sequence countdowns (CUnitInit.cpp's globals) and the
 // fog flag, registered; one #ifndef per name.
@@ -797,6 +801,27 @@ BOOL CUnit::IsBurning()
 
 void CUnit::EnergyUpdate()
 {
+  // Hyperion: the mod's energy regen (update_unit_energy): every caster regains
+  // 10 energy a second, after 2 seconds since its last spend, cloaking included;
+  // 1.17's 8 a frame and its cloaking drain both go.
+  if (PortCosmonarchy()) {
+    if ((gulUnitTypeFlags[wType] & 0x200000u) == 0)
+      return;
+    if ((dwFlags & 0x40000000u) != 0 || (dwFlags & 1u) == 0)
+      return;
+    if (ModUnitStateOf(this).nEnergyRegen <= 48 || IsDisabled())
+      return;
+    WORD wEnergy = this->wEnergy;
+    int nMax = GetMaxEnergyInProgress();
+    if (wEnergy == nMax)
+      return;
+    this->wEnergy = static_cast<WORD>(wEnergy + CosmoEnergyRegen());
+    if (this->wEnergy > GetMaxEnergyInProgress())
+      this->wEnergy = static_cast<WORD>(GetMaxEnergyInProgress());
+    if ((pSprite->flags.b & 8) != 0)
+      pSprite->RedrawHP();
+    return;
+  }
   if ((gulUnitTypeFlags[wType] & 0x200000u) == 0)
     return;
   DWORD dwFlags = this->dwFlags;
@@ -1062,6 +1087,28 @@ void CUnit::SetUnitPosition(upos_t nX, upos_t nY)
 // regen, spell timers every eighth frame, the time-to-live and zerg burn damage.
 void CUnit::StepUpdate()
 {
+  // Hyperion: the mod's out-of-combat timers (gptp-fork data_ext.cpp) count every frame;
+  // they start at UINT_MAX (out of combat) and damage or a spend resets them to 0.
+  if (PortCosmonarchy()) {
+    ModUnitState &st = ModUnitStateOf(this);
+    if (st.nEnergyRegen != 0xFFFFFFFFu)
+      st.nEnergyRegen++;
+    if (st.nShieldRegen != 0xFFFFFFFFu)
+      st.nShieldRegen++;
+    if (st.nDamageTaken != 0xFFFFFFFFu)
+      st.nDamageTaken++;
+    if (st.nStun != 0)
+      st.nStun--;
+    // the mod's burrowed cagra spreaders (tick_burrowed_cagra_spread): the
+    // burrow/unburrow signal covers their footprint, and every 15th frame they
+    // spread a tile as the Gathtelosk would (game_hooks.cpp:3619-3624).
+    if (CosmoBurrowedSpreader(wType)) {
+      if ((bOrderFlags & 4) && !(dwFlags & CUnit::UF_Burrowed))
+        CosmoCoverCreep(this);
+      if ((dwFlags & CUnit::UF_Burrowed) && (oc_dwReplayFrame % 15) == 0)
+        spread_creep(wType, PosS(pSprite->wPosX), PosS(pSprite->wPosY));
+    }
+  }
   for (int i = 0; i < 3; i++) {
     if ((&bUnion54)[i])
       (&bUnion54)[i]--;
@@ -1071,7 +1118,24 @@ void CUnit::StepUpdate()
   if (gbUnitHasShields[wType]) {
     DWORD lMax = HandicapShields(guwUnitEnergy[wType], bPlayer) << 8;  // Hyperion: at the owner's handicap
     if (lShields != lMax) {
-      int nNew = lShields + 7;
+      int nNew;
+      if (PortCosmonarchy()) {
+        // Hyperion: the mod's shield regen replaces 1.17's +7 a frame -- flash
+        // shielding on nearly every shielded unit after 2 seconds out of combat,
+        // ramping down from 10 to 2 hp a second, and the golden units' fixed 2 hp/s
+        // (update_unit_state.cpp:187-244).
+        ModUnitState &st = ModUnitStateOf(this);
+        if (CosmoFlashShielding(wType) &&
+            st.nShieldRegen > 48 && !IsDisabled()) {
+          nNew = lShields + CosmoShieldRegenAmount(this);
+        } else if (CosmoShieldRegen(wType) && st.nDamageTaken > 48 && !IsDisabled()) {
+          nNew = lShields + CosmoShieldRegenFixed();
+        } else {
+          nNew = lShields;
+        }
+      } else {
+        nNew = lShields + 7;
+      }
       lShields = nNew > (int)lMax ? lMax : nNew;
       if (pSprite->flags.b & 8)
         pSprite->RedrawHP();
@@ -1096,7 +1160,10 @@ skip:
     return;
   if ((gulUnitTypeFlags[wType] & 0x80) && lHitPoints > 0 &&
       lHitPoints != HandicapLife(gxUnitLife[wType], bPlayer))  // Hyperion: at the owner's handicap
-    ModifyLife(4);
+    // Hyperion: the mod's regeneration -- 1hp a second, doubled while burrowed,
+    // after 2 seconds out of combat -- in place of 1.17's 4 a frame (api.cpp:4317+).
+    ModifyLife(PortCosmonarchy() && ModUnitStateOf(this).nDamageTaken > 48
+                   ? CosmoHpRegenAmount(this) : 4);
   EnergyUpdate();
   if (bUnionE3)
     bUnionE3--;
@@ -1109,6 +1176,16 @@ skip:
   if (GetRace() == 1 && ((dwFlags & 2) || (gulUnitTypeFlags[wType] & 0x20)) &&
       IsBurning())
     DamageApply(0x14, NULL, bUnion90, 1);
+  // Hyperion: the mod's Terran buildings burn down in their red zone, 1.875hp a
+  // second, and go once the damage would (update_unit_state.cpp:351-375).
+  if (PortCosmonarchy() && GetRace() == 0 && (dwFlags & CUnit::UF_Building) &&
+      lHitPoints > 0 &&
+      lHitPoints < HandicapLife(gxUnitLife[wType], bPlayer) / 3) {
+    if (lHitPoints <= 20)
+      Suicide();
+    else
+      DamageApply(20, NULL, bUnion90, 1);
+  }
 }
 
 // CUnit::Stop, oracle 0x43A490 (68 B)

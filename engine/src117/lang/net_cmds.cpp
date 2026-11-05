@@ -43,6 +43,7 @@ typedef unsigned short      WORD;
 #include "../h/playervision.h"  // Hyperion: the replay viewer past slot 7 (stage D)
 #include "../h/typelimits.h"  // Hyperion: a mod's types
 #include "../h/selectlimits.h"  // Hyperion: SELECTION_MAX
+#include "../port/data/port_moddata.h"  // Hyperion: ModMorphTarget, a mod's morphs
 
 // The predicates and helpers other headers declare are included, never restated
 // here: a second spelling of one oracle function mangles to a second symbol.
@@ -611,7 +612,10 @@ void __fastcall recv_net_cmd_Morph(const net_cmd_word_t *pCmd) {
           nAllowed = TTAllowed(pCmd->wArg, g_ActiveNationID, pUnit);
           break;
         default:
-          nAllowed = 0;
+          // Hyperion: a mod's morph, the source into the target
+          nAllowed = ModMorphTarget(wType, pCmd->wArg)
+                         ? TTAllowed(pCmd->wArg, g_ActiveNationID, pUnit)
+                         : 0;
           break;
       }
     }

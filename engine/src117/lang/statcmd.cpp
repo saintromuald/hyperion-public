@@ -1474,9 +1474,14 @@ void StatcmdModCards(bool bApply)
     statcmd_btn_t b = {};
     b.wMinIndex = pAdd[k].wPos;
     b.wIcon = pAdd[k].wIcon;
-    if (pAdd[k].wUnit != 0xFFFF) {
+    if (pAdd[k].wUnit != 0xFFFF && !pAdd[k].bMorph) {
       b.pfnCondition = bf_mod_unit_ok;
       b.pfnAction = order_build;
+      b.bConditionArg = pAdd[k].wUnit;
+      b.w0E = pAdd[k].wUnit;
+    } else if (pAdd[k].bMorph) {
+      b.pfnCondition = bf_mod_unit_ok;
+      b.pfnAction = order_morph;
       b.bConditionArg = pAdd[k].wUnit;
       b.w0E = pAdd[k].wUnit;
     } else if (pAdd[k].bUpgrade) {

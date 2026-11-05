@@ -103,10 +103,18 @@ struct ModCardButton {
   bool bTarget;          // the cast is aimed at a unit or a place, as 1.17's spells are
   bool bResearch;        // the button researches wTech
   bool bUpgrade;         // the button upgrades wTech, an upgrade
+  bool bMorph;           // the button morphs wUnit (the source morphs into it)
   bool bUnitIcon;        // it gives no icon: wUnit's own (ModUnitArtFrame), set for each game
   unsigned char bAi;     // a computer casts it: 1 + the finder (kModAiFinders), or 0, it does not
 };
 const ModCardButton *ModCardButtons(int *pnCount);
+
+// A mod's morphs, from its cards' morph buttons: whether nSource morphs into nTarget.
+bool ModMorphTarget(unsigned nSource, unsigned nTarget);
+
+// A mod's own stat_txt (data/stat_txt.txt, one string per line, id 1 first, an empty
+// line none): the game's strings in a game that has the mod. Null for an id it has none of.
+const char *ModStatTxt(unsigned nId);
 
 // The targets a computer's caster looks for, by the names a cast button's "ai" gives: 1.17's
 // own finders, each of the spell it chooses targets for (ai_update_unit_spells), and last
