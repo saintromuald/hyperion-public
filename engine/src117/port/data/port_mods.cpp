@@ -137,6 +137,14 @@ void Installed(void) {
     } else if (mode["id"].Str() == "lab") {
       m.mode = "lab";
       m.button = mode["button"].Str("Open the Lab");
+    } else if (mode["id"].Str() == "play") {
+      m.mode = "play";
+      m.button = mode["button"].Str(PT_("Play"));
+    }
+    // a mod that brings data but names no mode plays: its main button starts a game
+    if (m.mode.empty() && !m.data.empty()) {
+      m.mode = "play";
+      m.button = PT_("Play");
     }
     bool bTaken = false;
     for (const PortMod &o : g_mods)

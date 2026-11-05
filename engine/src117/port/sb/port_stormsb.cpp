@@ -64,6 +64,10 @@ void SbSetLaunch(const char *pszSetupFile)
   Log("this build carries no SB netcode (--no-sb); the session \"%s\" is ignored",
       pszSetupFile ? pszSetupFile : "");
 }
+void SbSetLaunchJson(const char *pszSetupJson)
+{
+  Log("this build carries no SB netcode (--no-sb); the launch JSON is ignored");
+}
 bool SbLaunchOn(void)
 {
   return false;
@@ -72,11 +76,29 @@ int SbRosterCount(void)
 {
   return 0;
 }
+bool SbSessionStart(const char *pszWho)
+{
+  Log("this build carries no SB netcode (--no-sb); SbSessionStart(\"%s\") cannot",
+      pszWho ? pszWho : "");
+  return false;
+}
 bool SbInMatch(void)
 {
   return false;
 }
 bool SbCreator(void)
+{
+  return false;
+}
+bool SbMapFromLaunch(void)
+{
+  return false;
+}
+bool SbLaunchHeader(BYTE *pbSubCategory, BYTE *pbScenarioFlag, BYTE *pbLadderGame)
+{
+  return false;
+}
+bool SbLaunchParams(void *pvParams, size_t cbParams)
 {
   return false;
 }
@@ -129,23 +151,8 @@ BOOL SbLeaveGame(DWORD dwReason)
 }
 BOOL SbDropPlayer(DWORD dwPlayer, DWORD dwFlags)
 {
-  // The relay's authority decides a synced drop: the request goes to it and
-  // the confirmation is the EV_LEAVE event for the slot, which the game's
-  // network code already turns into the leave. Until the relay answers, the
-  // player stays in the game (and the authority may refuse).
-  if (g_session == NULL)
-    return Fail(NET_BAD_PROVIDER);
-  if (static_cast<BYTE>(dwPlayer) == NO_PLAYER || static_cast<BYTE>(dwPlayer) == g_bLocal)
-    return Fail(NET_INVALID);
-  if (g_bLocal == NO_PLAYER)
-    return Fail(NET_NOT_IN_GAME);
-  if (!IsPlayer(dwPlayer))
-    return Fail(NET_NO_PLAYER);
-  const int rc = rp_request_drop(g_session, static_cast<uint32_t>(dwPlayer));
-  Log("SbDropPlayer(%u, 0x%X): the relay's synced drop was asked (rc %d)", dwPlayer, dwFlags, rc);
-  if (rc == 0)
-    g_qwDropAsked[static_cast<BYTE>(dwPlayer)] = PortNowMs();
-  return rc == 0;
+  // The stub build carries no relay: nothing to ask.
+  return Fail(NET_BAD_PROVIDER);
 }
 BOOL SbDisconnectAll(DWORD dwFlags)
 {
@@ -153,43 +160,20 @@ BOOL SbDisconnectAll(DWORD dwFlags)
 }
 BOOL SbGetNumPlayers(int *pnFirst, int *pnLast, int *pnActive)
 {
-  // 1.17's leave handler queries the roster live, so this must answer with the
-  // players still in the game (the LAN provider's shape).
   if (pnFirst)
     *pnFirst = -1;
   if (pnLast)
     *pnLast = -1;
   if (pnActive)
     *pnActive = 0;
-  if (!InGame())
-    return FALSE;
-  int nFirst = -1, nLast = -1, nActive = 0;
-  for (int i = 0; i < kPlayers; ++i)
-    if (g_players[i].bIn) {
-      if (nFirst < 0)
-        nFirst = i;
-      nLast = i;
-      ++nActive;
-    }
-  if (pnFirst)
-    *pnFirst = nFirst;
-  if (pnLast)
-    *pnLast = nLast;
-  if (pnActive)
-    *pnActive = nActive;
-  return TRUE;
+  return FALSE;
 }
 BOOL SbGetPlayerName(DWORD dwPlayer, char *pszBuffer, DWORD cchBuffer)
 {
   if (!pszBuffer || !cchBuffer)
     return Fail(NET_INVALID);
   pszBuffer[0] = '\0';
-  if (!InGame())
-    return FALSE;
-  if (!IsPlayer(dwPlayer))
-    return Fail(NET_NO_PLAYER);
-  SStrCopy(pszBuffer, g_players[static_cast<BYTE>(dwPlayer)].szName, cchBuffer);
-  return TRUE;
+  return FALSE;
 }
 BOOL SbGetPlayerNames(char **ppszNames)
 {

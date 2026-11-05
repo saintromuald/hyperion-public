@@ -1026,6 +1026,10 @@ void CUnit::RemoveFromStatusBar() {
 }
 
 #include "../port/data/port_moddata.h"  // Hyperion: ModDataForGame
+#include "../h/playertables.h"  // Hyperion: PlayerGasGatheredTable (dword_526430)
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
+
+extern PlayerGasGatheredTable dword_526430;  // the gas gathered, CUnitInv.cpp's name
 
 // Loads orders.dat and units.dat and builds an empty unit pool.
 void CUnit::InitUnits() {
@@ -1255,10 +1259,18 @@ void CUnit::Complete() {
     dwFlags |= 1;
   }
   count_add_completion(this, 1);
+  // Hyperion: Massacre pays its owner three vespene for every finished unit
+  // and building (update_unit_state.cpp:697-701).
+  if (PortCosmonarchy() && CosmoGameKind() == COSMO_KIND_MASSACRE &&
+      CosmoMassacreGasUnit(wType) && bPlayer != 11) {
+    gPlayerGas[bPlayer] += 3;
+    dword_526430[bPlayer] += 3;
+  }
   if (gulUnitTypeFlags[wType] & 0x400000)
     sub_41D200(0x111);
   int nType = wType;
-  if (nType == 0x21 || nType == 0x65) {
+  if (nType == 0x21 || nType == 0x65 ||
+      (PortCosmonarchy() && CosmoIsLarva(nType))) {  // Hyperion: the mod's Ocsal larva
     reinterpret_cast<CLink *>(this)->Unlink(
         reinterpret_cast<CLink **>(&sgpTransHead),
         reinterpret_cast<CLink **>(&sgpTransTail));
@@ -1283,6 +1295,13 @@ void CUnit::Complete() {
     SetOrder(gubUnitOrderAI[wType]);
   else
     SetOrder(gubUnitOrderInitialize[wType]);
+  // Hyperion: the mod's cagra spreaders take the creep order and its larva the
+  // idle-larva order, whatever their data says (larva_creep_spawn.cpp).
+  if (PortCosmonarchy() &&
+      (CosmoCreepSpreader(nType) || CosmoCreepSpreaderDone(nType)))
+    SetOrder(0x65);
+  else if (PortCosmonarchy() && CosmoIsLarva(nType))
+    SetOrder(0x4D);
   if (gulUnitTypeFlags[wType] & 0x800) {
     wPowerupOriginX = pSprite->wPosX;
     wPowerupOriginY = pSprite->wPosY;

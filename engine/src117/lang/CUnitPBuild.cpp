@@ -9,6 +9,7 @@
 #include "oc_data.h"  // Hyperion: OC_VA
 #include "../h/CUnitPBuild.h"
 #include "../h/CUnit.h"
+#include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 #include "../h/CSprite.h"
 #include "../h/CImage.h"
 #include "../h/CTarget.h"        // ours: XYInRadius
@@ -102,6 +103,10 @@ void CUnit::DispatchBuildProtoss()
       }
 
       pNew->pSprite->ChangeImage(0xD3, 0);
+      // Hyperion: the mod's warp-in starts with three shield points so the bar
+      // reads while it builds (building_protoss.cpp:59-61).
+      if (PortCosmonarchy())
+        pNew->lShields += 3 * 256;
       if (wBuildType == 0x9D)
         pNew->pSprite->AllocImageBelow(0x158, 0, 0, 0);
       pOrderTarget = pNew;
