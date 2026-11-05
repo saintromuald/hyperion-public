@@ -80,8 +80,8 @@ bool g_bAttacked;                  // in a replay, an alert.attack has been give
 unsigned int g_nAttackFrame;       // and the frame of the last
 int g_nGroupLast = -1;
 int g_nSubgroupLast, g_nPageLast;  // the console's subgroup and page at the last frame
-// the HUD's selection grid: the page it shows, kept as the first unit on it, its units a page
-// (0 with no grid), and the unit the console reported on and its subgroup when it last looked
+// the HUD's selection grid: the page it shows, kept as the first type card on it, its cards
+// a page (0 with no grid), and the unit the console reported on and its subgroup when last read
 int g_nGridFirst, g_nGridPer;
 const CUnit *g_pGridStat;
 int g_nGridSub = -1;
@@ -246,21 +246,19 @@ void PortHudGameReset(void) {
 
 bool PortHudGameStarted(void) { return g_bStarted; }
 
-int PortHudGridPage(int nPer, int nUnits) {
-  // a new selection or subgroup: the page that holds the unit the console reports on, the
-  // subgroup's first; else the page shown, the last one if the selection is now shorter
+int PortHudGridPage(int nPer, int nCards) {
+  // a new selection or subgroup: the page that holds the active type's card; else the page
+  // shown, the last one if the selection now has fewer types
   if (gpStatUnit != g_pGridStat || SelectionSubgroup() != g_nGridSub) {
     g_pGridStat = gpStatUnit;
     g_nGridSub = SelectionSubgroup();
-    g_nGridFirst = 0;
-    for (int i = 0; i < nUnits && i < SelectionMax(); ++i)
-      if (StatUnits()[i] == gpStatUnit)
-        g_nGridFirst = i;
+    const int nCard = SelectionCardFor(gpStatUnit);
+    g_nGridFirst = nCard >= 0 ? nCard : 0;
   }
   g_nGridPer = nPer > 0 ? nPer : 0;
   if (nPer <= 0)
     return 0;
-  const int nPages = nUnits > nPer ? (nUnits + nPer - 1) / nPer : 1;
+  const int nPages = nCards > nPer ? (nCards + nPer - 1) / nPer : 1;
   const int nPage = g_nGridFirst / nPer;
   return nPage < nPages ? nPage : nPages - 1;
 }
@@ -285,7 +283,9 @@ void PortHudFrame(void) {
   NoteSeats();
   PortHudReplayWatch();
   // the selection the console shows, against the last frame's
-  const int nCount = byte_6AB4C0 <= SelectionMax() ? byte_6AB4C0 : SelectionMax();
+  int nCount = 0;
+  while (nCount < SelectionMax() && StatUnits()[nCount] != NULL)
+    ++nCount;  // the array, not byte_6AB4C0, whose eight bits can wrap
   if (nCount != g_nSelected || memcmp(g_apSelected, StatUnits(), nCount * sizeof(CUnit *)) != 0) {
     const bool bFirst = g_nSelected == 0 && nCount == 0;
     g_nSelected = nCount;
@@ -446,29 +446,24 @@ void PortHudGet(PortHudState *s) {
   s->nSupplyMax = s->anSupplyMax[s->nRace];
   s->nApm = Apm(nPlayer, s->nFrame);
 
-  // the selection, of 12 in 1.17 and 255 in Hyperion's (selectlimits.h): its count, the page
-  // of 12 the console shows and its types, and the types over the whole selection
-  s->nSelected = byte_6AB4C0 <= SelectionMax() ? byte_6AB4C0 : SelectionMax();
+  // the selection, of 12 in 1.17 and 255 in Hyperion's (selectlimits.h): its unit count,
+  // and its distinct types as one card each. Both consoles paginate cards, never split a type.
+  s->nSelected = 0;
+  while (s->nSelected < SelectionMax() && StatUnits()[s->nSelected] != NULL)
+    ++s->nSelected;  // byte_6AB4C0 is only a byte and wraps in a wide selection
   const int nFirst = SelectionPageFirst();
-  s->nPages = s->nSelected > SELECTION_PAGE ? (s->nSelected + SELECTION_PAGE - 1) / SELECTION_PAGE : 1;
+  SelectionCard aCards[SELECTION_PAGE];
+  const int nCards = SelectionCards(aCards, nFirst, SELECTION_PAGE);
+  s->nSubgroups = nCards;
+  s->nPages = nCards > SELECTION_PAGE ? (nCards + SELECTION_PAGE - 1) / SELECTION_PAGE : 1;
   s->nPage = nFirst / SELECTION_PAGE;
   // a HUD's grid shows pages of its own size (PortHudGridPage)
   if (g_nGridPer > 0) {
-    s->nPages = s->nSelected > g_nGridPer ? (s->nSelected + g_nGridPer - 1) / g_nGridPer : 1;
+    s->nPages = nCards > g_nGridPer ? (nCards + g_nGridPer - 1) / g_nGridPer : 1;
     s->nPage = g_nGridFirst / g_nGridPer < s->nPages ? g_nGridFirst / g_nGridPer : s->nPages - 1;
   }
-  for (int i = 0; i < SELECTION_PAGE; ++i) {
-    CUnit *p = nFirst + i < SelectionMax() ? StatUnits()[nFirst + i] : NULL;
-    s->anSelectedTypes[i] = p != NULL ? p->wType : -1;
-  }
-  for (int i = 0; i < s->nSelected; ++i) {
-    CUnit *p = StatUnits()[i];
-    bool bSeen = p == NULL;
-    for (int k = 0; k < i && !bSeen; ++k)
-      bSeen = StatUnits()[k] != NULL && StatUnits()[k]->wType == p->wType;
-    if (!bSeen)
-      ++s->nSubgroups;
-  }
+  for (int i = 0; i < SELECTION_PAGE; ++i)
+    s->anSelectedTypes[i] = aCards[i].pUnit != NULL ? aCards[i].pUnit->wType : -1;
   s->nSubgroup = SelectionSubgroup();
   CUnit *u = gpStatUnit;
   if (s->nSelected != 0 && u != NULL) {
@@ -937,7 +932,7 @@ std::string PortHudJson(void) {
   for (int r = 0; r < 3; ++r)
     j += std::string(r ? "," : "") + "[" + Int(s.anSupplyUsed[r]) + "," + Int(s.anSupplyMax[r]) + "]";
   j += "],\"selection\":[";
-  for (int i = 0; i < s.nSelected; ++i)
+  for (int i = 0; i < SELECTION_PAGE; ++i)
     j += std::string(i ? "," : "") + Int(s.anSelectedTypes[i]);
   j += "],\"buttons\":{";
   for (int k = 0; k < PORT_HUD_BTN_KINDS; ++k)

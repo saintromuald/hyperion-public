@@ -111,6 +111,13 @@ msgstr ""
 msgid "Start Training"
 msgstr ""
 
+#: src117/port/data/port_mods.cpp:142
+#: src117/port/data/port_mods.cpp:147
+#: src117/port/front/port_front_mutators.cpp:73
+#: src117/port/hud/port_hudinput.cpp:523
+msgid "Play"
+msgstr ""
+
 #: src117/port/data/port_mods.cpp:48
 msgid "StarCraft and its expansion, as the original plays them."
 msgstr ""
@@ -170,9 +177,9 @@ msgstr ""
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:54
 #: src117/port/front/port_front_campaign.cpp:58
-#: src117/port/front/port_front_mutators.cpp:1001
+#: src117/port/front/port_front_mutators.cpp:1033
 #: src117/port/front/port_front_replays.cpp:50
-#: src117/port/front/port_front_skirmish.cpp:1628
+#: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
 #: src117/port/tools/port_benchview.cpp:1307
 msgid "Zerg"
@@ -181,9 +188,9 @@ msgstr ""
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:53
 #: src117/port/front/port_front_campaign.cpp:57
-#: src117/port/front/port_front_mutators.cpp:1001
+#: src117/port/front/port_front_mutators.cpp:1033
 #: src117/port/front/port_front_replays.cpp:50
-#: src117/port/front/port_front_skirmish.cpp:1628
+#: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
 #: src117/port/tools/port_benchview.cpp:1307
 msgid "Terran"
@@ -192,9 +199,9 @@ msgstr ""
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:55
 #: src117/port/front/port_front_campaign.cpp:56
-#: src117/port/front/port_front_mutators.cpp:1001
+#: src117/port/front/port_front_mutators.cpp:1033
 #: src117/port/front/port_front_replays.cpp:50
-#: src117/port/front/port_front_skirmish.cpp:1628
+#: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
 #: src117/port/tools/port_benchview.cpp:1307
 msgid "Protoss"
@@ -203,9 +210,9 @@ msgstr ""
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_bench.cpp:1423
 #: src117/port/front/port_front_replays.cpp:877
-#: src117/port/front/port_front_skirmish.cpp:1635
-#: src117/port/front/port_front_skirmish.cpp:2812
-#: src117/port/front/port_front_skirmish.cpp:2820
+#: src117/port/front/port_front_skirmish.cpp:1636
+#: src117/port/front/port_front_skirmish.cpp:2813
+#: src117/port/front/port_front_skirmish.cpp:2821
 #: src117/port/front/port_front_trainer.cpp:48
 msgid "Random"
 msgstr ""
@@ -215,13 +222,13 @@ msgid "Sixty-four computers on Big Game Hunters 8x8, 1,024 tiles a side, as fast
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1088
-#: src117/port/front/port_front_skirmish.cpp:2040
-#: src117/port/front/port_front_skirmish.cpp:2044
+#: src117/port/front/port_front_skirmish.cpp:2041
+#: src117/port/front/port_front_skirmish.cpp:2045
 msgid "Player {0}"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1090
-#: src117/port/front/port_front_skirmish.cpp:2041
+#: src117/port/front/port_front_skirmish.cpp:2042
 msgid "Starts by slot: player {0} starts where the map’s picture shows {0}."
 msgstr ""
 
@@ -233,10 +240,10 @@ msgstr ""
 #: src117/port/front/port_front_replays.cpp:880
 #: src117/port/front/port_front_score.cpp:720
 #: src117/port/front/port_front_score.cpp:731
-#: src117/port/front/port_front_skirmish.cpp:2081
-#: src117/port/front/port_front_skirmish.cpp:2085
-#: src117/port/front/port_front_skirmish.cpp:2089
-#: src117/port/front/port_front_skirmish.cpp:3086
+#: src117/port/front/port_front_skirmish.cpp:2082
+#: src117/port/front/port_front_skirmish.cpp:2086
+#: src117/port/front/port_front_skirmish.cpp:2090
+#: src117/port/front/port_front_skirmish.cpp:3113
 #: src117/port/lan/port_front_lanhost.cpp:464
 #: src117/port/lan/port_front_lanhost.cpp:1104
 msgid "Computer"
@@ -248,7 +255,7 @@ msgid "Its own"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1104
-#: src117/port/front/port_front_skirmish.cpp:2160
+#: src117/port/front/port_front_skirmish.cpp:2161
 msgid "Colours by team"
 msgstr ""
 
@@ -266,7 +273,7 @@ msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1119
 #: src117/port/front/port_front_bench.cpp:1168
-#: src117/port/front/port_front_skirmish.cpp:2398
+#: src117/port/front/port_front_skirmish.cpp:2399
 msgid "Race"
 msgstr ""
 
@@ -275,7 +282,7 @@ msgid "Random is drawn from the seed: the same seed gives the same races."
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1121
-#: src117/port/front/port_front_skirmish.cpp:2221
+#: src117/port/front/port_front_skirmish.cpp:2222
 msgid "Handicap"
 msgstr ""
 
@@ -284,31 +291,31 @@ msgid "A player’s units at a share of their life, as in SC2. Not available yet
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1128
-#: src117/port/front/port_front_skirmish.cpp:2255
+#: src117/port/front/port_front_skirmish.cpp:2256
 msgid "Computer level"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1129
 #: src117/port/front/port_front_bench.cpp:1187
-#: src117/port/front/port_front_skirmish.cpp:2260
-#: src117/port/front/port_front_skirmish.cpp:2420
+#: src117/port/front/port_front_skirmish.cpp:2261
+#: src117/port/front/port_front_skirmish.cpp:2421
 #: src117/port/gameplay/port_ai.cpp:67
 msgid "Its own script"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1129
-#: src117/port/front/port_front_skirmish.cpp:2260
+#: src117/port/front/port_front_skirmish.cpp:2261
 msgid "Personality"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1130
-#: src117/port/front/port_front_skirmish.cpp:2261
+#: src117/port/front/port_front_skirmish.cpp:2262
 msgid "How the computer plays: turtle, rusher, expander and the like. Not available yet."
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1155
-#: src117/port/front/port_front_skirmish.cpp:2384
-#: src117/port/front/port_front_skirmish.cpp:2425
+#: src117/port/front/port_front_skirmish.cpp:2385
+#: src117/port/front/port_front_skirmish.cpp:2426
 msgid "All computers:"
 msgstr ""
 
@@ -325,32 +332,32 @@ msgid "Sets every slot’s race at once; each slot’s own list changes it after
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1182
-#: src117/port/front/port_front_skirmish.cpp:2412
+#: src117/port/front/port_front_skirmish.cpp:2413
 msgid "Level"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1186
-#: src117/port/front/port_front_skirmish.cpp:2419
+#: src117/port/front/port_front_skirmish.cpp:2420
 msgid "Every computer’s level"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1187
-#: src117/port/front/port_front_skirmish.cpp:2420
+#: src117/port/front/port_front_skirmish.cpp:2421
 msgid "Every computer’s personality"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1188
-#: src117/port/front/port_front_skirmish.cpp:2421
+#: src117/port/front/port_front_skirmish.cpp:2422
 msgid "How the computers play: turtle, rusher, expander and the like. Not available yet."
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1197
-#: src117/port/front/port_front_skirmish.cpp:2440
+#: src117/port/front/port_front_skirmish.cpp:2441
 msgid "New Team"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1201
-#: src117/port/front/port_front_skirmish.cpp:2446
+#: src117/port/front/port_front_skirmish.cpp:2447
 #: src117/port/front/port_frontlobby.cpp:156
 msgid "New team"
 msgstr ""
@@ -369,8 +376,8 @@ msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1210
 #: src117/port/front/port_front_bench.cpp:1213
-#: src117/port/front/port_front_skirmish.cpp:2455
-#: src117/port/front/port_front_skirmish.cpp:2460
+#: src117/port/front/port_front_skirmish.cpp:2456
+#: src117/port/front/port_front_skirmish.cpp:2461
 msgid "Quick layout"
 msgstr ""
 
@@ -423,11 +430,11 @@ msgid "empty: choose it in a slot’s Team list"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1302
-#: src117/port/front/port_front_skirmish.cpp:2335
-#: src117/port/front/port_front_skirmish.cpp:2372
-#: src117/port/front/port_front_skirmish.cpp:2584
+#: src117/port/front/port_front_skirmish.cpp:2336
+#: src117/port/front/port_front_skirmish.cpp:2373
+#: src117/port/front/port_front_skirmish.cpp:2585
 #: src117/port/front/port_front_trainer.cpp:427
-#: src117/port/lan/port_front_lan.cpp:1161
+#: src117/port/lan/port_front_lan.cpp:1163
 #: src117/port/platform/port_discord.cpp:613
 #: src117/port/platform/port_discord.cpp:616
 #: src117/port/tools/port_benchview.cpp:761
@@ -463,14 +470,14 @@ msgstr ""
 #: src117/port/front/port_front_bench.cpp:1341
 #: src117/port/front/port_front_bench.cpp:1404
 #: src117/port/front/port_front_score.cpp:65
-#: src117/port/front/port_front_skirmish.cpp:1467
+#: src117/port/front/port_front_skirmish.cpp:1468
 #: src117/port/tools/port_benchview.cpp:830
 #: src117/port/tools/port_benchview.cpp:858
 msgid "Players"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1344
-#: src117/port/front/port_frontkit.cpp:369
+#: src117/port/front/port_frontkit.cpp:377
 #: src117/port/tools/port_benchview.cpp:868
 msgid "Free For All"
 msgstr ""
@@ -481,12 +488,12 @@ msgid "Melee, all allied"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1345
-#: src117/port/front/port_front_skirmish.cpp:2737
+#: src117/port/front/port_front_skirmish.cpp:2738
 msgid "Team Match"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1355
-#: src117/port/front/port_front_skirmish.cpp:2730
+#: src117/port/front/port_front_skirmish.cpp:2731
 #: src117/port/tools/port_benchview.cpp:863
 msgid "Game type"
 msgstr ""
@@ -496,10 +503,10 @@ msgid "Free For All: every computer for itself. Melee: the original’s, where e
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1364
-#: src117/port/front/port_front_skirmish.cpp:1991
-#: src117/port/front/port_front_skirmish.cpp:2078
-#: src117/port/front/port_front_skirmish.cpp:2089
-#: src117/port/front/port_front_skirmish.cpp:2644
+#: src117/port/front/port_front_skirmish.cpp:1992
+#: src117/port/front/port_front_skirmish.cpp:2079
+#: src117/port/front/port_front_skirmish.cpp:2090
+#: src117/port/front/port_front_skirmish.cpp:2645
 msgid "You"
 msgstr ""
 
@@ -521,7 +528,7 @@ msgid "A minute, to see it runs"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:138
-#: src117/port/gameplay/port_mutators.cpp:87
+#: src117/port/gameplay/port_mutators.cpp:121
 msgid "Standard"
 msgstr ""
 
@@ -581,9 +588,9 @@ msgstr[1] ""
 
 #: src117/port/front/port_front_bench.cpp:1421
 #: src117/port/front/port_front_bench.cpp:1427
-#: src117/port/front/port_front_skirmish.cpp:2810
-#: src117/port/front/port_front_skirmish.cpp:2816
-#: src117/port/front/port_front_skirmish.cpp:2821
+#: src117/port/front/port_front_skirmish.cpp:2811
+#: src117/port/front/port_front_skirmish.cpp:2817
+#: src117/port/front/port_front_skirmish.cpp:2822
 msgid "Start positions"
 msgstr ""
 
@@ -596,8 +603,8 @@ msgid "drawn from the seed"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1423
-#: src117/port/front/port_front_skirmish.cpp:2173
-#: src117/port/front/port_front_skirmish.cpp:2812
+#: src117/port/front/port_front_skirmish.cpp:2174
+#: src117/port/front/port_front_skirmish.cpp:2813
 msgid "By slot"
 msgstr ""
 
@@ -611,18 +618,18 @@ msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1437
 #: src117/port/front/port_front_bench.cpp:1442
-#: src117/port/front/port_front_skirmish.cpp:2830
-#: src117/port/front/port_front_skirmish.cpp:2837
+#: src117/port/front/port_front_skirmish.cpp:2831
+#: src117/port/front/port_front_skirmish.cpp:2838
 msgid "Colours"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1438
-#: src117/port/front/port_front_skirmish.cpp:2831
+#: src117/port/front/port_front_skirmish.cpp:2832
 msgid "By player"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1438
-#: src117/port/front/port_front_skirmish.cpp:2831
+#: src117/port/front/port_front_skirmish.cpp:2832
 msgid "By team"
 msgstr ""
 
@@ -635,9 +642,9 @@ msgid "Colours by team come with Team Match."
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1452
-#: src117/port/front/port_front_settings.cpp:827
-#: src117/port/front/port_front_skirmish.cpp:2758
-#: src117/port/front/port_front_skirmish.cpp:2762
+#: src117/port/front/port_front_settings.cpp:893
+#: src117/port/front/port_front_skirmish.cpp:2759
+#: src117/port/front/port_front_skirmish.cpp:2763
 msgid "Game speed"
 msgstr ""
 
@@ -664,10 +671,10 @@ msgid "at most {0} frames"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1474
-#: src117/port/front/port_front_mutators.cpp:1637
+#: src117/port/front/port_front_mutators.cpp:1718
 #: src117/port/front/port_front_theme.cpp:611
-#: src117/port/front/port_frontkit.cpp:381
-#: src117/port/gameplay/port_mutators.cpp:501
+#: src117/port/front/port_frontkit.cpp:389
+#: src117/port/gameplay/port_mutators.cpp:587
 msgid "Custom"
 msgstr ""
 
@@ -709,7 +716,7 @@ msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1557
 #: src117/port/front/port_front_bench.cpp:1575
-#: src117/port/gameplay/port_mutators.cpp:64
+#: src117/port/gameplay/port_mutators.cpp:83
 msgid "Supply cap"
 msgstr ""
 
@@ -722,7 +729,7 @@ msgid "each player"
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1563
-#: src117/port/gameplay/port_mutators.cpp:443
+#: src117/port/gameplay/port_mutators.cpp:522
 msgid "Unlimited"
 msgstr ""
 
@@ -732,9 +739,9 @@ msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1583
 #: src117/port/front/port_front_bench.cpp:1591
-#: src117/port/front/port_front_skirmish.cpp:2790
-#: src117/port/front/port_front_skirmish.cpp:2800
-#: src117/port/front/port_front_skirmish.cpp:2802
+#: src117/port/front/port_front_skirmish.cpp:2791
+#: src117/port/front/port_front_skirmish.cpp:2801
+#: src117/port/front/port_front_skirmish.cpp:2803
 msgid "Unit limit"
 msgstr ""
 
@@ -751,7 +758,7 @@ msgid "The most units the game holds at once, every player’s and the map’s m
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:1601
-#: src117/port/front/port_front_settings.cpp:854
+#: src117/port/front/port_front_settings.cpp:920
 #: src117/port/tools/port_benchview.cpp:875
 msgid "Renderer"
 msgstr ""
@@ -889,8 +896,8 @@ msgstr ""
 #: src117/port/front/port_front_campaign.cpp:667
 #: src117/port/front/port_front_campaign.cpp:904
 #: src117/port/front/port_front_home.cpp:735
-#: src117/port/front/port_front_skirmish.cpp:1530
-#: src117/port/front/port_front_skirmish.cpp:3014
+#: src117/port/front/port_front_skirmish.cpp:1531
+#: src117/port/front/port_front_skirmish.cpp:3015
 #: src117/port/front/port_front_trainer.cpp:542
 #: src117/port/front/port_front_trainer.cpp:684
 msgid "Back"
@@ -1109,7 +1116,7 @@ msgid "Classic AI is the original’s own computer. The others play by Hyperion�
 msgstr ""
 
 #: src117/port/front/port_front_bench.cpp:541
-#: src117/port/front/port_front_skirmish.cpp:2472
+#: src117/port/front/port_front_skirmish.cpp:2473
 msgid "Teams by hand"
 msgstr ""
 
@@ -1181,9 +1188,9 @@ msgstr ""
 #: src117/port/front/port_front_bench.cpp:1058
 #: src117/port/front/port_front_replays.cpp:1001
 #: src117/port/front/port_front_score.cpp:927
-#: src117/port/front/port_front_skirmish.cpp:2579
-#: src117/port/hud/port_hudstats.cpp:513
-#: src117/port/lan/port_front_lan.cpp:1159
+#: src117/port/front/port_front_skirmish.cpp:2580
+#: src117/port/hud/port_hudstats.cpp:514
+#: src117/port/lan/port_front_lan.cpp:1161
 #: src117/port/lan/port_front_lanhost.cpp:242
 #: src117/port/platform/port_discord.cpp:611
 #: src117/port/platform/port_discord.cpp:615
@@ -1264,8 +1271,9 @@ msgstr ""
 #: src117/port/front/port_front_bench.cpp:90
 #: src117/port/front/port_front_replays.cpp:123
 #: src117/port/front/port_front_skirmish.cpp:83
-#: src117/port/gameplay/port_mutators.cpp:49
-#: src117/port/gameplay/port_mutators.cpp:51
+#: src117/port/gameplay/port_mutators.cpp:52
+#: src117/port/gameplay/port_mutators.cpp:54
+#: src117/port/gameplay/port_mutators.cpp:59
 #: src117/port/tools/port_benchview.cpp:62
 msgid "Normal"
 msgstr ""
@@ -1317,8 +1325,8 @@ msgstr ""
 #: src117/port/front/port_front_profile.cpp:760
 #: src117/port/front/port_front_profile.cpp:1166
 #: src117/port/lan/port_front_lan.cpp:424
-#: src117/port/lan/port_front_lan.cpp:1162
-#: src117/port/lan/port_lanlobby.cpp:109
+#: src117/port/lan/port_front_lan.cpp:1164
+#: src117/port/lan/port_lanlobby.cpp:113
 msgid "{0} and {1}"
 msgstr ""
 
@@ -1467,12 +1475,12 @@ msgstr ""
 #: src117/port/front/port_front_replays.cpp:1106
 #: src117/port/front/port_front_replays.cpp:1191
 #: src117/port/front/port_front_score.cpp:1120
-#: src117/port/front/port_front_settings.cpp:1814
-#: src117/port/front/port_front_settings.cpp:2000
-#: src117/port/front/port_front_skirmish.cpp:1607
+#: src117/port/front/port_front_settings.cpp:2032
+#: src117/port/front/port_front_settings.cpp:2264
+#: src117/port/front/port_front_skirmish.cpp:1608
 #: src117/port/gameplay/port_trainerview.cpp:1496
-#: src117/port/lan/port_front_lan.cpp:1068
-#: src117/port/lan/port_front_lan.cpp:1587
+#: src117/port/lan/port_front_lan.cpp:1070
+#: src117/port/lan/port_front_lan.cpp:1589
 #: src117/port/lan/port_front_lanhost.cpp:235
 #: src117/port/lan/port_front_lanhost.cpp:249
 #: src117/port/lan/port_front_lanhost.cpp:323
@@ -1547,7 +1555,7 @@ msgid "Watch Again"
 msgstr ""
 
 #: src117/port/front/port_front_campaign.cpp:899
-#: src117/port/lan/port_front_lan.cpp:1807
+#: src117/port/lan/port_front_lan.cpp:1809
 #: src117/port/lan/port_front_lanhost.cpp:500
 msgid "Watch"
 msgstr ""
@@ -1914,7 +1922,7 @@ msgid "Resume Game"
 msgstr ""
 
 #: src117/port/front/port_front_gamemenu.cpp:326
-#: src117/port/front/port_front_mutators.cpp:1534
+#: src117/port/front/port_front_mutators.cpp:1615
 msgid "Options"
 msgstr ""
 
@@ -1987,7 +1995,7 @@ msgstr ""
 #: src117/port/front/port_front_gamemenu.cpp:497
 #: src117/port/front/port_front_gamemenu.cpp:499
 #: src117/port/front/port_front_score.cpp:1090
-#: src117/port/front/port_front_settings.cpp:1848
+#: src117/port/front/port_front_settings.cpp:2066
 msgid "OK"
 msgstr ""
 
@@ -2065,7 +2073,7 @@ msgid "Allied"
 msgstr ""
 
 #: src117/port/front/port_front_gamemenu.cpp:567
-#: src117/port/hud/port_hudstats.cpp:416
+#: src117/port/hud/port_hudstats.cpp:417
 msgid "Vision"
 msgstr ""
 
@@ -2091,13 +2099,13 @@ msgstr ""
 
 #: src117/port/front/port_front_gamemenu.cpp:617
 #: src117/port/front/port_front_gamemenu.cpp:671
-#: src117/port/front/port_front_settings.cpp:1996
+#: src117/port/front/port_front_settings.cpp:2260
 msgid "Accept"
 msgstr ""
 
 #: src117/port/front/port_front_gamemenu.cpp:652
 #: src117/port/hud/port_hudinput.cpp:716
-#: src117/port/render/port_gpu_hud.cpp:1732
+#: src117/port/render/port_gpu_hud.cpp:1748
 msgid "Messaging"
 msgstr ""
 
@@ -2139,7 +2147,7 @@ msgid "Create a profile"
 msgstr ""
 
 #: src117/port/front/port_front_home.cpp:735
-#: src117/port/render/port_gpu_hud.cpp:1729
+#: src117/port/render/port_gpu_hud.cpp:1745
 msgid "Menu"
 msgstr ""
 
@@ -2222,7 +2230,7 @@ msgid "As it shows on your screen, over {0}."
 msgstr ""
 
 #: src117/port/front/port_front_hud.cpp:602
-#: src117/port/front/port_front_settings.cpp:911
+#: src117/port/front/port_front_settings.cpp:977
 msgid "Actions per minute"
 msgstr ""
 
@@ -2231,25 +2239,28 @@ msgid "Idle workers"
 msgstr ""
 
 #: src117/port/front/port_front_hud.cpp:604
+#: src117/port/front/port_front_mutators.cpp:1108
 #: src117/port/gameplay/port_trainerview.cpp:420
 #: src117/port/gameplay/port_trainerview.cpp:1327
 #: src117/port/hud/port_hudinput.cpp:691
-#: src117/port/hud/port_hudstats.cpp:415
-#: src117/port/hud/port_hudstats.cpp:424
+#: src117/port/hud/port_hudstats.cpp:416
+#: src117/port/hud/port_hudstats.cpp:425
 msgid "Army"
 msgstr ""
 
 #: src117/port/front/port_front_hud.cpp:605
+#: src117/port/front/port_front_settings.cpp:985
 msgid "Control groups"
 msgstr ""
 
 #: src117/port/front/port_front_hud.cpp:606
-#: src117/port/render/port_gpu_hud.cpp:1730
+#: src117/port/render/port_gpu_hud.cpp:1746
 msgid "Terrain"
 msgstr ""
 
 #: src117/port/front/port_front_hud.cpp:607
 #: src117/port/front/port_front_replays.cpp:53
+#: src117/port/front/port_front_settings.cpp:1069
 #: src117/port/hud/port_hudinput.cpp:538
 #: src117/port/hud/port_hudinput.cpp:658
 msgid "Replay TV"
@@ -2266,7 +2277,7 @@ msgid "This design does not load:"
 msgstr ""
 
 #: src117/port/front/port_front_hud.cpp:673
-#: src117/port/front/port_front_settings.cpp:921
+#: src117/port/front/port_front_settings.cpp:1081
 msgid "Layout"
 msgstr ""
 
@@ -2283,7 +2294,7 @@ msgid "Right column"
 msgstr ""
 
 #: src117/port/front/port_front_hud.cpp:678
-#: src117/port/front/port_front_skirmish.cpp:1480
+#: src117/port/front/port_front_skirmish.cpp:1481
 msgid "Size"
 msgstr ""
 
@@ -2341,7 +2352,7 @@ msgid "This design has no buttons to leave out."
 msgstr ""
 
 #: src117/port/front/port_front_hud.cpp:871
-#: src117/port/front/port_front_settings.cpp:972
+#: src117/port/front/port_front_settings.cpp:1120
 msgid "Not available yet"
 msgstr ""
 
@@ -2376,13 +2387,13 @@ msgstr ""
 #: src117/port/front/port_front_load.cpp:334
 #: src117/port/front/port_front_load.cpp:399
 #: src117/port/front/port_front_load.cpp:400
-#: src117/port/front/port_front_skirmish.cpp:2946
+#: src117/port/front/port_front_skirmish.cpp:2947
 #: src117/port/platform/port_discord.cpp:707
 msgid "Skirmish"
 msgstr ""
 
 #: src117/port/front/port_front_internal.h:31
-#: src117/port/lan/port_front_lan.cpp:1630
+#: src117/port/lan/port_front_lan.cpp:1632
 msgid "Multiplayer"
 msgstr ""
 
@@ -2395,7 +2406,7 @@ msgid "Mods"
 msgstr ""
 
 #: src117/port/front/port_front_internal.h:37
-#: src117/port/front/port_front_settings.cpp:1900
+#: src117/port/front/port_front_settings.cpp:2149
 #: src117/port/lan/port_front_lanhost.cpp:185
 msgid "Settings"
 msgstr ""
@@ -2437,12 +2448,13 @@ msgid "Graphics"
 msgstr ""
 
 #: src117/port/front/port_front_internal.h:50
-#: src117/port/front/port_front_settings.cpp:883
+#: src117/port/front/port_front_settings.cpp:949
 #: src117/port/lan/port_front_lanhost.cpp:1273
 msgid "Sound"
 msgstr ""
 
 #: src117/port/front/port_front_internal.h:50
+#: src117/port/front/port_front_settings.cpp:1075
 msgid "Interface"
 msgstr ""
 
@@ -2460,6 +2472,11 @@ msgstr ""
 
 #: src117/port/front/port_front_internal.h:53
 msgid "HUD"
+msgstr ""
+
+#: src117/port/front/port_front_internal.h:53
+#: src117/port/gameplay/port_mutators.cpp:86
+msgid "Newbie mode"
 msgstr ""
 
 #: src117/port/front/port_front_load.cpp:144
@@ -2545,10 +2562,10 @@ msgstr ""
 #: src117/port/front/port_front_mods.cpp:341
 #: src117/port/front/port_front_notes.cpp:787
 #: src117/port/front/port_front_profile.cpp:1213
-#: src117/port/front/port_front_skirmish.cpp:3098
+#: src117/port/front/port_front_skirmish.cpp:3125
 #: src117/port/gameplay/port_trainerview.cpp:1569
 #: src117/port/gameplay/port_trainerview.cpp:1587
-#: src117/port/hud/port_hudstats.cpp:721
+#: src117/port/hud/port_hudstats.cpp:722
 #: src117/port/lan/port_front_landevices.cpp:358
 #: src117/port/tools/port_benchview.cpp:2463
 #: src117/port/tools/port_errorwin.cpp:168
@@ -2686,592 +2703,735 @@ msgstr ""
 msgid "“{0}” opens Hyperion's live channel while it is active. Programs on this computer that you run can then read and change your games through it. Allow it only for a mod you trust."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1007
+#: src117/port/front/port_front_mutators.cpp:1039
 msgid "Town halls"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1013
+#: src117/port/front/port_front_mutators.cpp:1045
 msgid "depot, pylon, overlord"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1058
+#: src117/port/front/port_front_mutators.cpp:1090
 msgid "Black until scouted"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1058
+#: src117/port/front/port_front_mutators.cpp:1090
 msgid "Land known, units in sight"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1059
+#: src117/port/front/port_front_mutators.cpp:1091
 msgid "The whole map, all game"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1086
-msgid "This game · harder"
+#: src117/port/front/port_front_mutators.cpp:1091
+msgid "Fog, but the minerals and rocks show"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1089
-msgid "{0} s"
+#: src117/port/front/port_front_mutators.cpp:1109
+msgid "no select-army key or button"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1094
-#: src117/port/front/port_front_mutators.cpp:1142
-msgid "as Classic"
+#: src117/port/front/port_front_mutators.cpp:1110
+msgid "the select-army key and button, as Hyperion has them"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1095
-msgid "an SCV at {0}"
+#: src117/port/front/port_front_mutators.cpp:1114
+msgid "off: the army is selected by hand, as Classic"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1098
-msgid "Buildings, units, research and upgrades alike"
+#: src117/port/front/port_front_mutators.cpp:1123
+#: src117/port/gameplay/port_mutators.cpp:54
+msgid "x3"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1133
-msgid "all to research"
+#: src117/port/front/port_front_mutators.cpp:1123
+#: src117/port/tools/port_benchview.cpp:1470
+msgid "Energy"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1133
-msgid "all done at the start"
+#: src117/port/front/port_front_mutators.cpp:1125
+msgid "energy comes back three times as fast"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1133
-#: src117/port/gameplay/port_mutators.cpp:583
-msgid "no upgrades"
-msgstr ""
-
-#: src117/port/front/port_front_mutators.cpp:1134
-msgid "nothing to research"
-msgstr ""
-
-#: src117/port/front/port_front_mutators.cpp:1135
-msgid "Upgrades"
+#: src117/port/front/port_front_mutators.cpp:1126
+msgid "energy comes back as Classic"
 msgstr ""
 
 #: src117/port/front/port_front_mutators.cpp:1136
+msgid "Newbie"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1137
+msgid "the helpers are on"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1137
+msgid "the helpers are off, as Classic"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1139
+#: src117/port/gameplay/port_mutators.cpp:708
+msgid "workers trained by themselves"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1139
+msgid "workers by hand"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1140
+#: src117/port/gameplay/port_mutators.cpp:710
+msgid "mining balanced by itself"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1140
+msgid "mining by hand"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1143
+msgid "the upgrades chosen in Settings' Newbie mode tab research by themselves"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1160
+msgid "This game · harder"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1163
+msgid "{0} s"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1168
+#: src117/port/front/port_front_mutators.cpp:1216
+msgid "as Classic"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1169
+msgid "an SCV at {0}"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1172
+msgid "Buildings, units, research and upgrades alike"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1207
+msgid "all to research"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1207
+msgid "all done at the start"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1207
+#: src117/port/gameplay/port_mutators.cpp:671
+msgid "no upgrades"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1208
+msgid "nothing to research"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1209
+msgid "Upgrades"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1210
 #: src117/port/gameplay/port_trainerview.cpp:420
 msgid "Research"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1142
+#: src117/port/front/port_front_mutators.cpp:1216
 msgid "This game · {0}"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1143
+#: src117/port/front/port_front_mutators.cpp:1217
 msgid "Classic · {0}"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1150
+#: src117/port/front/port_front_mutators.cpp:1224
 msgid "Weapons, Armor, U-238 Shells · Stim Packs, Lockdown, Siege Tech"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1151
+#: src117/port/front/port_front_mutators.cpp:1225
 msgid "Three upgrades and three researches"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1318
+#: src117/port/front/port_front_mutators.cpp:1399
 msgid "NEW"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1374
+#: src117/port/front/port_front_mutators.cpp:1455
 msgid "Classic’s."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1376
+#: src117/port/front/port_front_mutators.cpp:1457
 msgid "Harder than Classic."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1507
-#: src117/port/front/port_front_skirmish.cpp:2724
+#: src117/port/front/port_front_mutators.cpp:1588
+#: src117/port/front/port_front_skirmish.cpp:2725
 msgid "GAME OPTIONS"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1507
-#: src117/port/front/port_front_mutators.cpp:1611
-#: src117/port/front/port_front_mutators.cpp:1868
+#: src117/port/front/port_front_mutators.cpp:1588
+#: src117/port/front/port_front_mutators.cpp:1692
+#: src117/port/front/port_front_mutators.cpp:1949
 msgid "MUTATORS"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1534
-#: src117/port/front/port_front_mutators.cpp:1613
+#: src117/port/front/port_front_mutators.cpp:1615
+#: src117/port/front/port_front_mutators.cpp:1694
 msgid "Mutators"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1534
+#: src117/port/front/port_front_mutators.cpp:1615
 msgid "Game Options"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1535
+#: src117/port/front/port_front_mutators.cpp:1616
 msgid "One set of mutators for every player: what the map holds, what each player starts with, supply, the fog, build time and tech. Hotkey: U"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1538
+#: src117/port/front/port_front_mutators.cpp:1619
 msgid "The game type, speed, rules and start positions, and the map. Hotkey: O"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1546
+#: src117/port/front/port_front_mutators.cpp:1627
 msgid "{0} · Hyperion rules"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1547
+#: src117/port/front/port_front_mutators.cpp:1628
 msgid "Custom set"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1548
+#: src117/port/front/port_front_mutators.cpp:1629
 msgid "No mutators · as Classic"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1614
+#: src117/port/front/port_front_mutators.cpp:1695
 msgid "They change the game past the classic rules, the same for every player, so they play by Hyperion’s, and its replay and save keep them."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1620
+#: src117/port/front/port_front_mutators.cpp:1701
 msgid "One set for every player. Any mutator plays by Hyperion rules, and the replay keeps the set."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1621
+#: src117/port/front/port_front_mutators.cpp:1702
 msgid "The host’s set, the same for every player. Any mutator plays by Hyperion rules."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1632
+#: src117/port/front/port_front_mutators.cpp:1713
 msgid "Presets"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1641
+#: src117/port/front/port_front_mutators.cpp:1722
 msgid "Any other set of the mutators below."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1642
+#: src117/port/front/port_front_mutators.cpp:1723
 msgid "The host chooses the mutators."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1723
+#: src117/port/front/port_front_mutators.cpp:1804
 msgid "CLICK TO CHOOSE"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1777
+#: src117/port/front/port_front_mutators.cpp:1858
 #: src117/port/tools/port_benchview.cpp:2215
 #: src117/port/tools/port_benchview.cpp:2224
 #: src117/port/tools/port_benchview.cpp:2226
 msgid "Where"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1778
+#: src117/port/front/port_front_mutators.cpp:1859
 msgid "Which bases may turn rich: those past each start’s natural, those at least a distance from every start, only the farthest, or every base. Off has none, as Classic."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1789
+#: src117/port/front/port_front_mutators.cpp:1870
 msgid "Distance"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1790
+#: src117/port/front/port_front_mutators.cpp:1871
 msgid "How far a base must be from every start, in a straight line, to turn rich: in tiles, or a share of the map’s size, its width and height averaged. For Outside a radius."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1799
+#: src117/port/front/port_front_mutators.cpp:1880
 msgid "Chance"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1800
+#: src117/port/front/port_front_mutators.cpp:1881
 msgid "The chance a base far enough from every start turns rich at. Bases that mirror each other are rolled together. Not for Off or Every base, which roll nothing."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1823
-#: src117/port/front/port_front_mutators.cpp:1826
+#: src117/port/front/port_front_mutators.cpp:1904
+#: src117/port/front/port_front_mutators.cpp:1907
 msgid "Announce at the start"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1827
+#: src117/port/front/port_front_mutators.cpp:1908
 msgid "On, the game’s first message says how many bases turned rich, or why none did. Off, it says nothing, and players find the gold and violet bases on the map."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1872
+#: src117/port/front/port_front_mutators.cpp:1953
 msgid "{0} ON"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1873
+#: src117/port/front/port_front_mutators.cpp:1954
 msgid "NONE ON"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1880
+#: src117/port/front/port_front_mutators.cpp:1961
 msgid "The game plays as Classic: the map’s resources, 50 minerals, 4 workers, 200 supply."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1924
+#: src117/port/front/port_front_mutators.cpp:2005
 msgid "Change Mutators"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1925
+#: src117/port/front/port_front_mutators.cpp:2006
 msgid "Choose Mutators"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1926
+#: src117/port/front/port_front_mutators.cpp:2007
 msgid "See Mutators"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:398
+#: src117/port/front/port_front_mutators.cpp:408
 msgid "a quarter as long"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:399
+#: src117/port/front/port_front_mutators.cpp:409
 msgid "half as long"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:400
+#: src117/port/front/port_front_mutators.cpp:410
 msgid "three quarters as long"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:401
+#: src117/port/front/port_front_mutators.cpp:411
 msgid "as long as Classic"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:402
+#: src117/port/front/port_front_mutators.cpp:412
 msgid "half again as long"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:403
+#: src117/port/front/port_front_mutators.cpp:413
 msgid "twice as long"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:404
+#: src117/port/front/port_front_mutators.cpp:414
 msgid "three times as long"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:405
+#: src117/port/front/port_front_mutators.cpp:415
 msgid "four times as long"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:406
+#: src117/port/front/port_front_mutators.cpp:416
 msgid "eight times as long"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:411
+#: src117/port/front/port_front_mutators.cpp:421
 msgid "×{0} as long"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:440
+#: src117/port/front/port_front_mutators.cpp:450
 msgid "this map"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:444
+#: src117/port/front/port_front_mutators.cpp:454
 msgid "Fields never run dry: a base can be mined all game."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:446
+#: src117/port/front/port_front_mutators.cpp:456
 msgid "A field holds {0}, the small ones {1}: a base lasts {2}."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:451
+#: src117/port/front/port_front_mutators.cpp:461
 msgid "Geysers never run dry."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:452
+#: src117/port/front/port_front_mutators.cpp:462
 msgid "A geyser holds {0} before it runs dry, then gives 2 a trip. It lasts {1}."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:456
+#: src117/port/front/port_front_mutators.cpp:466
 msgid "Every base as the map made it."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:459
+#: src117/port/front/port_front_mutators.cpp:469
 msgid "Every mineral field and geyser on {0} is rich: a trip brings 11 minerals or 16 gas, Classic 8."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:465
+#: src117/port/front/port_front_mutators.cpp:475
 msgid "{0} ({1} tiles)"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:469
+#: src117/port/front/port_front_mutators.cpp:479
 msgid "that is no start’s main or natural"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:470
+#: src117/port/front/port_front_mutators.cpp:480
 msgid "{0} or more from every start"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:471
+#: src117/port/front/port_front_mutators.cpp:481
 msgid "farthest from every start"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:477
+#: src117/port/front/port_front_mutators.cpp:487
 msgid "Any base {0} may turn rich, at {1}%. Reading this map’s bases…"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:479
+#: src117/port/front/port_front_mutators.cpp:489
 msgid "Any base {0} may turn rich, at {1}%. Read from the map as the game starts."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:483
+#: src117/port/front/port_front_mutators.cpp:493
 msgid "{0} No base turns rich, so no player starts ahead."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:486
+#: src117/port/front/port_front_mutators.cpp:496
 msgid "that are no start’s main or natural"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:488
+#: src117/port/front/port_front_mutators.cpp:498
 msgid "Up to {0} base {1} on {2} may turn rich, each at {3}%: a trip brings 11 minerals or 16 gas, Classic 8."
 msgid_plural "Up to {0} bases {1} on {2} may turn rich, each at {3}%: a trip brings 11 minerals or 16 gas, Classic 8."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src117/port/front/port_front_mutators.cpp:496
+#: src117/port/front/port_front_mutators.cpp:506
 msgid "Each player begins with {0} minerals and {1} gas: {2} worker’s worth."
 msgid_plural "Each player begins with {0} minerals and {1} gas: {2} workers’ worth."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src117/port/front/port_front_mutators.cpp:501
+#: src117/port/front/port_front_mutators.cpp:511
 msgid "Each player begins with {0} worker beside the town hall."
 msgid_plural "Each player begins with {0} workers beside the town hall."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src117/port/front/port_front_mutators.cpp:505
+#: src117/port/front/port_front_mutators.cpp:515
 msgid "Not on this game: Use Map Settings keeps the map’s own start units."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:510
+#: src117/port/front/port_front_mutators.cpp:520
 msgid "No cap: an army is held back only by the supply built."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:511
+#: src117/port/front/port_front_mutators.cpp:521
 msgid "Each player can hold {0} supply."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:517
+#: src117/port/front/port_front_mutators.cpp:527
 msgid "A depot, pylon or overlord gives {0}, a command center {1}, a nexus {2}, a hatchery {3}: whole supply, rounded down."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:520
+#: src117/port/front/port_front_mutators.cpp:530
 msgid "A depot, pylon or overlord gives {0}, a command center {1}, a nexus {2}, a hatchery {3}, as Classic."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:526
+#: src117/port/front/port_front_mutators.cpp:536
 msgid "Every player knows the map’s land from the start. Units still show only in sight."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:528
+#: src117/port/front/port_front_mutators.cpp:538
 msgid "Every player sees the whole map all game."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:529
+#: src117/port/front/port_front_mutators.cpp:540
+msgid "The fog of war stays as Classic, but the mineral fields, geysers, eggs and obstacles show through it from the start, so a new player sees what the map offers. Other units show only in sight."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:541
 msgid "The fog of war, as Classic plays it."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:534
+#: src117/port/front/port_front_mutators.cpp:544
+msgid "The select-army key and its button do nothing, for a game played without them."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:545
+msgid "The select-army key and its button, as Hyperion has them."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:548
+msgid "Every unit’s energy comes back three times as fast."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:549
+msgid "Energy comes back as Classic."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:552
+msgid "Newbie helpers on: workers are trained by themselves, mining is balanced by itself, and the upgrades chosen in Settings' Newbie mode tab are researched by themselves."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:553
+msgid "Newbie helpers for a player learning the game, as Classic plays it by hand."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:556
+#: src117/port/gameplay/port_mutators.cpp:115
+msgid "A completed town hall with nothing training and supply to spare trains its worker by itself."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:557
+msgid "Workers are trained by the player, as Classic."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:561
+msgid "Mining is assigned by the player, as Classic."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:566
 msgid "As Classic: an SCV trains in {0} s at {1}."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:536
+#: src117/port/front/port_front_mutators.cpp:568
 msgid "Everything takes {0}: an SCV trains in {1} s at {2}, Classic {3} s."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:542
+#: src117/port/front/port_front_mutators.cpp:574
 msgid "Every upgrade at its top level and every ability researched from the start."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:544
+#: src117/port/front/port_front_mutators.cpp:576
 msgid "Upgrades cannot be researched. Abilities still can."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:546
+#: src117/port/front/port_front_mutators.cpp:578
 msgid "Neither upgrades nor the abilities that need research."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:547
+#: src117/port/front/port_front_mutators.cpp:579
 msgid "Everything to research, as Classic."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:67
+#: src117/port/front/port_front_mutators.cpp:69
 #: src117/port/front/port_front_score.cpp:50
 #: src117/port/front/port_front_score.cpp:55
 #: src117/port/front/port_front_score.cpp:60
 msgid "Resources"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:68
+#: src117/port/front/port_front_mutators.cpp:70
 #: src117/port/gameplay/port_trainerview.cpp:774
 msgid "The start"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:686
+#: src117/port/front/port_front_mutators.cpp:71
+#: src117/port/front/port_front_mutators.cpp:1039
+#: src117/port/gameplay/port_trainerview.cpp:409
+#: src117/port/hud/port_hudstats.cpp:415
+msgid "Supply"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:718
 #: src117/port/gameplay/port_ai.cpp:64
 msgid "Harder"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:686
-#: src117/port/front/port_front_mutators.cpp:1086
+#: src117/port/front/port_front_mutators.cpp:718
+#: src117/port/front/port_front_mutators.cpp:1160
 msgid "This game"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:686
-#: src117/port/front/port_front_mutators.cpp:833
-#: src117/port/front/port_front_mutators.cpp:1086
-#: src117/port/front/port_front_mutators.cpp:1696
+#: src117/port/front/port_front_mutators.cpp:718
+#: src117/port/front/port_front_mutators.cpp:865
+#: src117/port/front/port_front_mutators.cpp:1160
+#: src117/port/front/port_front_mutators.cpp:1777
 #: src117/port/front/port_front_replays.cpp:54
 #: src117/port/front/port_front_replays.cpp:1010
 #: src117/port/front/port_front_score.cpp:929
-#: src117/port/front/port_front_skirmish.cpp:2769
+#: src117/port/front/port_front_skirmish.cpp:2770
+#: src117/port/gameplay/port_mutators.cpp:73
+#: src117/port/gameplay/port_mutators.cpp:74
 msgid "Classic"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:69
-#: src117/port/front/port_front_mutators.cpp:1007
-#: src117/port/gameplay/port_trainerview.cpp:409
-#: src117/port/hud/port_hudstats.cpp:414
-msgid "Supply"
-msgstr ""
-
-#: src117/port/front/port_front_mutators.cpp:70
+#: src117/port/front/port_front_mutators.cpp:72
 msgid "Fog, time and tech"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:72
+#: src117/port/front/port_front_mutators.cpp:75
 msgid "How much each mineral field holds, so how long a base can be mined."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:73
+#: src117/port/front/port_front_mutators.cpp:76
 msgid "How much each geyser holds before it runs dry."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:730
+#: src117/port/front/port_front_mutators.cpp:762
 msgid "a geyser"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:730
+#: src117/port/front/port_front_mutators.cpp:762
 msgid "a field"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:74
+#: src117/port/front/port_front_mutators.cpp:77
 msgid "What each player has to spend at the first second."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:740
+#: src117/port/front/port_front_mutators.cpp:772
 msgid "never runs dry"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:741
+#: src117/port/front/port_front_mutators.cpp:773
 msgid "lasts {0}"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:742
+#: src117/port/front/port_front_mutators.cpp:774
 msgid "then 2 a trip"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:743
+#: src117/port/front/port_front_mutators.cpp:775
 msgid "the small ones {0}"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:744
-#: src117/port/gameplay/port_mutators.cpp:87
-#: src117/port/gameplay/port_mutators.cpp:111
+#: src117/port/front/port_front_mutators.cpp:776
+#: src117/port/gameplay/port_mutators.cpp:121
+#: src117/port/gameplay/port_mutators.cpp:145
 msgid "Infinite"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:75
+#: src117/port/front/port_front_mutators.cpp:78
 msgid "The biggest army each player can keep."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:76
+#: src117/port/front/port_front_mutators.cpp:79
 msgid "How many workers each player starts with."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:77
+#: src117/port/front/port_front_mutators.cpp:80
 msgid "More supply from each depot, pylon, overlord and town hall, so fewer are needed."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:78
+#: src117/port/front/port_front_mutators.cpp:81
 msgid "How much of the map each player sees."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:79
+#: src117/port/front/port_front_mutators.cpp:82
 msgid "How fast everything is built, trained and researched."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:80
+#: src117/port/front/port_front_mutators.cpp:83
 msgid "Start with everything researched, or play without upgrades or research."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:81
+#: src117/port/front/port_front_mutators.cpp:84
 msgid "Some bases away from the starts get gold minerals and violet gas, which bring more each trip."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:828
+#: src117/port/front/port_front_mutators.cpp:85
+msgid "Units cost no supply and the cap is off; depots and pylons cost 40 minerals at half their life."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:86
+msgid "One Machine Shop serves every Factory, and the same for the other add-ons."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:860
 msgid "A trip brings"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:834
+#: src117/port/front/port_front_mutators.cpp:866
 msgid "Rich · off"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:835
+#: src117/port/front/port_front_mutators.cpp:867
 msgid "Rich · every base"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:836
+#: src117/port/front/port_front_mutators.cpp:868
 msgid "Rich · up to {0} base"
 msgid_plural "Rich · up to {0} bases"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src117/port/front/port_front_mutators.cpp:838
+#: src117/port/front/port_front_mutators.cpp:87
+msgid "No select-army key or button, for a game without them."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:870
 msgid "Rich · none far enough"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:851
+#: src117/port/front/port_front_mutators.cpp:88
+msgid "Every unit's energy comes back three times as fast."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:883
 msgid "Reading this map…"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:851
+#: src117/port/front/port_front_mutators.cpp:883
 msgid "A sketch, not this map"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:871
+#: src117/port/front/port_front_mutators.cpp:89
+msgid "Newbie helpers for a player learning the game: workers, mining and research by themselves."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:90
+msgid "A town hall with nothing training and supply to spare trains its worker by itself."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:903
 msgid "gas"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:871
+#: src117/port/front/port_front_mutators.cpp:903
 msgid "minerals"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:912
+#: src117/port/front/port_front_mutators.cpp:91
+#: src117/port/front/port_front_mutators.cpp:560
+#: src117/port/gameplay/port_mutators.cpp:116
+msgid "Each base's patches take up to three workers, each geyser three; once a base is full, the workers that are free go to the next base with room, and to the built geysers."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:944
+#: src117/port/gameplay/port_mutators.cpp:73
+#: src117/port/gameplay/port_mutators.cpp:85
 msgid "No cap"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:916
+#: src117/port/front/port_front_mutators.cpp:948
 msgid "supply has no limit"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:917
+#: src117/port/front/port_front_mutators.cpp:949
 msgid "supply, less than Classic: harder"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:918
+#: src117/port/front/port_front_mutators.cpp:950
 msgid "supply, the most a player holds"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:947
+#: src117/port/front/port_front_mutators.cpp:979
 msgid "Classic 200"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:953
+#: src117/port/front/port_front_mutators.cpp:985
 msgid "marines"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:953
+#: src117/port/front/port_front_mutators.cpp:985
 msgid "zealots"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:953
+#: src117/port/front/port_front_mutators.cpp:985
 msgid "ultralisks"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:961
+#: src117/port/front/port_front_mutators.cpp:993
 msgid "Any number of {0}"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:965
+#: src117/port/front/port_front_mutators.cpp:997
 msgid "Classic {0}"
 msgstr ""
 
@@ -3412,7 +3572,7 @@ msgid "Make a profile to play. It keeps your campaign and your saves."
 msgstr ""
 
 #: src117/port/front/port_front_profile.cpp:1201
-#: src117/port/front/port_front_skirmish.cpp:1602
+#: src117/port/front/port_front_skirmish.cpp:1603
 msgid "Choose"
 msgstr ""
 
@@ -3575,7 +3735,7 @@ msgid "Made {0}"
 msgstr ""
 
 #: src117/port/front/port_front_profile.cpp:838
-#: src117/port/lan/port_front_lan.cpp:1614
+#: src117/port/lan/port_front_lan.cpp:1616
 msgid "In {0}"
 msgstr ""
 
@@ -3612,7 +3772,7 @@ msgid "New profile"
 msgstr ""
 
 #: src117/port/front/port_front_profile.cpp:869
-#: src117/port/front/port_front_skirmish.cpp:1443
+#: src117/port/front/port_front_skirmish.cpp:1444
 #: src117/port/lan/port_front_lanhost.cpp:603
 msgid "and {0} more"
 msgstr ""
@@ -3634,7 +3794,7 @@ msgid "{0} frames at {1}"
 msgstr ""
 
 #: src117/port/front/port_front_replays.cpp:1010
-#: src117/port/front/port_front_skirmish.cpp:2768
+#: src117/port/front/port_front_skirmish.cpp:2769
 msgid "Rules"
 msgstr ""
 
@@ -3771,7 +3931,7 @@ msgid "Campaign mission"
 msgstr ""
 
 #: src117/port/front/port_front_replays.cpp:300
-#: src117/port/front/port_front_skirmish.cpp:1349
+#: src117/port/front/port_front_skirmish.cpp:1350
 #: src117/port/front/port_front_trainer.cpp:423
 msgid "Unreadable"
 msgstr ""
@@ -3850,8 +4010,8 @@ msgid "My Replays"
 msgstr ""
 
 #: src117/port/front/port_front_replays.cpp:53
-#: src117/port/lan/port_front_lan.cpp:1648
-#: src117/port/lan/port_front_lan.cpp:1649
+#: src117/port/lan/port_front_lan.cpp:1650
+#: src117/port/lan/port_front_lan.cpp:1651
 msgid "Online"
 msgstr ""
 
@@ -3901,15 +4061,15 @@ msgid "REPLAY"
 msgstr ""
 
 #: src117/port/front/port_front_replays.cpp:745
-#: src117/port/front/port_front_skirmish.cpp:1237
+#: src117/port/front/port_front_skirmish.cpp:1238
 msgid "MAP"
 msgstr ""
 
 #: src117/port/front/port_front_replays.cpp:745
-#: src117/port/front/port_front_skirmish.cpp:1239
-#: src117/port/front/port_front_skirmish.cpp:2582
-#: src117/port/hud/port_hudstats.cpp:531
-#: src117/port/hud/port_hudstats.cpp:1083
+#: src117/port/front/port_front_skirmish.cpp:1240
+#: src117/port/front/port_front_skirmish.cpp:2583
+#: src117/port/hud/port_hudstats.cpp:532
+#: src117/port/hud/port_hudstats.cpp:1084
 #: src117/port/tools/port_benchview.cpp:1668
 msgid "PLAYERS"
 msgstr ""
@@ -4001,14 +4161,14 @@ msgstr ""
 
 #: src117/port/front/port_front_score.cpp:50
 #: src117/port/hud/port_hudinput.cpp:691
-#: src117/port/hud/port_hudstats.cpp:424
+#: src117/port/hud/port_hudstats.cpp:425
 msgid "Overview"
 msgstr ""
 
 #: src117/port/front/port_front_score.cpp:50
 #: src117/port/front/port_front_score.cpp:55
 #: src117/port/front/port_front_score.cpp:60
-#: src117/port/hud/port_hudstats.cpp:421
+#: src117/port/hud/port_hudstats.cpp:422
 #: src117/port/tools/port_benchview.cpp:1112
 #: src117/port/tools/port_benchview.cpp:2043
 msgid "Units"
@@ -4112,12 +4272,12 @@ msgid "Score"
 msgstr ""
 
 #: src117/port/front/port_front_score.cpp:63
-#: src117/port/hud/port_hudstats.cpp:413
+#: src117/port/hud/port_hudstats.cpp:414
 msgid "Gas"
 msgstr ""
 
 #: src117/port/front/port_front_score.cpp:63
-#: src117/port/hud/port_hudstats.cpp:413
+#: src117/port/hud/port_hudstats.cpp:414
 msgid "Minerals"
 msgstr ""
 
@@ -4127,23 +4287,23 @@ msgid "Spent"
 msgstr ""
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2484
+#: src117/port/front/port_front_skirmish.cpp:2485
 msgid "Auto"
 msgstr ""
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2484
+#: src117/port/front/port_front_skirmish.cpp:2485
 msgid "Rows"
 msgstr ""
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2484
+#: src117/port/front/port_front_skirmish.cpp:2485
 #: src117/port/tools/port_benchview.cpp:2234
 msgid "Compact"
 msgstr ""
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2484
+#: src117/port/front/port_front_skirmish.cpp:2485
 msgid "Columns"
 msgstr ""
 
@@ -4152,7 +4312,7 @@ msgid "By Team"
 msgstr ""
 
 #: src117/port/front/port_front_score.cpp:65
-#: src117/port/front/port_front_skirmish.cpp:2745
+#: src117/port/front/port_front_skirmish.cpp:2746
 msgid "Teams"
 msgstr ""
 
@@ -4189,8 +4349,8 @@ msgid "{0} of {1} by score"
 msgstr ""
 
 #: src117/port/front/port_front_score.cpp:959
-#: src117/port/front/port_front_skirmish.cpp:2329
-#: src117/port/front/port_front_skirmish.cpp:2370
+#: src117/port/front/port_front_skirmish.cpp:2330
+#: src117/port/front/port_front_skirmish.cpp:2371
 #: src117/port/hud/port_hudinput.cpp:675
 msgid "{0} of {1}"
 msgstr ""
@@ -4199,1423 +4359,1665 @@ msgstr ""
 msgid "{0}, out at {1}"
 msgstr ""
 
+#: src117/port/front/port_front_settings.cpp:1001
+msgid "Group 8"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1003
+msgid "Group 9"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1005
+msgid "Group 0"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1007
+msgid "Group 11"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1009
+msgid "Group 12"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1011
+msgid "Group 13"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1013
+msgid "Group 14"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1015
+msgid "Group 15"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1017
+msgid "Group 16"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1019
+msgid "Group 17"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1021
+msgid "Group 18"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1023
+msgid "Group 19"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1025
+msgid "Camera locations"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1026
+msgid "As StarCraft II's: eight saved views, and eight keys in all. F1 to F8 jump to them, and Ctrl with the same key saves, as SC2's Ctrl does; a save says so on the map's message. Each game starts the eight on the start view, and 1.17's Ctrl+F1 help moved to Ctrl+F10."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1027
+msgid "Camera location 1"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1029
+msgid "Camera location 2"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1031
+msgid "Camera location 3"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1033
+msgid "Camera location 4"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1035
+msgid "Camera location 5"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1037
+msgid "Camera location 6"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1039
+msgid "Camera location 7"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1041
+msgid "Camera location 8"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1043
+msgid "Selection"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1044
+msgid "The keys that work on the selection and the minimap."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1045
+msgid "Next subgroup"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1046
+msgid "In a game by Hyperion’s rules, the next kind of unit in the selection: the console shows its card and the page that holds it, as StarCraft II’s Tab. With Shift, the kind before. Click the key and press another, with Ctrl, Shift or Alt if you like."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1047
+msgid "Minimap terrain"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1048
+msgid "The minimap’s terrain on or off, as its button does; with Shift, the units’ colours, as the original’s Shift+Tab. In a game by classic rules Tab still does it, as in the original; in a game by Hyperion’s rules Tab is the subgroup’s."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1049
+msgid "Idle worker"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1050
+msgid "Selects your next idle worker and takes the view to it, as the HUD’s idle worker button does, and as the small idle worker icon above the bottom console does when clicked. The ` key, as StarCraft II’s players set it."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1051
+msgid "Select army"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1052
+msgid "In a game by Hyperion’s rules, selects your army, every unit that fights, up to 255, as the HUD’s army button does. A game by classic rules keeps the original’s selections and has no army key."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1053
+msgid "View and camera"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1054
+msgid "The art, the view's shape, the zoom and the follow and TV keys."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1055
+msgid "Toggle art"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1056
+msgid "Classic or HD art in a game, F5 as in Remastered before the camera locations took F1 to F8. Click the key and press another: any key, with Ctrl, Shift or Alt if you like."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1057
+msgid "Toggle view shape"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1058
+msgid "640 × 480 or the wide view in a game. Set as the art’s key is."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1059
+msgid "Zoom out"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1060
+msgid "The camera zoomed out; held, it keeps zooming."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1061
+msgid "Zoom in"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1062
+msgid "The camera zoomed in; held, it keeps zooming."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1063
+msgid "Zoom reset"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1064
+msgid "The zoom back to 1, the game’s view."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1065
+msgid "Zoom fit"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1066
+msgid "The whole map in view, as far as the zoom allows."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1067
+msgid "Follow selected unit"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1068
+msgid "The camera follows the selected unit."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1070
+msgid "A replay’s TV camera, in a replay."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1071
+msgid "Debug and tools"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1073
+msgid "Debug Tools' overlay"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1074
+msgid "Debug Tools’s overlay in a game while its live channel is open: the game in a window with its readings round it, full screen, a counter, then off. With no key, the Overlay button at the top of the game opens it."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1076
+msgid "The command card's and the screen's keys."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1077
+msgid "Research panel"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1078
+msgid "With the Newbie mode mutator on, opens a left-hand list of every technology and upgrade your completed buildings can start now, with those under way and their progress. Click an available row to start it at a free building; click one under way to select its building."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1079
+msgid "Global production queue"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1080
+msgid "In any game, lists every unit you are training or morphing (including waiting queue slots), every technology and upgrade under way, and every building under construction. Click a row to select and centre its source. Ctrl+Q remains the larva-selection key, so this panel uses another default."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1081
+msgid "Classic|Grid"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1082
+msgid "Grid puts the command card on the left hand’s 3 × 3 keys, as StarCraft II can. Remastered has no presets."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1083
+msgid "Spellcasters’ energy bars"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1084
+msgid "The selected spellcaster’s original energy row shows beneath its health bar, on by default. Off hides that row; no extra overlay bar is drawn."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1085
+msgid "Screenshot"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1087
+msgid "Allies blue, enemies red"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1088
+msgid "In a game you play, you are drawn in blue, your allies in teal and the other players in red, units, buildings and minimap alike, as StarCraft II’s team colours and Warcraft III’s ally colours do. The original’s minimap button does it for the minimap alone. Only what is drawn changes: replays and saved games keep every player’s own colour. Remastered has the string and no control."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1089
+msgid "Colour-blind player colours"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1089
+msgid "Off|Red-green|Blue-yellow"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1090
+msgid "Each player in turn takes a colour from a palette that stays apart for that kind of colour blindness: Okabe and Ito’s for red-green, colours apart along red and cyan and in lightness for blue-yellow. With Allies blue, enemies red, you, your allies and your enemies take three of them. Only what is drawn changes. Remastered has the string and no control."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1091
+msgid "Text size"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1091
+msgid "Classic|Larger|Largest"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1091
+msgid "fonts larger than those the original draws at 640 by 480"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1093
+msgid "Middle-mouse drag scroll"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1094
+msgid "Hold the middle button and move the mouse: the map moves with the cursor, at the speed set here, from a tenth of the cursor’s movement to one and a half times it; a little past the middle, the map stays under the cursor. Remastered has the string and no control."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1095
+msgid "Player data folder"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1096
+msgid "Profiles, replays and saved games, kept apart from the original game’s. For now it is set with --data on the command line."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1097
+msgid "Game files"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1097
+msgid "StarCraft from Battle.net|Classic (1.16.1 and prior)"
+msgstr ""
+
 #: src117/port/front/port_front_settings.cpp:1098
-msgid "a multiplayer game, in whose menu it changes"
+msgid "Where the game’s files come from: StarCraft from Battle.net, which is free, or your classic, pre-Remastered files from 1.16.1 and earlier, the folder with StarDat.mpq and BrooDat.mpq. Either way the game is drawn in its classic art. Hyperion asks when it starts and finds neither."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1099
+msgid "Classic StarCraft folder"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1100
-msgid "StarCraft from Battle.net, which the Hyperion tab can point to"
+msgid "Browse to the classic StarCraft folder, the one with StarDat.mpq and BrooDat.mpq; Game files then reads from it. Without one, Hyperion.exe’s own folder."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1101
+msgid "StarCraft from Battle.net"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1102
+msgid "Found from Battle.net’s uninstall entry, or Browse to it (a folder inside it will do). It gives the game’s files when Game files says so, and Remastered’s subtitles and chat filter either way. Another install than the one in use takes a restart."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1103
+msgid "Mods folder"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1104
+msgid "Where the mods are, each in a folder with its mod.json. A new folder takes a restart, as the chosen mod’s data is read when Hyperion starts."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1105
+msgid "Check a mod’s fingerprint"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1106
+msgid "A mod that changes the rules is named by a hash of its data, so a replay or a saved game made with another version of it is refused. Off, it plays all the same, for a mod’s author trying a change; it may go its own way where the data differs."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1107
+msgid "Hyperion’s menus"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1108
+msgid "Off: the original menus. Hyperion’s menus need the GPU renderer, which is the default."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1109
+msgid "Show in Discord"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1110
+msgid "With the Discord app running on this computer, your friends see Playing Hyperion and what you are doing: the mode, the map and the players, or the mod you have loaded. Off, Discord is told nothing."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1111
+msgid "Settings file"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1112
+msgid "Hyperion’s settings and the original game’s, in the player data folder, out of its registry key."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1113
+msgid "Processor threads"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1113
+msgid "Auto|Off|2|4|8|16"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1114
+msgid "The threads Hyperion spreads work over beside the game’s: the checks that a replay or a network match plays the same game, and in a large game some of what each frame looks up. Auto uses half your processor’s threads, up to 16; Off keeps it all on one. The game’s own steps always run one after another in the same order, so it plays the same either way."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1115
+msgid "Rest between frames"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1116
+msgid "Between frames Hyperion waits for what is due next, so a game at its own speed uses a small part of one processor core. Off, it goes round without a pause, as the original did, keeping a core busy. Frames come as evenly either way."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1117
+msgid "Game’s cores"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1117
+msgid "Auto|Large cache|Any"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1118
+msgid "On a processor whose cores do not all share one cache, such as a Ryzen X3D with its two halves, which cores the game runs on. Large cache plays large games faster, a 64-player game by a tenth; Any lets Windows choose, which favours the fastest clocks and suits small games a little better. Auto takes the large cache once a game has 2,000 units. Where every core shares one cache it makes no difference."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1149
+msgid "Research automatically"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1150
+msgid "One toggle per upgrade: with the Newbie mode mutator on, it is researched by itself when a building that can do it is free, level after level until it is done. The mutator and its worker-training and mining helpers are in the mutators' Play group."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1156
+msgid "Research this upgrade by itself, level after level until it is done."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1285
+msgid "a multiplayer game, in whose menu it changes"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1287
+msgid "StarCraft from Battle.net, which the Hyperion tab can point to"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1289
 msgid "StarCraft: Remastered’s paid content, which this version of Hyperion does not use"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1409
+#: src117/port/front/port_front_settings.cpp:1599
 msgid "Primary"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1673
-#: src117/port/gameplay/port_mutators.cpp:49
-#: src117/port/gameplay/port_mutators.cpp:363
-#: src117/port/gameplay/port_mutators.cpp:446
+#: src117/port/front/port_front_settings.cpp:1868
+#: src117/port/front/port_front_settings.cpp:1879
+msgid "Press a key"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1876
+#: src117/port/gameplay/port_mutators.cpp:52
+#: src117/port/gameplay/port_mutators.cpp:421
+#: src117/port/gameplay/port_mutators.cpp:525
 #: src117/port/tools/port_benchview.cpp:2237
 msgid "None"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1676
-msgid "Press a key"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:1712
+#: src117/port/front/port_front_settings.cpp:1915
 msgid "Browse"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1759
+#: src117/port/front/port_front_settings.cpp:1955
+#: src117/port/front/port_front_skirmish.cpp:2093
+#: src117/port/front/port_front_skirmish.cpp:3112
+msgid "Open"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1977
 msgid "In the original’s option dialogs."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1760
+#: src117/port/front/port_front_settings.cpp:1978
 msgid "Added by Remastered."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1761
+#: src117/port/front/port_front_settings.cpp:1979
 msgid "New in Hyperion."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1775
+#: src117/port/front/port_front_settings.cpp:1993
 #: src117/port/lan/port_front_landevices.cpp:321
 msgid "Not available yet."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1777
+#: src117/port/front/port_front_settings.cpp:1995
 msgid "Needs {0}."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1779
+#: src117/port/front/port_front_settings.cpp:1997
 msgid "Not during a game: change it in the main menu’s Settings."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1782
+#: src117/port/front/port_front_settings.cpp:2000
 msgid "Applies when you accept it."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1784
+#: src117/port/front/port_front_settings.cpp:2002
 msgid "Applies from the next game."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1786
+#: src117/port/front/port_front_settings.cpp:2004
 msgid "Applies after a restart."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1813
+#: src117/port/front/port_front_settings.cpp:2031
 msgid "Restore the {0} settings?"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1814
+#: src117/port/front/port_front_settings.cpp:2032
 msgid "Continue"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1815
+#: src117/port/front/port_front_settings.cpp:2033
 msgid "Every setting on this tab goes back to its default. The other tabs keep theirs."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1824
+#: src117/port/front/port_front_settings.cpp:2042
 msgid "Hyperion goes back to the display it had in {0} second."
 msgid_plural "Hyperion goes back to the display it had in {0} seconds."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src117/port/front/port_front_settings.cpp:1827
+#: src117/port/front/port_front_settings.cpp:2045
 #: src117/port/gameplay/port_trainerview.cpp:850
 msgid "Keep"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1827
+#: src117/port/front/port_front_settings.cpp:2045
 msgid "Revert"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1828
+#: src117/port/front/port_front_settings.cpp:2046
 msgid "Keep this display?"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1837
+#: src117/port/front/port_front_settings.cpp:2055
 msgid "Allow"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1837
+#: src117/port/front/port_front_settings.cpp:2055
 msgid "Don't allow"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1838
+#: src117/port/front/port_front_settings.cpp:2056
 msgid "Open the live channel?"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1844
+#: src117/port/front/port_front_settings.cpp:2062
 msgid "The setting “{0}” changes when Hyperion next starts."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1847
+#: src117/port/front/port_front_settings.cpp:2065
 msgid "Restart now"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1847
+#: src117/port/front/port_front_settings.cpp:2065
 msgid "Later"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1850
-#: src117/port/front/port_front_settings.cpp:1854
+#: src117/port/front/port_front_settings.cpp:2068
+#: src117/port/front/port_front_settings.cpp:2072
 msgid "Restart Hyperion"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1938
+#: src117/port/front/port_front_settings.cpp:2189
 msgid "Restore Defaults"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:2008
+#: src117/port/front/port_front_settings.cpp:2272
 msgid "Changes apply when you accept them."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:2042
-msgid "The original uses that key. F5 to F9, F11, F12 and Tab are free."
+#: src117/port/front/port_front_settings.cpp:2309
+msgid "A control group’s key is a letter or a digit."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:2054
+#: src117/port/front/port_front_settings.cpp:2321
+#: src117/port/front/port_front_settings.cpp:2343
 msgid "{0} is {1}’s key."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:2107
+#: src117/port/front/port_front_settings.cpp:2331
+msgid "That key is the system’s. A letter, a digit, F1 to F12 and Tab are free."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:2396
 msgid "No classic StarCraft files there: its folder holds StarDat.mpq and BrooDat.mpq."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:2116
+#: src117/port/front/port_front_settings.cpp:2405
 msgid "No StarCraft: Remastered install there: its folder holds .build.info."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:583
+#: src117/port/front/port_front_settings.cpp:618
 msgid "The install’s ({0})"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:827
+#: src117/port/front/port_front_settings.cpp:893
 msgid "Slowest|Slower|Slow|Normal|Fast|Faster|Fastest"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:828
+#: src117/port/front/port_front_settings.cpp:894
 msgid "Single player; the lobby sets it in multiplayer."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:829
+#: src117/port/front/port_front_settings.cpp:895
 msgid "Game frame timing"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:829
+#: src117/port/front/port_front_settings.cpp:895
 msgid "Classic|Even"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:830
+#: src117/port/front/port_front_settings.cpp:896
 msgid "When each game frame runs. Classic, on the system timer, which steps every 15.6 ms, so at Fastest frames come 31 or 47 ms apart and units move unevenly; Even, on the precise clock, 42 ms apart. What a frame does is the same either way."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:831
+#: src117/port/front/port_front_settings.cpp:897
 msgid "Mouse scroll speed"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:831
-#: src117/port/front/port_front_settings.cpp:833
-#: src117/port/front/port_front_settings.cpp:835
-#: src117/port/front/port_front_settings.cpp:945
+#: src117/port/front/port_front_settings.cpp:897
+#: src117/port/front/port_front_settings.cpp:899
+#: src117/port/front/port_front_settings.cpp:901
+#: src117/port/front/port_front_settings.cpp:1093
 msgid "Slow|Fast"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:833
+#: src117/port/front/port_front_settings.cpp:899
 msgid "Keyboard scroll speed"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:835
+#: src117/port/front/port_front_settings.cpp:901
 msgid "Mouse sensitivity"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:836
+#: src117/port/front/port_front_settings.cpp:902
 msgid "On, the cursor in a game moves by the mouse’s movement times a scale, from half Windows’ speed to twice it, the same at the middle. It needs the cursor held in the window (Confine the mouse to the window), and stops while Ctrl+Alt has let it go. Off, Windows’ own speed, as the original has it."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:837
+#: src117/port/front/port_front_settings.cpp:903
 msgid "Confine the mouse to the window"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:838
+#: src117/port/front/port_front_settings.cpp:904
 msgid "In a game, the cursor stays in the window, as the original kept it; edge scrolling in a window needs it. Off, it leaves the window freely. Dragging on the minimap holds it there either way. Ctrl+Alt lets it go until you click the game, as in VMware."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:839
+#: src117/port/front/port_front_settings.cpp:905
 msgid "Smooth minimap drag"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:840
+#: src117/port/front/port_front_settings.cpp:906
 msgid "Dragging on the minimap moves the view a tile at a time, as the original does. On, the camera follows the drag smoothly between the tiles. A press on the minimap goes there at once either way."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:841
+#: src117/port/front/port_front_settings.cpp:907
 msgid "Hardware cursor"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:842
+#: src117/port/front/port_front_settings.cpp:908
 msgid "On, the system draws the game’s cursor over the window, so it moves with the mouse between the game’s frames; the art is the original’s, scaled as the game is. Off, the game draws it into each frame, as the original does. A browser’s player on a streamed seat always has it drawn into the frame."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:843
+#: src117/port/front/port_front_settings.cpp:909
 msgid "Save a replay of every game"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:844
+#: src117/port/front/port_front_settings.cpp:910
 msgid "The original writes every game’s replay as LastReplay, which the next game writes over. On, a copy of each is kept in the replays folder’s AutoSave folder, named by the date and the map."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:845
+#: src117/port/front/port_front_settings.cpp:911
 msgid "Run in the background"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:846
+#: src117/port/front/port_front_settings.cpp:912
 msgid "Off, as the original: a single-player game and a replay pause while another window has the focus, and go on when you come back. On, they go on behind it. A multiplayer game always goes on. Sound in the background (Sound) decides whether you hear it."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:847
+#: src117/port/front/port_front_settings.cpp:913
 msgid "Network latency"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:847
+#: src117/port/front/port_front_settings.cpp:913
 msgid "Low|High|Extra high"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:848
+#: src117/port/front/port_front_settings.cpp:914
 msgid "How far ahead the players’ commands are sent in a multiplayer game. Low carries them out soonest; High and Extra high wait a little longer for each, so a slow or distant connection holds the game up less. Changed in a multiplayer game’s menu, as the original’s Network dialog changed it, it changes for every player."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:849
+#: src117/port/front/port_front_settings.cpp:915
 msgid "Display"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:849
+#: src117/port/front/port_front_settings.cpp:915
 msgid "Window|Full screen|Borderless full screen"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:850
+#: src117/port/front/port_front_settings.cpp:916
 msgid "Accept shows the new display at once and asks to keep it; Escape, Revert or 15 seconds go back. Only a kept display is saved. Alt+Enter switches between the saved window and the saved full screen."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:851
+#: src117/port/front/port_front_settings.cpp:917
 msgid "Monitor and resolution"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:852
+#: src117/port/front/port_front_settings.cpp:918
 msgid "What the chosen Display offers. Borderless: each monitor at its desktop size. Full screen: every display mode of each monitor. Window: the sizes that fit on the monitor with the window frame. Changing Display picks the closest on the same monitor."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:854
+#: src117/port/front/port_front_settings.cpp:920
 msgid "Vulkan (Recommended)|Direct3D 12"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:855
+#: src117/port/front/port_front_settings.cpp:921
 msgid "The graphics card’s interface Hyperion draws through. Vulkan shows each frame soonest; Direct3D 12 is there for a card or driver that Vulkan does not run well on. If the one chosen does not start, Hyperion draws through one that does."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:857
+#: src117/port/front/port_front_settings.cpp:923
 msgid "Art"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:857
+#: src117/port/front/port_front_settings.cpp:923
 msgid "Classic|Remastered HD"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:858
+#: src117/port/front/port_front_settings.cpp:924
 msgid "Remastered’s High Definition box. The art hotkey (F5, as in Remastered) switches it in a game, blending over half a second, and the setting keeps it. Needs the StarCraft: Remastered install (the Hyperion tab) and the GPU renderer."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:859
+#: src117/port/front/port_front_settings.cpp:925
 msgid "View shape"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:859
+#: src117/port/front/port_front_settings.cpp:925
 msgid "4:3, as the original|Widescreen, 16:9|Fit the screen"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:860
+#: src117/port/front/port_front_settings.cpp:926
 msgid "Remastered’s letterbox box: the shape a game starts at, the screen’s own unless another is chosen. The view hotkey (Ctrl+F5) switches between 4:3 and the wide shape in a game, and the setting keeps it. --view on the command line goes before it. Whether a lobby can hold everyone to a shape is decided with multiplayer."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:861
+#: src117/port/front/port_front_settings.cpp:927
 msgid "Classic art filtering"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:861
+#: src117/port/front/port_front_settings.cpp:927
 msgid "Sharp|Soft|Softer|Filtered"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:862
+#: src117/port/front/port_front_settings.cpp:928
 msgid "How the 640 × 480 art is scaled up to the screen. Sharp keeps every pixel square and smooths only its edges, as Hyperion has drawn it until now; Soft and Softer blend more of each pixel into the next; Filtered blends them all. The HD art is always drawn sharp. SDL’s renderer has Sharp and Filtered alone."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:863
-#: src117/port/front/port_front_settings.cpp:913
+#: src117/port/front/port_front_settings.cpp:929
+#: src117/port/front/port_front_settings.cpp:979
 #: src117/port/lan/port_front_lanhost.cpp:1270
 msgid "Frame rate"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:863
+#: src117/port/front/port_front_settings.cpp:929
 msgid "Classic|60|Match the display|144|240|No limit"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:864
+#: src117/port/front/port_front_settings.cpp:930
 msgid "How often a frame is drawn. Classic, only when the game has something new, about 80 a second, so a scroll steps. Past it, scrolls and the camera glide at the rate chosen. With Vertical sync on, no more are drawn than the display shows, since the rest would only wait in line for it."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:865
+#: src117/port/front/port_front_settings.cpp:931
 msgid "Vertical sync"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:866
+#: src117/port/front/port_front_settings.cpp:932
 msgid "Each frame waits for the display’s refresh, so it never tears. Off, frames show the moment they are drawn."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:867
+#: src117/port/front/port_front_settings.cpp:933
 msgid "Frames ahead"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:867
+#: src117/port/front/port_front_settings.cpp:933
 msgid "1|2|3"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:868
+#: src117/port/front/port_front_settings.cpp:934
 msgid "How many frames the game may prepare before the graphics card has drawn them. 1 shows each frame soonest after it is made; 3 keeps the card busiest when it is the slower part, a little later to the screen; 2 is between them."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:869
+#: src117/port/front/port_front_settings.cpp:935
 msgid "Menu background quality"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:869
+#: src117/port/front/port_front_settings.cpp:935
 msgid "Auto|High|Low"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:870
+#: src117/port/front/port_front_settings.cpp:936
 msgid "The planet behind the menus, the most a menu frame asks of the graphics card. Auto draws it at a lower resolution when the card cannot keep up with the display; High always at full; Low always at a lower one. It is soft, so a lower resolution hardly shows."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:871
+#: src117/port/front/port_front_settings.cpp:937
 msgid "Gamma"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:871
+#: src117/port/front/port_front_settings.cpp:937
 msgid "Dark|Bright"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:872
+#: src117/port/front/port_front_settings.cpp:938
 msgid "The original’s Gamma Correction."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:873
+#: src117/port/front/port_front_settings.cpp:939
 msgid "Colour cycling"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:874
+#: src117/port/front/port_front_settings.cpp:940
 msgid "Water and lava animation."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:875
+#: src117/port/front/port_front_settings.cpp:941
 msgid "Smooth unit turning"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:875
+#: src117/port/front/port_front_settings.cpp:941
 msgid "Remastered’s in-between facings in the HD art"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:876
+#: src117/port/front/port_front_settings.cpp:942
 msgid "HD only: Remastered’s in-between facings."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:877
+#: src117/port/front/port_front_settings.cpp:943
 msgid "HD lighting"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:878
+#: src117/port/front/port_front_settings.cpp:944
 msgid "Remastered’s real-time lighting on the HD art: each unit and building shaded by its own normal, specular and occlusion maps, lit from above and by the explosions, fire and muzzle flashes around it, with its lights glowing. Remastered’s box also sways foliage and stacks shadows, which Hyperion does not do yet."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:879
+#: src117/port/front/port_front_settings.cpp:945
 msgid "Player colours"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:879
+#: src117/port/front/port_front_settings.cpp:945
 msgid "Classic|Exact"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:880
+#: src117/port/front/port_front_settings.cpp:946
 msgid "A Remastered map can give each player an exact colour. Exact draws the map’s own, with the map in full colour: shadows, the fog and translucent effects blended as colours. Classic draws every pixel as the original does, a map’s colour as the closest of the original’s. Exact needs the GPU renderer."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:881
+#: src117/port/front/port_front_settings.cpp:947
 msgid "Music"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:881
-#: src117/port/front/port_front_settings.cpp:883
-#: src117/port/front/port_front_settings.cpp:899
+#: src117/port/front/port_front_settings.cpp:947
+#: src117/port/front/port_front_settings.cpp:949
+#: src117/port/front/port_front_settings.cpp:965
 msgid "Min|Max"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:884
+#: src117/port/front/port_front_settings.cpp:950
 msgid "The original calls it Digital Volume. Both volumes start where the original’s do: music at 25, sound at 50."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:885
+#: src117/port/front/port_front_settings.cpp:951
 msgid "Unit speech"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:887
+#: src117/port/front/port_front_settings.cpp:953
 msgid "Unit acknowledgements"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:889
+#: src117/port/front/port_front_settings.cpp:955
 msgid "Building sounds"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:891
+#: src117/port/front/port_front_settings.cpp:957
 msgid "Subtitles"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:893
+#: src117/port/front/port_front_settings.cpp:959
 msgid "Cinematic subtitles"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:894
+#: src117/port/front/port_front_settings.cpp:960
 msgid "Remastered’s subtitles over the cinematics that speak, in English, read from the StarCraft: Remastered install. Off, the cinematics as the original shows them, without words."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:895
+#: src117/port/front/port_front_settings.cpp:961
 msgid "Sound in the background"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:896
+#: src117/port/front/port_front_settings.cpp:962
 msgid "Off, as the original: the game’s sounds stop while another window is in front. On, they go on playing behind it."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:897
+#: src117/port/front/port_front_settings.cpp:963
 msgid "Unit voices"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:897
+#: src117/port/front/port_front_settings.cpp:963
 msgid "Classic|Remastered"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:898
+#: src117/port/front/port_front_settings.cpp:964
 msgid "Remastered, the voices and the other sounds of a game as Remastered recorded them again, at twice the original’s sample rate, read from the StarCraft: Remastered install; a sound it does not have plays as the original’s. Classic, the original’s. Remastered’s original voice-over box, the other way round."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:899
+#: src117/port/front/port_front_settings.cpp:965
 msgid "Master volume"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:900
+#: src117/port/front/port_front_settings.cpp:966
 msgid "One volume over everything Hyperion plays, on top of Music and Sound: the game’s sounds, the music and the cinematics. At Max they are as loud as the original makes them."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:901
+#: src117/port/front/port_front_settings.cpp:967
 msgid "Colour theme"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:902
+#: src117/port/front/port_front_settings.cpp:968
 msgid "The menus’ colours: an accent, a second accent and the panels. Blue and gold is the design’s own. Custom takes three colours you pick, and with its lightness yours, any text that would grow hard to read is lightened until it reads. The planet, the player colours and the map pictures are never themed."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:903
+#: src117/port/front/port_front_settings.cpp:969
 msgid "Unit portraits"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:903
+#: src117/port/front/port_front_settings.cpp:969
 msgid "Animated|Still|Off"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:905
+#: src117/port/front/port_front_settings.cpp:971
 msgid "Console layout"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:905
+#: src117/port/front/port_front_settings.cpp:971
 msgid "One block|To the edges"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:906
+#: src117/port/front/port_front_settings.cpp:972
 msgid "With the HD art in a view wider than 4:3: To the edges puts the console’s three parts, the minimap, the selection and the command card, toward the screen’s corners, as Remastered draws its HD console; One block keeps it in one piece in the middle, as the original draws it. A mod’s own console may keep it in one block."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:907
+#: src117/port/front/port_front_settings.cpp:973
 msgid "Console skin"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:907
+#: src117/port/front/port_front_settings.cpp:973
 msgid "By race|Terran|Protoss|Zerg"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:908
+#: src117/port/front/port_front_settings.cpp:974
 msgid "The console in a game you play: the race played’s, as the original, or one race’s whatever you play, with its command buttons, chat box and panels. The advisor’s voice and the supply icon stay your race’s, and a replay keeps its own console."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:909
+#: src117/port/front/port_front_settings.cpp:975
 msgid "Game timer"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:910
+#: src117/port/front/port_front_settings.cpp:976
 msgid "The game’s time at the top left, as Remastered shows it: at Fastest, 42 ms a frame, which is real time when the game is played at Fastest. The original’s replay panel counts slower, in Normal’s seconds."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:912
+#: src117/port/front/port_front_settings.cpp:978
 msgid "Your actions over the last game minute, under the timer: every command you give, but not chat, pausing or saving. Not in replays. Remastered can also alert at a chosen rate, which Hyperion does not yet."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:914
+#: src117/port/front/port_front_settings.cpp:980
 msgid "The frames shown each second, under the timer. The original’s loop draws about 80. Remastered has it in its exe with no control."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:915
+#: src117/port/front/port_front_settings.cpp:981
 msgid "Mature language filter"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:916
+#: src117/port/front/port_front_settings.cpp:982
 msgid "Players’ chat, in a game, a replay and the lobbies, shown with the words on Remastered’s English list starred out, the list read from the StarCraft: Remastered install. A replay keeps what was sent."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:917
+#: src117/port/front/port_front_settings.cpp:983
 msgid "Language"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:918
+#: src117/port/front/port_front_settings.cpp:984
 msgid "Hyperion’s menus and the game’s text, as in Remastered. The install’s is the language StarCraft: Remastered was installed in. The game’s text in another language needs that language’s text in the install, which Battle.net installs for its chosen language alone, else the game stays in English. Hyperion’s own text is a first translation, which players are welcome to correct."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:919
-msgid "Hotkey editor"
+#: src117/port/front/port_front_settings.cpp:986
+msgid "The keys that select a group and, with Ctrl, make the selection a group (Shift adds to it, Alt selects and centres): the ten digits, then nine more, the groups 11 to 19, on R, F, V, T, G, B, Y, H and N, which hold units and buildings alike, and which win their letters outright: R no longer repairs, T no longer stims, and G, B and H are the groups' alone, the card keeping every other key. Click a key and press another to change it."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:919
-#: src117/port/front/port_front_settings.cpp:1737
-#: src117/port/front/port_front_skirmish.cpp:2092
-#: src117/port/front/port_front_skirmish.cpp:3085
-msgid "Open"
+#: src117/port/front/port_front_settings.cpp:987
+msgid "Group 1"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:919
-msgid "hotkeys you can change"
+#: src117/port/front/port_front_settings.cpp:989
+msgid "Group 2"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:920
-msgid "Per race and unit, on the unit’s own command card (one card a mode: siege, burrowed, lifted); the default key shown; conflicts flagged on the race’s tab."
+#: src117/port/front/port_front_settings.cpp:991
+msgid "Group 3"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:921
-msgid "Classic|Grid"
+#: src117/port/front/port_front_settings.cpp:993
+msgid "Group 4"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:922
-msgid "Grid puts the command card on the left hand’s 3 × 3 keys, as StarCraft II can. Remastered has no presets."
+#: src117/port/front/port_front_settings.cpp:995
+msgid "Group 5"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:923
-msgid "Toggle art"
+#: src117/port/front/port_front_settings.cpp:997
+msgid "Group 6"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:924
-msgid "Classic or HD art in a game, F5 as in Remastered. Click the key and press another: F5 to F9, F11 or F12, with Ctrl, Shift or Alt if you like (the original keeps F1 to F4 and F10). Escape leaves it as it was."
+#: src117/port/front/port_front_settings.cpp:999
+msgid "Group 7"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:925
-msgid "Toggle view shape"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:926
-msgid "640 × 480 or the wide view in a game. Set as the art’s key is."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:927
-msgid "Debug Tools’ overlay"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:928
-msgid "Debug Tools’ overlay in a game while its live channel is open: the game in a window with its readings round it, full screen, a counter, then off. Set as the art’s key is; with no key, the Overlay button at the top of the game opens it."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:929
-msgid "Next subgroup"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:930
-msgid "In a game by Hyperion’s rules, the next kind of unit in the selection: the console shows its card and the page that holds it, as StarCraft II’s Tab. With Shift, the kind before. Click the key and press another: Tab, F5 to F9, F11 or F12, with Ctrl, Shift or Alt if you like."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:931
-msgid "Minimap terrain"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:932
-msgid "The minimap’s terrain on or off, as its button does; with Shift, the units’ colours, as the original’s Shift+Tab. In a game by classic rules Tab still does it, as in the original; in a game by Hyperion’s rules Tab is the subgroup’s."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:933
-msgid "Idle worker"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:934
-msgid "Selects your next idle worker and takes the view to it, as the HUD’s idle worker button does."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:935
-msgid "Select army"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:936
-msgid "In a game by Hyperion’s rules, selects your army, every unit that fights, up to 255, as the HUD’s army button does. A game by classic rules keeps the original’s selections and has no army key."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:937
-msgid "Screenshot"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:939
-msgid "Allies blue, enemies red"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:940
-msgid "In a game you play, you are drawn in blue, your allies in teal and the other players in red, units, buildings and minimap alike, as StarCraft II’s team colours and Warcraft III’s ally colours do. The original’s minimap button does it for the minimap alone. Only what is drawn changes: replays and saved games keep every player’s own colour. Remastered has the string and no control."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:941
-msgid "Colour-blind player colours"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:941
-msgid "Off|Red-green|Blue-yellow"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:942
-msgid "Each player in turn takes a colour from a palette that stays apart for that kind of colour blindness: Okabe and Ito’s for red-green, colours apart along red and cyan and in lightness for blue-yellow. With Allies blue, enemies red, you, your allies and your enemies take three of them. Only what is drawn changes. Remastered has the string and no control."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:943
-msgid "Text size"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:943
-msgid "Classic|Larger|Largest"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:943
-msgid "fonts larger than those the original draws at 640 by 480"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:945
-msgid "Middle-mouse drag scroll"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:946
-msgid "Hold the middle button and move the mouse: the map moves with the cursor, at the speed set here, from a tenth of the cursor’s movement to one and a half times it; a little past the middle, the map stays under the cursor. Remastered has the string and no control."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:947
-msgid "Player data folder"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:948
-msgid "Profiles, replays and saved games, kept apart from the original game’s. For now it is set with --data on the command line."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:949
-msgid "Game files"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:949
-msgid "StarCraft from Battle.net|Classic (1.16.1 and prior)"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:950
-msgid "Where the game’s files come from: StarCraft from Battle.net, which is free, or your classic, pre-Remastered files from 1.16.1 and earlier, the folder with StarDat.mpq and BrooDat.mpq. Either way the game is drawn in its classic art. Hyperion asks when it starts and finds neither."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:951
-msgid "Classic StarCraft folder"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:952
-msgid "Browse to the classic StarCraft folder, the one with StarDat.mpq and BrooDat.mpq; Game files then reads from it. Without one, Hyperion.exe’s own folder."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:953
-msgid "StarCraft from Battle.net"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:954
-msgid "Found from Battle.net’s uninstall entry, or Browse to it (a folder inside it will do). It gives the game’s files when Game files says so, and Remastered’s subtitles and chat filter either way. Another install than the one in use takes a restart."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:955
-msgid "Mods folder"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:956
-msgid "Where the mods are, each in a folder with its mod.json. A new folder takes a restart, as the chosen mod’s data is read when Hyperion starts."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:957
-msgid "Check a mod’s fingerprint"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:958
-msgid "A mod that changes the rules is named by a hash of its data, so a replay or a saved game made with another version of it is refused. Off, it plays all the same, for a mod’s author trying a change; it may go its own way where the data differs."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:959
-msgid "Hyperion’s menus"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:960
-msgid "Off: the original menus. Hyperion’s menus need the GPU renderer, which is the default."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:961
-msgid "Show in Discord"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:962
-msgid "With the Discord app running on this computer, your friends see Playing Hyperion and what you are doing: the mode, the map and the players, or the mod you have loaded. Off, Discord is told nothing."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:963
-msgid "Settings file"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:964
-msgid "Hyperion’s settings and the original game’s, in the player data folder, out of its registry key."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:965
-msgid "Processor threads"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:965
-msgid "Auto|Off|2|4|8|16"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:966
-msgid "The threads Hyperion spreads work over beside the game’s: the checks that a replay or a network match plays the same game, and in a large game some of what each frame looks up. Auto uses half your processor’s threads, up to 16; Off keeps it all on one. The game’s own steps always run one after another in the same order, so it plays the same either way."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:967
-msgid "Rest between frames"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:968
-msgid "Between frames Hyperion waits for what is due next, so a game at its own speed uses a small part of one processor core. Off, it goes round without a pause, as the original did, keeping a core busy. Frames come as evenly either way."
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:969
-msgid "Game’s cores"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:969
-msgid "Auto|Large cache|Any"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:970
-msgid "On a processor whose cores do not all share one cache, such as a Ryzen X3D with its two halves, which cores the game runs on. Large cache plays large games faster, a 64-player game by a tenth; Any lets Windows choose, which favours the fastest clocks and suits small games a little better. Auto takes the large cache once a game has 2,000 units. Where every core shares one cache it makes no difference."
-msgstr ""
-
-#: src117/port/front/port_front_skirmish.cpp:1239
+#: src117/port/front/port_front_skirmish.cpp:1240
 msgid "SIZE"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1239
+#: src117/port/front/port_front_skirmish.cpp:1240
 msgid "TILESET"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1239
+#: src117/port/front/port_front_skirmish.cpp:1240
 msgid "RULES"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1317
+#: src117/port/front/port_front_skirmish.cpp:1318
 msgid "Up One Level"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1324
+#: src117/port/front/port_front_skirmish.cpp:1325
 msgid "To {0} · Backspace"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1326
+#: src117/port/front/port_front_skirmish.cpp:1327
 msgid "Folder"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1335
+#: src117/port/front/port_front_skirmish.cpp:1336
 msgid "{0} map"
 msgid_plural "{0} maps"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src117/port/front/port_front_skirmish.cpp:1335
+#: src117/port/front/port_front_skirmish.cpp:1336
 msgid "No maps"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1347
+#: src117/port/front/port_front_skirmish.cpp:1348
 msgid "Either"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1349
+#: src117/port/front/port_front_skirmish.cpp:1350
 msgid "Too many"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1365
+#: src117/port/front/port_front_skirmish.cpp:1366
 msgid "No maps in this folder."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1366
+#: src117/port/front/port_front_skirmish.cpp:1367
 msgid "No map in this folder has that many players at that size."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1402
-#: src117/port/front/port_front_skirmish.cpp:2888
+#: src117/port/front/port_front_skirmish.cpp:1403
+#: src117/port/front/port_front_skirmish.cpp:2889
 msgid "{0} starts · {1} × {2} tiles · {3}"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1409
+#: src117/port/front/port_front_skirmish.cpp:1410
 msgid "Plays under Hyperion rules: past the original’s 8 players."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1410
+#: src117/port/front/port_front_skirmish.cpp:1411
 msgid "Plays under Hyperion rules: past the original’s 256 tiles."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1413
+#: src117/port/front/port_front_skirmish.cpp:1414
 msgid "Classic or Hyperion rules."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1432
+#: src117/port/front/port_front_skirmish.cpp:1433
 msgid "{0} map, counting its folders"
 msgid_plural "{0} maps, counting its folders"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src117/port/front/port_front_skirmish.cpp:1447
+#: src117/port/front/port_front_skirmish.cpp:1448
 msgid "Double-click or Enter opens it."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1458
+#: src117/port/front/port_front_skirmish.cpp:1459
 msgid "CHOOSE A MAP"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1490
+#: src117/port/front/port_front_skirmish.cpp:1491
 msgid "Maps for Brood War"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1490
+#: src117/port/front/port_front_skirmish.cpp:1491
 msgid "Maps for StarCraft"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1525
-#: src117/port/front/port_front_skirmish.cpp:1602
+#: src117/port/front/port_front_skirmish.cpp:1526
+#: src117/port/front/port_front_skirmish.cpp:1603
 msgid "Open Folder"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1525
+#: src117/port/front/port_front_skirmish.cpp:1526
 msgid "Choose Map"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1538
+#: src117/port/front/port_front_skirmish.cpp:1539
 msgid "The set-up waits: choose {0} again to keep it."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1540
+#: src117/port/front/port_front_skirmish.cpp:1541
 msgid "Slots, races and options come next."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1741
+#: src117/port/front/port_front_skirmish.cpp:1742
 msgid "{0}: player {1}’s colour. Picking it swaps the two."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1743
+#: src117/port/front/port_front_skirmish.cpp:1744
 msgid "{0}: reads as player {1}’s colour {2}. Picking it swaps the two."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1746
+#: src117/port/front/port_front_skirmish.cpp:1747
 msgid "{0}: hard to tell from player {1}’s colour {2}."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1779
+#: src117/port/front/port_front_skirmish.cpp:1780
 msgid "Now its own colour, {0}"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1780
+#: src117/port/front/port_front_skirmish.cpp:1781
 msgid "Now {0}"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1787
+#: src117/port/front/port_front_skirmish.cpp:1788
 msgid "A number: that player’s colour. Picking it swaps the two."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1790
+#: src117/port/front/port_front_skirmish.cpp:1791
 msgid "Orange rim: hard to tell from a player’s colour."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1827
+#: src117/port/front/port_front_skirmish.cpp:1828
 msgid "The units"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1834
+#: src117/port/front/port_front_skirmish.cpp:1835
 msgid "The minimap"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1839
+#: src117/port/front/port_front_skirmish.cpp:1840
 msgid "Nobody else to compare with."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1840
+#: src117/port/front/port_front_skirmish.cpp:1841
 msgid "Clear of every other player, on the minimap and in the units."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1845
+#: src117/port/front/port_front_skirmish.cpp:1846
 msgid "Reads as player {0}’s colour {1}. Choose another, or give player {0} a new colour first."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1848
+#: src117/port/front/port_front_skirmish.cpp:1849
 msgid "Close to player {0}’s colour {1}. Allowed, and marked on both."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1859
+#: src117/port/front/port_front_skirmish.cpp:1860
 msgid "Use This Colour"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1919
+#: src117/port/front/port_front_skirmish.cpp:1920
 msgid "Close colours"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1920
+#: src117/port/front/port_front_skirmish.cpp:1921
 msgid "Hard to tell from player {0}’s colour {1}. Pick another, or press Distinct Colours to separate every player’s."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1946
+#: src117/port/front/port_front_skirmish.cpp:1947
 msgid "Colour for player {0}"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1947
+#: src117/port/front/port_front_skirmish.cpp:1948
 msgid "The game’s colours"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1947
+#: src117/port/front/port_front_skirmish.cpp:1948
 msgid "Any colour"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1971
+#: src117/port/front/port_front_skirmish.cpp:1972
 msgid "Observer 1"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1972
+#: src117/port/front/port_front_skirmish.cpp:1973
 msgid "An observer has no seat: they watch every seat play, the whole map shown."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1991
+#: src117/port/front/port_front_skirmish.cpp:1992
 msgid "Empty"
-msgstr ""
-
-#: src117/port/front/port_front_skirmish.cpp:1994
-#: src117/port/front/port_front_skirmish.cpp:2115
-#: src117/port/front/port_front_skirmish.cpp:2119
-#: src117/port/front/port_front_skirmish.cpp:2198
-#: src117/port/front/port_frontkit.cpp:376
-msgid "Use Map Settings"
 msgstr ""
 
 #: src117/port/front/port_front_skirmish.cpp:1995
 #: src117/port/front/port_front_skirmish.cpp:2116
+#: src117/port/front/port_front_skirmish.cpp:2120
+#: src117/port/front/port_front_skirmish.cpp:2199
+#: src117/port/front/port_frontkit.cpp:384
+msgid "Use Map Settings"
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:1996
+#: src117/port/front/port_front_skirmish.cpp:2117
 msgid "The map seats the players and runs the game, and expects you in your seat. Watching a game of computers is for melee games."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1998
+#: src117/port/front/port_front_skirmish.cpp:1999
 msgid "Observer"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1999
+#: src117/port/front/port_front_skirmish.cpp:2000
 msgid "Watch instead of playing: your seat becomes a computer, and you watch every seat play with the whole map shown, the replay’s controls and speeds up to 16 times Fastest."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2012
+#: src117/port/front/port_front_skirmish.cpp:2013
 msgid "The whole map shown, the replay’s controls, up to 16 times Fastest"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2020
+#: src117/port/front/port_front_skirmish.cpp:2021
 msgid "EMPTY"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2022
+#: src117/port/front/port_front_skirmish.cpp:2023
 msgid "watching is for melee games"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2023
+#: src117/port/front/port_front_skirmish.cpp:2024
 msgid "choose You to watch a game of computers"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2045
+#: src117/port/front/port_front_skirmish.cpp:2046
 msgid "Starts are drawn at random in a melee game, so a slot is not a place on the map. Choose Start positions: By slot to give each player a start."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2078
+#: src117/port/front/port_front_skirmish.cpp:2079
 msgid "You, the host"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2078
+#: src117/port/front/port_front_skirmish.cpp:2079
 msgid "The host"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2085
+#: src117/port/front/port_front_skirmish.cpp:2086
 msgid "Closed"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2105
-#: src117/port/lan/port_front_lan.cpp:1835
+#: src117/port/front/port_front_skirmish.cpp:2106
+#: src117/port/lan/port_front_lan.cpp:1837
 msgid "{0} (you)"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2119
+#: src117/port/front/port_front_skirmish.cpp:2120
 msgid "The map seats the players and runs the game."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2121
+#: src117/port/front/port_front_skirmish.cpp:2122
 msgid "Your seat"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2122
+#: src117/port/front/port_front_skirmish.cpp:2123
 msgid "Play it yourself, or make it a computer and watch: every seat a computer, the whole map shown, with the replay’s controls and speeds up to 16 times Fastest."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2125
+#: src117/port/front/port_front_skirmish.cpp:2126
 msgid "The seat"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2126
+#: src117/port/front/port_front_skirmish.cpp:2127
 msgid "Open: the next person in the room to join takes it. A person seated here goes back to the room when the seat is made a computer, closed or open. The host may give up their own seat to run the room, and take any seat that is not a person's again."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2145
+#: src117/port/front/port_front_skirmish.cpp:2146
 msgid "OPEN"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2145
+#: src117/port/front/port_front_skirmish.cpp:2146
 msgid "CLOSED"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2147
+#: src117/port/front/port_front_skirmish.cpp:2148
 msgid "for the next person to join"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2161
+#: src117/port/front/port_front_skirmish.cpp:2162
 msgid "Each team plays in shades of its colour. Choose Colours: By player to pick each player’s."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2173
-#: src117/port/front/port_front_skirmish.cpp:2820
+#: src117/port/front/port_front_skirmish.cpp:2174
+#: src117/port/front/port_front_skirmish.cpp:2821
 msgid "The map’s"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2197
+#: src117/port/front/port_front_skirmish.cpp:2198
 msgid "Their race"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2199
-#: src117/port/front/port_front_skirmish.cpp:2223
+#: src117/port/front/port_front_skirmish.cpp:2200
+#: src117/port/front/port_front_skirmish.cpp:2224
 msgid "The host’s"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2200
+#: src117/port/front/port_front_skirmish.cpp:2201
 msgid "Each person in the room chooses their own race."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2201
+#: src117/port/front/port_front_skirmish.cpp:2202
 msgid "The map gives the computers their races."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2202
+#: src117/port/front/port_front_skirmish.cpp:2203
 msgid "The host chooses the computers’ races."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2222
+#: src117/port/front/port_front_skirmish.cpp:2223
 msgid "Their handicap"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2225
+#: src117/port/front/port_front_skirmish.cpp:2226
 msgid "Each person in the room chooses their own handicap."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2226
+#: src117/port/front/port_front_skirmish.cpp:2227
 msgid "The host chooses the computers’ handicaps."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2244
+#: src117/port/front/port_front_skirmish.cpp:2245
 msgid "READY"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2244
+#: src117/port/front/port_front_skirmish.cpp:2245
 msgid "NOT READY"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2256
+#: src117/port/front/port_front_skirmish.cpp:2257
 msgid "Use Map Settings: the map runs its computers."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2257
+#: src117/port/front/port_front_skirmish.cpp:2258
 msgid "A room’s computers are the original’s own, Classic AI. Other levels in a room are not available yet."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2291
-#: src117/port/front/port_front_skirmish.cpp:2427
+#: src117/port/front/port_front_skirmish.cpp:2292
+#: src117/port/front/port_front_skirmish.cpp:2428
 msgid "Distinct Colours ({0})"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2292
+#: src117/port/front/port_front_skirmish.cpp:2293
 msgid "Distinct Colours"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2295
+#: src117/port/front/port_front_skirmish.cpp:2296
 msgid "Distinct colours"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2296
+#: src117/port/front/port_front_skirmish.cpp:2297
 msgid "Some players’ colours are close to another’s. Gives each player the colour farthest from those already taken; you keep yours. Hotkey: T"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2298
+#: src117/port/front/port_front_skirmish.cpp:2299
 msgid "No two colours are close. Gives each player the colour farthest from those already taken; you keep yours. Hotkey: T"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2334
+#: src117/port/front/port_front_skirmish.cpp:2335
 #: src117/port/platform/port_discord.cpp:656
 msgid "{0} person"
 msgid_plural "{0} people"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src117/port/front/port_front_skirmish.cpp:2337
+#: src117/port/front/port_front_skirmish.cpp:2338
 msgid "{0} open"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2339
+#: src117/port/front/port_front_skirmish.cpp:2340
 msgid "{0} of {1} ready"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2346
-#: src117/port/front/port_front_skirmish.cpp:2379
-#: src117/port/front/port_front_skirmish.cpp:2424
+#: src117/port/front/port_front_skirmish.cpp:2347
+#: src117/port/front/port_front_skirmish.cpp:2380
+#: src117/port/front/port_front_skirmish.cpp:2425
 msgid "Fill Empty"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2348
+#: src117/port/front/port_front_skirmish.cpp:2349
 msgid "Fill empty"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2349
+#: src117/port/front/port_front_skirmish.cpp:2350
 msgid "A computer of a random race in each closed seat; open seats wait for people. Hotkey: F"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2374
+#: src117/port/front/port_front_skirmish.cpp:2375
 msgid "{0} empty"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2447
+#: src117/port/front/port_front_skirmish.cpp:2448
 msgid "Adds a team; choose it in a player’s Team list to move them to it. Hotkey: N"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2462
+#: src117/port/front/port_front_skirmish.cpp:2463
 msgid "This map’s starts could not be read, so no layout can be worked out from them. New Team and each player’s Team list make the teams."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2464
+#: src117/port/front/port_front_skirmish.cpp:2465
 msgid "Sets the teams from where the map’s starts are: halves of the map, or groups of nearby starts. Each player starts in their team’s part (Start positions: By slot). Move anyone with their Team list after."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2488
+#: src117/port/front/port_front_skirmish.cpp:2489
 msgid "Each team a column of chips, for games past 24 players. Not available yet."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2578
+#: src117/port/front/port_front_skirmish.cpp:2579
 msgid "empty: choose it in a player’s Team list"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2583
+#: src117/port/front/port_front_skirmish.cpp:2584
 msgid "{0} slots"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2605
+#: src117/port/front/port_front_skirmish.cpp:2606
 msgid "{0} to {1} shown, the wheel scrolls"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2613
+#: src117/port/front/port_front_skirmish.cpp:2614
 msgid "Use Map Settings: the map seats the players and runs the game."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2638
+#: src117/port/front/port_front_skirmish.cpp:2639
 msgid "OBSERVERS"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2644
-#: src117/port/front/port_front_skirmish.cpp:2646
+#: src117/port/front/port_front_skirmish.cpp:2645
+#: src117/port/front/port_front_skirmish.cpp:2647
 #: src117/port/lan/port_front_lanhost.cpp:54
 msgid "Nobody"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2644
+#: src117/port/front/port_front_skirmish.cpp:2645
 msgid "Multiplayer only"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2645
+#: src117/port/front/port_front_skirmish.cpp:2646
 #: src117/port/lan/port_front_lanhost.cpp:54
 msgid "Anyone in the room"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2653
+#: src117/port/front/port_front_skirmish.cpp:2654
 msgid "Observers watch a multiplayer game without playing. They come with multiplayer, which is not available yet."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2656
+#: src117/port/front/port_front_skirmish.cpp:2657
 msgid "The room’s people who are not seated can watch the match once it starts, {0} s behind the players."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2659
+#: src117/port/front/port_front_skirmish.cpp:2660
 #: src117/port/lan/port_front_lan.cpp:762
-#: src117/port/lan/port_lanroom_proto.cpp:690
+#: src117/port/lan/port_lanroom_proto.cpp:694
 msgid "The host has turned watching off."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2688
+#: src117/port/front/port_front_skirmish.cpp:2689
 msgid "The host chooses it."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2732
+#: src117/port/front/port_front_skirmish.cpp:2733
 msgid "Free For All while you watch"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2738
+#: src117/port/front/port_front_skirmish.cpp:2739
 msgid "Players on teams: teammates are allied, share vision and win together, and every other team is an enemy. Quick layout sets the teams from the map’s starts; New Team and each player’s Team list change them. Plays by Hyperion’s rules."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2745
-#: src117/port/front/port_frontkit.cpp:380
+#: src117/port/front/port_front_skirmish.cpp:2746
+#: src117/port/front/port_frontkit.cpp:388
 msgid "Top vs Bottom"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2754
+#: src117/port/front/port_front_skirmish.cpp:2755
 msgid "Fastest ×{0}"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2776
-#: src117/port/front/port_front_skirmish.cpp:2779
+#: src117/port/front/port_front_skirmish.cpp:2777
+#: src117/port/front/port_front_skirmish.cpp:2780
 msgid "Rule set"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2777
+#: src117/port/front/port_front_skirmish.cpp:2778
 msgid "The host chooses the rules the room’s match plays by."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2780
+#: src117/port/front/port_front_skirmish.cpp:2781
 msgid "Classic plays as the original does, to the frame. Hyperion has the improvements, starting with pathing. The replay keeps the choice."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2784
+#: src117/port/front/port_front_skirmish.cpp:2785
 msgid "Hyperion rules, required"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2785
+#: src117/port/front/port_front_skirmish.cpp:2786
 msgid "Because of {0}. The original never had such games, so there is nothing to match."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2800
+#: src117/port/front/port_front_skirmish.cpp:2801
 msgid "The host chooses the most units the game holds."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2803
+#: src117/port/front/port_front_skirmish.cpp:2804
 msgid "The most units the game holds at once, every player’s and the map’s minerals and geysers together. The original holds 1,700. Automatic: the original’s in a game it could play, and in a bigger game or with a supply cap past 200, room for the map’s own and for each player’s whole supply cap in units. A number plays by Hyperion’s rules."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2810
+#: src117/port/front/port_front_skirmish.cpp:2811
 msgid "The map sets them"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2817
+#: src117/port/front/port_front_skirmish.cpp:2818
 msgid "Random: the original draws each player a start. By slot: each player starts where the map’s picture shows their number. Either plays by the original’s rules."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2823
-#: src117/port/front/port_front_skirmish.cpp:2892
+#: src117/port/front/port_front_skirmish.cpp:2824
+#: src117/port/front/port_front_skirmish.cpp:2893
 msgid "The map places the players."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2824
+#: src117/port/front/port_front_skirmish.cpp:2825
 msgid "This game type draws the starts at random. Choosing them is not available for it."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2838
+#: src117/port/front/port_front_skirmish.cpp:2839
 msgid "By player: each player’s own colour. By team: each team in shades of one colour, so a team reads at a glance."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2855
-#: src117/port/front/port_front_skirmish.cpp:2857
+#: src117/port/front/port_front_skirmish.cpp:2856
+#: src117/port/front/port_front_skirmish.cpp:2858
 msgid "Lock teams"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2858
+#: src117/port/front/port_front_skirmish.cpp:2859
 msgid "Keeps players from changing team in a multiplayer lobby. Not available yet."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2894
+#: src117/port/front/port_front_skirmish.cpp:2895
 msgid "Starts by slot: each number is that player’s start."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2895
+#: src117/port/front/port_front_skirmish.cpp:2896
 msgid "Random starts: the numbers are the map’s, not the players’."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2899
+#: src117/port/front/port_front_skirmish.cpp:2900
 msgid "Enlarge"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2945
+#: src117/port/front/port_front_skirmish.cpp:2946
 msgid "{0} on {1}"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2947
-#: src117/port/front/port_front_skirmish.cpp:3060
+#: src117/port/front/port_front_skirmish.cpp:2948
+#: src117/port/front/port_front_skirmish.cpp:3087
 msgid "{0} starts"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2962
+#: src117/port/front/port_front_skirmish.cpp:2963
 msgid "Mod: {0}"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2962
+#: src117/port/front/port_front_skirmish.cpp:2963
 msgid "Game: {0}"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2965
-#: src117/port/front/port_front_skirmish.cpp:2970
+#: src117/port/front/port_front_skirmish.cpp:2966
+#: src117/port/front/port_front_skirmish.cpp:2971
 msgid "The game"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2966
+#: src117/port/front/port_front_skirmish.cpp:2967
 msgid "{0}, a mod on {1}: its units, weapons and rules are in every game started here. The Mods screen chooses another mod, or the original game."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2971
+#: src117/port/front/port_front_skirmish.cpp:2972
 msgid "StarCraft, Brood War or a mod built on one, chosen for each game: it sets the races, the maps and the rules. For now it is the one Hyperion started in; choosing it here is not available yet."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2977
+#: src117/port/front/port_front_skirmish.cpp:2978
 msgid "Change Map"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2979
+#: src117/port/front/port_front_skirmish.cpp:2980
 msgid "The map"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2979
+#: src117/port/front/port_front_skirmish.cpp:2980
 msgid "The host chooses the map."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:3009
+#: src117/port/front/port_front_skirmish.cpp:3010
 msgid "Start Game"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:3014
+#: src117/port/front/port_front_skirmish.cpp:3015
 #: src117/port/gameplay/port_trainerview.cpp:851
 msgid "Leave"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:3030
+#: src117/port/front/port_front_skirmish.cpp:3033
+msgid "ONLINE (RELAY)"
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3033
+msgid "THIS NETWORK"
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3038
+msgid "Online (relay)"
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3038
+#: src117/port/lan/port_front_lanhost.cpp:1235
+msgid "This network"
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3039
+msgid "The host set this match to play online: at its start the room asks its coordinator for a session, and every seat joins it over the internet. The host toggles this."
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3040
+msgid "The host set this match to play on the room's own network relay. The host toggles this."
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:3057
 msgid "MOD RULES"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:3030
+#: src117/port/front/port_front_skirmish.cpp:3057
 msgid "HYPERION RULES"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:3033
+#: src117/port/front/port_front_skirmish.cpp:3060
 msgid "Mod rules"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:3033
+#: src117/port/front/port_front_skirmish.cpp:3060
 #: src117/port/front/port_front_trainer.cpp:432
 msgid "Hyperion rules"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:3034
+#: src117/port/front/port_front_skirmish.cpp:3061
 msgid "Required by {0}. Its replay and save are Hyperion’s and say so."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:3258
+#: src117/port/front/port_front_skirmish.cpp:3285
 msgid "Choose a map first."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:3265
+#: src117/port/front/port_front_skirmish.cpp:3292
 msgid "A session needs at least one computer."
 msgstr ""
 
@@ -5623,15 +6025,15 @@ msgstr ""
 msgid "Classic AI is the original’s own computer, and plays by either rules. The others play by Hyperion’s rules: StarCraft II’s levels, Very Easy to Elite, from slower and smaller to faster, and the Cheater levels, which play as Elite and cheat as StarCraft II’s do. Vision sees the whole map; resources sees it too and brings back more from each trip, growing to half as much again by 20 minutes; insane brings back a fifth more from the start, growing to twice as much."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:768
+#: src117/port/front/port_front_skirmish.cpp:769
 msgid "Brood War map (.scx)"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:770
+#: src117/port/front/port_front_skirmish.cpp:771
 msgid "Hyperion map (.hxm)"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:771
+#: src117/port/front/port_front_skirmish.cpp:772
 msgid "StarCraft map (.scm)"
 msgstr ""
 
@@ -5639,59 +6041,59 @@ msgstr ""
 msgid "The player’s units and buildings at this share of their life and shields, as in StarCraft II, to even a game between players of different skill. Damage, energy and speed stay as they are. Below 100% the game plays by Hyperion’s rules."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:824
-#: src117/port/front/port_front_skirmish.cpp:893
-#: src117/port/front/port_front_skirmish.cpp:1418
+#: src117/port/front/port_front_skirmish.cpp:825
+#: src117/port/front/port_front_skirmish.cpp:894
+#: src117/port/front/port_front_skirmish.cpp:1419
 msgid "That map could not be read."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:828
-#: src117/port/front/port_front_skirmish.cpp:894
-#: src117/port/front/port_front_skirmish.cpp:1417
+#: src117/port/front/port_front_skirmish.cpp:829
+#: src117/port/front/port_front_skirmish.cpp:895
+#: src117/port/front/port_front_skirmish.cpp:1418
 msgid "That map has more players than Hyperion holds."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:858
+#: src117/port/front/port_front_skirmish.cpp:859
 msgid "the mod {0}, which brings its own data"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:860
+#: src117/port/front/port_front_skirmish.cpp:861
 msgid "{0} players (the original allows 8)"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:862
+#: src117/port/front/port_front_skirmish.cpp:863
 msgid "a {0} × {1} map (the original allows 256)"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:865
+#: src117/port/front/port_front_skirmish.cpp:866
 msgid "Team Match (the original has no teams in a game against computers)"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:868
+#: src117/port/front/port_front_skirmish.cpp:869
 msgid "a computer at {0} (the original has one computer, its own)"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:872
+#: src117/port/front/port_front_skirmish.cpp:873
 msgid "a handicap (the original has none)"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:877
+#: src117/port/front/port_front_skirmish.cpp:878
 msgid "a unit limit of {0} (the original holds 1,700)"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:880
+#: src117/port/front/port_front_skirmish.cpp:881
 msgid "mutators ({0})"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:896
+#: src117/port/front/port_front_skirmish.cpp:897
 msgid "That map has no room for a computer opponent in this game type."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:897
+#: src117/port/front/port_front_skirmish.cpp:898
 msgid "That game type does not fit this map."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:898
+#: src117/port/front/port_front_skirmish.cpp:899
 msgid "The game could not be made."
 msgstr ""
 
@@ -5716,12 +6118,12 @@ msgstr ""
 msgid "Past 256"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:971
+#: src117/port/front/port_front_skirmish.cpp:972
 msgid "A skirmish needs at least one computer."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:976
-#: src117/port/front/port_front_skirmish.cpp:3270
+#: src117/port/front/port_front_skirmish.cpp:977
+#: src117/port/front/port_front_skirmish.cpp:3297
 msgid "That map is no longer there."
 msgstr ""
 
@@ -6073,76 +6475,76 @@ msgstr ""
 msgid "timelines and their paths"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:334
+#: src117/port/front/port_frontkit.cpp:342
 msgid "{0} {1} {2}, {3}"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:341
-#: src117/port/gameplay/port_mutators.cpp:551
+#: src117/port/front/port_frontkit.cpp:349
+#: src117/port/gameplay/port_mutators.cpp:637
 #: src117/port/gameplay/port_trainerview.cpp:228
-#: src117/port/hud/port_hudstats.cpp:472
+#: src117/port/hud/port_hudstats.cpp:473
 #: src117/port/tools/port_benchview.cpp:344
 msgctxt "thousands"
 msgid ","
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:368
+#: src117/port/front/port_frontkit.cpp:376
 msgid "Melee"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:370
+#: src117/port/front/port_frontkit.cpp:378
 msgid "One on One"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:371
+#: src117/port/front/port_frontkit.cpp:379
 msgid "Capture The Flag"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:372
+#: src117/port/front/port_frontkit.cpp:380
 msgid "Greed"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:373
+#: src117/port/front/port_frontkit.cpp:381
 msgid "Slaughter"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:374
+#: src117/port/front/port_frontkit.cpp:382
 msgid "Sudden Death"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:375
+#: src117/port/front/port_frontkit.cpp:383
 msgid "Ladder"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:377
+#: src117/port/front/port_frontkit.cpp:385
 msgid "Team Melee"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:378
+#: src117/port/front/port_frontkit.cpp:386
 msgid "Team Free For All"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:379
+#: src117/port/front/port_frontkit.cpp:387
 msgid "Team Capture The Flag"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:845
+#: src117/port/front/port_frontkit.cpp:853
 msgid "Blue and gold"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:845
+#: src117/port/front/port_frontkit.cpp:853
 msgid "Black and red"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:845
+#: src117/port/front/port_frontkit.cpp:853
 msgid "Purple and green"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:846
+#: src117/port/front/port_frontkit.cpp:854
 msgid "Steel and amber"
 msgstr ""
 
-#: src117/port/front/port_frontkit.cpp:846
+#: src117/port/front/port_frontkit.cpp:854
 msgid "Gold and cyan"
 msgstr ""
 
@@ -6352,278 +6754,373 @@ msgstr ""
 msgid "Cheater: insane"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:174
+#: src117/port/gameplay/port_camkeys.cpp:103
+msgid "Location {0} saved."
+msgstr ""
+
+#: src117/port/gameplay/port_mineinfo.cpp:173
+msgid "Larvae: "
+msgstr ""
+
+#: src117/port/gameplay/port_mineinfo.cpp:176
+msgid "Enter selects Â· Esc cancels"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:102
+msgid "Bases away from every start may turn rich: gold mineral fields and violet geysers that give 11 minerals and 16 gas a trip, and run dry sooner. Never a start's main or natural; bases that mirror each other turn rich together. Every base: all of them. Classic: none."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:105
+msgid "Supply is not needed: every unit costs no supply and the cap is off, and a depot and a pylon cost 40 minerals with half their life, as they are built for their tech, not their supply. Classic: supply as 1.17's."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:108
+msgid "One add-on of a kind serves every building: one Machine Shop lets any Factory build Siege Tanks, and the same for the Control Tower's, the Covert Ops' and the Physics Lab's. Classic: each building needs its own."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:111
+msgid "No select-army key and no army button, for a game played without them. Classic: the key and the button."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:112
+msgid "Every unit's energy comes back three times as fast. Classic: the usual rate."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:113
+msgid "Newbie helpers for a player learning the game: workers, mining and research by themselves. The toggles are in Settings' Newbie mode tab."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:121
+msgid "Plenty"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:121
+msgid "Gold Rush"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:122
+msgid "Quick Start"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:211
 msgid "a quarter of the map"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:175
+#: src117/port/gameplay/port_mutators.cpp:212
 msgid "a third of the map"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:176
+#: src117/port/gameplay/port_mutators.cpp:213
 msgid "half the map"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:178
+#: src117/port/gameplay/port_mutators.cpp:215
 msgid "{0}% of the map"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:179
-#: src117/port/gameplay/port_mutators.cpp:190
+#: src117/port/gameplay/port_mutators.cpp:216
+#: src117/port/gameplay/port_mutators.cpp:227
 msgid "{0} tiles"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:185
+#: src117/port/gameplay/port_mutators.cpp:222
 msgid "Quarter map"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:186
+#: src117/port/gameplay/port_mutators.cpp:223
 msgid "Third map"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:187
+#: src117/port/gameplay/port_mutators.cpp:224
 msgid "Half map"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:189
+#: src117/port/gameplay/port_mutators.cpp:226
 msgid "{0}% of map"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:315
+#: src117/port/gameplay/port_mutators.cpp:366
 msgid "Automatic"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:368
-#: src117/port/gameplay/port_mutators.cpp:448
+#: src117/port/gameplay/port_mutators.cpp:433
+#: src117/port/gameplay/port_mutators.cpp:527
 msgid "{0}% chance"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:49
+#: src117/port/gameplay/port_mutators.cpp:52
 msgid "Explored"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:51
-msgid "Researched"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:51
-msgid "No upgrades"
-msgstr ""
-
 #: src117/port/gameplay/port_mutators.cpp:52
-msgid "No research"
+msgid "Explored + resources"
 msgstr ""
 
 #: src117/port/gameplay/port_mutators.cpp:53
+#: src117/port/gameplay/port_mutators.cpp:55
+#: src117/port/gameplay/port_mutators.cpp:56
+#: src117/port/gameplay/port_mutators.cpp:57
+#: src117/port/gameplay/port_mutators.cpp:61
 #: src117/port/lan/port_front_lanhost.cpp:1222
 msgid "Off"
 msgstr ""
 
 #: src117/port/gameplay/port_mutators.cpp:53
+#: src117/port/gameplay/port_mutators.cpp:55
+#: src117/port/gameplay/port_mutators.cpp:56
+#: src117/port/gameplay/port_mutators.cpp:57
+#: src117/port/lan/port_front_lanhost.cpp:1222
+#: src117/port/lan/port_front_lanhost.cpp:1273
+#: src117/port/lan/port_front_lanhost.cpp:1330
+msgid "On"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:59
+msgid "Researched"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:59
+msgid "No upgrades"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:60
+msgid "No research"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:61
 msgid "Past the naturals"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:53
+#: src117/port/gameplay/port_mutators.cpp:61
 msgid "Outside a radius"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:53
+#: src117/port/gameplay/port_mutators.cpp:61
 msgid "Farthest only"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:54
+#: src117/port/gameplay/port_mutators.cpp:62
 msgid "Every base"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:545
+#: src117/port/gameplay/port_mutators.cpp:631
 msgctxt "list"
 msgid ", "
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:557
+#: src117/port/gameplay/port_mutators.cpp:643
 msgid "infinite mineral fields"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:557
+#: src117/port/gameplay/port_mutators.cpp:643
 msgid "mineral fields {0}"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:559
+#: src117/port/gameplay/port_mutators.cpp:645
 msgid "infinite geysers"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:559
+#: src117/port/gameplay/port_mutators.cpp:645
 msgid "geysers {0}"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:562
+#: src117/port/gameplay/port_mutators.cpp:648
 msgid "start resources {0} / {1}"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:564
+#: src117/port/gameplay/port_mutators.cpp:650
 msgid "no supply cap"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:564
+#: src117/port/gameplay/port_mutators.cpp:650
 msgid "supply cap {0}"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:568
+#: src117/port/gameplay/port_mutators.cpp:654
 msgid "{0} start worker"
 msgid_plural "{0} start workers"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src117/port/gameplay/port_mutators.cpp:573
+#: src117/port/gameplay/port_mutators.cpp:659
 msgid "supply +{0}%"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:575
+#: src117/port/gameplay/port_mutators.cpp:661
 msgid "the map explored"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:577
+#: src117/port/gameplay/port_mutators.cpp:663
 msgid "no fog of war"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:579
+#: src117/port/gameplay/port_mutators.cpp:665
+msgid "the map and its resources explored"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:667
 msgid "build time {0}"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:581
+#: src117/port/gameplay/port_mutators.cpp:669
 msgid "all researched"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:585
+#: src117/port/gameplay/port_mutators.cpp:673
 msgid "no research"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:587
+#: src117/port/gameplay/port_mutators.cpp:675
 msgid "every base rich, not announced"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:587
+#: src117/port/gameplay/port_mutators.cpp:675
 msgid "every base rich"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:592
+#: src117/port/gameplay/port_mutators.cpp:680
 msgid "rich resources past the naturals at {0}%"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:595
+#: src117/port/gameplay/port_mutators.cpp:683
 msgid "rich resources {0} or more from every start at {1}%"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:597
+#: src117/port/gameplay/port_mutators.cpp:685
 msgid "rich resources farthest only at {0}%"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:599
+#: src117/port/gameplay/port_mutators.cpp:687
 msgid "each rolled alone"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:601
+#: src117/port/gameplay/port_mutators.cpp:689
 msgid "maybe none"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:603
+#: src117/port/gameplay/port_mutators.cpp:691
 msgid "the same every game"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:605
+#: src117/port/gameplay/port_mutators.cpp:693
 msgid "not announced"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:608
+#: src117/port/gameplay/port_mutators.cpp:696
 msgid "unit limit {0}"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:63
-msgid "Mineral fields"
+#: src117/port/gameplay/port_mutators.cpp:698
+msgid "no supply, cheap depots and pylons"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:63
-msgid "Vespene geysers"
+#: src117/port/gameplay/port_mutators.cpp:700
+msgid "one add-on serves every building"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:63
-msgid "Start resources"
+#: src117/port/gameplay/port_mutators.cpp:702
+msgid "no army hotkey"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:64
-msgid "Start workers"
+#: src117/port/gameplay/port_mutators.cpp:704
+msgid "energy x3"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:64
-msgid "Supply boost"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:65
-msgid "Fog of war"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:65
-msgid "Build time"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:65
-msgid "Tech and upgrades"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:66
-msgid "Rich resources"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:68
-msgid "What each mineral field holds, or that it never runs dry. Classic: 1,500, the small ones 750."
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:69
-msgid "What each geyser holds before it runs dry, or that it never does. Classic: 5,000."
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:70
-msgid "The minerals and gas each player begins with. Classic: 50 and 0."
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:71
-msgid "The most supply each player can hold. Classic: 200."
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:72
-msgid "The workers each player begins with, beside the town hall. Classic: 4."
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:73
-msgid "More supply from each depot, pylon, overlord and town hall. Classic: none, a depot’s 8."
+#: src117/port/gameplay/port_mutators.cpp:706
+msgid "newbie helpers"
 msgstr ""
 
 #: src117/port/gameplay/port_mutators.cpp:74
+#: src117/port/gameplay/port_mutators.cpp:85
+msgid "One add-on"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:82
+msgid "Mineral fields"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:82
+msgid "Vespene geysers"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:82
+msgid "Start resources"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:83
+msgid "Start workers"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:83
+msgid "Supply boost"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:84
+msgid "Fog of war"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:84
+msgid "Build time"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:84
+msgid "Tech and upgrades"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:85
+msgid "Rich resources"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:86
+msgid "No army key"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:86
+msgid "Energy regeneration"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:87
+msgid "Auto train workers"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:87
+msgid "Auto mine efficiently"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:89
+msgid "What each mineral field holds, or that it never runs dry. Classic: 1,500, the small ones 750."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:90
+msgid "What each geyser holds before it runs dry, or that it never does. Classic: 5,000."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:91
+msgid "The minerals and gas each player begins with. Classic: 50 and 0."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:92
+msgid "The most supply each player can hold. Classic: 200."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:93
+msgid "The workers each player begins with, beside the town hall. Classic: 4."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:94
+msgid "More supply from each depot, pylon, overlord and town hall. Classic: none, a depot’s 8."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:95
 msgid "Explored: every player knows the map’s land from the start, under the fog. None: every player sees the whole map all game. Classic: the fog of war."
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:76
+#: src117/port/gameplay/port_mutators.cpp:97
 msgid "How long buildings, units, research and upgrades take to make: ×0.5 takes half as long. Classic: ×1."
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:78
+#: src117/port/gameplay/port_mutators.cpp:99
 msgid "Researched: every upgrade at its top level and every ability researched from the start. No upgrades: none can be researched. No research: neither upgrades nor the abilities that need research. Classic: all to research."
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:81
-msgid "Bases away from every start may turn rich: gold mineral fields and violet geysers that give 11 minerals and 16 gas a trip, and run dry sooner. Never a start's main or natural; bases that mirror each other turn rich together. Every base: all of them. Classic: none."
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:87
-msgid "Plenty"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:87
-msgid "Gold Rush"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:88
-msgid "Quick Start"
 msgstr ""
 
 #: src117/port/gameplay/port_teams.cpp:310
@@ -6940,7 +7437,7 @@ msgstr ""
 #: src117/port/gameplay/port_trainerview.cpp:406
 #: src117/port/gameplay/port_trainerview.cpp:723
 #: src117/port/hud/port_hudinput.cpp:691
-#: src117/port/hud/port_hudstats.cpp:424
+#: src117/port/hud/port_hudstats.cpp:425
 msgid "Income"
 msgstr ""
 
@@ -6961,8 +7458,8 @@ msgid "Spending quotient"
 msgstr ""
 
 #: src117/port/gameplay/port_trainerview.cpp:409
-#: src117/port/hud/port_hudstats.cpp:414
-#: src117/port/hud/port_hudstats.cpp:418
+#: src117/port/hud/port_hudstats.cpp:415
+#: src117/port/hud/port_hudstats.cpp:419
 msgid "Workers"
 msgstr ""
 
@@ -6972,7 +7469,7 @@ msgstr ""
 
 #: src117/port/gameplay/port_trainerview.cpp:410
 #: src117/port/gameplay/port_trainerview.cpp:724
-#: src117/port/hud/port_hudstats.cpp:420
+#: src117/port/hud/port_hudstats.cpp:421
 msgid "Army value"
 msgstr ""
 
@@ -7209,10 +7706,6 @@ msgid "A Terran console of plates and glass across the bottom."
 msgstr ""
 
 #: src117/port/hud/port_hudinput.cpp:523
-msgid "Play"
-msgstr ""
-
-#: src117/port/hud/port_hudinput.cpp:523
 #: src117/port/tools/port_benchview.cpp:729
 msgid "Pause"
 msgstr ""
@@ -7233,13 +7726,13 @@ msgstr ""
 
 #: src117/port/hud/port_hudinput.cpp:574
 #: src117/port/hud/port_hudinput.cpp:708
-#: src117/port/hud/port_hudstats.cpp:730
+#: src117/port/hud/port_hudstats.cpp:731
 msgid "Hide {0}’s vision"
 msgstr ""
 
 #: src117/port/hud/port_hudinput.cpp:575
 #: src117/port/hud/port_hudinput.cpp:709
-#: src117/port/hud/port_hudstats.cpp:731
+#: src117/port/hud/port_hudstats.cpp:732
 msgid "Show {0}’s vision"
 msgstr ""
 
@@ -7284,12 +7777,12 @@ msgid "Page Before"
 msgstr ""
 
 #: src117/port/hud/port_hudinput.cpp:713
-#: src117/port/render/port_gpu_hud.cpp:1727
+#: src117/port/render/port_gpu_hud.cpp:1743
 msgid "View Players"
 msgstr ""
 
 #: src117/port/hud/port_hudinput.cpp:713
-#: src117/port/render/port_gpu_hud.cpp:1731
+#: src117/port/render/port_gpu_hud.cpp:1747
 msgid "Diplomacy"
 msgstr ""
 
@@ -7329,253 +7822,253 @@ msgstr ""
 msgid "Right-click or Ctrl: makes it of the selection. Shift: adds the selection to it."
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:1030
+#: src117/port/hud/port_hudstats.cpp:1031
 msgid "The graph fills in as the game plays."
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:1105
+#: src117/port/hud/port_hudstats.cpp:1106
 msgid "PLAYER"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:1134
+#: src117/port/hud/port_hudstats.cpp:1135
 msgid "TEAM {0}"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:1183
+#: src117/port/hud/port_hudstats.cpp:1184
 msgid "none"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:417
+#: src117/port/hud/port_hudstats.cpp:418
 msgid "Minerals a minute"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:417
+#: src117/port/hud/port_hudstats.cpp:418
 msgid "Gas a minute"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:418
+#: src117/port/hud/port_hudstats.cpp:419
 msgid "In all a minute"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:419
+#: src117/port/hud/port_hudstats.cpp:420
 msgid "Army supply"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:422
-#: src117/port/hud/port_hudstats.cpp:424
+#: src117/port/hud/port_hudstats.cpp:423
+#: src117/port/hud/port_hudstats.cpp:425
 msgid "Units lost"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:422
+#: src117/port/hud/port_hudstats.cpp:423
 msgid "Value lost"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:423
+#: src117/port/hud/port_hudstats.cpp:424
 msgid "Units killed"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:423
+#: src117/port/hud/port_hudstats.cpp:424
 msgid "Value killed"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:425
+#: src117/port/hud/port_hudstats.cpp:426
 msgid "Supply over the game"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:426
+#: src117/port/hud/port_hudstats.cpp:427
 msgid "Income a minute over the game"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:427
+#: src117/port/hud/port_hudstats.cpp:428
 msgid "Army value over the game"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:427
+#: src117/port/hud/port_hudstats.cpp:428
 msgid "Value lost over the game"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:510
+#: src117/port/hud/port_hudstats.cpp:511
 msgid "Tab next page · Shift+F1 side view · F1 close"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:515
+#: src117/port/hud/port_hudstats.cpp:516
 msgid "{0} team"
 msgid_plural "{0} teams"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src117/port/hud/port_hudstats.cpp:717
+#: src117/port/hud/port_hudstats.cpp:718
 msgid "Every player, in the stats popup"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:725
+#: src117/port/hud/port_hudstats.cpp:726
 msgid "Vision switches for the first eight players only"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:793
+#: src117/port/hud/port_hudstats.cpp:794
 #: src117/port/render/port_gpu_hud.cpp:1409
 msgctxt "race letter"
 msgid "Z"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:793
+#: src117/port/hud/port_hudstats.cpp:794
 #: src117/port/render/port_gpu_hud.cpp:1409
 msgctxt "race letter"
 msgid "T"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:793
+#: src117/port/hud/port_hudstats.cpp:794
 #: src117/port/render/port_gpu_hud.cpp:1409
 msgctxt "race letter"
 msgid "P"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:922
+#: src117/port/hud/port_hudstats.cpp:923
 #: src117/port/render/port_gpu_hud.cpp:1417
 msgid "+{0} more · F1"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:943
+#: src117/port/hud/port_hudstats.cpp:944
 #: src117/port/render/port_gpu_hud.cpp:1438
 msgctxt "figure letter"
 msgid "M"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:943
+#: src117/port/hud/port_hudstats.cpp:944
 #: src117/port/render/port_gpu_hud.cpp:1438
 msgctxt "figure letter"
 msgid "G"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:944
+#: src117/port/hud/port_hudstats.cpp:945
 #: src117/port/render/port_gpu_hud.cpp:1439
 msgctxt "figure letter"
 msgid "S"
 msgstr ""
 
-#: src117/port/hud/port_hudstats.cpp:944
+#: src117/port/hud/port_hudstats.cpp:945
 #: src117/port/render/port_gpu_hud.cpp:1439
 msgctxt "figure letter"
 msgid "W"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1036
+#: src117/port/lan/port_front_lan.cpp:1038
 msgid "Console"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1036
-#: src117/port/lan/port_front_lan.cpp:1143
+#: src117/port/lan/port_front_lan.cpp:1038
+#: src117/port/lan/port_front_lan.cpp:1145
 #: src117/port/lan/port_front_lanhost.cpp:1202
 msgid "The Room"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1038
+#: src117/port/lan/port_front_lan.cpp:1040
 msgid "The host’s console"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1038
-#: src117/port/lan/port_front_lan.cpp:1745
+#: src117/port/lan/port_front_lan.cpp:1040
+#: src117/port/lan/port_front_lan.cpp:1747
 msgid "The room"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1039
+#: src117/port/lan/port_front_lan.cpp:1041
 msgid "Everyone in the room, the matches and this machine’s load. Hotkey: R"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1040
+#: src117/port/lan/port_front_lan.cpp:1042
 msgid "Who is in the room and what they play. Leave goes back to Multiplayer. Hotkey: R"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1047
+#: src117/port/lan/port_front_lan.cpp:1049
 msgid "Choose a map first"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1058
+#: src117/port/lan/port_front_lan.cpp:1060
 msgid "A match needs two players or more"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1059
+#: src117/port/lan/port_front_lan.cpp:1061
 msgid "Open a seat for the room, or make one a computer."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1064
+#: src117/port/lan/port_front_lan.cpp:1066
 msgid "{0} Is Not Ready"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1065
+#: src117/port/lan/port_front_lan.cpp:1067
 msgid "Every seat says Ready before the match starts."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1066
+#: src117/port/lan/port_front_lan.cpp:1068
 msgid "Wait for {0}"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1066
+#: src117/port/lan/port_front_lan.cpp:1068
 msgid "The match starts when every seat is ready."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1067
+#: src117/port/lan/port_front_lan.cpp:1069
 msgid "Start Anyway"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1067
+#: src117/port/lan/port_front_lan.cpp:1069
 msgid "The match starts now, with everyone seated."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1082
+#: src117/port/lan/port_front_lan.cpp:1084
 msgid "Not Ready"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1082
-#: src117/port/lan/port_front_lan.cpp:1253
+#: src117/port/lan/port_front_lan.cpp:1084
+#: src117/port/lan/port_front_lan.cpp:1255
 msgid "Ready"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1094
+#: src117/port/lan/port_front_lan.cpp:1096
 msgid "You left the room"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1163
+#: src117/port/lan/port_front_lan.cpp:1165
 msgid "{0} in a browser, {1} installed"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1166
+#: src117/port/lan/port_front_lan.cpp:1168
 msgid "When it starts: {0} from the host"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1167
+#: src117/port/lan/port_front_lan.cpp:1169
 msgid "{0} new stream"
 msgid_plural "{0} new streams"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src117/port/lan/port_front_lan.cpp:1180
+#: src117/port/lan/port_front_lan.cpp:1182
 #: src117/port/lan/port_front_landevices.cpp:279
 msgid "{0}, the host’s own"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1211
+#: src117/port/lan/port_front_lan.cpp:1213
 msgid "Chat"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1236
+#: src117/port/lan/port_front_lan.cpp:1238
 msgid "Nothing said yet. Enter types a line."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1244
+#: src117/port/lan/port_front_lan.cpp:1246
 msgid "Enter to chat"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1250
-#: src117/port/lan/port_front_lan.cpp:1253
+#: src117/port/lan/port_front_lan.cpp:1252
+#: src117/port/lan/port_front_lan.cpp:1255
 msgid "A match in the room"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1250
+#: src117/port/lan/port_front_lan.cpp:1252
 msgid "Start Match"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1251
+#: src117/port/lan/port_front_lan.cpp:1253
 msgid "The seats, the game options and who is in the room come next, then Start Match."
 msgstr ""
 
@@ -7584,302 +8077,302 @@ msgstr ""
 msgid "The server could not start"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1317
+#: src117/port/lan/port_front_lan.cpp:1319
 msgid "Nothing answers at {0}"
-msgstr ""
-
-#: src117/port/lan/port_front_lan.cpp:1318
-msgid "A room is joined on port 6112, and found on 6111."
 msgstr ""
 
 #: src117/port/lan/port_front_lan.cpp:132
 msgid "Another room or game on this machine has its port. Close it, then start the server."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1348
+#: src117/port/lan/port_front_lan.cpp:1320
+msgid "A room is joined on port 6112, and found on 6111."
+msgstr ""
+
+#: src117/port/lan/port_front_lan.cpp:1350
 msgid "That is not an address"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1349
+#: src117/port/lan/port_front_lan.cpp:1351
 msgid "An address on this network is four numbers, like 192.168.1.20."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1407
+#: src117/port/lan/port_front_lan.cpp:1409
 msgid "The game, installed here"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1408
+#: src117/port/lan/port_front_lan.cpp:1410
 msgid "{0}, from this PC’s copy"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1408
-#: src117/port/lan/port_front_lan.cpp:1553
+#: src117/port/lan/port_front_lan.cpp:1410
+#: src117/port/lan/port_front_lan.cpp:1555
 msgid "StarCraft and Brood War"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1409
+#: src117/port/lan/port_front_lan.cpp:1411
 msgid "A wired network"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1409
+#: src117/port/lan/port_front_lan.cpp:1411
 msgid "Wi-Fi works, with more delay"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1410
+#: src117/port/lan/port_front_lan.cpp:1412
 msgid "A graphics card that makes video"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1411
+#: src117/port/lan/port_front_lan.cpp:1413
 msgid "For players in a browser, which is not available yet"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1430
+#: src117/port/lan/port_front_lan.cpp:1432
 msgid "Rooms on This Network"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1437
+#: src117/port/lan/port_front_lan.cpp:1439
 msgid "No room answers on this network yet. A room appears here a moment after its host starts it."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1457
+#: src117/port/lan/port_front_lan.cpp:1459
 msgid "A room"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1462
-#: src117/port/lan/port_front_lan.cpp:1747
+#: src117/port/lan/port_front_lan.cpp:1464
+#: src117/port/lan/port_front_lan.cpp:1749
 msgid "{0} device in the room"
 msgid_plural "{0} devices in the room"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src117/port/lan/port_front_lan.cpp:1463
+#: src117/port/lan/port_front_lan.cpp:1465
 msgid "{0} match running"
 msgid_plural "{0} matches running"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src117/port/lan/port_front_lan.cpp:1464
+#: src117/port/lan/port_front_lan.cpp:1466
 msgid "asks for a password"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1480
-#: src117/port/lan/port_front_lan.cpp:1509
-#: src117/port/lan/port_front_lan.cpp:1583
+#: src117/port/lan/port_front_lan.cpp:1482
+#: src117/port/lan/port_front_lan.cpp:1511
+#: src117/port/lan/port_front_lan.cpp:1585
 msgid "Join"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1483
+#: src117/port/lan/port_front_lan.cpp:1485
 msgid "Can’t join"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1497
+#: src117/port/lan/port_front_lan.cpp:1499
 msgid "Or an address"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1518
+#: src117/port/lan/port_front_lan.cpp:1520
 msgid "Two Ways to Play"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1523
+#: src117/port/lan/port_front_lan.cpp:1525
 msgid "In a browser, streamed"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1524
+#: src117/port/lan/port_front_lan.cpp:1526
 msgid "Phones, tablets, Macs, Chromebooks, a television: anything with a browser. The host runs that player’s game and sends it as video; nothing is installed and nothing of the game leaves the host. Not available yet."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1526
+#: src117/port/lan/port_front_lan.cpp:1528
 msgid "Installed, from the host"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1527
+#: src117/port/lan/port_front_lan.cpp:1529
 msgid "Windows and Linux PCs, x64 or ARM. Each plays the game itself at its own resolution, and sends its commands through the host."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1544
+#: src117/port/lan/port_front_lan.cpp:1546
 msgid "Both kinds play in one match: every seat sends its commands through the host, and every seat computes the same game from them."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1546
+#: src117/port/lan/port_front_lan.cpp:1548
 msgid "THIS COPY"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1549
+#: src117/port/lan/port_front_lan.cpp:1551
 msgid "the mod {0}"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1550
+#: src117/port/lan/port_front_lan.cpp:1552
 msgid "no mod"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1552
+#: src117/port/lan/port_front_lan.cpp:1554
 msgid "{0}, {1}, {2}"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1556
+#: src117/port/lan/port_front_lan.cpp:1558
 msgid "A room plays only with copies that match it: the same version, the same game data ({0}), the same mod."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1560
+#: src117/port/lan/port_front_lan.cpp:1562
 msgid "Rooms are for this network only, and everyone playing needs their own copy of StarCraft."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1570
+#: src117/port/lan/port_front_lan.cpp:1572
 msgid "Join {0}"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1571
+#: src117/port/lan/port_front_lan.cpp:1573
 msgid "The room asks for its password. The host’s console shows it, under Join This Room."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1576
+#: src117/port/lan/port_front_lan.cpp:1578
 msgid "the password"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1620
+#: src117/port/lan/port_front_lan.cpp:1622
 msgid "Couldn’t join {0}"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1624
+#: src117/port/lan/port_front_lan.cpp:1626
 msgid "Nothing answers in {0}"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1624
+#: src117/port/lan/port_front_lan.cpp:1626
 msgid "The room may have stopped."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1631
+#: src117/port/lan/port_front_lan.cpp:1633
 msgid "Joining {0}…"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1632
+#: src117/port/lan/port_front_lan.cpp:1634
 msgid "Couldn’t join: {0} {1}"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1633
+#: src117/port/lan/port_front_lan.cpp:1635
 msgid "Play with others on this network: host a room here, or join one"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1643
+#: src117/port/lan/port_front_lan.cpp:1645
 msgid "This Network"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1650
+#: src117/port/lan/port_front_lan.cpp:1652
 msgid "Not available yet. Online play comes later, on the same connection the network uses."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1655
+#: src117/port/lan/port_front_lan.cpp:1657
 msgid "The Original’s Screens"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1659
+#: src117/port/lan/port_front_lan.cpp:1661
 msgid "The original’s screens"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1660
+#: src117/port/lan/port_front_lan.cpp:1662
 msgid "StarCraft’s own multiplayer screens, as the original draws them: Local Area Network, its game list and chat room. Hotkey: O"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1668
+#: src117/port/lan/port_front_lan.cpp:1670
 msgid "Host a Room"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1669
+#: src117/port/lan/port_front_lan.cpp:1671
 msgid "This machine hosts. Everyone else on the network joins with Hyperion installed, from Join a Room."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1670
+#: src117/port/lan/port_front_lan.cpp:1672
 msgid "Your room is running: H opens its console."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1671
+#: src117/port/lan/port_front_lan.cpp:1673
 msgid "Installed players cost the host next to nothing; as many as the network holds."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1678
+#: src117/port/lan/port_front_lan.cpp:1680
 msgid "{0} room found on this network"
 msgid_plural "{0} rooms found on this network"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src117/port/lan/port_front_lan.cpp:1679
+#: src117/port/lan/port_front_lan.cpp:1681
 msgid "Join a Room"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1680
+#: src117/port/lan/port_front_lan.cpp:1682
 msgid "Play in a room on this network. Pick one below, or type its address. This copy plays there itself, as one of the room’s installed players."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1682
+#: src117/port/lan/port_front_lan.cpp:1684
 msgid "{0}, {1} this copy can join"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1746
+#: src117/port/lan/port_front_lan.cpp:1748
 msgid "Hosted on {0}"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1757
+#: src117/port/lan/port_front_lan.cpp:1759
 msgid "The Lobby"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1760
+#: src117/port/lan/port_front_lan.cpp:1762
 msgid "The lobby"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1761
+#: src117/port/lan/port_front_lan.cpp:1763
 msgid "The host seats you in a match; its lobby opens then."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1766
+#: src117/port/lan/port_front_lan.cpp:1768
 msgid "Leave Room"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1770
+#: src117/port/lan/port_front_lan.cpp:1772
 msgid "Matches"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1773
+#: src117/port/lan/port_front_lan.cpp:1775
 msgid "No match yet. The host opens one, and seats the room’s people in it."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1787
+#: src117/port/lan/port_front_lan.cpp:1789
 #: src117/port/lan/port_front_lanhost.cpp:543
 msgid "Choosing a map"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1788
+#: src117/port/lan/port_front_lan.cpp:1790
 msgid "in its lobby"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1789
+#: src117/port/lan/port_front_lan.cpp:1791
 #: src117/port/lan/port_front_lanhost.cpp:545
 msgid "starting"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1790
+#: src117/port/lan/port_front_lan.cpp:1792
 msgid "playing for {0}"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1791
+#: src117/port/lan/port_front_lan.cpp:1793
 #: src117/port/lan/port_front_lanhost.cpp:546
 msgid "ended"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1792
+#: src117/port/lan/port_front_lan.cpp:1794
 #: src117/port/lan/port_front_lanhost.cpp:547
 msgid "ended: {0}"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1809
+#: src117/port/lan/port_front_lan.cpp:1811
 #: src117/port/lan/port_front_lanhost.cpp:503
 msgid "Watch this match"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1812
+#: src117/port/lan/port_front_lan.cpp:1814
 msgid "From this machine, {0} s behind the players, with the replay player’s camera."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1818
+#: src117/port/lan/port_front_lan.cpp:1820
 msgid "In the Room"
 msgstr ""
 
@@ -7893,32 +8386,34 @@ msgstr ""
 msgid "This console is back in it."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1945
+#: src117/port/lan/port_front_lan.cpp:1947
 msgid "The Match Did Not Come"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:1945
+#: src117/port/lan/port_front_lan.cpp:1947
 msgid "The room sent nothing of it. It may have ended."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:2093
+#: src117/port/lan/port_front_lan.cpp:2095
 msgid "The server stopped"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:2093
+#: src117/port/lan/port_front_lan.cpp:2095
 msgid "Nobody can join until it starts again."
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:2100
+#: src117/port/lan/port_front_lan.cpp:2102
 msgid "The match did not start"
 msgstr ""
 
-#: src117/port/lan/port_front_lan.cpp:2110
+#: src117/port/lan/port_front_lan.cpp:2115
+#: src117/port/lan/port_front_lan.cpp:2124
+#: src117/port/lan/port_front_lan.cpp:2138
 msgid "The match could not start here"
 msgstr ""
 
 #: src117/port/lan/port_front_lan.cpp:345
-#: src117/port/lan/port_front_lan.cpp:1178
+#: src117/port/lan/port_front_lan.cpp:1180
 #: src117/port/lan/port_front_lanhost.cpp:366
 #: src117/port/lan/port_front_lanhost.cpp:371
 msgid "This machine"
@@ -7963,9 +8458,9 @@ msgid "Playing {0}"
 msgstr ""
 
 #: src117/port/lan/port_front_lan.cpp:423
-#: src117/port/lan/port_front_lan.cpp:1799
+#: src117/port/lan/port_front_lan.cpp:1801
 #: src117/port/lan/port_front_lanhost.cpp:578
-#: src117/port/lan/port_lanlobby.cpp:104
+#: src117/port/lan/port_lanlobby.cpp:108
 msgid "a computer"
 msgid_plural "{0} computers"
 msgstr[0] ""
@@ -8009,7 +8504,7 @@ msgid "Getting the game from the host"
 msgstr ""
 
 #: src117/port/lan/port_front_lan.cpp:437
-#: src117/port/lan/port_front_lan.cpp:1198
+#: src117/port/lan/port_front_lan.cpp:1200
 #: src117/port/lan/port_front_landevices.cpp:30
 #: src117/port/lan/port_front_landevices.cpp:300
 #: src117/port/lan/port_front_lanhost.cpp:921
@@ -8233,7 +8728,7 @@ msgid "By time in the room"
 msgstr ""
 
 #: src117/port/lan/port_front_landevices.cpp:335
-#: src117/port/lan/port_lanroom_proto.cpp:688
+#: src117/port/lan/port_lanroom_proto.cpp:692
 msgid "That match is not being played now."
 msgstr ""
 
@@ -8369,22 +8864,12 @@ msgstr ""
 msgid "Anyone on this network can join"
 msgstr ""
 
-#: src117/port/lan/port_front_lanhost.cpp:1222
-#: src117/port/lan/port_front_lanhost.cpp:1273
-#: src117/port/lan/port_front_lanhost.cpp:1330
-msgid "On"
-msgstr ""
-
 #: src117/port/lan/port_front_lanhost.cpp:1231
 msgid "Listens on"
 msgstr ""
 
 #: src117/port/lan/port_front_lanhost.cpp:1233
 msgid "games on {0}, found on {1}"
-msgstr ""
-
-#: src117/port/lan/port_front_lanhost.cpp:1235
-msgid "This network"
 msgstr ""
 
 #: src117/port/lan/port_front_lanhost.cpp:1235
@@ -8951,7 +9436,7 @@ msgid "Its host plays the mod {0}, which this copy does not have active."
 msgstr ""
 
 #: src117/port/lan/port_lanclient.cpp:251
-#: src117/port/lan/port_lanroom_proto.cpp:368
+#: src117/port/lan/port_lanroom_proto.cpp:369
 msgid "Turn it off under Mods, then join."
 msgstr ""
 
@@ -9003,64 +9488,64 @@ msgstr ""
 msgid "L goes back to {0} s behind"
 msgstr ""
 
-#: src117/port/lan/port_lanlobby.cpp:110
+#: src117/port/lan/port_lanlobby.cpp:114
 #: src117/port/platform/port_discord.cpp:615
 msgid "{0}, {1}"
 msgstr ""
 
-#: src117/port/lan/port_lanlobby.cpp:180
+#: src117/port/lan/port_lanlobby.cpp:184
 msgid "A match"
 msgstr ""
 
-#: src117/port/lan/port_lanlobby.cpp:409
+#: src117/port/lan/port_lanlobby.cpp:699
 msgid "Starting the match"
 msgstr ""
 
-#: src117/port/lan/port_lanroom_proto.cpp:322
+#: src117/port/lan/port_lanroom_proto.cpp:323
 msgid "The host's web\\play folder is from another build of Hyperion; play streamed meanwhile."
 msgstr ""
 
-#: src117/port/lan/port_lanroom_proto.cpp:353
+#: src117/port/lan/port_lanroom_proto.cpp:354
 msgid "The room is not taking anyone now."
 msgstr ""
 
-#: src117/port/lan/port_lanroom_proto.cpp:354
+#: src117/port/lan/port_lanroom_proto.cpp:355
 msgid "Ask the host to start the server."
 msgstr ""
 
-#: src117/port/lan/port_lanroom_proto.cpp:357
+#: src117/port/lan/port_lanroom_proto.cpp:358
 msgid "Choose another name."
 msgstr ""
 
-#: src117/port/lan/port_lanroom_proto.cpp:359
+#: src117/port/lan/port_lanroom_proto.cpp:360
 msgid "The room asks for its password."
 msgstr ""
 
-#: src117/port/lan/port_lanroom_proto.cpp:359
+#: src117/port/lan/port_lanroom_proto.cpp:360
 msgid "That is not the room's password."
 msgstr ""
 
-#: src117/port/lan/port_lanroom_proto.cpp:360
+#: src117/port/lan/port_lanroom_proto.cpp:361
 msgid "The host's console shows it, under Join This Room."
 msgstr ""
 
-#: src117/port/lan/port_lanroom_proto.cpp:364
+#: src117/port/lan/port_lanroom_proto.cpp:365
 msgid "The host's page offers the room's version to install."
 msgstr ""
 
-#: src117/port/lan/port_lanroom_proto.cpp:368
+#: src117/port/lan/port_lanroom_proto.cpp:369
 msgid "Activate it under Mods, then join."
 msgstr ""
 
-#: src117/port/lan/port_lanroom_proto.cpp:371
+#: src117/port/lan/port_lanroom_proto.cpp:372
 msgid "The host's page has the game data to install."
 msgstr ""
 
-#: src117/port/lan/port_lanroom_proto.cpp:541
+#: src117/port/lan/port_lanroom_proto.cpp:545
 msgid "The room has a new password."
 msgstr ""
 
-#: src117/port/lan/port_lanroom_proto.cpp:558
+#: src117/port/lan/port_lanroom_proto.cpp:562
 msgid "The server stops after the last match; nobody new can join."
 msgstr ""
 
@@ -9118,7 +9603,7 @@ msgstr ""
 msgid "Looking at the score"
 msgstr ""
 
-#: src117/port/render/port_gpu_hud.cpp:1759
+#: src117/port/render/port_gpu_hud.cpp:1775
 msgid "FOLLOW"
 msgstr ""
 
@@ -9348,10 +9833,6 @@ msgstr ""
 
 #: src117/port/tools/port_benchview.cpp:1466
 msgid "Shields"
-msgstr ""
-
-#: src117/port/tools/port_benchview.cpp:1470
-msgid "Energy"
 msgstr ""
 
 #: src117/port/tools/port_benchview.cpp:1477

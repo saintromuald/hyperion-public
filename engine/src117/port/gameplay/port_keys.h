@@ -24,6 +24,8 @@ enum {
   PORT_HOTKEY_TERRAIN,     // Ctrl+Tab: the minimap's terrain, 1.17's Tab
   PORT_HOTKEY_IDLE,        // `: the next idle worker (SC2's, the user, 2026-11-02)
   PORT_HOTKEY_ARMY,        // Ctrl+Shift+F12: the army
+  PORT_HOTKEY_RESEARCH,    // Ctrl+Shift+F6: Newbie mode's research opportunities
+  PORT_HOTKEY_PRODUCTION,  // Ctrl+Shift+F7: every local production queue
   // the eight camera locations, SC2's (port_camkeys.cpp): F1 to F8 jump to them, and
   // Ctrl with the same key saves the location, so there are eight keys in all (the user,
   // 2026-11-02)

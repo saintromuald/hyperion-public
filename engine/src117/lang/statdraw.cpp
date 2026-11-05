@@ -33,8 +33,7 @@
 #include "../h/selectlimits.h"  // Hyperion: SELECTION_MAX
 #include "../h/handicap.h"  // Hyperion: a player's handicap
 #include "../h/mutators.h"  // Hyperion: the supply boost
-#include "../port/gameplay/port_onecard.h"  // Hyperion: the one-card selection display
-extern BYTE byte_6AB4C0;  // the selection's count, for the one-card display
+#include "../port/gameplay/port_onecard.h"  // Hyperion: the type cards' count labels
 
 // The globals this TU reaches, dual-spelled: one #ifndef per name, never one
 // over the block, so adding a name cannot undeclare the ones below it.
@@ -287,12 +286,17 @@ int __fastcall statdraw_query_unit() {
   return statdraw_query_special();
 }
 
-// Hyperion: the unit the multi-selection grid shows in slot i: the page of the selection
-// the console shows (selectlimits.h, SelectionPageFirst), which is its first 12 but in a game
-// of Hyperion's selection (stage S).
+// Hyperion: the type card the multi-selection grid shows in slot i. Its representative is
+// the first selected unit of that type and its count is over the whole selection; pages are
+// of cards, so a type is never repeated on a later page (selectlimits.h, SelectionCards).
+static SelectionCard PageCard(int i) {
+  SelectionCard card = {NULL, 0};
+  SelectionCards(&card, SelectionPageFirst() + i, 1);
+  return card;
+}
+
 static CUnit *PageUnit(int i) {
-  const int n = SelectionPageFirst() + i;
-  return n < SelectionMax() ? StatUnits()[n] : NULL;
+  return PageCard(i).pUnit;
 }
 
 // statdraw_query_multi -- oracle 0x4A52D0, 69 B. A null selection slot is
@@ -802,67 +806,36 @@ extern int sgbReplayPaused_g;
 extern DWORD gOptions;
 #endif
 
-// Fills the multi-selection grid from the selection, one button per unit, and
-// hides the buttons past the end.
+// Fills the multi-selection grid with one button per distinct unit type and hides the
+// buttons past the end. The button names the first unit of its type, preserving the panel's
+// ordinary click handling; its label carries the type's total over the whole selection.
 void __fastcall statdraw_draw_multi(ctrl_t *pDlg) {
   if (statdata_get_type() != 1) {
     statdata_clr_all(pDlg);
     statdata_set_type(1);
   }
   statdraw_save_stats();
+  g_nSelectionCardLabels = 0;
   ctrl_t *p = ctrl_find_ndx(pDlg, 0x21);
   if (!p)
     return;
-  // Hyperion: a selection of more than one shows one card, the active unit's, with the
-  // selection's count on it; the subgroup's key (Tab) steps the type between them (the
-  // user, 2026-11-04)
-  g_nOneCardCount = 0;
-  if (byte_6AB4C0 > 1 && gpStatUnit != NULL) {
-    int nActive = -1;
-    for (int i = 0; i < SELECTION_PAGE; ++i)
-      if (PageUnit(i) == gpStatUnit)
-        nActive = i;
-    if (nActive >= 0) {
-      int i = 0;
-      for (ctrl_t *q = p; q != NULL; q = q->pNext, ++i) {
-        if (i == nActive) {
-          // the one card must be filled as the normal path fills each button, or it shows
-          // a stale unit (and the click handlers would read it)
-          statdata_select_t *pSel = static_cast<statdata_select_t *>(ctrl_data26(q));
-          pSel->pUnit = gpStatUnit;
-          pSel->wFrame = ModUnitArtFrame(MOD_ART_GRPWIRE, gpStatUnit->wType);
-          g_rcOneCard = q->rc;
-          g_nOneCardCount = byte_6AB4C0;
-          ctrl_show(q);
-          ctrl_set_update(q);
-        } else {
-          ctrl_hide(q);
-        }
-        if (q->nIndex == 0x2C)
-          break;
-      }
-      return;
-    }
-  }
-  for (int i = 0; p; i++) {
-    if (i >= SELECTION_PAGE) {
-      while (p) {
-        ctrl_hide(p);
-        if (p->nIndex == 0x2C)
-          break;
-        p = p->pNext;
-      }
-      return;
-    }
-    CUnit *u = PageUnit(i);
-    if (u) {
+  for (int i = 0; p != NULL && i < SELECTION_PAGE; ++i, p = p->pNext) {
+    const SelectionCard card = PageCard(i);
+    CUnit *u = card.pUnit;
+    if (u != NULL) {
       statdata_select_t *pSel = static_cast<statdata_select_t *>(ctrl_data26(p));
       pSel->pUnit = u;
       pSel->wFrame = ModUnitArtFrame(MOD_ART_GRPWIRE, u->wType);  // Hyperion: a mod's unit's own or its looks'
+      g_aSelectionCardLabels[i].rc = p->rc;
+      g_aSelectionCardLabels[i].nUnits = card.nUnits;
+      g_nSelectionCardLabels = i + 1;
       ctrl_show(p);
       ctrl_set_update(p);
-      p = p->pNext;
+    } else {
+      ctrl_hide(p);
     }
+    if (p->nIndex == 0x2C)
+      break;
   }
 }
 

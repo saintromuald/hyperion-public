@@ -525,6 +525,34 @@ typed and not again while a key is held. The subgroup key acts only under Hyperi
 there 1.17's own Tab toggle of the terrain is off, and in a classic game Tab toggles the terrain
 as in 1.17.
 
+### Research and production overlays
+
+`port_production.cpp` adds two independently toggleable, rebindable panels. **Research**
+(Ctrl+Shift+F6 by default) appears only with the Newbie mode mutator. It scans every completed
+local building, lists each tech or upgrade that `ResearchAllowed`/`UpgradeAllowed` currently
+admits at a free building, and includes work already under way with progress. A click on an
+available row revalidates its source and sends the ordinary `send_net_cmd_Research` or
+`send_net_cmd_Upgrade` through `SelectOnlySet`, so the action is network- and replay-safe and
+cannot be queued twice. A click on work under way selects and centres its building instead.
+`TechUseAllowed` is evaluated for research cards as well, but is not substituted for
+`ResearchAllowed`: the use tree can hide a tech until it is researched and can name its caster,
+not the research building.
+
+**Production** (Ctrl+Shift+F7 by default) works in ordinary games without Newbie mode. It lists
+all local training and morph queues, including waiting slots where `CUnit::GetBuildUnit` exposes
+them, all research and upgrades, and every building under construction. Its rows select and
+centre their source; they never issue cancel commands. Replays and observed games allow viewing
+and centring but send no commands. The Ctrl+Q default was not used because it already selects
+larvae; modified R defaults were avoided because R belongs to control group 11.
+
+Both panels scroll with the wheel or their footer arrows and reset transient hit/layout state
+between games. Visible icons are additional `PortHdUiItem`s appended by `PortConsoleHdItems`, in
+the same game-pixel coordinates as the panel wells. The overlay leaves those wells unpainted so
+the later Ui pass cannot obscure the HD icons. Classic art, icons still loading, and rows beyond
+the console item list's remaining capacity get compact text badges instead of enlarged SD art.
+Added mod research uses its mod card's icon and name; where no public total-time accessor exists
+for an added tech or upgrade, its row shows the work and source without inventing a percentage.
+
 ### The score
 
 The score screen (`front-end.md`, `port_front_score.cpp`) shows every player of a game, and
@@ -615,7 +643,7 @@ Presentation only, and compatible with vanilla replays:
 | Name | Where | What |
 |---|---|---|
 | `rules` | `settings.json`, `hyperion` | `classic` (or `1.17`) makes new games play by 1.17's rules; anything else, or none, Hyperion's, the default since 2026-10-22. `--rules` overrides it; a game past 1.17's limits plays by Hyperion's whatever it says, and a game over the network by the rules its room's launch names (`src117/h/hxrules.h`) |
-| `keyArt`, `keyView`, `keyZoomOut`, `keyZoomIn`, `keyZoomReset`, `keyZoomFit`, `keyFollow`, `keyTv`, `keyDebugView` | `settings.json`, `hyperion` | Hyperion's own function keys, as numbers; the defaults are F5, Ctrl+F5, F7, F8, F9, Shift+F9, F11, F12 and F6 (`port_keys.cpp`) |
+| `keyArt`, `keyView`, `keyZoomOut`, `keyZoomIn`, `keyZoomReset`, `keyZoomFit`, `keyFollow`, `keyTv`, `keyDebugView`, `keyResearch`, `keyProduction` | `settings.json`, `hyperion` | Hyperion's own hotkeys, as numbers; the research and production overlays default to Ctrl+Shift+F6 and Ctrl+Shift+F7 (`port_keys.cpp`) |
 | `layout`, `card`, `accel`, `keys` | `profiles\<name>\hotkeys.json` | the command card's layout (`classic` or `grid`) and per-button keys, the accelerator commands' keys by name, and the control group keys (`port_hotkeys.cpp`) |
 | `HYPERION_TRAINERTEST=<period>,<back>` | environment | the trainer's self-test: at every period'th frame first reached, go back that many frames and watch the line again; every frame played twice must hash alike (`trainertest.txt`) |
 | `HYPERION_TRAINER_SEAT=<slot>` | environment | with `--trainer --replay`, the recorded seat the player takes over |

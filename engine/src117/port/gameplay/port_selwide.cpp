@@ -87,6 +87,7 @@ int SelectionPageFirst() {
 }
 
 void SelectionPageSet(int nFirst) {
+  // Pages are of distinct types now, never of individual units (SelectionCards).
   g_nPageFirst = nFirst < 0 ? 0 : nFirst - nFirst % SELECTION_PAGE;
 }
 
@@ -138,7 +139,8 @@ int ConsoleUnits(std::vector<WORD> *pTypes) {
   return n;
 }
 
-// The subgroup k of the kinds: the console reports on its first unit and shows its page.
+// The subgroup k of the kinds: the console reports on its first unit and shows its card's
+// page. The page is a card index, not a unit index, so a type never straddles two pages.
 void Show(const std::vector<WORD> &types, int n, int k) {
   g_nSubgroup = k;
   g_nKinds = static_cast<int>(types.size());
@@ -147,13 +149,48 @@ void Show(const std::vector<WORD> &types, int n, int k) {
   for (int i = 0; i < n; i++) {
     if (pp[i]->wType == g_wSubgroupType) {
       gpStatUnit = pp[i];
-      g_nPageFirst = i - i % SELECTION_PAGE;
+      g_nPageFirst = k - k % SELECTION_PAGE;
       return;
     }
   }
 }
 
 }  // namespace
+
+int SelectionCards(SelectionCard *pCards, int nFirst, int nCount) {
+  std::vector<WORD> types;
+  const int n = ConsoleUnits(&types);
+  const int nCards = static_cast<int>(types.size());
+  if (pCards == NULL)
+    return nCards;
+  for (int k = 0; k < nCount; ++k) {
+    SelectionCard &card = pCards[k];
+    card.pUnit = NULL;
+    card.nUnits = 0;
+    const int nCard = nFirst + k;
+    if (nCard < 0 || nCard >= nCards)
+      continue;
+    const WORD wType = types[nCard];
+    for (int i = 0; i < n; ++i) {
+      CUnit *pUnit = StatUnits()[i];
+      if (pUnit->wType != wType)
+        continue;
+      if (card.pUnit == NULL)
+        card.pUnit = pUnit;
+      ++card.nUnits;
+    }
+  }
+  return nCards;
+}
+
+int SelectionCardFor(const CUnit *pUnit) {
+  if (pUnit == NULL)
+    return -1;
+  std::vector<WORD> types;
+  ConsoleUnits(&types);
+  const auto at = std::find(types.begin(), types.end(), pUnit->wType);
+  return at != types.end() ? static_cast<int>(at - types.begin()) : -1;
+}
 
 void SelectionSubgroupsSort() {
   if (!SelectionWide())

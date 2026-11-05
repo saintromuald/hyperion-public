@@ -34,11 +34,10 @@
 #include "../../h/hxrules.h"  // HX_OPT_START_SPLIT, the start workers split's option
 #include "../render/port_teamcolor.h"  // PortTeamColorGet, the saturated number's colour
 #include "port_camkeys.h"  // PortCamKeysLocation, the saved cameras' minimap labels
-#include "port_onecard.h"  // the console's one-card selection display
+#include "port_onecard.h"  // the classic console's type-card count labels
 #include "../../h/rect32.h"   // rect32_t, the minimap's cage and the console's
 #include "../../gen/globals117.h"
 #include "../platform/port_globals117.h"  // oc_dwReplayFrame, the frame the scan runs on
-#include "../platform/port_settings.h"  // PortSettingNumber, the bars' Interface setting
 
 // the minimap's cage rectangle, as port_hudinput.cpp spells it (minimap.cpp, 0x508BB0)
 #ifdef OC_DLL_MODE
@@ -54,10 +53,10 @@ extern rect32_t sgMinimapArea_g;
 extern rect32_t sgConsoleAreaRect_g;
 #endif
 
-// The console's one-card selection display: statdraw_draw_multi sets these when it shows
-// the active unit's one card (port_onecard.h).
-int g_nOneCardCount = 0;
-rect16_t g_rcOneCard = {0, 0, 0, 0};
+// The classic console's visible type cards: statdraw_draw_multi sets their count labels
+// (port_onecard.h).
+int g_nSelectionCardLabels = 0;
+SelectionCardLabel g_aSelectionCardLabels[SELECTION_PAGE];
 
 namespace {
 
@@ -88,22 +87,26 @@ struct Patch {
   int nOn;      // the workers on it now
 };
 
-// The worker's target as one of the patches, or -1; a refinery target finds the geyser it
-// sits on.
+// The worker's patch, or -1. Its persistent harvest link comes first: it still names the
+// resource while the worker carries gas back, when the immediate order targets the town hall.
+// The order target remains a fallback for a worker approaching a patch before linking to it.
+// A refinery target finds the geyser it sits on.
 int PatchOf(const CUnit *pWorker, const std::vector<Patch> &ap)
 {
-  const CUnit *pT = pWorker->pOrderTarget;
-  if (pT == NULL)
-    return -1;
-  for (size_t i = 0; i < ap.size(); ++i) {
-    const Patch &p = ap[i];
-    if (pT == p.pUnit)
-      return static_cast<int>(i);
-    // the geyser's refinery stands on it: a worker mining gas has the refinery as its target
-    if (p.bGas && IsRefinery(pT->wType) && pT->pSprite != NULL &&
-        abs(static_cast<int>(pT->pSprite->wPosX) - p.nX) < 64 &&
-        abs(static_cast<int>(pT->pSprite->wPosY) - p.nY) < 64)
-      return static_cast<int>(i);
+  const CUnit *apTarget[2] = {pWorker->pUnionD0, pWorker->pOrderTarget};
+  for (const CUnit *pT : apTarget) {
+    if (pT == NULL)
+      continue;
+    for (size_t i = 0; i < ap.size(); ++i) {
+      const Patch &p = ap[i];
+      if (pT == p.pUnit)
+        return static_cast<int>(i);
+      // the geyser's refinery stands on it: a worker mining gas links to the refinery
+      if (p.bGas && IsRefinery(pT->wType) && pT->pSprite != NULL &&
+          abs(static_cast<int>(pT->pSprite->wPosX) - p.nX) < 64 &&
+          abs(static_cast<int>(pT->pSprite->wPosY) - p.nY) < 64)
+        return static_cast<int>(i);
+    }
   }
   return -1;
 }
@@ -237,7 +240,6 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   static std::vector<int> s_aGroup;
   static std::vector<BaseInfo> s_aBase;
   static int s_nIdle = 0;
-  static double s_fEnergyBars = 1.0;  // the Interface setting, on until it says no
   static unsigned int s_nLastFrame = 0;
   static unsigned int s_nNextScan = 0;
   const unsigned int nFrame = oc_dwReplayFrame;
@@ -431,9 +433,6 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     }
 
     s_nIdle = nIdle;
-    double d = 1.0;  // on by default; Settings' "Spellcasters' energy bars" turns them off
-    PortSettingNumber("hyperion", "energyBars", &d);
-    s_fEnergyBars = d;
     s_nNextScan = nFrame + 6;
   }
   s_nLastFrame = nFrame;
@@ -512,7 +511,8 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     const double fSy0 = fY + (fYw - fCamY) * fSy;
     if (fSx0 < fX - 60 || fSx0 > fX + fW + 60 || fSy0 < fY - 40 || fSy0 > fY + fH)
       continue;
-    const int nOn = p.nOn > p.nSat ? p.nSat : p.nOn;  // capped, as the town halls'
+    // Gas can be over-assigned: show the true count, including workers returning with gas.
+    const int nOn = p.nOn;
     char sz[16];
     snprintf(sz, sizeof sz, "%d / %d", nOn, p.nSat);
     const float fWid = UiTextWidth(UI_FACE_BOLD, 11.0f, 0.0f, sz);
@@ -536,12 +536,14 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     *pfX = fX + fx * fScale;
     *pfY = fY + fy * fScale;
   };
-  auto minimapText = [&](int nMapX, int nMapY, const char *psz, const UiColor &c) {
+  auto minimapText = [&](int nMapX, int nMapY, const char *psz, const UiColor &c,
+                         float fSize = 8.0f, float fBelow = 0.0f) {
     float fx = 0.0f, fy = 0.0f;
     minimapAt(nMapX, nMapY, &fx, &fy);
     if (fx == 0.0f && fy == 0.0f)
       return;
-    const float fSize = 8.0f * fScale;
+    fSize *= fScale;
+    fy += fBelow * fScale;
     const float fWid = UiTextWidth(UI_FACE_BOLD, fSize, 0.0f, psz);
     UiText(fx - fWid / 2 + 0.5f, fy - fSize * 0.5f + 0.5f, UI_FACE_BOLD, fSize, 0.0f,
            UiColor{0.0f, 0.0f, 0.0f, 0.75f}, psz);
@@ -555,11 +557,12 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
       return;
     const double dx = bx - ax, dy = by - ay;
     const double len = sqrt(dx * dx + dy * dy);
-    const int nSteps = len > 1.0 ? static_cast<int>(len / 2.5) : 1;
+    const int nSteps = len > 1.0 ? static_cast<int>(len / 1.5) : 1;
     const int nMax = nSteps < 119 ? nSteps : 119;
     for (int k = 0; k <= nMax; ++k) {
       const double t = nMax > 0 ? static_cast<double>(k) / nMax : 0.0;
-      UiFill(static_cast<float>(ax + dx * t), static_cast<float>(ay + dy * t), 1.5f * fScale, 1.5f * fScale, c);
+      UiFill(static_cast<float>(ax + dx * t), static_cast<float>(ay + dy * t),
+             0.65f * fScale, 0.65f * fScale, c);
     }
   };
 
@@ -573,18 +576,20 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
       const double fSx0 = fX + (link.nX - fCamX) * fSx;
       const double fSy0 = fY + (link.nY - fCamY) * fSy;
       if (fSx0 > fX - 40 && fSx0 < fX + fW + 40 && fSy0 > fY - 40 && fSy0 < fY + fH) {
-        const float fWid = UiTextWidth(UI_FACE_BOLD, 12.0f, 0.0f, sz);
+        const float fSize = 6.0f;  // half the first world-label size
+        const float fWid = UiTextWidth(UI_FACE_BOLD, fSize, 0.0f, sz);
         const float fX0 = static_cast<float>(fSx0) - fWid / 2;
         const float fY0 = static_cast<float>(fSy0) - 30.0f;
-        UiText(fX0 + 1.0f, fY0 + 1.0f, UI_FACE_BOLD, 12.0f, 0.0f, UiColor{0.0f, 0.0f, 0.0f, 0.75f}, sz);
-        UiText(fX0, fY0, UI_FACE_BOLD, 12.0f, 0.0f, RaceColour(), sz);
+        UiText(fX0 + 1.0f, fY0 + 1.0f, UI_FACE_BOLD, fSize, 0.0f, UiColor{0.0f, 0.0f, 0.0f, 0.75f}, sz);
+        UiText(fX0, fY0, UI_FACE_BOLD, fSize, 0.0f, RaceColour(), sz);
       }
     }
     if (link.bExit) {
       char szN[8];
       snprintf(szN, sizeof szN, "N%zu", k + 1);
-      minimapText(link.nExitX, link.nExitY, szN, RaceColour());
-      minimapLine(link.nX, link.nY, link.nExitX, link.nExitY, UiColor{RaceColour().r, RaceColour().g, RaceColour().b, 0.6f});
+      // Half the camera labels' size and a little below them; the link is only a subtle guide.
+      minimapText(link.nExitX, link.nExitY, szN, RaceColour(), 4.0f, 4.0f);
+      minimapLine(link.nX, link.nY, link.nExitX, link.nExitY, UiColor{1.0f, 1.0f, 1.0f, 0.35f});
     }
   }
   // the saved camera locations' small labels on the minimap: c1 for F1, c2 for F2, and so
@@ -598,49 +603,23 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     minimapText(nx, ny, sz, UiColor{1.0f, 1.0f, 1.0f, 0.9f});
   }
 
-  // the console's one-card selection display: the selection's count on the active unit's
-  // card, as the strip showed it (the user, 2026-11-04)
-  if (g_nOneCardCount > 1 && byte_6AB4C0 > 1) {
-    char sz[16];
-    snprintf(sz, sizeof sz, "x%d", g_nOneCardCount);
-    const float fSize = 11.0f * fScale;
-    const float fWid = UiTextWidth(UI_FACE_BOLD, fSize, 0.0f, sz);
-    const float fx = fX + (g_rcOneCard.right - 1) * fScale - fWid - 2.0f;
-    const float fy = fY + g_rcOneCard.top * fScale + 2.0f;
-    UiText(fx + 1.0f, fy + 1.0f, UI_FACE_BOLD, fSize, 0.0f, UiColor{0.0f, 0.0f, 0.0f, 0.8f}, sz);
-    UiText(fx, fy, UI_FACE_BOLD, fSize, 0.0f, UiColor{1.0f, 1.0f, 1.0f, 0.95f}, sz);
-  }
-
-  // each of the player's spellcasters' energy as a small bar over it, SC2's, so what the
-  // casters have shows at a glance; Settings' Interface can turn the bars off, on by
-  // default (the user, 2026-11-03). Only the player's own units: the game never shows
-  // another player's energy.
-  if (s_fEnergyBars > 0.5 && bCamOk) {
-    for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
-      if (p->bPlayer != nPlayer || p->pSprite == NULL || p->wEnergy == 0)
-        continue;
-      if ((gulUnitTypeFlags[p->wType] & 0x200000) == 0)  // no caster, no energy
-        continue;
-      const double fSx0 = fX + (static_cast<int>(p->pSprite->wPosX) - fCamX) * fSx;
-      const double fSy0 = fY + (static_cast<int>(p->pSprite->wPosY) - fCamY) * fSy;
-      if (fSx0 < fX - 40 || fSx0 > fX + fW + 40 || fSy0 < fY - 60 || fSy0 > fY + fH)
-        continue;
-      const int nMax = p->GetMaxEnergyReal();
-      if (nMax <= 0)
-        continue;
-      int nNow = static_cast<int>(p->wEnergy) >> 8;
-      if (nNow > nMax)
-        nNow = nMax;
-      const float fBarW = static_cast<float>(SpriteGrpWidth(p->pSprite) * fSx * 0.6);
-      if (fBarW < 8.0f)
-        continue;
-      const float fBarH = 2.5f * fScale;
-      const float fTop = static_cast<float>(fSy0 - SpriteGrpHeight(p->pSprite) * fSy - fBarH - 4.0);
-      const float fX0 = static_cast<float>(fSx0) - fBarW / 2;
-      UiFill(fX0, fTop, fBarW, fBarH, UiColor{0.02f, 0.05f, 0.12f, 0.75f});
-      UiFill(fX0, fTop, fBarW * static_cast<float>(nNow) / nMax, fBarH, UiColor{0.25f, 0.6f, 1.0f, 0.95f});
+  // the classic console's type cards: each label is that type's total over the whole
+  // selection, not the number of cards or the selection's total (the user, 2026-11-04)
+  if (StatUnits()[0] != NULL && StatUnits()[1] != NULL) {
+    for (int i = 0; i < g_nSelectionCardLabels && i < SELECTION_PAGE; ++i) {
+      const SelectionCardLabel &card = g_aSelectionCardLabels[i];
+      char sz[16];
+      snprintf(sz, sizeof sz, "x%d", card.nUnits);
+      const float fSize = 11.0f * fScale;
+      const float fWid = UiTextWidth(UI_FACE_BOLD, fSize, 0.0f, sz);
+      const float fx = fX + (card.rc.right - 1) * fScale - fWid - 2.0f;
+      const float fy = fY + card.rc.top * fScale + 2.0f;
+      UiText(fx + 1.0f, fy + 1.0f, UI_FACE_BOLD, fSize, 0.0f, UiColor{0.0f, 0.0f, 0.0f, 0.8f}, sz);
+      UiText(fx, fy, UI_FACE_BOLD, fSize, 0.0f, UiColor{1.0f, 1.0f, 1.0f, 0.95f}, sz);
     }
   }
+
+  // Energy uses 1.17's own health/energy stack (rle_draw_hpfloat), never a second blue bar.
 
   // the idle workers' icon, fixed above the bottom console's top edge - on top of it,
   // not on it - and right of the minimap's cage, clear of its clicks, always, the count

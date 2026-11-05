@@ -127,8 +127,10 @@ int ModUnitStateLoad(void *pFile)
 // ---------------------------------------------------------------------------------------
 // The vespene rework (gptp-fork hooks/harvest.cpp).
 
-// The yields, as systems/triggers/trigger_system.h:170 gives them: { 5, 5, 3, 5, 7, 9 }.
-static const BYTE s_yields[6] = {5, 5, 3, 5, 7, 9};
+// Mineral fields never die: a full trip carries 5, then the field floors at its depleted
+// amount and keeps yielding 2 (classic's reduced final trip) at the slower 90-frame timer.
+// Gas stays { 3, 5, 7, 9 } by tier, as systems/triggers/trigger_system.h:170 gives it.
+static const BYTE s_yields[6] = {2, 5, 3, 5, 7, 9};
 
 int CosmoYield(int nKind)
 {
