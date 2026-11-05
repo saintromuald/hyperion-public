@@ -96,6 +96,8 @@ enum Bind {
   BIND_KEY_ZOOM_FIT,
   BIND_KEY_FOLLOW,      // and the follow and replay TV
   BIND_KEY_TV,
+  BIND_KEY_RESEARCH,    // Newbie mode's research browser and the global production queue
+  BIND_KEY_PRODUCTION,
   BIND_KEY_CAM1,        // the eight camera locations' (port_camkeys.cpp): F1 to F8 jump,
   BIND_KEY_CAM2,        // Ctrl with the same key saves
   BIND_KEY_CAM3,
@@ -734,6 +736,8 @@ int HotkeyOf(int bind)
     case BIND_KEY_ZOOM_FIT: return PORT_HOTKEY_ZOOM_FIT;
     case BIND_KEY_FOLLOW: return PORT_HOTKEY_FOLLOW;
     case BIND_KEY_TV: return PORT_HOTKEY_TV;
+    case BIND_KEY_RESEARCH: return PORT_HOTKEY_RESEARCH;
+    case BIND_KEY_PRODUCTION: return PORT_HOTKEY_PRODUCTION;
     case BIND_KEY_CAM1: return PORT_HOTKEY_CAM1;
     case BIND_KEY_CAM2: return PORT_HOTKEY_CAM2;
     case BIND_KEY_CAM3: return PORT_HOTKEY_CAM3;
@@ -1070,10 +1074,14 @@ const Setting kSettings[] = {
      ReadKey, WriteKey, NULL, PT_("Debug Tools\xE2\x80\x99""s overlay in a game while its live channel is open: the game in a window with its readings round it, full screen, a counter, then off. With no key, the Overlay button at the top of the game opens it.")},
     {"hotkeys", PT_("Interface"), CTL_HEAD, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
      NULL, NULL, NULL, PT_("The command card's and the screen's keys.")},
+    {"hotkeys", PT_("Research panel"), CTL_KEYS, "Ctrl+Shift+F6", 885.0f, false, "Hyperion", NULL, "live", BIND_KEY_RESEARCH,
+     ReadKey, WriteKey, NULL, PT_("With the Newbie mode mutator on, opens a left-hand list of every technology and upgrade your completed buildings can start now, with those under way and their progress. Click an available row to start it at a free building; click one under way to select its building.")},
+    {"hotkeys", PT_("Global production queue"), CTL_KEYS, "Ctrl+Shift+F7", 886.0f, false, "Hyperion", NULL, "live", BIND_KEY_PRODUCTION,
+     ReadKey, WriteKey, NULL, PT_("In any game, lists every unit you are training or morphing (including waiting queue slots), every technology and upgrade under way, and every building under construction. Click a row to select and centre its source. Ctrl+Q remains the larva-selection key, so this panel uses another default.")},
     {"hotkeys", PT_("Layout"), CTL_CHOICE, PT_("Classic|Grid"), 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
      ReadCardLayout, WriteCardLayout, NULL, PT_("Grid puts the command card on the left hand\xE2\x80\x99""s 3 \xC3\x97"" 3 keys, as StarCraft II can. Remastered has no presets.")},
     {"hotkeys", PT_("Spellcasters\xE2\x80\x99"" energy bars"), CTL_TOGGLE, NULL, 1.0f, false, "Hyperion", NULL, "live", BIND_NONE,
-     ReadFlag, WriteFlag, "energyBars", PT_("A small bar over each of your spellcasters shows the energy it has, always, on by default. Off, the bars go.")},
+     ReadFlag, WriteFlag, "energyBars", PT_("The selected spellcaster\xE2\x80\x99s original energy row shows beneath its health bar, on by default. Off hides that row; no extra overlay bar is drawn.")},
     {"hotkeys", PT_("Screenshot"), CTL_KEYS, "Print", 0.0f, false, "Classic", NULL, "live", BIND_NONE,
      NULL, NULL, NULL, NULL},
     {"access", PT_("Allies blue, enemies red"), CTL_TOGGLE, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,

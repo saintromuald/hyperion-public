@@ -559,30 +559,54 @@ void __fastcall sub_49C8B0(CUnit *pUnit) {
 
 WORD get_order_tech_energy_cost(order_id_t bOrderId);  // CUnitInit.cpp
 
+// Hyperion: smart-cast candidates are ranked before their distances are compared. An
+// immediate Consume prefers every selected caster that is not already carrying that order;
+// only when all of them are committed may one be picked again. Energy keeps its old priority
+// within each of those two groups. The score is pure input selection state, not a reservation.
+struct SmartCastScore {
+  int nPriority;
+  long long qDistance;
+};
+
+static SmartCastScore SmartCastScoreFor(long long qDistance, bool bHasEnergy,
+                                        bool bCommitted, bool bDistributeConsume) {
+  SmartCastScore score = {(bDistributeConsume && bCommitted ? 2 : 0) + (bHasEnergy ? 0 : 1),
+                          qDistance};
+  return score;
+}
+
+static bool SmartCastScoreBetter(const SmartCastScore &candidate, const SmartCastScore &best) {
+  return candidate.nPriority < best.nPriority ||
+         (candidate.nPriority == best.nPriority && candidate.qDistance < best.qDistance);
+}
+
 // Hyperion: StarCraft II's smart cast in a game of Hyperion's selection:
 // a spell is cast by one selected unit, the nearest to the place that may cast it and has
 // the energy, or, when none has, the nearest that may, so that one refusal is heard; NULL when no
 // selected unit may cast it, and 1.17's walk refuses it unit by unit.
-static CUnit *SmartCaster(int nX, int nY, order_id_t bOrder) {
+static CUnit *SmartCaster(int nX, int nY, order_id_t bOrder, int nQueued) {
   const tech_id_t bTech = order_techType[bOrder];
   const WORD wCost = get_order_tech_energy_cost(bOrder);
-  CUnit *pBest = NULL, *pAble = NULL;
-  long long qBest = 0, qAble = 0;
+  // order.cpp's tech mapping names 0x10 Consume. Use the requested order itself to recognize
+  // a caster's current cast, rather than duplicating cast_consume's order id here. Queued
+  // commands keep the old selection: appending one does not make it the unit's current order.
+  const bool bDistributeConsume = bTech == 0x10 && !nQueued;
+  CUnit *pBest = NULL;
+  SmartCastScore best = {0, 0};
   for (CUnit *pUnit = select_get_first(); pUnit != NULL; pUnit = select_get_next()) {
     if (TechUseAllowed(bTech, g_ActiveNationID, pUnit) != 1)
       continue;
     const long long dx = PosU(pUnit->pSprite->wPosX) - nX, dy = PosU(pUnit->pSprite->wPosY) - nY;
     const long long q = dx * dx + dy * dy;
-    if (pAble == NULL || q < qAble) {
-      pAble = pUnit;
-      qAble = q;
-    }
-    if (!pUnit->NeedsMoreEnergy(wCost) && (pBest == NULL || q < qBest)) {
+    const SmartCastScore score = SmartCastScoreFor(q, !pUnit->NeedsMoreEnergy(wCost),
+                                                   pUnit->bOrderId == bOrder,
+                                                   bDistributeConsume);
+    if (pBest == NULL || SmartCastScoreBetter(score, best)) {
       pBest = pUnit;
-      qBest = q;
+      best = score;
     }
   }
-  return pBest != NULL ? pBest : pAble;
+  return pBest;
 }
 
 // Issue an order at a point or a unit for every selected unit, offset by what
@@ -608,7 +632,7 @@ void __fastcall select_target(int nX, int nY, CUnit *pTarget, int nTargetType,
 
   // Hyperion: a spell from several goes to one caster (SmartCaster)
   if (SelectionWide() && !SelectOnlyActive() && order_techType[bOrder] != 0x2C) {
-    if (CUnit *pCaster = SmartCaster(nX, nY, bOrder)) {
+    if (CUnit *pCaster = SmartCaster(nX, nY, bOrder, nQueued)) {
       SelectOnlySet(pCaster);
       select_target(nX, nY, pTarget, nTargetType, nOrderID, nQueued);
       SelectOnlySet(NULL);

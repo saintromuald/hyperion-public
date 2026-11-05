@@ -1020,51 +1020,11 @@ void StatDataSelectAmong(CUnit *pUnit) {
   sub_4BCE70(nCount, units, 0, 1);
 }
 
-// Click on a multi-selection button: select just that unit, or with a modifier
-// held, every other selected unit or every selected unit of the same type.
+// Click on a type card: select its representative, or with a modifier use the same whole-
+// selection behaviour as the wide grid. The visible cards cannot drive Shift/Ctrl themselves:
+// there is only one representative per type, while the operation must reach every unit.
 void __fastcall statdata_select_btn_command(ctrl_t *pCtrl) {
-  CUnit *units[SELECTION_WIDE];
-  // Hyperion: in a game of Hyperion's selection the whole selection, of which the grid
-  // shows a page of 12 (stage S): with shift every unit but this one, with ctrl every unit of
-  // its type
-  if (SelectionWide() && (byte_665E68 || byte_665E69)) {
-    StatDataSelectAmong(static_cast<statdata_select_t *>(ctrl_data26(pCtrl))->pUnit);
-    return;
-  }
-  if (byte_665E68) {
-    int nCount = 0;
-    memset(units, 0, sizeof(units));
-    ctrl_t *p = ctrl_find_ndx(pCtrl->pParent, 0x21);
-    for (int i = SELECTION_MAX; i; i--) {
-      if (p->dwFlags & 8) {
-        CUnit *u = static_cast<statdata_select_t *>(ctrl_data26(p))->pUnit;
-        if (u && p != pCtrl)
-          units[nCount++] = u;
-      }
-      p = p->pNext;
-    }
-    sub_4BCE70(nCount, units, 0, 1);
-    return;
-  }
-  CUnit *pUnit = static_cast<statdata_select_t *>(ctrl_data26(pCtrl))->pUnit;
-  if (byte_665E69) {
-    WORD wType = pUnit->wType;
-    int nCount = 0;
-    memset(units, 0, sizeof(units));
-    ctrl_t *p = ctrl_find_ndx(pCtrl->pParent, 0x21);
-    for (int i = SELECTION_MAX; i; i--) {
-      if (p->dwFlags & 8) {
-        CUnit *u = static_cast<statdata_select_t *>(ctrl_data26(p))->pUnit;
-        if (u->wType == wType)
-          units[nCount++] = u;
-      }
-      p = p->pNext;
-    }
-    sub_4BCE70(nCount, units, 0, 1);
-    return;
-  }
-  CUnit *pOne = pUnit;
-  sub_4BCE70(1, &pOne, 0, 1);
+  StatDataSelectAmong(static_cast<statdata_select_t *>(ctrl_data26(pCtrl))->pUnit);
 }
 
 // Hyperion: the box's frame by the unit's state, 1.17's tests in its order
@@ -1088,9 +1048,9 @@ void __fastcall statdata_select_btn_draw(ctrl_t *pCtrl, int nXOfs, int nYOfs,
   statdata_select_t *pSel = static_cast<statdata_select_t *>(ctrl_data26(pCtrl));
   CUnit *u = pSel->pUnit;
   *ctrl_progress_slot(pCtrl) = static_cast<WORD>(StatDataBoxFrame(u));  // Hyperion
-  // Hyperion: in a game of Hyperion's selection with more than one kind of unit, the box
-  // of the console's subgroup, the kind the card is for, is drawn lighter
-  if (SelectionWide() && SelectionSubgroups() > 1 && gpStatUnit != NULL && u->wType == gpStatUnit->wType) {
+  // Hyperion: with more than one type card, the active subgroup's card is drawn lighter,
+  // in a classic twelve-unit selection as well as a wide one.
+  if (SelectionCards(NULL, 0, 0) > 1 && gpStatUnit != NULL && u->wType == gpStatUnit->wType) {
     BYTE abSaved[256];
     memcpy(abSaved, _gbRemapColorTbl, sizeof abSaved);
     memcpy(_gbRemapColorTbl, PortConsoleLightRemap(), sizeof abSaved);

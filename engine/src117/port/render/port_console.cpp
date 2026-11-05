@@ -58,6 +58,7 @@
 #include "port_view.h"  // g_portView, PortViewFullRows
 #include "port_hd.h"
 #include "port_modart.h"  // PortModUiHas, a mod's own icons and wireframes at the HD scale
+#include "../gameplay/port_production.h"  // the research and production overlays' additional HD icons
 #include "../data/port_stormvid.h"  // PortVidPlaying
 #include "../data/port_video.h"
 #include "../front/port_ui.h"  // PortCascRead
@@ -845,7 +846,7 @@ bool PortConsoleHudSelectionBoxes(unsigned char *pMask, int nWidth, int nHeight)
     PortGrpFrameDecode(frame, &pixels);
     // the console's subgroup's box, drawn lighter (statdata_select_btn_draw)
     const statdata_select_t *pSel = bSelect ? *reinterpret_cast<statdata_select_t *const *>(&pCtrl->_unmapped24[2]) : NULL;
-    if (SelectionWide() && SelectionSubgroups() > 1 && gpStatUnit != NULL && pSel != NULL && pSel->pUnit != NULL &&
+    if (SelectionCards(NULL, 0, 0) > 1 && gpStatUnit != NULL && pSel != NULL && pSel->pUnit != NULL &&
         pSel->pUnit->wType == gpStatUnit->wType) {
       const BYTE *pLight = PortConsoleLightRemap();
       for (int &v : pixels)
@@ -1610,5 +1611,10 @@ int PortConsoleHdItems(PortHdUiItem *pItems, int nMax, bool bConsole)
       AddItem(pItems, nMax, &n, PORT_HD_UI_MOD, MOD_ART_WIRE << 16 | nType, k + 1, pData, pWire, 0, 0, &abSlots[k],
               1);
   }
+  // Newbie research and the global production queue reuse this same HD pass. Their rows already
+  // carry game-pixel rectangles (not controls); the helper fills only the capacity left here and
+  // the Ui overlay leaves those rectangles unpainted so its backgrounds cannot cover the icons.
+  if (bConsole && n < nMax)
+    n += PortProductionHdItems(pItems + n, nMax - n);
   return n;
 }

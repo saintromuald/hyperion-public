@@ -129,8 +129,9 @@ Hyperion.exe --mod cosmonarchy                     # play it
    - **The vespene rework**: the neutral ridge and geyser mine without a structure
      (`CosmoUncappedGasNode`), the mod's refineries mine for the owner or mutual allies
      (`CosmoGeyserMineable`), gas never depletes, and a trip carries the node's yield —
-     3 (ridge), 5 (geyser/tier 1), 7 (tier 2), 9 (tier 3), minerals 5, depleted 5 at the
-     90-frame timer, normal trips 42 frames (harvest.cpp, trigger_system.h). The
+     3 (ridge), 5 (geyser/tier 1), 7 (tier 2), 9 (tier 3). Mineral fields carry 5 while
+     full, then persist at their floor and carry 2 per trip at the 90-frame depleted timer;
+     normal trips take 42 frames (harvest.cpp, trigger_system.h). The
      MiningEfficiency upgrade's 125%–300% carry multiplier is in `SetHarvestInventory`.
    - **Energy**: every caster regains 10 a second after 2 seconds since its last spend,
      cloaking costs nothing, and maximums are the mod's fixed per-unit values

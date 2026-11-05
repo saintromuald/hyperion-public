@@ -750,11 +750,11 @@ void OwnTip(const HudHit *h, double lx, double ly) {
 
 // A page of the selection's grid, with its layout, when the slot shows one now.
 bool GridOf(const HudHit &h, HudGrid *pGrid, int *pnFirst) {
-  PortHudState st;
-  PortHudGet(&st);
-  if (h.nSlot != HUD_SLOT_SELECTION || st.nSelected < 2 || !HudGridOf(h.pLayer->def["grid"], h.w, h.h, st.nSelected, pGrid))
+  const int nCards = SelectionCards(NULL, 0, 0);
+  if (h.nSlot != HUD_SLOT_SELECTION || StatUnits()[0] == NULL || StatUnits()[1] == NULL || nCards < 1 ||
+      !HudGridOf(h.pLayer->def["grid"], h.w, h.h, nCards, pGrid))
     return false;
-  *pnFirst = PortHudGridPage(pGrid->per, st.nSelected) * pGrid->per;
+  *pnFirst = PortHudGridPage(pGrid->per, nCards) * pGrid->per;
   return true;
 }
 
@@ -776,10 +776,13 @@ bool GridMouse(const HudHit &h, double lx, double ly, WORD wTag) {
   }
   if (nTab < 0 && lx >= g.x0 && ly >= g.y0) {
     const int c = static_cast<int>((lx - g.x0) / g.cw), r = static_cast<int>((ly - g.y0) / g.ch);
-    if (c < g.cols && r < g.rows && nFirst + r * g.cols + c < SelectionMax())
+    if (c < g.cols && r < g.rows && nFirst + r * g.cols + c < SelectionCards(NULL, 0, 0))
       nCell = r * g.cols + c;
   }
-  CUnit *pUnit = nCell >= 0 ? StatUnits()[nFirst + nCell] : NULL;
+  SelectionCard card = {NULL, 0};
+  if (nCell >= 0)
+    SelectionCards(&card, nFirst + nCell, 1);
+  CUnit *pUnit = card.pUnit;
   if (wTag == 3) {
     if (pUnit == NULL) {
       OwnTip(NULL, 0, 0);

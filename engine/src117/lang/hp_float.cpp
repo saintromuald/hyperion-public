@@ -9,6 +9,7 @@
 #include "../h/glues.h"       // GameLoadImage
 #include "../gen/globals117.h"
 #include "../h/handicap.h"  // Hyperion: a player's handicap
+#include "../port/platform/port_settings.h"  // Hyperion: the original energy row's setting
 
 // The globals this TU reaches, each spelled for both builds, one #ifdef per name.
 
@@ -372,10 +373,18 @@ void rle_draw_hpfloat(int nX, int nY, int nUnused, hpbar_t *pBar, CUnit *pUnit)
       (nHalluc = (pUnit->dwFlags >> 30) & 1) != 0 || wType == 0x28) {
     if (pUnit->bPlayer != g_LocalNationID)
       return;
-    if (nSpell != 0 && nHalluc == 0)
+    if (nSpell != 0 && nHalluc == 0) {
+      // Hyperion: keep 1.17's original energy row, controlled by the Interface setting;
+      // the separate blue overlay that used to duplicate it is gone. Hallucinations' and
+      // scarabs' time-to-live rows are not energy and stay governed by 1.17's own rules.
+      double fShown = 1.0;
+      PortSettingNumber("hyperion", "energyBars", &fShown);
+      if (fShown <= 0.5)
+        return;
       nMax = pUnit->GetMaxEnergyReal();
-    else
+    } else {
       nMax = static_cast<WORD>(pUnit->GetMaxTimeToLive());
+    }
     if ((gulUnitTypeFlags[pUnit->wType] & 0x200000) != 0 &&
         (pUnit->dwFlags & 0x40000000) == 0)
       nCur = pUnit->wEnergy >> 8;

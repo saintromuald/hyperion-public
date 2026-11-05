@@ -29,6 +29,7 @@
 #include "../port/gameplay/port_keys.h"  // Hyperion
 #include "../port/gameplay/port_camkeys.h"  // Hyperion: PortCameraPressed, PortCameraRun
 #include "../port/gameplay/port_mutators.h"  // Hyperion: MutatorsOfGame, the no-army-key mutator
+#include "../port/gameplay/port_production.h"  // Hyperion: research and global production panels
 #include "../h/mutators.h"   // Hyperion: g_hxMutatorsOn
 #include "../port/gameplay/port_mineinfo.h"  // Hyperion: PortLarvaPickOpen, the larvae' pick
 #include "../port/loop/port_perf.h"  // Hyperion: PortPerfIdle
@@ -765,6 +766,11 @@ win_lparam_t __stdcall WndProc(void *hWnd, unsigned int uMsg, uintptr_t wParam, 
       PortDebugViewCycle();
       return 0;
     }
+    // Newbie mode's research browser, and the global production queue in every game. A held
+    // key's repeats never toggle either one (port_production.cpp).
+    if (!bRepeat && (nHotkey == PORT_HOTKEY_RESEARCH || nHotkey == PORT_HOTKEY_PRODUCTION) &&
+        PortProductionHotkey(nHotkey))
+      return 0;
   }
   // Hyperion: the camera locations' keys (port_camkeys.cpp), SC2's: a plain F5 to F8 jumps
   // to the location, Ctrl+F5 to Ctrl+F8 saves it. Not while a message is typed, so a key

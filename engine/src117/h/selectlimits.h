@@ -54,10 +54,22 @@ static inline DWORD *GroupRow(int nHuman, int nGroup) {
 // As a game starts, ahead of the selection's own start (select_init): 1.17's arrays and 12,
 // or the port's rows and 255 when the game records HX_OPT_SELECTION.
 void SelectionForGame();
-// The local selection's page the console shows, 12 units from its first (statdraw.cpp,
-// statselect.cpp); 0 outside a game of HX_OPT_SELECTION. Presentation only.
+// The local selection's page the console shows, 12 type cards from its first (statdraw.cpp);
+// 0 outside a game of HX_OPT_SELECTION. Presentation only.
 int SelectionPageFirst();
 void SelectionPageSet(int nFirst);
+
+// One card per distinct unit type, in the console's order. A card's unit is the first of
+// that type and nUnits is the type's total over the whole selection, not just its page.
+// SelectionCards fills at most nCount cards beginning at nFirst and returns the total number
+// of cards; pCards may be NULL to ask only for that total. SelectionCardFor returns a unit's
+// card index, or -1 when its type is not selected.
+struct SelectionCard {
+  CUnit *pUnit;
+  int nUnits;
+};
+int SelectionCards(SelectionCard *pCards, int nFirst, int nCount);
+int SelectionCardFor(const CUnit *pUnit);
 
 // The console's subgroups in a game of Hyperion's selection, as StarCraft II's: the
 // kinds of unit selected, by their rank, the console's units sorted into them
