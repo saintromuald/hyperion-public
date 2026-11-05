@@ -1081,7 +1081,7 @@ const Setting kSettings[] = {
     {"hotkeys", PT_("Layout"), CTL_CHOICE, PT_("Classic|Grid"), 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
      ReadCardLayout, WriteCardLayout, NULL, PT_("Grid puts the command card on the left hand\xE2\x80\x99""s 3 \xC3\x97"" 3 keys, as StarCraft II can. Remastered has no presets.")},
     {"hotkeys", PT_("Spellcasters\xE2\x80\x99"" energy bars"), CTL_TOGGLE, NULL, 1.0f, false, "Hyperion", NULL, "live", BIND_NONE,
-     ReadFlag, WriteFlag, "energyBars", PT_("The selected spellcaster\xE2\x80\x99s original energy row shows beneath its health bar, on by default. Off hides that row; no extra overlay bar is drawn.")},
+     ReadFlag, WriteFlag, "energyBars", PT_("Every spellcaster in your sight shows its energy as a small bar over it, yours and the enemy's alike, selected or not; the selected spellcaster's original energy row stays beneath its health bar. On by default.")},
     {"hotkeys", PT_("Screenshot"), CTL_KEYS, "Print", 0.0f, false, "Classic", NULL, "live", BIND_NONE,
      NULL, NULL, NULL, NULL},
     {"access", PT_("Allies blue, enemies red"), CTL_TOGGLE, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,

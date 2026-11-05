@@ -596,6 +596,11 @@ static CUnit *SmartCaster(int nX, int nY, order_id_t bOrder, int nQueued) {
   for (CUnit *pUnit = select_get_first(); pUnit != NULL; pUnit = select_get_next()) {
     if (TechUseAllowed(bTech, g_ActiveNationID, pUnit) != 1)
       continue;
+    // A defiler at a full bar gains nothing from Consume: never the pick while another
+    // selected caster is short of full (ApplyConsume itself refuses at a full bar, so a
+    // forced cast still kills nothing; the user, 2026-11-05)
+    if (bTech == 0x10 && pUnit->wEnergy >= pUnit->GetMaxEnergy())
+      continue;
     const long long dx = PosU(pUnit->pSprite->wPosX) - nX, dy = PosU(pUnit->pSprite->wPosY) - nY;
     const long long q = dx * dx + dy * dy;
     const SmartCastScore score = SmartCastScoreFor(q, !pUnit->NeedsMoreEnergy(wCost),

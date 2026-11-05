@@ -1002,7 +1002,11 @@ void __fastcall statdata_ctx_training(ctrl_t *pCtrl) {
 }
 
 // Hyperion: a click on a selected unit's wireframe over the whole selection, which the
-// console shows a page of (stage S) and the HUD's grid another
+// console shows a page of (stage S) and the HUD's grid another.
+// Brood War's and StarCraft II's modifiers, the card standing for its type: a plain click
+// takes the card's unit alone, Shift drops every unit of the card's type from the
+// selection (the card's "xN" is the type's, so Shift takes them all, the user 2026-11-05),
+// and Ctrl keeps only the type.
 void StatDataSelectAmong(CUnit *pUnit) {
   CUnit *units[SELECTION_WIDE];
   int nCount = 0;
@@ -1013,16 +1017,16 @@ void StatDataSelectAmong(CUnit *pUnit) {
   } else {
     for (int i = 0; i < SelectionMax(); i++) {
       CUnit *u = StatUnits()[i];
-      if (u != NULL && (byte_665E68 ? u != pUnit : u->wType == pUnit->wType))
+      if (u != NULL && (byte_665E68 ? u->wType != pUnit->wType : u->wType == pUnit->wType))
         units[nCount++] = u;
     }
   }
   sub_4BCE70(nCount, units, 0, 1);
 }
 
-// Click on a type card: select its representative, or with a modifier use the same whole-
-// selection behaviour as the wide grid. The visible cards cannot drive Shift/Ctrl themselves:
-// there is only one representative per type, while the operation must reach every unit.
+// Click on a type card: select its representative alone, or with a modifier the same
+// whole-selection behaviour as the wide grid's (StatDataSelectAmong): Shift drops the
+// card's type from the selection, Ctrl keeps only it.
 void __fastcall statdata_select_btn_command(ctrl_t *pCtrl) {
   StatDataSelectAmong(static_cast<statdata_select_t *>(ctrl_data26(pCtrl))->pUnit);
 }

@@ -1,4 +1,5 @@
-// port_production.cpp -- a left-hand research browser and a global production queue.
+// port_production.cpp -- a left-hand research browser, a global production queue, and a
+// small permanent production strip at the very top of the screen.
 //
 // Research is a Newbie-mode aid: every currently allowed research and upgrade from every completed
 // local building, not only the selection. Production is independent of the mutator and lists every
@@ -66,6 +67,15 @@ const int kFooterH = 20;
 const int kMaxRows = 9;
 const int kIcon = 32;
 
+// The permanent strip at the very top of the screen: one small cell per producing source,
+// Cosmonarchy's bar's place, beside the panels' full list (the user, 2026-11-05).
+const int kStripIcon = 20;
+const int kStripBar = 3;
+const int kStripGap = 2;
+const int kStripPad = 4;
+const int kStripCell = kStripIcon + 2 * kStripGap;
+const int kStripMax = 16;
+
 struct Row {
   RowKind kind = ROW_TRAIN;
   unsigned id = 0;         // tech, upgrade or unit type
@@ -95,6 +105,21 @@ struct PanelLayout {
   LayoutRow rows[kMaxRows];
   FBox target;  // the whole panel in window pixels, from the last draw
 };
+// The strip's cell: the row whose icon it shows (the source's active one), the source's
+// total queued count for the corner number, and the icon's and progress bar's boxes.
+struct StripCell {
+  int nRow = -1;
+  int nCount = 0;
+  Box icon;
+  Box bar;
+};
+struct StripLayout {
+  bool bShown = false;
+  Box box;
+  int nCells = 0;
+  StripCell cells[kStripMax];
+  FBox target;
+};
 struct RowKey {
   RowKind kind = ROW_TRAIN;
   unsigned id = 0;
@@ -117,6 +142,7 @@ bool g_bRowsValid;
 bool g_bLayoutValid;
 std::vector<Row> g_rows[PANELS];
 PanelLayout g_layout[PANELS];
+StripLayout g_strip;
 int g_anScroll[PANELS];
 std::vector<Hit> g_hits;
 bool g_bPressed;
@@ -507,6 +533,7 @@ void ResetTransient(void)
   g_hits.clear();
   memset(g_anScroll, 0, sizeof g_anScroll);
   memset(g_layout, 0, sizeof g_layout);
+  memset(&g_strip, 0, sizeof g_strip);
   g_bPressed = false;
   g_bRowsValid = false;
   g_bLayoutValid = false;
@@ -535,9 +562,16 @@ bool PanelShown(int nPanel)
   return nPanel == PANEL_RESEARCH ? g_bResearch && MutatorsOfGame().nNewbie != 0 : g_bQueue;
 }
 
+// The strip needs no key: it is up whenever a game with a local player is (the user,
+// 2026-11-05). It draws only while something is actually in production.
+bool StripShown(void)
+{
+  return gwGameMode == 3 && LocalPlayer() >= 0;
+}
+
 bool AnyShown(void)
 {
-  return PanelShown(PANEL_RESEARCH) || PanelShown(PANEL_QUEUE);
+  return PanelShown(PANEL_RESEARCH) || PanelShown(PANEL_QUEUE) || StripShown();
 }
 
 void RefreshRows(void)
@@ -556,7 +590,7 @@ void RefreshRows(void)
       units.push_back(p);
   if (PanelShown(PANEL_RESEARCH))
     BuildResearchRows(units, nPlayer);
-  if (PanelShown(PANEL_QUEUE))
+  if (PanelShown(PANEL_QUEUE) || StripShown())
     BuildQueueRows(units);
   g_bRowsValid = true;
   g_dwRowsFrame = oc_dwReplayFrame;
@@ -591,6 +625,54 @@ void MakeLayout(void)
     for (int i = 0; i < l.nVisible && nRows > 0; ++i) {
       l.rows[i].nRow = l.nFirst + i;
       l.rows[i].icon = {l.box.x + 6, l.box.y + kHeaderH + i * kRowH + 2, kIcon, kIcon};
+    }
+  }
+
+  // The strip: one cell per producing source, at the very top, centred. The cell's icon is
+  // the source's active unit row (a building's research yields to its production), its
+  // corner number the source's rows in all; empty production is no strip at all.
+  {
+    StripLayout &s = g_strip;
+    s.bShown = StripShown();
+    s.nCells = 0;
+    if (s.bShown) {
+      const std::vector<Row> &rows = g_rows[PANEL_QUEUE];
+      DWORD adwSource[kStripMax];
+      for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+        const Row &r = rows[i];
+        int k = 0;
+        while (k < s.nCells && adwSource[k] != r.dwSource)
+          ++k;
+        if (k == s.nCells) {
+          if (k >= kStripMax)
+            continue;
+          adwSource[k] = r.dwSource;
+          s.cells[k].nRow = i;  // the first row, until an active one takes the cell
+          s.cells[k].nCount = 0;
+          ++s.nCells;
+        }
+        StripCell &c = s.cells[k];
+        ++c.nCount;
+        if (!r.bActive)
+          continue;  // a waiting slot never takes the cell's icon
+        const Row &cur = rows[c.nRow];
+        if (!cur.bActive ||
+            (cur.kind == ROW_RESEARCH || cur.kind == ROW_UPGRADE) &&
+                (r.kind == ROW_TRAIN || r.kind == ROW_MORPH || r.kind == ROW_CONSTRUCT))
+          c.nRow = i;
+      }
+      if (s.nCells > 0) {
+        s.box.w = s.nCells * kStripCell + 2 * kStripPad;
+        s.box.h = kStripPad + kStripIcon + kStripGap + kStripBar + kStripPad;
+        s.box.x = (nViewW - s.box.w) / 2;
+        s.box.y = 0;  // the very tip of the screen
+        for (int i = 0; i < s.nCells; ++i) {
+          s.cells[i].icon = {s.box.x + kStripPad + i * kStripCell + kStripGap,
+                             s.box.y + kStripPad, kStripIcon, kStripIcon};
+          s.cells[i].bar = {s.cells[i].icon.x, s.cells[i].icon.y + kStripIcon + kStripGap,
+                            kStripIcon, kStripBar};
+        }
+      }
     }
   }
 }
@@ -768,6 +850,60 @@ bool DrawOnePanel(int nPanel, float fX, float fY, float fW, float fH)
   return true;
 }
 
+// The strip: the small permanent production bar at the very top of the screen, one cell
+// per producing source (the user, 2026-11-05). Each cell is the source's active icon with
+// its progress under it and its total rows at the corner; a click centres the source, as a
+// row's click does. The big panels and their hotkeys are unchanged.
+bool DrawStrip(float fX, float fY, float fW, float fH)
+{
+  StripLayout &s = g_strip;
+  if (!s.bShown || s.nCells <= 0)
+    return false;
+  std::vector<Row> &rows = g_rows[PANEL_QUEUE];
+  s.target = ToTarget(s.box, fX, fY, fW, fH);
+  const float k = ScaleY(fH);
+  const UiColor panel = UiRgb(0x0b141d, 0.85f);
+  const UiColor line = UiRgb(0x35536a, 0.9f);
+  const UiColor ink = UiRgb(0xe8f0f5);
+  const bool bHdConsole = PortGpuHdConsoleShown() != 0;
+  UiFill(s.target.x, s.target.y, s.target.w, s.target.h, panel, 3.0f * k);
+  UiRing(s.target.x, s.target.y, s.target.w, s.target.h, line, 3.0f * k, SDL_max(1.0f, k));
+  AddHit(s.target, HIT_PANEL, PANEL_QUEUE);
+  for (int i = 0; i < s.nCells; ++i) {
+    StripCell &c = s.cells[i];
+    if (c.nRow < 0 || c.nRow >= static_cast<int>(rows.size()))
+      continue;
+    Row &r = rows[c.nRow];
+    const FBox icon = ToTarget(c.icon, fX, fY, fW, fH);
+    if (!bHdConsole || !r.bHdItem) {
+      const UiColor badge = r.kind == ROW_UPGRADE ? UiRgb(0x493b67) : r.kind == ROW_RESEARCH ? UiRgb(0x244f64)
+                            : r.kind == ROW_CONSTRUCT ? UiRgb(0x3f5534) : UiRgb(0x344b60);
+      UiFill(icon.x, icon.y, icon.w, icon.h, badge, 2.0f * k);
+      const std::string mark = Badge(r.name);
+      const float bw = UiTextWidth(UI_FACE_BOLD, 9.0f * k, 0.0f, mark.c_str());
+      Text(mark.c_str(), icon.x + (icon.w - bw) * 0.5f, icon.y + 14.0f * k, 9.0f * k, ink,
+           UI_FACE_BOLD);
+    }
+    UiRing(icon.x, icon.y, icon.w, icon.h, line, 2.0f * k, SDL_max(1.0f, k));
+    const UiColor bar = r.kind == ROW_RESEARCH ? UiRgb(0x55b7d9) : r.kind == ROW_UPGRADE ? UiRgb(0xb497df)
+                        : r.kind == ROW_CONSTRUCT ? UiRgb(0x82c66e) : UiRgb(0x6b9fd0);
+    DrawProgress(ToTarget(c.bar, fX, fY, fW, fH), r.nProgress, bar);
+    if (c.nCount > 1) {
+      char szN[8];
+      snprintf(szN, sizeof szN, "x%d", c.nCount);
+      const float fSize = 8.0f * k;
+      const float bw = UiTextWidth(UI_FACE_BOLD, fSize, 0.0f, szN);
+      UiText(icon.x + icon.w - bw, icon.y + fSize, UI_FACE_BOLD, fSize, 0.0f,
+             UiColor{0.0f, 0.0f, 0.0f, 0.85f}, szN);
+      UiText(icon.x + icon.w - bw - 1.0f, icon.y + fSize - 1.0f, UI_FACE_BOLD, fSize, 0.0f,
+             UiColor{1.0f, 1.0f, 1.0f, 0.95f}, szN);
+    }
+    const RowKey key = KeyOf(r);
+    AddHit(icon, HIT_ROW, PANEL_QUEUE, &key);
+  }
+  return true;
+}
+
 bool LayerShown(void)
 {
   TickState();
@@ -784,6 +920,7 @@ bool LayerDraw(int, int, float fX, float fY, float fW, float fH)
   bool bDrew = false;
   for (int nPanel = 0; nPanel < PANELS; ++nPanel)
     bDrew |= DrawOnePanel(nPanel, fX, fY, fW, fH);
+  bDrew |= DrawStrip(fX, fY, fW, fH);
   return bDrew;
 }
 
@@ -794,7 +931,7 @@ bool LayerOutside(float x, float y)
   for (int nPanel = 0; nPanel < PANELS; ++nPanel)
     if (g_layout[nPanel].bShown && Inside(g_layout[nPanel].target, x, y))
       return true;
-  return false;
+  return g_strip.bShown && g_strip.nCells > 0 && Inside(g_strip.target, x, y);
 }
 
 void TogglePanel(int nPanel)
@@ -959,32 +1096,45 @@ int PortProductionHdItems(PortHdUiItem *pItems, int nMax)
     for (Row &r : g_rows[nPanel])
       r.bHdItem = false;
   int n = 0;
+  // One cell of either presentation: the row's command icon into its game-pixel box.
+  auto emit = [&](Row &r, const Box &box) {
+    if (n >= nMax || r.nIcon < 0)
+      return;
+    const bool bOwn = ModArtOwnFrame(MOD_ART_ICON, static_cast<unsigned>(r.nIcon));
+    if (bOwn ? !PortModUiHas(MOD_ART_ICON, static_cast<unsigned>(r.nIcon)) : PortHdUiSet(PORT_HD_UI_ICONS) == NULL)
+      return;  // the overlay's badge remains until this frame/art is ready
+    PortHdUiItem &item = pItems[n++];
+    memset(&item, 0, sizeof item);
+    item.nSet = bOwn ? PORT_HD_UI_MOD : PORT_HD_UI_ICONS;
+    item.nFrame = bOwn ? (MOD_ART_ICON << 16) | r.nIcon : r.nIcon;
+    item.nCell = bOwn ? 0 : -1;
+    item.nX = box.x;
+    item.nY = box.y;
+    item.nW = box.w;
+    item.nH = box.h;
+    item.nTints = 16;
+    memcpy(item.abTint, sgBmpTIcon_g + 3 * 16, 16);
+    r.bHdItem = true;
+  };
   for (int nPanel = 0; nPanel < PANELS; ++nPanel) {
     PanelLayout &l = g_layout[nPanel];
     if (!l.bShown || g_rows[nPanel].empty())
       continue;
-    for (int i = 0; i < l.nVisible && n < nMax; ++i) {
+    for (int i = 0; i < l.nVisible; ++i) {
       const int nRow = l.rows[i].nRow;
       if (nRow < 0 || nRow >= static_cast<int>(g_rows[nPanel].size()))
         continue;
-      Row &r = g_rows[nPanel][nRow];
-      if (r.nIcon < 0)
+      emit(g_rows[nPanel][nRow], l.rows[i].icon);
+    }
+  }
+  // and the strip's cells (the user, 2026-11-05)
+  if (g_strip.bShown) {
+    std::vector<Row> &rows = g_rows[PANEL_QUEUE];
+    for (int i = 0; i < g_strip.nCells; ++i) {
+      const StripCell &c = g_strip.cells[i];
+      if (c.nRow < 0 || c.nRow >= static_cast<int>(rows.size()))
         continue;
-      const bool bOwn = ModArtOwnFrame(MOD_ART_ICON, static_cast<unsigned>(r.nIcon));
-      if (bOwn ? !PortModUiHas(MOD_ART_ICON, static_cast<unsigned>(r.nIcon)) : PortHdUiSet(PORT_HD_UI_ICONS) == NULL)
-        continue;  // the overlay's badge remains until this frame/art is ready
-      PortHdUiItem &item = pItems[n++];
-      memset(&item, 0, sizeof item);
-      item.nSet = bOwn ? PORT_HD_UI_MOD : PORT_HD_UI_ICONS;
-      item.nFrame = bOwn ? (MOD_ART_ICON << 16) | r.nIcon : r.nIcon;
-      item.nCell = bOwn ? 0 : -1;
-      item.nX = l.rows[i].icon.x;
-      item.nY = l.rows[i].icon.y;
-      item.nW = l.rows[i].icon.w;
-      item.nH = l.rows[i].icon.h;
-      item.nTints = 16;
-      memcpy(item.abTint, sgBmpTIcon_g + 3 * 16, 16);
-      r.bHdItem = true;
+      emit(rows[c.nRow], c.icon);
     }
   }
   return n;
