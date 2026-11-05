@@ -16,4 +16,5 @@
 
 void PlutoGameStart();
 void PlutoFrame();
+void PlutoNoteResult(int nLastPlayer);
 void PlutoGameEnd();

@@ -105,19 +105,24 @@ Classic net commands appended to StarCraft's TurnBuffer (0x654880, byte count at
 
 - `0x09` Select: `{op, count, u16 unit ids[count]}` (the bot's own unit ids, echoed
   from the obs Hyperion builds)
-- `0x14` RightClick: `{op, u16 x, u16 y, u16 targetId, u16 targetType, u8 queued}`
-- `0x15` Action: `{op, u16 x, u16 y, u16 targetId, u16 targetType, u8 order, u8 queued}`
+- `0x0C` Placebox (8 bytes)
+- `0x14` RightClick (10 bytes): `{op, u16 x, u16 y, u16 targetId, u16 targetType, u8 queued}`
+- `0x15` Action (11 bytes): `{op, u16 x, u16 y, u16 targetId, u16 targetType, u8 order, u8 queued}`
+- `0x1A` Stop and `0x2B` HoldPosition (2 bytes each)
+- `0x1F` Build, `0x23` Unit Morph, and `0x35` UpgradeBldg (3 bytes each)
+- Research, upgrade, burrow/cloak, transport, cancellation, and other classic
+  commands use their native 1.16.1 opcode sizes and receivers
 
 ## What Hyperion must do
 
-1. Own `pluto_infer.exe` as a helper process (the AI lab's pattern), over the shm +
-   events.
-2. Every 6th game frame, build the observation from Hyperion's game state — the
-   header, one 436-byte entry per visible unit (position/4096, hp/1600, the flags,
-   the one-hots and the embeddings), the map planes and the globals — and signal
-   the request event.
-3. Read the reply's net commands and turn them into Hyperion's unit orders (the
-   command layer is the classic one).
+1. Run the real DLL and its own `pluto_infer.exe` through `pluto-bridge.exe`;
+   Pluto's observation globals contain policy state that a Hyperion-side builder
+   cannot reproduce faithfully.
+2. Send one HXP3 frame per game frame. The bridge owns the six-frame inference
+   cadence and returns the classic net commands in each HXRP reply.
+3. Apply those commands through Hyperion's native receivers. Replies are held
+   for three additional game frames so their total action latency is four, as
+   in Pluto's training condition.
 4. The level: `AI_LEVEL_PLUTO` in `port_ai.h`, the skirmish row, `--ai-levels`, the
    replay/save record — and the room's computer seat rides the same level.
 
@@ -131,36 +136,45 @@ bridge's stdin/stdout. All little-endian.
 
 | Field | Bytes | What |
 |---|---|---|
-| magic | 4 | `HXPF` = 0x50465848 |
+| magic | 4 | `HXP3` = 0x33505848 (`HXP2` = 0x32505848 and legacy `HXPF` = 0x50465848 are also accepted) |
 | frame | 4 | the game frame number |
 | nUnits | 4 | the unit count (<= 9999) |
 | mapW, mapH | 8 | the map size in tiles |
 | nPlayers | 4 | the player count (<= 12) |
-| units | nUnits * 40 | one `{u32 id,type,player,x,y,hp,shields,energy,order; u8 visible,completed,pad[2]}` a unit |
+| units | nUnits * 40 | one `{u32 id,type,player,x,y,hp,shields,energy,order; u8 visible,completed,direction,pad}` a unit |
+| unit extras | nUnits * 64 | HXP3 only: full status flags, order/move/connected/build-unit slots, speed, current build and previous types, resources, order type, targets, remaining build time, queue slot/state, weapon/spell cooldowns, movement and facing bytes, order flags, detection, and the main order timer |
 | players | nPlayers * 28 | one `{u32 race,minerals,gas,supplyTotal,supplyUsed,startX,startY}` a player |
-| seen | (mapW*mapH+7)/8 | one bit a tile in row order: the tile is seen by the Pluto slot |
-| explored | (mapW*mapH+7)/8 | one bit a tile: the tile is explored by the Pluto slot |
+| tiles | mapW*mapH*4 | HXP2/HXP3: the actual `gpSquareMap` four-byte tile flags (visibility, walkability, buildability, and terrain) |
+| seen/explored | 2*((mapW*mapH+7)/8) | Legacy HXPF only: two visibility bitplanes |
 
 Traps learned the hard way:
 
 - `order` must be a real, alive order (the rig sends `PlayerGuard`). Sending 0
   (`Die`) makes the fork's engine drop every unit from its model: the obs stays at
   N=1 and no commands ever come back.
-- **Fog of war is real, not a cheat**: `visible` per unit (the Pluto slot's own
-  vision — `SpriteSeenBy(u->pSprite, slot)` on Hyperion's side) and the seen /
-  explored tile planes (`VisionHxTileSeen/Explored`). The bridge writes the planes
+- **Fog of war is real, not a cheat**: `visible` per unit (always for Pluto's
+  own units, otherwise `SpriteSeenBy(u->pSprite, slot)`) and the actual tile
+  flags, including visibility remapped from Hyperion's slot order to BWAPI's
+  player order. Detection is transported separately, so visible-but-undetected
+  units remain visible without becoming detected. `completed` comes from the
+  unit's real status flag, and start locations are transported in pixels then
+  converted to tiles. Invisible enemies do not become accessible initial units.
+  The bridge writes the planes
   into the tile array and links only the visible units into the visible-unit
   list — the list is the local player's view, and the fork's engine keeps
   everything else hidden. Units that were never seen never reach the obs at all;
   the net's map planes carry the fog too.
-- The unit `id`s are the positions in the list (0..n-1), sent fresh each frame.
-  The bridge maps slot = id, so the fork's model index equals the Hyperion list
-  position, and the commands' unit ids (9363 + index) map straight back.
-- The bridge applies the frame to the fork's *SC image*, never to the fork's
-  GameData: the fork's own server converts the image into the GameData every
-  frame, and the bridge writing it concurrently broke the server's unit sync.
-- Frame 0 is not applied: the start-up image is already complete before the
-  fork's threads first read it.
+- The unit `id` is Hyperion's stable unit-table slot, not its changing position
+  in the used list. The bridge preserves that slot in the SC image and assigns a
+  permanent packed BWAPI id on first appearance; command ids (9363 + slot) map
+  back to the current live unit. Later-created units and discovery events use
+  the same mapping.
+- The bridge applies live frames to the fork's *SC image*. Its server performs
+  the ordinary dynamic GameData updates; the bridge supplies real frame-0
+  records before `onStart` and only initializes later records needed by new
+  discovery events, rather than replacing the server's unit synchronization.
+- Frame 0 is applied. `onStart` runs only after the scripted startup scaffold
+  has been replaced by the actual match's players, units, resources, and map.
 
 ### Reply out (stdout, per frame)
 
@@ -173,6 +187,12 @@ Traps learned the hard way:
 | win | 4 | 0 for now |
 
 `port_pluto.cpp` reads `12 + n + 4` per reply and re-syncs on the magic.
+
+At match end Hyperion sends a 12-byte `HXPE` record (`magic`, `winner`, zero)
+before closing transport. `winner` is 1 only when Pluto is the last side alive;
+otherwise it is 0. The bridge calls `onEnd` only after receiving this record, so
+benchmark setup and aborted runs cannot fabricate a win or loss for the bandit
+history. Match acceptance uses Hyperion's game-state summary, never `onEnd`.
 
 ## The obs architecture, mapped (2026-11-03)
 
@@ -193,10 +213,10 @@ Traps learned the hard way:
 ## The embedding formula, solved (2026-11-03, the sincos trace)
 
 The sincos helpers have no static callers in the DLL -- the calls are
-materialized at runtime. The bridge now traces them (`HX_DEBUG` +
-`ArmSincosTrace`: the helpers' prologues are patched at runtime to stubs in the
-bridge exe that log `(return address, angle)` into `dump/sincos.log`), which
-named the call sites and their angle arguments directly:
+materialized at runtime. A research-only bridge traced them by patching the
+helpers' prologues to log `(return address, angle)`, which named the call sites
+and their angle arguments directly (that instrumentation is not in the live
+bridge):
 
 - `0x30A94`/`0x30AD8` -- the facing pair at entry +0x24/+0x28:
   angle = facing byte (unit +0x21) × the scale at 0x63FDCB2C.

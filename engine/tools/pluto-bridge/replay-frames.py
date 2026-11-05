@@ -12,13 +12,15 @@ frames = []
 off = 0
 while off + 12 <= len(data):
     magic, frm, nUnits = struct.unpack_from('<III', data, off)
-    if magic != 0x50465848:
+    if magic not in (0x50465848, 0x32505848, 0x33505848):
         print('bad magic at %d: %08x' % (off, magic))
         break
     mapW, mapH, nPlayers = struct.unpack_from('<III', data, off + 12)
     nUnits = min(nUnits, 9999)
     nPlayers = min(nPlayers, 12)
-    need = 24 + nUnits * 40 + nPlayers * 28 + 2 * ((mapW * mapH + 7) // 8)
+    tile_bytes = mapW * mapH * 4 if magic in (0x32505848, 0x33505848) else 2 * ((mapW * mapH + 7) // 8)
+    extra_bytes = nUnits * 64 if magic == 0x33505848 else 0
+    need = 24 + nUnits * 40 + extra_bytes + nPlayers * 28 + tile_bytes
     if off + need > len(data):
         print('frame %d truncated' % frm)
         break
