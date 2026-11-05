@@ -24,6 +24,11 @@ void __fastcall CUnit::ApplyBloodBoil(int x, int y, CUnit *pAttacker)
 
 void CUnit::ApplyConsume(CUnit *pTarget)
 {
+  // Hyperion: at a full bar Consume gains nothing, so it consumes nothing: the target
+  // survives, and massed consumes stop wasting zerglings once every defiler is full
+  // (the user, 2026-11-05).
+  if (wEnergy >= GetMaxEnergy())
+    return;
   CSprite *pSprite = pTarget->pSprite;
   spos_t y = pSprite->wPosY;
   spos_t x = PosS(pSprite->wPosX);

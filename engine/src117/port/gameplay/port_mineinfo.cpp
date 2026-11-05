@@ -30,9 +30,12 @@
 #include "../front/port_ui.h"
 #include "../hud/port_hudstate.h"  // PortHudPressButton, the idle icon's click; PortSelectLarva
 #include "../front/port_text.h"   // PortText, the pick's words
+#include "../render/port_console.h"  // PortConsoleHudOn, PortConsoleHidden: the card counts are the classic console's
 #include "../../h/net_cmds.h"     // PlayerData, the saturated number's colour
 #include "../../h/hxrules.h"  // HX_OPT_START_SPLIT, the start workers split's option
 #include "../render/port_teamcolor.h"  // PortTeamColorGet, the saturated number's colour
+#include "../platform/port_settings.h"  // PortSettingNumber, the energy bars' setting
+#include "../../h/playervision.h"  // SpriteSeenBy, an enemy caster's bar only when seen
 #include "port_camkeys.h"  // PortCamKeysLocation, the saved cameras' minimap labels
 #include "port_onecard.h"  // the classic console's type-card count labels
 #include "../../h/rect32.h"   // rect32_t, the minimap's cage and the console's
@@ -239,6 +242,15 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   static std::vector<NydusLink> s_aNydus;
   static std::vector<int> s_aGroup;
   static std::vector<BaseInfo> s_aBase;
+  // a spellcaster the local player can see, for its energy bar: its sprite's place and
+  // size in map pixels and its energy, gathered on the scan's beat (the user, 2026-11-05)
+  struct CasterBar {
+    int nX, nY;
+    int nW, nH;
+    int nNow, nMax;
+  };
+  static std::vector<CasterBar> s_aBars;
+  static double s_fEnergyBars = 1.0;  // Settings' Interface toggle, on until it says no
   static int s_nIdle = 0;
   static unsigned int s_nLastFrame = 0;
   static unsigned int s_nNextScan = 0;
@@ -432,6 +444,37 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
       s_aNydus.push_back(link);
     }
 
+    // the spellcasters in the local player's sight, their own or another player's alike:
+    // the bars' rule is the bars' setting, and the fog keeps an unseen enemy's energy
+    // hidden, but a seen enemy caster's bar shows as one's own does (the user, 2026-11-05)
+    {
+      double d = 1.0;
+      PortSettingNumber("hyperion", "energyBars", &d);
+      s_fEnergyBars = d;
+    }
+    s_aBars.clear();
+    for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
+      if (p->pSprite == NULL || (gulUnitTypeFlags[p->wType] & 0x200000) == 0 ||
+          (p->dwFlags & 0x40000000) != 0)
+        continue;  // a caster, never a hallucination
+      if (!SpriteSeenBy(p->pSprite, nPlayer))
+        continue;
+      CasterBar bar;
+      bar.nX = static_cast<int>(p->pSprite->wPosX);
+      bar.nY = static_cast<int>(p->pSprite->wPosY);
+      bar.nW = SpriteGrpWidth(p->pSprite);
+      bar.nH = SpriteGrpHeight(p->pSprite);
+      bar.nMax = p->GetMaxEnergyReal();
+      if (bar.nMax <= 0)
+        continue;
+      bar.nNow = static_cast<int>(p->wEnergy) >> 8;
+      if (bar.nNow > bar.nMax)
+        bar.nNow = bar.nMax;
+      if (bar.nNow < 0)
+        bar.nNow = 0;
+      s_aBars.push_back(bar);
+    }
+
     s_nIdle = nIdle;
     s_nNextScan = nFrame + 6;
   }
@@ -545,9 +588,14 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     fSize *= fScale;
     fy += fBelow * fScale;
     const float fWid = UiTextWidth(UI_FACE_BOLD, fSize, 0.0f, psz);
-    UiText(fx - fWid / 2 + 0.5f, fy - fSize * 0.5f + 0.5f, UI_FACE_BOLD, fSize, 0.0f,
+    // UiText's y is the baseline: put the em box's middle on the point, so the label sits
+    // on the saved camera's centre and not above it (the user, 2026-11-05)
+    float fAscent = 0.0f, fDescent = 0.0f, fGap = 0.0f;
+    UiFontMetrics(UI_FACE_BOLD, fSize, &fAscent, &fDescent, &fGap);
+    const float fBase = fy + (fAscent + fDescent) * 0.5f;
+    UiText(fx - fWid / 2 + 0.5f, fBase + 0.5f, UI_FACE_BOLD, fSize, 0.0f,
            UiColor{0.0f, 0.0f, 0.0f, 0.75f}, psz);
-    UiText(fx - fWid / 2, fy - fSize * 0.5f, UI_FACE_BOLD, fSize, 0.0f, c, psz);
+    UiText(fx - fWid / 2, fBase, UI_FACE_BOLD, fSize, 0.0f, c, psz);
   };
   auto minimapLine = [&](int nX0, int nY0, int nX1, int nY1, const UiColor &c) {
     float ax = 0.0f, ay = 0.0f, bx = 0.0f, by = 0.0f;
@@ -604,8 +652,10 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   }
 
   // the classic console's type cards: each label is that type's total over the whole
-  // selection, not the number of cards or the selection's total (the user, 2026-11-04)
-  if (StatUnits()[0] != NULL && StatUnits()[1] != NULL) {
+  // selection, not the number of cards or the selection's total (the user, 2026-11-04).
+  // Only while the classic console is on the screen: the HUD's grid puts the counts in
+  // its own cells, and a hidden console's rects would hang the text over the map.
+  if (!PortConsoleHidden() && !PortConsoleHudOn() && StatUnits()[0] != NULL && StatUnits()[1] != NULL) {
     for (int i = 0; i < g_nSelectionCardLabels && i < SELECTION_PAGE; ++i) {
       const SelectionCardLabel &card = g_aSelectionCardLabels[i];
       char sz[16];
@@ -619,7 +669,29 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     }
   }
 
-  // Energy uses 1.17's own health/energy stack (rle_draw_hpfloat), never a second blue bar.
+  // the spellcasters' energy bars, over every caster in the local player's sight: over the
+  // sprite, its energy now over its maximum, full or empty alike, so which casters hold
+  // energy is read at a glance with nothing selected. Selected units' 1.17 energy row
+  // (rle_draw_hpfloat) stays as it is; the Interface setting turns the bars off.
+  if (s_fEnergyBars > 0.5 && bCamOk) {
+    for (const CasterBar &b : s_aBars) {
+      const double fSx0 = fX + (b.nX - fCamX) * fSx;
+      const double fSy0 = fY + (b.nY - fCamY) * fSy;
+      if (fSx0 < fX - 40 || fSx0 > fX + fW + 40 || fSy0 < fY - 60 || fSy0 > fY + fH)
+        continue;
+      const float fBarW = static_cast<float>(b.nW * fSx * 0.6);
+      if (fBarW < 8.0f)
+        continue;
+      const float fBarH = 2.5f * fScale;
+      const float fTop = static_cast<float>(fSy0 - b.nH * fSy) - fBarH - 4.0f;
+      const float fX0 = static_cast<float>(fSx0) - fBarW / 2;
+      UiFill(fX0, fTop, fBarW, fBarH, UiColor{0.02f, 0.05f, 0.12f, 0.75f});
+      if (b.nNow > 0)
+        UiFill(fX0, fTop, fBarW * static_cast<float>(b.nNow) / b.nMax, fBarH,
+               UiColor{0.25f, 0.6f, 1.0f, 0.95f});
+      bDrew = true;
+    }
+  }
 
   // the idle workers' icon, fixed above the bottom console's top edge - on top of it,
   // not on it - and right of the minimap's cage, clear of its clicks, always, the count

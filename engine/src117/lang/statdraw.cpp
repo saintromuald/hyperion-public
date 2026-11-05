@@ -826,7 +826,12 @@ void __fastcall statdraw_draw_multi(ctrl_t *pDlg) {
       statdata_select_t *pSel = static_cast<statdata_select_t *>(ctrl_data26(p));
       pSel->pUnit = u;
       pSel->wFrame = ModUnitArtFrame(MOD_ART_GRPWIRE, u->wType);  // Hyperion: a mod's unit's own or its looks'
-      g_aSelectionCardLabels[i].rc = p->rc;
+      // The control's rect is in its dialog's coordinates (dialog.h). The overlay draws in
+      // the screen's, so add the dialog's origin, or the counts land at the map's top left.
+      g_aSelectionCardLabels[i].rc.left = pDlg->rc.left + p->rc.left;
+      g_aSelectionCardLabels[i].rc.top = pDlg->rc.top + p->rc.top;
+      g_aSelectionCardLabels[i].rc.right = pDlg->rc.left + p->rc.right;
+      g_aSelectionCardLabels[i].rc.bottom = pDlg->rc.top + p->rc.bottom;
       g_aSelectionCardLabels[i].nUnits = card.nUnits;
       g_nSelectionCardLabels = i + 1;
       ctrl_show(p);

@@ -545,6 +545,12 @@ centre their source; they never issue cancel commands. Replays and observed game
 and centring but send no commands. The Ctrl+Q default was not used because it already selects
 larvae; modified R defaults were avoided because R belongs to control group 11.
 
+A small permanent strip at the very top of the screen shows the same queues without any key
+(the user, 2026-11-05): one cell per producing source, the source's active icon (a building's
+research yields to its production) with its progress beneath and its total rows at the corner,
+and a click centres the source as a row's click does. With nothing in production there is no
+strip at all.
+
 Both panels scroll with the wheel or their footer arrows and reset transient hit/layout state
 between games. Visible icons are additional `PortHdUiItem`s appended by `PortConsoleHdItems`, in
 the same game-pixel coordinates as the panel wells. The overlay leaves those wells unpainted so
