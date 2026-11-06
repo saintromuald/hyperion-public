@@ -450,11 +450,12 @@ void PortBenchEnd(const char *pszReason)
       continue;
     SyncSlot slot;
     SyncSlotRead(s, &slot);
+    const std::string name = PortJsonQuote(gPlayerData[s].szName);
     snprintf(sz, sizeof sz,
-             "%s\r\n    {\"slot\": %d, \"race\": %d, \"team\": %d, \"level\": \"%s\", \"minerals\": %d, \"gas\": %d, "
+             "%s\r\n    {\"slot\": %d, \"name\": %s, \"race\": %d, \"team\": %d, \"level\": \"%s\", \"minerals\": %d, \"gas\": %d, "
              "\"minerals_gathered\": %d, \"gas_gathered\": %d, \"units\": %d, "
              "\"units_made\": %u, \"units_lost\": %u, \"units_killed\": %u}",
-             bFirst ? "" : ",", s, gPlayerData[s].nRace, gPlayerData[s].nTeam, AiLevelName(AiProfileOf(s).bLevel),
+             bFirst ? "" : ",", s, name.c_str(), gPlayerData[s].nRace, gPlayerData[s].nTeam, AiLevelName(AiProfileOf(s).bLevel),
              static_cast<int>(slot.nMinerals), static_cast<int>(slot.nGas),
              static_cast<int>(slot.nMineralsGathered), static_cast<int>(slot.nGasGathered), anUnits[s],
              slot.adwScores[2], slot.adwScores[3], slot.adwScores[4]);

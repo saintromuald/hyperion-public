@@ -631,6 +631,8 @@ static void ApplyImageState(const HxUnit *units, const HxUnitExtra *extras,
   // image path below, but resources and supplies must not remain at frame 0.
   for (unsigned i = 0; i < nPlayers && i < 12; ++i) {
     PlayerData &p = g->players[i];
+    if (i == 0)
+      snprintf(p.name, sizeof p.name, "PLuto");
     p.race = static_cast<int>(players[i].race);
     p.minerals = static_cast<int>(players[i].minerals);
     p.gas = static_cast<int>(players[i].gas);
