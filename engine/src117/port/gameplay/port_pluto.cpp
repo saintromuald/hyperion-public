@@ -654,6 +654,10 @@ void PlutoGameStart() {
   s_fifoFrames = -1;
   if (s_nPlutoSlot < 0)
     return;
+  // Keep the AI identifiable in the lobby, players panel, replay header, and
+  // benchmark summary rather than only by its AI-level label.
+  snprintf(gPlayerData[s_nPlutoSlot].szName, sizeof gPlayerData[s_nPlutoSlot].szName,
+           "PLuto");
   // Benchmark playback marks the viewer allied with the recorded players for
   // vision. That is useful for watching, but wrong for an AI-vs-AI melee: the
   // combat receivers turn attacks into Follow orders. Restore melee hostility
