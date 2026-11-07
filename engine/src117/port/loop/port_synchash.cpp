@@ -111,7 +111,7 @@ extern "C" unsigned char __heap_base;  // the heap's start, after the module's o
 
 extern CImage sgCircleImages_g[80] OC_UNALIGNED;  // the selection circles' own images (CImage.cpp)
 extern CImage sgHpbarImages[SELECTION_MAX];     // and the selection's health bars
-extern CImage g_hxHpbarImages[SELECTION_WIDE];  // and both of Hyperion's selection (CImage.cpp)
+extern CImage g_hxHpbarImages[SELECTION_HPBARS_WIDE];  // selection and draw-pass caster bars (CImage.cpp)
 extern CImage g_hxCircleImages[SELECTION_HUMANS * SELECTION_WIDE + 80];
 extern CSprite sgSprites[POOL_SPRITES_STORE];
 extern CUnit sgUnitsMem[POOL_UNITS_STORE];

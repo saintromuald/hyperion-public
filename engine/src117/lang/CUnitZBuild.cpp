@@ -13,6 +13,7 @@
 #include "../port/data/port_moddata.h"  // Hyperion: ModMorphTarget, a mod's morphs
 #include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 #include "../h/CUnitBuild.h"
+#include "../h/hxrules.h"     // Hyperion: recorded construction clearing
 #include "../h/CUnitTSpells.h"
 #include "../h/CUnitZSpells.h"
 #include "../h/CSprite.h"
@@ -451,31 +452,35 @@ void CUnit::DispatchBuildSelfZerg()
 void CUnit::DispatchDroneBuild()
 {
   CSprite *pSprite = this->pSprite;
-  upos_t wPosX;
-  upos_t wPosY;
-  WORD wBoxX;
-  WORD wBoxY;
   int nType;
   CUnit *pPowerup;
+
+  // A blocker can jostle a waiting drone off the exact morph pixel. Keep the
+  // construction order alive, re-check the site and walk back instead of
+  // cancelling; a newly disabled or otherwise permanent blocker still fails.
+  if ((g_hxRuleOptions & HX_OPT_CONSTRUCTION_CLEAR) != 0 && this->bOrderState == 1 &&
+      (pSprite->wPosX != PosU(this->wOrderTargetX) ||
+       PosU(pSprite->wPosY) != PosU(this->wOrderTargetY)))
+  {
+    const WorkerConstructionSiteResult retry = PrepareWorkerConstructionSite(this, 0x19);
+    if (retry != WORKER_SITE_FAILED)
+    {
+      this->SetDestination_xy(this->wOrderTargetX, this->wOrderTargetY);
+      return;
+    }
+  }
 
   if (pSprite->wPosX == PosU(this->wOrderTargetX)
       && PosU(pSprite->wPosY) == PosU(this->wOrderTargetY))
   {
     nType = this->wBuildQueue[this->bBuildQueueSlot];
-    wPosX = pSprite->wPosX;
-    wBoxX = static_cast<WORD>(gUnitPlaceboxSize[static_cast<WORD>(nType)].x);
-    wPosY = pSprite->wPosY;
-    wBoxY = static_cast<WORD>(gUnitPlaceboxSize[static_cast<WORD>(nType)].y);
-    if (mtx_query_place_bldg(this, this->bPlayer,
-                             (PosS(wPosX) - static_cast<short>(wBoxX) / 2) / 32,
-                             (PosS(wPosY) - static_cast<short>(wBoxY) / 2) / 32,
-                             nType, 0, 0, 1, 1) != 0
-        || this->pSprite->wPosX != PosU(this->wOrderTargetX)
-        || PosU(this->pSprite->wPosY) != PosU(this->wOrderTargetY))
+    const WorkerConstructionSiteResult site = PrepareWorkerConstructionSite(this, 0x19);
+    if (site == WORKER_SITE_WAIT)
     {
-      gamesnd_build_error(this, 0x358);
+      this->bOrderState = 1;
+      return;
     }
-    else if (bldg_get_unit_cost(this->bPlayer, static_cast<WORD>(nType), 1, 1))
+    if (site == WORKER_SITE_READY)
     {
       bldg_deduct_resources(this->bPlayer);
       pPowerup = reinterpret_cast<CUnit *>(GetHeldPowerup());

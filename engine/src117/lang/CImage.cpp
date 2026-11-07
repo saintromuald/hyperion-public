@@ -445,13 +445,23 @@ void CImage::GetDimensions(rect32_t *prc)
   prc->bottom = this->wMapY - 1 + pFrame->bHeight;
 }
 
-// Take an image off the healthbar pool, put
-//            it at the front of the sprite's image list, and initialise it.
-//            Static and __fastcall, with the CSprite in ECX as an argument.
-//            Nothing guards a null pImageHead; 1.17 relies on a healthbar only
-//            ever being added to a sprite that already has a main image.
+// Take an image off the healthbar pool for the selected unit. The original NewUnits lookup
+// is direct; unselected casters use AllocHealthbarForUnit with the unit cached by DrawAll.
 CImage * __fastcall CImage::AllocHealthbar(CSprite *pSprite)
 {
+  if (pSprite == NULL || (pSprite->flags.b & 8) == 0)
+    return 0;
+  return AllocHealthbarForUnit(pSprite, NewUnits()[pSprite->bSelectionIndex]);
+}
+
+// Take an image off the healthbar pool, put it at the front of the sprite's image list, and
+// initialise it for a unit already found by the caller. Popping the free-list head is O(1).
+// The caller owns the bar's lifetime: selection keeps its bars; DrawAll reclaims the temporary
+// unselected-caster bars it allocates through here at the end of the same pass.
+CImage * __fastcall CImage::AllocHealthbarForUnit(CSprite *pSprite, CUnit *pUnit)
+{
+  if (pSprite == NULL || pSprite->pImageHead == NULL || pUnit == NULL)
+    return 0;
   CImage *pImage = hpbar_images_sgpFreeHead;
   if (pImage == 0)
     return 0;
@@ -464,7 +474,7 @@ CImage * __fastcall CImage::AllocHealthbar(CSprite *pSprite)
       reinterpret_cast<CLink *>(pImage),
       reinterpret_cast<CLink **>(&pSprite->pImageHead));
 
-  pImage->HealthbarInit(pSprite);
+  pImage->HealthbarInitForUnit(pSprite, pUnit);
   return pImage;
 }
 
@@ -1458,12 +1468,14 @@ extern const lo_file_t *sgpShieldOverlayGroups_g[999] OC_UNALIGNED;
 #endif
 
 // Hyperion: the health bars, their groups and the circles of a game of Hyperion's
-// selection, 255 units (stage S, h/selectlimits.h); every other game keeps 1.17's pools of 12
-// and 80. The circles are a selection's for each human, and 1.17's 80 more.
+// selection (stage S, h/selectlimits.h); every other game keeps 1.17's pools of 12 and 80.
+// Besides the selection's persistent bars, the wide pool has scratch capacity for the local
+// player's visible unselected spellcasters; DrawAll returns all of those at each pass's end.
+// The circles are a selection's for each human, and 1.17's 80 more.
 #include "../port/replays/port_snap.h"  // PORT_SNAP_KEEP
 #define SELECTION_CIRCLES_WIDE (SELECTION_HUMANS * SELECTION_WIDE + 80)
-CImage g_hxHpbarImages[SELECTION_WIDE];
-GROUP g_hxHpbarGroups[SELECTION_WIDE];
+CImage g_hxHpbarImages[SELECTION_HPBARS_WIDE];
+GROUP g_hxHpbarGroups[SELECTION_HPBARS_WIDE];
 CImage g_hxCircleImages[SELECTION_CIRCLES_WIDE];
 PORT_SNAP_KEEP(g_hxHpbarImages);  // the trainer's snapshots hold them (port_snap.cpp)
 PORT_SNAP_KEEP(g_hxHpbarGroups);
@@ -1606,7 +1618,7 @@ void CImage::InitHPBar(int nBarType)
   this->wImageID = 0x230;
 
   // Hyperion: or the group of the same bar in the pool of Hyperion's selection (stage S)
-  const bool bWide = this >= g_hxHpbarImages && this < g_hxHpbarImages + SELECTION_WIDE;
+  const bool bWide = this >= g_hxHpbarImages && this < g_hxHpbarImages + SELECTION_HPBARS_WIDE;
   GROUP *pGroup = bWide ? &g_hxHpbarGroups[nBarType] : &sgHpbarGroups_g[nBarType];
   this->pGroup  = pGroup;
   *reinterpret_cast<WORD *>(pGroup) = 1;
@@ -2796,11 +2808,19 @@ void CImage::sub_40F3A0(BYTE bEnable)
 extern BYTE sprite_healthbarSize[387];
 #endif
 
-// Sizes this healthbar image's private GROUP from the sprite's sprites.dat
-// width and its unit's shield/energy rows, then starts its script.
+// Sizes this healthbar image's private GROUP from the selected sprite's sprites.dat width
+// and its unit's shield/energy rows, then starts its script. This keeps 1.17's direct lookup.
 void CImage::HealthbarInit(CSprite *pSprite)
 {
-  CUnit *pUnit = NewUnits()[pSprite->bSelectionIndex];  // Hyperion: selectlimits.h's (stage S)
+  HealthbarInitForUnit(pSprite, NewUnits()[pSprite->bSelectionIndex]);
+}
+
+// Hyperion: the same initialisation for a known unit, including an unselected caster found
+// by EnergyCasterBarsBegin. No selection-slot lookup or unit-list scan is needed here.
+void CImage::HealthbarInitForUnit(CSprite *pSprite, CUnit *pUnit)
+{
+  if (pSprite == NULL || pUnit == NULL)
+    return;
   BYTE bSize = sprite_healthbarSize[pSprite->wSpriteID - 130];
   this->cVertOffset = (char)(
       (sgpImgGroups[sprite_selCircleImg[pSprite->wSpriteID - 130] + 561]
@@ -3052,7 +3072,7 @@ void CImage::InitImages()
 }
 
 // Hyperion: a game of Hyperion's selection (stage S): the health bars and circles from
-// pools for 255 units, threaded as InitImages threads 1.17's. As the selection starts no image
+// its wide pools, threaded as InitImages threads 1.17's. As the selection starts no image
 // of 1.17's two pools is out, and none is again in this game.
 void CImage::InitSelectionImagesWide()
 {
@@ -3062,7 +3082,7 @@ void CImage::InitSelectionImagesWide()
   hpbar_images_sgpFreeTail_g = &g_hxHpbarImages[0];
   hpbar_images_sgpFreeHead = &g_hxHpbarImages[0];
   g_hxHpbarImages[0].InitHPBar(0);
-  for (DWORD i = 1; i < SELECTION_WIDE; i++) {
+  for (DWORD i = 1; i < SELECTION_HPBARS_WIDE; i++) {
     reinterpret_cast<CLink *>(&g_hxHpbarImages[0])->AppendLink(
         reinterpret_cast<CLink *>(&g_hxHpbarImages[i]),
         reinterpret_cast<CLink **>(&hpbar_images_sgpFreeTail_g));

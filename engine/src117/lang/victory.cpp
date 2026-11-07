@@ -10,6 +10,8 @@
 #include "oc_data.h"  // Hyperion: OC_VA
 #include "../h/victory.h"
 #include "../port/gameplay/port_eud.h"  // Hyperion: EUD maps
+#include "../port/gameplay/port_mutators.h"  // Hyperion: production victory
+#include "../h/CUnit.h"                 // Hyperion: the live production buildings
 
 #include <string.h>  // memset
 
@@ -1184,6 +1186,78 @@ static void TriggersEudBuild() {
   EudTriggersEnd();
 }
 
+// Hyperion: production victory. A team game's team, or mutually allied-victory players elsewhere,
+// is one side, so a teammate who never had a factory cannot eliminate the others. Existence counts;
+// dying units, subunits and hallucinations follow the unit counters' exclusions. When one side
+// remains, mark its players victorious and let victory_chk apply every result in the usual way.
+static void ProductionVictoryCheck() {
+  const int nPlayers = PlayerLobbySlots();
+  bool abActive[PLAYER_SLOTS_MAX] = {};
+  int anSide[PLAYER_SLOTS_MAX];
+  for (int i = 0; i < nPlayers; ++i) {
+    abActive[i] = sgpParticipants[i] != 0 && gbVictoryState[i] == 0;
+    anSide[i] = i;
+  }
+  const auto root = [&anSide](int n) {
+    while (anSide[n] != n) {
+      anSide[n] = anSide[anSide[n]];
+      n = anSide[n];
+    }
+    return n;
+  };
+  const bool bTeamGame = IsTeamGame();
+  for (int i = 0; i < nPlayers; ++i) {
+    if (!abActive[i])
+      continue;
+    for (int j = i + 1; j < nPlayers; ++j) {
+      if (!abActive[j])
+        continue;
+      const bool bSameTeam = bTeamGame && gPlayerData[i].nTeam != 0 && gPlayerData[i].nTeam == gPlayerData[j].nTeam;
+      const bool bAlliedVictory = sgbAlliances_g[i][j] == 2 && sgbAlliances_g[j][i] == 2;
+      if (!bSameTeam && !bAlliedVictory)
+        continue;
+      const int a = root(i), b = root(j);
+      if (a != b)
+        anSide[b] = a;
+    }
+  }
+  for (int i = 0; i < nPlayers; ++i)
+    root(i);
+
+  bool abSide[PLAYER_SLOTS_MAX] = {};
+  bool abProduction[PLAYER_SLOTS_MAX] = {};
+  for (int i = 0; i < nPlayers; ++i)
+    if (abActive[i])
+      abSide[root(i)] = true;
+  for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
+    const int nPlayer = p->bPlayer;
+    if (nPlayer >= nPlayers || !abActive[nPlayer])
+      continue;
+    if ((gubUnitCountInfo[p->wType] & 0x20) == 0 || (gulUnitTypeFlags[p->wType] & 0x10) != 0 ||
+        (p->dwFlags & 0x40000000u) != 0 || p->IsDeadOrDying())
+      continue;
+    abProduction[root(nPlayer)] = true;
+  }
+
+  int nLeft = 0, nLast = -1;
+  for (int i = 0; i < nPlayers; ++i) {
+    if (!abSide[i])
+      continue;
+    if (abProduction[i]) {
+      ++nLeft;
+      nLast = i;
+    } else {
+      for (int j = 0; j < nPlayers; ++j)
+        if (abActive[j] && root(j) == i && sgbVictoryCodes[j] == 0)
+          sgbVictoryCodes[j] = 2;
+    }
+  }
+  if (nLeft == 1)
+    for (int i = 0; i < nPlayers; ++i)
+      if (abActive[i] && root(i) == nLast && sgbVictoryCodes[i] == 0)
+        sgbVictoryCodes[i] = 3;
+}
+
 // One tick of the trigger machinery: age
 //            the clocks, then walk every active nation's trigger list and
 //            settle the victory codes if any of them ran. The head is read into
@@ -1225,7 +1299,11 @@ void triggers_loop(int nTicks) {
   }
   if (EudGame())  // Hyperion: what the map wrote that applies once its triggers have run
     EudTriggersDone();
-  if (bAny) {
+  // Production victory has no map trigger to set bAny, but still settles through victory_chk.
+  const bool bProduction = MutatorProductionVictory();
+  if (bProduction)
+    ProductionVictoryCheck();
+  if (bAny || bProduction) {
     victory_chk();
   }
 }

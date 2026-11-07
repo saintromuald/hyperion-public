@@ -19,6 +19,35 @@
 #include "../gen/globals117.h"
 #include "../port/render/port_view.h"  // Hyperion: PortViewScreenToMap
 #include "../h/selectlimits.h"  // Hyperion: SELECTION_MAX
+#include "../h/hxrules.h"       // Hyperion: HX_OPT_MORPH_RALLY
+
+namespace {
+
+// Hyperion: a larva that is morphing still speaks for the town hall that owns it. Resolve only
+// this file's right-click paths, rather than CUnit::GetRClickAction globally: selection, command
+// cards and every other caller keep their original rules. In particular, resolve before the
+// eligibility checks so an egg's own inert flags cannot hide its parent's ordinary rally action.
+CUnit *rclick_morph_rally_unit(CUnit *pUnit)
+{
+  if (pUnit == NULL || (g_hxRuleOptions & HX_OPT_MORPH_RALLY) == 0 || !HxRules())
+    return pUnit;
+
+  if (!((pUnit->wType == 0x23 && pUnit->bOrderId == 0x2A) || pUnit->wType == 0x24))
+    return pUnit;
+
+  CUnit *pParent = pUnit->pUnion80;
+  if (pParent != NULL &&
+      (pParent->wType == 0x83 || pParent->wType == 0x84 || pParent->wType == 0x85))
+    return pParent;
+  return pUnit;
+}
+
+BYTE rclick_unit_action(CUnit *pUnit)
+{
+  return rclick_morph_rally_unit(pUnit)->GetRClickAction();
+}
+
+}  // namespace
 
 // The globals this TU reaches, each spelled once for the standalone build and
 // once for the payload.
@@ -190,7 +219,7 @@ void __fastcall gamemap_rclick_default(dlgevt_t *pEvent)
       for (i = 0; i < SelectionMax(); i++) {
         CUnit *pUnit = StatUnits()[i];
         if (pUnit) {
-          switch (pUnit->GetRClickAction()) {
+          switch (rclick_unit_action(pUnit)) {
           case 1:
           case 2:
           case 4:
@@ -227,6 +256,7 @@ found:
 // few type/order pairs.
 BOOL unit_has_rclick_action(CUnit *pUnit)
 {
+  pUnit = rclick_morph_rally_unit(pUnit);
   DWORD dwFlags = pUnit->dwFlags;
 
   // One chain with the `return 0` textually last: as eight early returns MSVC
@@ -289,9 +319,35 @@ void __fastcall sub_47F680(int nX, int nY, CUnit *pTarget, int nTargetType, BYTE
       nType = 0xE4;
     }
   }
+  // Queen Infestation is the one energy spell normally issued through right-click rather than
+  // Action. Give it the same per-click caster rotation as Ensnare and the spell buttons. The
+  // option gate is essential: an older replay applied its right-click to every eligible Queen.
+  if (SelectionWide() && (g_hxRuleOptions & HX_OPT_SMART_CAST_ROTATION) != 0 &&
+      !SelectOnlyActive()) {
+    for (CUnit *pUnit = select_get_first(); pUnit != NULL; pUnit = select_get_next()) {
+      BYTE bAction = pUnit->GetRClickAction();
+      if ((pUnit->dwFlags & 0x40000000) && (bAction == 4 || bAction == 5))
+        bAction = 1;
+      CUnit *pQueryTarget = pTarget;
+      const order_id_t bOrder = (BYTE)query_click[bAction](pUnit, nX, nY, &pQueryTarget, nType);
+      if (bOrder != 0x1B)
+        continue;
+      if (CUnit *pCaster = SelectSmartCaster(nX, nY, bOrder, bQueued)) {
+        SelectOnlySet(pCaster);
+        sub_47F680(nX, nY, pTarget, nTargetType, bQueued);
+        SelectOnlySet(NULL);
+        return;
+      }
+      break;
+    }
+  }
   // Declared outside the loop it gets [ebp-8]; inside, it takes nTargetType's home.
   CUnit *pClick;
-  for (CUnit *pUnit = select_get_first(); pUnit != NULL && pUnit != NULL; pUnit = select_get_next()) {
+  for (CUnit *pSelected = select_get_first(); pSelected != NULL && pSelected != NULL;
+       pSelected = select_get_next()) {
+    // Keep the selection itself untouched: several larvae, and their parents too, can all apply
+    // the same ordinary rally orders in one received command.
+    CUnit *pUnit = rclick_morph_rally_unit(pSelected);
     BYTE bAction = pUnit->GetRClickAction();
     if ((pUnit->dwFlags & 0x40000000) && (bAction == 4 || bAction == 5))
       bAction = 1;
@@ -368,7 +424,7 @@ void __fastcall rclick_action(dlgevt_t *pEvent)
     for (i = 0; i < SelectionMax(); i++) {
       CUnit *pUnit = StatUnits()[i];
       if (pUnit) {
-        switch (pUnit->GetRClickAction()) {
+        switch (rclick_unit_action(pUnit)) {
         case 1:
         case 2:
         case 4:
@@ -407,6 +463,7 @@ BOOL rclick_interpret(CUnit *pTarget)
     if (pUnit == NULL)
       continue;
 
+    pUnit = rclick_morph_rally_unit(pUnit);
     bAction = pUnit->GetRClickAction();
     if ((pUnit->dwFlags & 0x40000000) && (bAction == 4 || bAction == 5))
       bAction = 1;

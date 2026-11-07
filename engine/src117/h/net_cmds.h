@@ -188,6 +188,8 @@ CUnit * __fastcall select_get_next();
 // of several carries out runs (select.cpp); NULL ends it.
 void SelectOnlySet(CUnit *pUnit);
 bool SelectOnlyActive();
+// Hyperion: the shared smart-cast pick, also used by right-click Infestation (rclick.cpp).
+CUnit *SelectSmartCaster(int nX, int nY, order_id_t bOrder, int nQueued);
 
 // oracle 0x4643C0 / 0x464200 (group_un.cpp). The group is a BYTE:
 // recv_net_cmd_GroupUnits loads only CL, and both callees read exactly that byte.

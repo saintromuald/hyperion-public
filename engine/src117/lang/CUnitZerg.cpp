@@ -19,6 +19,7 @@
 #include "../h/count.h"        // ours: count_add_existence
 #include "../h/creep.h"         // ours: spread_creep
 #include "../h/CUnitBuild.h"    // ours: ClipToMap
+#include "../h/hxrules.h"       // Hyperion: recorded construction clearing
 #include "../h/CUnitTSpells.h"   // ours: gamesnd_play
 #include "../h/CTarget.h"         // ours: CTarget::XYInRadius
 #include "../h/gamesnd.h"         // ours: gamesnd_land_error
@@ -387,11 +388,11 @@ void CUnit::DispatchDroneLand()
       BYTE bPlayer = this->bPlayer;
       WORD wSizeY  = (WORD)gUnitPlaceboxSize[wType].y;
       WORD wSizeX  = (WORD)gUnitPlaceboxSize[wType].x;
-      int  nPlace  = mtx_query_place_bldg(
-                       this, bPlayer,
+      int  nPlace  = mtx_query_place_bldg_worker(
+                       0x19, this, bPlayer,
                        PosS((this->wOrderTargetX - (short)wSizeX / 2) / 32),
                        PosS((this->wOrderTargetY - (short)wSizeY / 2) / 32),
-                       wType, 0, 0, 1, 1);
+                       wType, 0, 0, 1, 1, NULL, NULL);
 
       if (wType == 0x95 && nMode == 1 && nPlace == 0)
       {
@@ -415,8 +416,23 @@ void CUnit::DispatchDroneLand()
           return;
         }
       }
-      else if (nPlace != 0 || nMode == 2)
+      else if (nPlace != 0)
       {
+        goto landError;
+      }
+
+      if (nMode == 2)
+      {
+        if ((g_hxRuleOptions & HX_OPT_CONSTRUCTION_CLEAR) == 0)
+          goto landError;
+        // Recover only when this query finds a clearable blocker. A generic failed landing
+        // still takes landError; state 3 remembers that blockers, not teleporting, are the fix.
+        const WorkerConstructionSiteResult site = PrepareWorkerConstructionSite(this, 0x19);
+        if (site == WORKER_SITE_WAIT)
+        {
+          this->bOrderState = 3;
+          return;
+        }
         goto landError;
       }
 
@@ -459,6 +475,18 @@ landError:
       if (nMode == 0)
         return;
 
+      if (nMode == 2 && (g_hxRuleOptions & HX_OPT_CONSTRUCTION_CLEAR) != 0)
+      {
+        // Do this before changing the landing sprite. Only a real blocker plan enters state 3;
+        // every other failed landing follows the original error path below.
+        const WorkerConstructionSiteResult site = PrepareWorkerConstructionSite(this, 0x19);
+        if (site == WORKER_SITE_WAIT)
+        {
+          this->bOrderState = 3;
+          return;
+        }
+      }
+
       pSprite->SetShadowOffset(0);
       this->pSprite->sub_417840();
 
@@ -488,6 +516,31 @@ landError:
       this->pSprite->InvalidateDrawInfo();
       this->SetNextOrder(0x96);
       status_set_update();
+      this->EndUninterruptableDispatchOrder();
+      return;
+    }
+
+    case 3:
+    {
+      // A previous landing failure had a clearable blocker. Wait for that blocker, then ask the
+      // ordinary movement code for a fresh path. There is deliberately no SetUnitPosition here:
+      // an unrelated path failure can never turn into a teleport through the map.
+      const WorkerConstructionSiteResult site = PrepareWorkerConstructionSite(this, 0x19);
+      if (site == WORKER_SITE_WAIT)
+        return;
+      if (site == WORKER_SITE_READY)
+      {
+        this->dwFlags &= ~0x80000;
+        this->bOrderState = 1;
+        this->SetDestination_xy(this->wOrderTargetX, this->wOrderTargetY);
+        return;
+      }
+      gamesnd_land_error(this);
+      if (this->pOrderQueueHead != 0 && this->GetFirstQueuedOrder() == 0x1A)
+        this->RemovePreviousOrder();
+      this->pSprite->SetShadowOffset(7);
+      this->pSprite->InvalidateDrawInfo();
+      this->SetNextOrder(0x96);
       this->EndUninterruptableDispatchOrder();
       return;
     }

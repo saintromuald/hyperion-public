@@ -60,7 +60,7 @@ UiColor Alpha(UiColor c, float a)
 // over its picture (gist).
 const int kOrder[] = {MUT_MINERALS, MUT_GAS,  MUT_RICH,  MUT_START, MUT_WORKERS, MUT_SUPPLY,
                       MUT_BOOST,    MUT_NOCAP, MUT_FOG, MUT_BUILD, MUT_TECH,    MUT_ADDON,
-                      MUT_NOARMYKEY, MUT_ENERGY, MUT_NEWBIE, MUT_AUTOWORKERS, MUT_AUTOMINE};
+                      MUT_NOARMYKEY, MUT_ENERGY, MUT_NEWBIE, MUT_AUTOWORKERS, MUT_AUTOMINE, MUT_VICTORY};
 const int kOrderCount = static_cast<int>(sizeof kOrder / sizeof kOrder[0]);
 struct Group {
   const char *pszName;
@@ -70,7 +70,7 @@ const Group kGroups[] = {{PT_("Resources"), 0, 3},
                          {PT_("The start"), 3, 2},
                          {PT_("Supply"), 5, 3},
                          {PT_("Fog, time and tech"), 8, 4},
-                         {PT_("Play"), 12, 5}};
+                         {PT_("Play"), 12, 6}};
 const char *const kGists[MUT_COUNT] = {
     PT_("How much each mineral field holds, so how long a base can be mined."),
     PT_("How much each geyser holds before it runs dry."),
@@ -89,6 +89,7 @@ const char *const kGists[MUT_COUNT] = {
     PT_("Newbie helpers for a player learning the game: workers, mining and research by themselves."),
     PT_("A town hall with nothing training and supply to spare trains its worker by itself."),
     PT_("Each base's patches take up to three workers, each geyser three; once a base is full, the workers that are free go to the next base with room, and to the built geysers."),
+    PT_("Lose every production building and your side is out; the last side with one wins."),
 };
 
 int g_nSel = MUT_MINERALS;  // the mutator briefed
@@ -537,7 +538,7 @@ std::string Effect(const MutatorSet &m, int nMut)
     if (m.nFog == MUTATOR_FOG_NONE)
       return PortText("Every player sees the whole map all game.");
     if (m.nFog == MUTATOR_FOG_RESOURCES)
-      return PortText("The fog of war stays as Classic, but the mineral fields, geysers, eggs and obstacles show through it from the start, so a new player sees what the map offers. Other units show only in sight.");
+      return PortText("The fog of war stays as Classic. Mineral fields, geysers, rocks and other doodads are explored and remembered from the start. Live sight is never opened, so opponents stay hidden until seen.");
     return PortText("The fog of war, as Classic plays it.");
   case MUT_NOARMYKEY:
     if (m.nNoArmyKey != 0)
@@ -559,6 +560,10 @@ std::string Effect(const MutatorSet &m, int nMut)
     if (m.nAutoMine != 0)
       return PortText("Each base's patches take up to three workers, each geyser three; once a base is full, the workers that are free go to the next base with room, and to the built geysers.");
     return PortText("Mining is assigned by the player, as Classic.");
+  case MUT_VICTORY:
+    if (m.nVictory == MUTATOR_VICTORY_PRODUCTION)
+      return PortText("A player or team with no live production buildings loses; the last side with one wins. Buildings still under construction count, while dying buildings, subunits and hallucinations do not.");
+    return PortText("The map's own victory conditions, as Classic.");
   case MUT_BUILD: {
     const std::string sp = PortText(g_shown.speed.c_str());  // the game's speed, named
     if (m.nBuildTime == 100)
@@ -1088,7 +1093,7 @@ void StillFog(const Paint &p, const MutatorSet &m)
 {
   const bool bOn = m.nFog != MUTATOR_FOG_CLASSIC;
   static const char *const kSay[] = {PT_("Black until scouted"), PT_("Land known, units in sight"),
-                                     PT_("The whole map, all game"), PT_("Fog, but the minerals and rocks show")};
+                                     PT_("The whole map, all game"), PT_("Fog, with minerals and rocks remembered")};
   Half h[2];
   Halves(p, bOn, h);
   for (int i = 0; i < 2; ++i) {
@@ -1266,6 +1271,7 @@ void DrawPicture(float x, float y, float w, float h, void *pCtx)
   case MUT_NEWBIE: StillNewbie(p, m); break;
   case MUT_AUTOWORKERS: StillNewbie(p, m); break;
   case MUT_AUTOMINE: StillNewbie(p, m); break;
+  case MUT_VICTORY: StillBuild(p, m); break;
   }
   UiPopClip();
 }

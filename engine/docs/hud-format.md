@@ -1211,7 +1211,8 @@ A page holds `cols × rows` units. One unit selected shows its wireframe and fig
 (name, kind, hit points, shields, kills). The active subgroup's wireframes are lit; the card and
 the portrait show the active subgroup's first unit. The page shown is kept as the first unit it
 shows, so two screens with different widths (or a resize) show the page holding the same units.
-Clicking a wireframe selects that unit; Shift takes it out; Ctrl keeps only its type.
+Clicking a wireframe selects that unit; Shift takes only that unit out; Ctrl keeps only its type;
+Ctrl+Shift removes every selected unit of its type.
 
 **The grid in Hyperion (Hyperion's addition).** The cells sit beside the tabs, from the left, or
 up to the tabs when they are at the right, as StarCraft II's do; the design center's player

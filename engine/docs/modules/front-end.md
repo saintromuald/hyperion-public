@@ -344,7 +344,7 @@ over the column counts the mutators on and names the set: "No mutators · as Cla
 preset's name or "Custom set", with Hyperion rules.
 
 The tab is the presets (the engine's five, Custom lit for any other set and never a choice),
-the list of the ten by group, and the briefing of one: what it does, a picture of Classic
+the list by group, and the briefing of one: what it does, a picture of Classic
 beside this game, its choices as chips, and what the choice does in a sentence. Pointing at a
 row briefs it until the pointer leaves the list; pointing at a chip shows that choice in the
 picture and the sentence, dashed, before it is taken. Nothing a chip pointed at shows moves the

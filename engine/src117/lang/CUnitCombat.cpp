@@ -3359,6 +3359,7 @@ void CUnit::DamageApply(int nDamage, CUnit *pAttacker, int nSourcePlayer, int a4
         }
       }
     }
+    gamesnd_worker_killed(this, pAttacker);  // Hyperion: the true lethal branch, before Suicide
     lHitPoints = 0;
     Suicide();
     count_add_killed(this, nSourcePlayer);

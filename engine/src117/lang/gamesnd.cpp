@@ -7,8 +7,21 @@
 static int sgnHelpSndTimer;
 #endif
 #include "oc_data.h"  // Hyperion: OC_VA
+#include <vector>  // Hyperion: one worker-killed alert per base in a frame
 #include "../h/gamesnd.h"
 #include "../gen/globals117.h"
+
+// Hyperion: worker-killed alerts are presentation state, not part of the game's
+// simulation. A base key suppresses only another alert for that same base in
+// the same frame; a death-position key does the same when no base is nearby.
+struct worker_kill_alert_t {
+  const CUnit *pBase;
+  int nX;
+  int nY;
+};
+static std::vector<worker_kill_alert_t> sgWorkerKillAlerts;
+static DWORD sgdwWorkerKillAlertFrame;
+static int sgnWorkerKillSndTimer;
 
 // The globals this TU reaches, dual-spelled, one #ifdef per name.
 #ifndef gxUnitLife
@@ -301,8 +314,10 @@ extern "C" BYTE count_race(int nUnitType);
 #include "../h/CUnitHarvest.h"   // gamesnd_show_player_error
 #include "../h/TrigAct.h"        // gamesnd_mute_speech / gamesnd_unmute_speech
 #include "../h/CThingy.h"       // gamesnd_select
+#include "../h/minimap.h"       // Hyperion: do_minimap_ping
 
 #include "../h/CImage.h"       // IsSelfOwned
+#include "../port/platform/port_globals117.h"  // Hyperion: oc_dwReplayFrame
 #include "../port/render/port_view.h"  // Hyperion: PortViewSeenRect, g_portView
 #include "../h/playervision.h"  // Hyperion: the replay viewer past slot 7 (stage D)
 #include "../h/typelimits.h"  // Hyperion: a mod's types
@@ -352,7 +367,8 @@ int __fastcall gamesnd_screendist_volume(int nMapX, int nMapY) {
 
 // 0x446FF0  gamesnd_update  (107 B)
 // Counts the three cue timers down, and every other frame the units'
-// attack-notify timers at CUnit +0x87.
+// attack-notify timers at CUnit +0x87. Hyperion's worker-killed voice has its
+// own timer so it neither consumes nor waits for the ordinary attack warning.
 void __fastcall gamesnd_update(void) {
   if (sgnSelectSndTimer)
     sgnSelectSndTimer--;
@@ -360,6 +376,8 @@ void __fastcall gamesnd_update(void) {
     sgnBuildSndTimer--;
   if (sgnHelpSndTimer)
     sgnHelpSndTimer--;
+  if (sgnWorkerKillSndTimer)
+    sgnWorkerKillSndTimer--;
 
   if (nUpdateCtr-- == 0) {
     nUpdateCtr = 1;
@@ -773,6 +791,9 @@ void __fastcall gamesnd_reset(BYTE bPreload) {
   sgnLastSelectCount = 0;
   sgnHelpSndTimer = 0;
   gbSpeechMuted_g = 0;
+  sgnWorkerKillSndTimer = 0;  // Hyperion
+  sgdwWorkerKillAlertFrame = 0;
+  sgWorkerKillAlerts.clear();
 
   if (!sgbGamesndInit_g) {
     int i = 0;
@@ -1016,4 +1037,77 @@ void __fastcall gamesnd_under_attack(CUnit *__restrict pUnit) {
   int nDeadline = (unsigned int)snd_get_duration(nSoundId) / 1000 * 1000;
   nDeadline += gwSoundLengthAdjust[nSoundId];
   statport_talking_portrait(pUnit, nDeadline, 1, 0x10, nSoundId);
+}
+
+// Hyperion: the stock tables have no worker-specific under-attack advisor cue.
+// Keep the fallback in one helper so exact clips can replace it without touching
+// the alert path. These are zerg_advisor_zadupd01, terran_advisor_tadupd01 and
+// protoss_advisor_padupd01 in sfxdata.tbl.
+static int gamesnd_worker_killed_cue(BYTE bRace) {
+  return 120 + bRace;
+}
+
+// The completed friendly resource depot whose centre is nearest the killing
+// blow, within the same eight-tile reach the HUD uses to assign a mineral line
+// to a base. A worker killed farther from every depot uses its death position.
+static CUnit *gamesnd_worker_killed_base(CUnit *pWorker) {
+  const int nX = PosS(pWorker->pSprite->wPosX);
+  const int nY = PosS(pWorker->pSprite->wPosY);
+  const long long nReach = 8 * 32;
+  long long nBest = -1;
+  CUnit *pBest = NULL;
+
+  for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
+    if (p->bPlayer != pWorker->bPlayer || p->pSprite == NULL ||
+        p->IsDeadOrDying() || !p->IsResourceDest())
+      continue;
+    const long long nDx = nX - PosS(p->pSprite->wPosX);
+    const long long nDy = nY - PosS(p->pSprite->wPosY);
+    const long long nDistance = nDx * nDx + nDy * nDy;
+    if (nDistance > nReach * nReach)
+      continue;
+    if (nBest < 0 || nDistance < nBest) {
+      nBest = nDistance;
+      pBest = p;
+    }
+  }
+  return pBest;
+}
+
+// A lethal enemy blow to a local worker pings its base in the existing attack
+// red, whether or not it is on screen. Deaths at different bases in one frame
+// each ping; repeated deaths at one base do not. The advisor voice is once for
+// the batch and has a separate five-second cooldown (game_timer's 100 ms ticks),
+// which never gates the pings.
+void __fastcall gamesnd_worker_killed(CUnit *pUnit, CUnit *pAttacker) {
+  if (gPlayback || pUnit->bPlayer != g_LocalNationID ||
+      (gulUnitTypeFlags[pUnit->wType] & 8) == 0 || pAttacker == NULL ||
+      !pAttacker->IsEnemyUnit(pUnit))
+    return;
+
+  if (sgdwWorkerKillAlertFrame != oc_dwReplayFrame) {
+    sgdwWorkerKillAlertFrame = oc_dwReplayFrame;
+    sgWorkerKillAlerts.clear();
+  }
+
+  CUnit *pBase = gamesnd_worker_killed_base(pUnit);
+  CSprite *pSprite = pBase != NULL ? pBase->pSprite : pUnit->pSprite;
+  const int nX = PosS(pSprite->wPosX);
+  const int nY = PosS(pSprite->wPosY);
+  for (size_t i = 0; i < sgWorkerKillAlerts.size(); ++i) {
+    const worker_kill_alert_t &alert = sgWorkerKillAlerts[i];
+    if (alert.pBase == pBase &&
+        (pBase != NULL || (alert.nX == nX && alert.nY == nY)))
+      return;
+  }
+
+  const worker_kill_alert_t alert = {pBase, nX, nY};
+  sgWorkerKillAlerts.push_back(alert);
+  do_minimap_ping(nX, nY, 0x10);
+
+  if (sgnWorkerKillSndTimer == 0) {
+    sgnWorkerKillSndTimer = 50;
+    const int nSoundId = gamesnd_worker_killed_cue(byte_5264C2);
+    gamesnd_play(nSoundId, NULL, (BYTE)gOptions_lift_variant & 1, 0);
+  }
 }

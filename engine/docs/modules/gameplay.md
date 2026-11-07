@@ -277,10 +277,11 @@ the set-up's Mutators tab (`front-end.md`, "The Mutators tab").
 | Supply cap | 100, 200, 300, 400, 500, 600 | 200 | `count_init`: `MutatorSupplyCap` |
 | Start workers | 2, 4, 6, 8, 10, 12 | 4 | `PlaceStartingUnits` and `TeamPlaceStartingUnits` (`placebox.cpp`): `MutatorWorkers` |
 | Supply boost | None, +25%, +50%, +75%, +100% | none | the supply a unit gives as it counts (`count_unit_complete`), the computer's count of the depots it needs (`SAI_Build.cpp`) and the console's line (`statdraw.cpp`): `MutatorFoodMade` |
-| Fog of war | Normal, Explored, None | Normal | the map's tiles as the map loads (`MutatorsMapLoaded`) and after each refresh of the players' sight (`MutatorsVisionRefresh`, `gameloop.cpp`) |
+| Fog of war | Normal, Explored, None, Explored + resources | Normal | the map's tiles as the map loads (`MutatorsMapLoaded`) and after each refresh of the players' sight (`MutatorsVisionRefresh`, `gameloop.cpp`); resources' and doodads' static memory only as a new map loads |
 | Build time | ×0.25, ×0.5, ×0.75, ×1 | ×1 | the units' and buildings', upgrades' and techs' time tables as the map loads (`MutatorsMapLoaded`) |
 | Tech and upgrades | Normal, Researched, No upgrades, No research | Normal | Researched: the players' tech and upgrades as the map loads; the other two: `UpgradeAllowed` and `ResearchAllowed` (`Allowed.cpp`): `MutatorUpgradesForbidden`, `MutatorResearchForbidden` |
 | Rich resources | Off, Past the naturals, Outside a radius, Farthest only, Every base; a distance of 32, 48, 64 or 80 tiles or a quarter, third or half of the map; a chance of 25, 50, 75 or 100% | Off | the read and roll as the map loads (`RichBasesMapLoaded`, below); a harvest (`CUnit::GetHarvest`): `MutatorTrip`; a load taken (`SetHarvestInventory`): `MutatorCarry`; a unit's name (`CUnit::GetName`): `MutatorRichName` |
+| Victory | Classic, Production | Classic | `ProductionVictoryCheck` from `triggers_loop`, even with no map triggers, then the usual `victory_chk` |
 
 The unit limit is held with the mutators (`MutatorSet::nUnits`, the record's sixteenth value)
 but chosen in Game Options, not on the tab: Automatic, or 3,400, 6,800, 13,600, 27,200, 54,400,
@@ -323,11 +324,21 @@ they are made. No upgrades has `UpgradeAllowed` refuse every upgrade (as one at 
 and No research has `ResearchAllowed` refuse every tech as well (as one not available): the
 buttons, a player's command and the computer's research (`SAI_Build.cpp`) all ask those two.
 Explored clears every tile's unexplored bits for every player, and None its hidden bits too.
+Explored + resources instead makes one pass as a new map loads: neutral mineral fields and geysers
+get ordinary fogged-unit memories, and resources', rocks' and other doodads' tiles lose only their
+unexplored bits. It never clears a live hidden bit and never visits transient or opponent-owned
+units. Records before `MUTATOR_REVISION` 4 retain the old repeated live-tile reveal when replayed.
 1.17 hides the tiles again every 100 frames (`sub_46C180`, the game loop's fog block), so
 `MutatorsVisionRefresh` runs after each refresh; slots past 8 have Hyperion's own sight sets
-(`VisionHxHidden`, `VisionHxUnexplored`). A save holds the tables (its `DATS`), the research and
-the tiles, so a loaded game scales only a mod's unit types, which the mod gives back at each
-start.
+(`VisionHxHidden`, `VisionHxUnexplored`). A save holds the tables (its `DATS`), the research, the
+static memories and the tiles, so a loaded game scales only a mod's unit types, which the mod gives
+back at each start.
+
+Production victory counts a unit type with `gubUnitCountInfo[type] & 0x20`, complete or still under
+construction, but not one dying, a subunit or a hallucination. Players with mutual allied victory
+form one side and pool their factories. A side with none loses; when only one side has any left its
+players win through `victory_chk`. This check runs on the ordinary victory-check cadence even when
+the map has no triggers, and the mutator is off unless `victory=production` is chosen.
 
 The presets are the design's (`lobby.js`'s `PRESETS`): Standard, Plenty (fields and geysers
 ×2; called Rich before rich bases, and `--mutators rich` still names it), Gold Rush (×4, 1,000 /
@@ -546,10 +557,11 @@ and centring but send no commands. The Ctrl+Q default was not used because it al
 larvae; modified R defaults were avoided because R belongs to control group 11.
 
 A small permanent strip at the very top of the screen shows the same queues without any key
-(the user, 2026-11-05): one cell per producing source, the source's active icon (a building's
-research yields to its production) with its progress beneath and its total rows at the corner,
-and a click centres the source as a row's click does. With nothing in production there is no
-strip at all.
+(the user, 2026-11-05). Identical work of one kind groups across sources: five Queens at different
+stages are one `x5` cell, whose single bar follows the Queen closest to completion and then the
+next after refresh. Different unit types and different kinds of work remain separate. A click
+centres the representative's source. Icons use the enabled command-button palette rather than the
+dim palette. With nothing in production there is no strip at all.
 
 Both panels scroll with the wheel or their footer arrows and reset transient hit/layout state
 between games. Visible icons are additional `PortHdUiItem`s appended by `PortConsoleHdItems`, in
@@ -558,6 +570,33 @@ the later Ui pass cannot obscure the HD icons. Classic art, icons still loading,
 the console item list's remaining capacity get compact text badges instead of enlarged SD art.
 Added mod research uses its mod card's icon and name; where no public total-time accessor exists
 for an added tech or upgrade, its row shows the work and source without inventing a percentage.
+
+### Current Hyperion helpers
+
+`HX_OPT_CONSTRUCTION_CLEAR` lets an arrived SCV, Probe or Drone wait while movable units blocking
+its site receive deterministic move orders. Burrowed blockers unburrow first, and Spider Mines use
+the mine's real detonation animation and effect. Terrain, creep, psi, resource and existing-building
+rules still reject the site; disabled or immovable blockers cannot be cleared. Payment and creation
+remain in the ordinary arrived-worker path, and recovery from a failed approach never teleports a
+worker. `HX_OPT_MORPH_RALLY` lets a morphing larva or its egg right-click a world or minimap point
+as its parent Hatchery/Lair/Hive, so the resulting units (including twins) inherit that rally.
+`HX_OPT_SMART_CAST_ROTATION` extends Consume's one-new-caster-per-immediate-click behavior to the
+other energy spells, including Ensnare and right-click Infestation. All three options, and `HX_OPT_SCOUT_BALANCE`, are recorded
+so older replays retain their original rules. The Scout balance subtracts 35 minerals, 10 gas and
+120 build frames (eight Normal-speed seconds) after map overrides and before build-time scaling.
+
+The original green HP/purple energy stack is the only energy presentation. In a wide-selection
+Hyperion game the Interface toggle shows it on the local player's visible casters even when
+unselected: `CSprite::DrawAll` lends those units original health-bar images for the draw pass and
+reclaims them in reverse order, leaving no view-dependent bars in a save or snapshot. Classic games
+keep the stack on selected units. There is no second bar above the sprite.
+
+Mineral saturation displays the actual assignment above the optimum (for example `35 / 24`), and a
+returning gas worker keeps its refinery association through `pUnionC8_SavedOrderTarget`, so `3 / 3`
+stays steady and takes the saturated colour. Nydus labels are 12 px in the world and 4 px on the
+minimap, with a thin white link in both; saved-camera labels are 7 px. A lethal enemy blow to a local
+worker emits the red attack ping at each affected base even for simultaneous deaths, with a
+race-appropriate advisor warning batched separately from the pings.
 
 ### The score
 

@@ -41,6 +41,9 @@
 #include "TrigAct.h"       // net_rand
 #include "CUnitTSpells.h"  // net_randbetween
 #include "../h/handicap.h"  // Hyperion: a player's handicap
+#include "CUnitSearches.h"  // Hyperion: blocker destinations must be reachable
+#include <algorithm>
+#include <vector>
 
 // The globals this TU reaches, dual-spelled, one #ifndef per name: the plain extern arm
 // alone leaves the shipped form's baked slots unchecked, and one guard over the whole
@@ -305,29 +308,398 @@ BOOL CUnit::CountDownToCompletion() {
   return 0;
 }
 
+// Hyperion: automatic construction-blocker clearing. Placement previews and the
+// network command's validation use the read-only worker query in collide.cpp;
+// only this arrived-worker path turns its blocker list into simulation orders.
+struct WorkerBlockerList {
+  std::vector<CUnit *> units;
+};
+
+static void __fastcall CollectWorkerBlocker(CUnit *pUnit, void *pContext)
+{
+  WorkerBlockerList *pList = static_cast<WorkerBlockerList *>(pContext);
+  if (std::find(pList->units.begin(), pList->units.end(), pUnit) == pList->units.end())
+    pList->units.push_back(pUnit);
+}
+
+struct WorkerSiteBox {
+  int left;
+  int top;
+  int right;
+  int bottom;
+};
+
+enum WorkerBlockerAction {
+  WORKER_BLOCKER_MOVE,
+  WORKER_BLOCKER_DEBURROW,
+  WORKER_BLOCKER_DETONATE,
+  WORKER_BLOCKER_WAIT,
+};
+
+struct WorkerBlockerPlan {
+  CUnit *pUnit;
+  WorkerBlockerAction action;
+  mpoint_t destination;
+  bool bHasDestination;
+  bool bIssueMove;
+};
+
+static WorkerSiteBox WorkerSiteBounds(const CUnit *pWorker, int nBuildType,
+                                      int nCellX, int nCellY)
+{
+  (void)pWorker;
+  WorkerSiteBox box;
+  box.left = nCellX * 32;
+  box.top = nCellY * 32;
+  box.right = box.left + (gUnitPlaceboxSize[(WORD)nBuildType].x / 32) * 32;
+  box.bottom = box.top + (gUnitPlaceboxSize[(WORD)nBuildType].y / 32) * 32;
+  return box;
+}
+
+// A destination is clear only when the blocker's whole collision box, not just
+// its centre, is outside the building's footprint.
+static bool WorkerDestinationOutside(const CUnit *pUnit, mpoint_t pt,
+                                     const WorkerSiteBox &site)
+{
+  const rect16_t &bounds = gUnitBoundBox[pUnit->wType];
+  const int left = pt.x - bounds.left;
+  const int top = pt.y - bounds.top;
+  const int right = pt.x + bounds.right;
+  const int bottom = pt.y + bounds.bottom;
+  return right <= site.left || left >= site.right ||
+         bottom <= site.top || top >= site.bottom;
+}
+
+static bool WorkerDestinationOnMap(const CUnit *pUnit, mpoint_t pt)
+{
+  const rect16_t &bounds = gUnitBoundBox[pUnit->wType];
+  return pt.x - bounds.left >= 0 && pt.y - bounds.top >= 0 &&
+         pt.x + bounds.right < gwMapPixWidth &&
+         pt.y + bounds.bottom < gwMapPixHeight - 0x20;
+}
+
+static bool WorkerDestinationReserved(const CUnit *pUnit,
+                                      const std::vector<WorkerBlockerPlan> &plans,
+                                      mpoint_t pt)
+{
+  const rect16_t &bounds = gUnitBoundBox[pUnit->wType];
+  const int left = pt.x - bounds.left;
+  const int top = pt.y - bounds.top;
+  const int right = pt.x + bounds.right;
+  const int bottom = pt.y + bounds.bottom;
+  for (size_t i = 0; i < plans.size(); ++i) {
+    if (!plans[i].bHasDestination)
+      continue;
+    const rect16_t &other = gUnitBoundBox[plans[i].pUnit->wType];
+    const int otherLeft = plans[i].destination.x - other.left;
+    const int otherTop = plans[i].destination.y - other.top;
+    const int otherRight = plans[i].destination.x + other.right;
+    const int otherBottom = plans[i].destination.y + other.bottom;
+    if (left < otherRight && right > otherLeft &&
+        top < otherBottom && bottom > otherTop)
+      return true;
+  }
+  return false;
+}
+
+static mpoint_t WorkerCandidateDestination(const CUnit *pUnit,
+                                           const WorkerSiteBox &site,
+                                           int nSide, int nSlot, int nRing)
+{
+  const rect16_t &bounds = gUnitBoundBox[pUnit->wType];
+  const int nClearance = 8 + nRing * 32;
+  const int nSpanX = (site.right - site.left) / 32;
+  const int nSpanY = (site.bottom - site.top) / 32;
+  mpoint_t pt;
+
+  switch (nSide) {
+  case 0:  // left
+    pt.x = PosS(site.left - bounds.right - nClearance);
+    pt.y = PosS(site.top + nSlot * 32);
+    break;
+  case 1:  // right
+    pt.x = PosS(site.right + bounds.left + nClearance);
+    pt.y = PosS(site.top + nSlot * 32);
+    break;
+  case 2:  // above
+    pt.x = PosS(site.left + nSlot * 32);
+    pt.y = PosS(site.top - bounds.bottom - nClearance);
+    break;
+  default:  // below
+    pt.x = PosS(site.left + nSlot * 32);
+    pt.y = PosS(site.bottom + bounds.top + nClearance);
+    break;
+  }
+
+  // Keep the walk on the perimeter even for a non-standard small placebox.
+  if (nSide < 2 && nSlot > nSpanY)
+    pt.y = PosS(site.bottom);
+  if (nSide >= 2 && nSlot > nSpanX)
+    pt.x = PosS(site.right);
+  return pt;
+}
+
+static bool WorkerFindDestination(CUnit *pUnit, const WorkerSiteBox &site,
+                                  const std::vector<WorkerBlockerPlan> &plans,
+                                  mpoint_t *pDestination)
+{
+  const int nUnitIndex = static_cast<int>(pUnit - CUnit::Head());
+  const int nSpanX = (site.right - site.left) / 32 + 1;
+  const int nSpanY = (site.bottom - site.top) / 32 + 1;
+
+  // Four rings are enough to try separate lanes and positions without making a
+  // permanently boxed-in blocker spin the worker forever. No random numbers are
+  // consumed: unit-table order, side, slot and ring fully determine the search.
+  for (int nRing = 0; nRing < 4; ++nRing) {
+    for (int nSideStep = 0; nSideStep < 4; ++nSideStep) {
+      const int nSide = (nUnitIndex + nSideStep) & 3;
+      const int nSpan = nSide < 2 ? nSpanY : nSpanX;
+      for (int nSlotStep = 0; nSlotStep < nSpan; ++nSlotStep) {
+        const int nSlot = (nSlotStep + nUnitIndex / 4) % nSpan;
+        mpoint_t input = WorkerCandidateDestination(pUnit, site, nSide, nSlot, nRing);
+        mpoint_t output = input;
+        if (!FindPlaceForUnit(pUnit, &input, &output, NULL, 1, 0))
+          continue;
+        if (!WorkerDestinationOutside(pUnit, output, site) ||
+            !WorkerDestinationOnMap(pUnit, output) ||
+            WorkerDestinationReserved(pUnit, plans, output) ||
+            !sai_path_can_reach_target(pUnit, PosU(output.x), PosU(output.y)))
+          continue;
+        *pDestination = output;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+static bool WorkerPlanBlockers(CUnit *pWorker, std::vector<CUnit *> &blockers,
+                               const WorkerSiteBox &site,
+                               std::vector<WorkerBlockerPlan> *pPlans)
+{
+  std::sort(blockers.begin(), blockers.end(), [](const CUnit *pLeft, const CUnit *pRight) {
+    return pLeft - CUnit::Head() < pRight - CUnit::Head();
+  });
+
+  // Keep destinations reserved after an earlier blocker leaves the footprint,
+  // and across simultaneous construction sites. Current blockers are excluded
+  // here and added one at a time below so none rejects its own existing move.
+  std::vector<WorkerBlockerPlan> reservations;
+  for (CUnit *pUnit = CUnit::GetUsedList(); pUnit != NULL; pUnit = pUnit->pNext) {
+    if (pUnit->bOrderId != 6 ||
+        std::find(blockers.begin(), blockers.end(), pUnit) != blockers.end())
+      continue;
+    mpoint_t destination;
+    destination.x = pUnit->wOrderTargetX;
+    destination.y = pUnit->wOrderTargetY;
+    if (!WorkerDestinationOutside(pUnit, destination, site) ||
+        !WorkerDestinationOnMap(pUnit, destination))
+      continue;
+    WorkerBlockerPlan reservation;
+    reservation.pUnit = pUnit;
+    reservation.action = WORKER_BLOCKER_WAIT;
+    reservation.destination = destination;
+    reservation.bHasDestination = true;
+    reservation.bIssueMove = false;
+    reservations.push_back(reservation);
+  }
+
+  // Plan everything before changing anything. In particular, a later blocker
+  // with no legal destination must not leave earlier blockers with new orders.
+  for (size_t i = 0; i < blockers.size(); ++i) {
+    CUnit *pUnit = blockers[i];
+    if (pUnit->IsDisabled())
+      return false;
+
+    WorkerBlockerPlan plan;
+    plan.pUnit = pUnit;
+    plan.action = WORKER_BLOCKER_WAIT;
+    plan.destination.x = 0;
+    plan.destination.y = 0;
+    plan.bHasDestination = false;
+    plan.bIssueMove = false;
+
+    // Mines precede generic burrow handling: their order is not Deburrow's.
+    if (pUnit->wType == 0x0D) {
+      if (pUnit->bOrderId != 0x14 || pUnit->bOrderState != 6)
+        plan.action = WORKER_BLOCKER_DETONATE;
+      pPlans->push_back(plan);
+      continue;
+    }
+
+    if (pUnit->bOrderId == 0x76) {
+      pPlans->push_back(plan);
+      continue;
+    }
+
+    if (pUnit->bOrderId == 0x74 || pUnit->bOrderId == 0x75 ||
+        (pUnit->dwFlags & CUnit::UF_Burrowed)) {
+      if (pUnit->bOrderId != 0x74 && pUnit->bOrderId != 0x75 &&
+          pUnit->wType != 0x67)
+        return false;
+      plan.action = WORKER_BLOCKER_DEBURROW;
+      pPlans->push_back(plan);
+      continue;
+    }
+
+    if (!pUnit->CanMove())
+      return false;
+
+    if (pUnit->bOrderId == 6) {
+      mpoint_t current;
+      current.x = pUnit->wOrderTargetX;
+      current.y = pUnit->wOrderTargetY;
+      if (WorkerDestinationOutside(pUnit, current, site) &&
+          WorkerDestinationOnMap(pUnit, current) &&
+          !WorkerDestinationReserved(pUnit, reservations, current) &&
+          sai_path_can_reach_target(pUnit, PosU(current.x), PosU(current.y))) {
+        plan.action = WORKER_BLOCKER_MOVE;
+        plan.destination = current;
+        plan.bHasDestination = true;
+        pPlans->push_back(plan);
+        reservations.push_back(plan);
+        continue;
+      }
+    }
+
+    if (!WorkerFindDestination(pUnit, site, reservations, &plan.destination))
+      return false;
+    plan.action = WORKER_BLOCKER_MOVE;
+    plan.bHasDestination = true;
+    plan.bIssueMove = true;
+    pPlans->push_back(plan);
+    reservations.push_back(plan);
+  }
+
+  for (size_t i = 0; i < pPlans->size(); ++i) {
+    WorkerBlockerPlan &plan = (*pPlans)[i];
+    CUnit *pUnit = plan.pUnit;
+    switch (plan.action) {
+    case WORKER_BLOCKER_MOVE:
+      if (plan.bIssueMove)
+        pUnit->SetOrder_xy(6, plan.destination.x, plan.destination.y);
+      break;
+    case WORKER_BLOCKER_DEBURROW:
+      pUnit->Deburrow();
+      break;
+    case WORKER_BLOCKER_DETONATE:
+      if (pUnit->bOrderId != 0x14)
+        pUnit->SetOrder(0x14);
+      // Enter the real DispatchVultureMine detonation state. Its animation
+      // completion performs Suicide; this path never substitutes a fake kill.
+      pUnit->pOrderTarget = NULL;
+      pUnit->pSprite->bElevationLevel = gubUnitPriorityPlane[pUnit->wType];
+      pUnit->pSprite->flags.b &= ~0x40;
+      pUnit->SetBackgroundOrder(0x17);
+      pUnit->dwFlags &= ~0x200000;
+      pUnit->MakeUnburrowed();
+      pUnit->wOrderTargetX = pUnit->pSprite->wPosX;
+      pUnit->wOrderTargetY = pUnit->pSprite->wPosY;
+      pUnit->pSprite->SetAnimation(0x0D, 1);
+      pUnit->bOrderState = 6;
+      pUnit->DispatchVultureMine();
+      break;
+    case WORKER_BLOCKER_WAIT:
+      break;
+    }
+  }
+
+  (void)pWorker;
+  return true;
+}
+
+WorkerConstructionSiteResult PrepareWorkerConstructionSite(
+    CUnit *pWorker, order_id_t nBuildOrder)
+{
+  const int nBuildType = pWorker->wBuildQueue[pWorker->bBuildQueueSlot];
+  if (!bldg_get_unit_cost(pWorker->bPlayer, nBuildType, 1, 1))
+    return WORKER_SITE_FAILED;
+
+  const WORD wW = (WORD)gUnitPlaceboxSize[(WORD)nBuildType].x;
+  const WORD wH = (WORD)gUnitPlaceboxSize[(WORD)nBuildType].y;
+  const int nCellX = (pWorker->wOrderTargetX - (short)wW / 2) / 32;
+  const int nCellY = (pWorker->wOrderTargetY - (short)wH / 2) / 32;
+  const int nArg8 = nBuildOrder == 0x19 ? 1 : 0;
+
+  if (mtx_query_place_bldg(pWorker, pWorker->bPlayer, nCellX, nCellY,
+                           nBuildType, 0, 0, 1, nArg8) == 0)
+    return WORKER_SITE_READY;
+
+  WorkerBlockerList found;
+  const int nRelaxed = mtx_query_place_bldg_worker(
+      nBuildOrder, pWorker, pWorker->bPlayer, nCellX, nCellY, nBuildType,
+      0, 0, 1, nArg8, CollectWorkerBlocker, &found);
+  WorkerSiteBox site = WorkerSiteBounds(pWorker, nBuildType, nCellX, nCellY);
+  std::vector<WorkerBlockerPlan> plans;
+  if (nRelaxed != 0 || found.units.empty() ||
+      !WorkerPlanBlockers(pWorker, found.units, site, &plans)) {
+    gamesnd_build_error(pWorker, 0x358);
+    return WORKER_SITE_FAILED;
+  }
+  return WORKER_SITE_WAIT;
+}
+
 // 0x41A580 (482 B). Walks to the build site, then places the queued building
-// and hands the worker over to it. The two gotos keep the XYInRadius
-// arguments loaded after the nState test; one `||` chain hoists them.
+// and hands the worker over to it. Hyperion lets an arrived worker clear mobile
+// blockers and retry here before the original affordability/payment handoff.
 void CUnit::DispatchBuild() {
   if (dwUnion134 != 0)
     dwFlags |= 0x800000;
   switch (bOrderState) {
   case 1: {
-    int nState = AtMoveTarget();
-    if (nState == 0)
-      return;
-    if (nState == 2)
-      goto end;
-    {
-      int nY = wOrderTargetY;
-      int nX = wOrderTargetX;
-      if (!reinterpret_cast<CTarget *>(this)->XYInRadius(0x80, nX, nY))
-        goto end;
-    }
-    if (!sub_41BCB0()) {
-end:
-      EndDispatchOrder();
-      return;
+    if ((g_hxRuleOptions & HX_OPT_CONSTRUCTION_CLEAR) == 0) {
+      // The recorded legacy approach, byte for byte in behavior: never query or pay while
+      // AtMoveTarget still says the SCV is moving, and a path failure always ends the order.
+      const int nState = AtMoveTarget();
+      if (nState == 0)
+        return;
+      if (nState == 2) {
+        EndDispatchOrder();
+        return;
+      }
+      if (!reinterpret_cast<CTarget *>(this)->XYInRadius(0x80, wOrderTargetX, wOrderTargetY) ||
+          !sub_41BCB0()) {
+        EndDispatchOrder();
+        return;
+      }
+    } else {
+      const int nState = AtMoveTarget();
+      if (nState == 0)
+        return;  // in particular, being inside the placement radius is not arrival
+      const bool bInRange = reinterpret_cast<CTarget *>(this)->XYInRadius(
+          0x80, wOrderTargetX, wOrderTargetY) != 0;
+      if (nState == 2) {
+        // Only a confirmed clearable blocker may recover a failed approach. State 2 remembers
+        // that recovery; a generic path/placement failure keeps the original cancellation.
+        if (!bInRange) {
+          EndDispatchOrder();
+          return;
+        }
+        const WorkerConstructionSiteResult site = PrepareWorkerConstructionSite(this, 0x1E);
+        if (site == WORKER_SITE_WAIT) {
+          bOrderState = 2;
+          return;
+        }
+        EndDispatchOrder();
+        return;
+      }
+      if (!bInRange) {
+        EndDispatchOrder();
+        return;
+      }
+      const WorkerConstructionSiteResult site = PrepareWorkerConstructionSite(this, 0x1E);
+      if (site == WORKER_SITE_FAILED) {
+        EndDispatchOrder();
+        return;
+      }
+      if (site == WORKER_SITE_WAIT) {
+        bOrderState = 2;
+        return;
+      }
+      if (!sub_41BCB0()) {
+        EndDispatchOrder();
+        return;
+      }
     }
     dwFlags &= ~0x100000;
     pSprite->bElevationLevel = gubUnitPriorityPlane[wType] + 1;
@@ -358,6 +730,24 @@ end:
     status_set_update();
     pBuilt->SetOrder(0x2C);
     town_move_morphed_building(this, pBuilt);
+    return;
+  }
+  case 2: {
+    // A clearable blocker interrupted this SCV's approach. Wait without paying, then restore
+    // the ordinary approach state; state 1, not this recovery, is the only place that pays.
+    if (!reinterpret_cast<CTarget *>(this)->XYInRadius(0x80, wOrderTargetX, wOrderTargetY)) {
+      SetDestination_xy(wOrderTargetX, wOrderTargetY);
+      return;
+    }
+    const WorkerConstructionSiteResult site = PrepareWorkerConstructionSite(this, 0x1E);
+    if (site == WORKER_SITE_WAIT)
+      return;
+    if (site == WORKER_SITE_READY) {
+      bOrderState = 1;
+      SetDestination_xy(wOrderTargetX, wOrderTargetY);
+      return;
+    }
+    EndDispatchOrder();
     return;
   }
   case 0:

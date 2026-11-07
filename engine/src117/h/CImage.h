@@ -40,6 +40,9 @@ typedef void(__fastcall *IMAGEUPDATEPROC)(CImage *pImage);
 // which MSVC otherwise diagnoses as C4099.
 class CSprite;
 
+// The direct health-bar initialiser and allocator take the unit their caller already found.
+class CUnit;
+
 // Return type of CImage::CreateThingy only -- a pointer needs no definition, and `class`
 // agrees with src117/h/CThingy.h's own tag.
 class CThingy;
@@ -566,6 +569,10 @@ public:
   // in ECX.
   void HealthbarInit(CSprite *pSprite);
 
+  // Hyperion: the same initialisation with the unit supplied directly. The original wrapper
+  // above uses the selected unit; an unselected caster's draw-pass bar uses its cached unit.
+  void HealthbarInitForUnit(CSprite *pSprite, CUnit *pUnit);
+
   // SelectInit: AllocSelect forwards its own three parameters unchanged -- nImageID
   // pushed, then its EDX argument (bSelIndex), then its ECX one (pSprite), with the new
   // CImage in ECX -- so the parameter types are exactly AllocSelect's, which this header
@@ -782,6 +789,11 @@ public:
   static
   CImage * __fastcall AllocHealthbar(CSprite *pSprite);
 
+  // Hyperion: allocate for a unit the caller already found, without a selection lookup or a
+  // used-list scan. CSprite uses this for unselected casters' bars, which it caps and reclaims
+  // at the end of the same DrawAll pass; selected units use the original allocator above.
+  static CImage * __fastcall AllocHealthbarForUnit(CSprite *pSprite, CUnit *pUnit);
+
   // Defined in src117/lang/CImage.cpp.
 
   // oracle 0x40EE50 (28 B). __thiscall with no arguments, from both sides: `this` is
@@ -945,7 +957,6 @@ iscript_off_t ImageScriptAnim(iscript_off_t header, int nAnim);
 
 // oracle 0x40FD30 (30 B). ECX is read as a CUnit (byte at +0x4C is bPlayer);
 // both callers test the dword result.
-class CUnit;
 BOOL __fastcall IsSelfOwned(CUnit *pUnit);
 
 // oracle 0x4103C0 (179 B). Nullary, plain `ret`; CImage::LoadImages discards EAX.

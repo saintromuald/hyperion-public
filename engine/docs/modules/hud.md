@@ -479,9 +479,13 @@ and so selects 12. A replay or save without the option selects 12 as recorded.
   (`SelectionSubgroupsSort`). The card is the active subgroup's. Every unit has its box, and
   when the selection holds more than one kind the active subgroup's boxes are lighter than the
   rest (`PortConsoleLighten`, `PortConsoleLightRemap` for 1.17's panel; the user, 2026-10-23).
-  The subgroup key steps through them, with Shift back; the page follows the subgroup. A
-  targeted spell is cast by the nearest unit able to cast it with the energy (`SmartCaster`,
-  `select.cpp`). With other kinds selected (`SelectionMixed`), a card's button that is one kind's
+  The subgroup key steps through them, with Shift back; the page follows the subgroup. An
+  immediate targeted energy spell goes to one caster. Repeated clicks prefer selected casters
+  not already carrying that spell's order, nearest first, until all are committed; only then does
+  the energy-first/nearest fallback wrap around (`SelectSmartCaster`, `select.cpp`). This is the same
+  rotation for Consume (whose tech cost is zero) as for Ensnare and the other energy spells.
+  Queued commands retain nearest-caster selection. With other kinds selected (`SelectionMixed`),
+  a card's button that is one kind's
   own form of a shared command gives the shared one, as 1.17's card for a mixed selection does:
   the medic's Heal, the carrier's and the reaver's Attack, Move and Stop (`order.cpp`), and each
   unit takes its own form of it (a medic heal-moves). The attack key on a card with no Attack
@@ -494,8 +498,8 @@ and so selects 12. A replay or save without the option selects 12 as recorded.
   (`statdata_select_btn_draw`): the box by the unit's state (`StatDataBoxFrame`), in the
   player's selection colour when it is the normal one, and the wireframe in its hit points'
   colours (`PortConsoleHudBox`, `PortConsoleHudWire`). A cell's press selects as a click on
-  1.17's wireframe does (`StatDataSelectAmong`: alone, Shift leaves it out, Ctrl takes its
-  type), its tooltip names the unit with 1.17's lines (status string 0x329), and a tab shows its
+  1.17's wireframe does (`StatDataSelectAmong`: alone, Shift leaves only it out, Ctrl takes its
+  type, Ctrl+Shift removes its type), its tooltip names the unit with 1.17's lines (status string 0x329), and a tab shows its
   page (`PortHudGridTurn`). The page shown is the one holding the active subgroup's first unit
   until the player turns it (`PortHudGridPage`). Presentation only: the page is the HUD's.
 - **Buildings' wireframes.** grpwire.grp, the panel's small wireframes, has 1.17's 131 units'

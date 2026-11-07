@@ -536,14 +536,16 @@ void placebox_query_place_addon(order_id_t cArg0, int nArg1, point16_t ptIn)
 {
   CUnit *pUnit = select_get_first();
 
-  int rc = mtx_query_place_bldg(pUnit, pUnit->bPlayer, ptIn.x, ptIn.y,
-                                nArg1, 1, 0, 0, 0);
+  int rc = mtx_query_place_bldg_worker(cArg0, pUnit, pUnit->bPlayer,
+                                       ptIn.x, ptIn.y, nArg1, 1, 0, 0, 0,
+                                       NULL, NULL);
   if (rc == 0) {
     int nCellX = ptIn.x - gUnitAddOnOffset[(WORD)nArg1 - 106].x / 32;
     int nCellY = ptIn.y - gUnitAddOnOffset[(WORD)nArg1 - 106].y / 32;
 
-    rc = mtx_query_place_bldg(pUnit, pUnit->bPlayer, (short)nCellX, (short)nCellY,
-                              pUnit->wType, 0, 0, 0, 0);
+    rc = mtx_query_place_bldg_worker(cArg0, pUnit, pUnit->bPlayer,
+                                     (short)nCellX, (short)nCellY,
+                                     pUnit->wType, 0, 0, 0, 0, NULL, NULL);
     if (rc == 0) {
       mpoint_t  pt;  // Hyperion: a map point
       pt.x = PosS(gUnitPlaceboxSize[pUnit->wType].x / 2 + nCellX * 32);
@@ -564,8 +566,9 @@ void placebox_query_place_bldg(order_id_t bArg0, int nArg1, point16_t ptIn)
 {
   CUnit *pUnit = select_get_first();
 
-  int rc = mtx_query_place_bldg(pUnit, pUnit->bPlayer, ptIn.x, ptIn.y,
-                                nArg1, 1, 0, 0, 0);
+  int rc = mtx_query_place_bldg_worker(bArg0, pUnit, pUnit->bPlayer,
+                                       ptIn.x, ptIn.y, nArg1, 1, 0, 0, 0,
+                                       NULL, NULL);
   if (rc != 0) {
     if (gPlayback == 0)
       map_msg_target_self(status_get_str(sgszPlaceboxStrs_g[rc]), g_ActiveNationID);
@@ -871,17 +874,18 @@ void placebox_create(int nArg0, WORD nArg1)
 // non-zero answer. The addon offset is divided by 32, signed.
 int sub_47DB80()
 {
-  int nRet = mtx_query_place_bldg(gpStatUnit, sgbPlaceboxPlyr_g,
-                                  sgPlacePos_g.x, sgPlacePos_g.y,
-                                  sgwPlaceUnitType[1], 1, 1, 0, 0);
+  int nRet = mtx_query_place_bldg_worker(
+      sgbPlaceboxOrder_g, gpStatUnit, sgbPlaceboxPlyr_g,
+      sgPlacePos_g.x, sgPlacePos_g.y, sgwPlaceUnitType[1], 1, 1, 0, 0,
+      NULL, NULL);
 
   if (sgbParentOn != 0) {
     WORD wType = sgwPlaceUnitType[1];
-    int nParent = mtx_query_place_bldg(
-        gpStatUnit, sgbPlaceboxPlyr_g,
+    int nParent = mtx_query_place_bldg_worker(
+        sgbPlaceboxOrder_g, gpStatUnit, sgbPlaceboxPlyr_g,
         (short)(sgPlacePos_g.x - gUnitAddOnOffset[wType - 106].x / 32),
         (short)(sgPlacePos_g.y - gUnitAddOnOffset[wType - 106].y / 32),
-        sgwPlaceUnitType[0], 0, 1, 0, 0);
+        sgwPlaceUnitType[0], 0, 1, 0, 0, NULL, NULL);
     if (nRet == 0)
       return nParent;
   }

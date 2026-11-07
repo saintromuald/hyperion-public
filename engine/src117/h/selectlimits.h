@@ -22,6 +22,10 @@
 
 #define SELECTION_MAX 12     // the units one selection holds in 1.17
 #define SELECTION_WIDE 255   // and in a game of HX_OPT_SELECTION
+// Its health-bar pool also has one scratch slot for each unit in 1.17's unit pool. A draw
+// pass caps its temporary unselected-caster bars to these extra slots; selected bars persist.
+#define SELECTION_HPBARS_EPHEMERAL 1700
+#define SELECTION_HPBARS_WIDE (SELECTION_WIDE + SELECTION_HPBARS_EPHEMERAL)
 #define SELECTION_HUMANS 8   // the humans gSelected keeps a row for
 #define SELECTION_GROUPS 18  // a human's groups in 1.17's rows: the ten hotkeys, then eight recent selections
 #define SELECTION_GROUPS_WIDE 24  // and in a game of Hyperion's selection: the ten hotkeys, nine more

@@ -152,6 +152,16 @@ int mtx_query_place_bldg(CUnit *pUnit, BYTE bPlayer, int nX, int nY,
                          int nType, int nSlot, int nArg6, int nArg7,
                          int nArg8);
 
+// Hyperion: the worker-placement view ignores only units that the construction
+// attempt can clear. It runs the same terrain, creep, psi, resource and building
+// checks as the original and never issues orders itself. The optional visitor
+// only records clearable blockers for the later simulation-time attempt.
+typedef void (__fastcall *ConstructionBlockerVisitor)(CUnit *pUnit, void *pContext);
+extern "C" int mtx_query_place_bldg_worker(
+    order_id_t nOrder, CUnit *pUnit, BYTE bPlayer, int nX, int nY, int nType,
+    int nSlot, int nArg6, int nArg7, int nArg8,
+    ConstructionBlockerVisitor pfnVisitor, void *pContext);
+
 // -- the three big placement callees, unported -------------------------------
 // Seated here rather than in the .cpp so a generated hook row can resolve them.
 // The signatures are derived from the caller side, so whoever lands these three

@@ -62,6 +62,7 @@
     if (u.boost) out.push('supply +' + u.boost + '%');
     if (u.fog === 1) out.push('the map explored');
     else if (u.fog === 2) out.push('no fog of war');
+    else if (u.fog === 3) out.push('resources and obstacles remembered');
     if (u.build !== undefined && u.build !== 100) out.push('build time ' + share(u.build));
     if (u.tech) out.push(['', 'all researched', 'no upgrades', 'no research'][u.tech] || '');
     if (u.rich === 4) out.push('every base rich' + ((u.richRules || 0) & 8 ? ', not announced' : ''));
@@ -75,6 +76,7 @@
                (rules & 4 ? ', the same every game' : '') + (rules & 8 ? ', not announced' : ''));
     }
     if (u.units) out.push('unit limit ' + n(u.units));
+    if (u.victory === 1) out.push('production victory');
     return out.filter(Boolean).join(', ');
   }
   var SPEED = { slowest: 'Slowest', slower: 'Slower', slow: 'Slow', normal: 'Normal', fast: 'Fast', faster: 'Faster', fastest: 'Fastest' };

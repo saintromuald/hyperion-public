@@ -13,6 +13,7 @@
 #include "oc_data.h"  // Hyperion: OC_VA
 #include "../h/playervision.h"  // Hyperion: the slots past 7
 #include "../h/playertables.h"  // Hyperion: player slots past 11
+#include "../port/gameplay/port_mutators.h"  // Hyperion: revision-4 initial resource memory
 #include <string.h>
 
 #include "../h/CUnitUpdate.h"
@@ -743,6 +744,10 @@ void CUnit::CircleUpdate()
     return;
   if (IsDead())
     return;
+  // Revision-4 resource fog owns this one initial allocation. This also keeps player-owned
+  // resource-looking units out of the mutator's neutral-only initial memory pass.
+  if (MutatorFogSuppressInitialCopy(wType))
+    return;
   CThingy::AllocFromSprite(wType, pSprite);
 }
 
@@ -796,7 +801,6 @@ BOOL CUnit::IsBurning()
 }
 
 // CUnit::EnergyUpdate, oracle 0x438E20 (187 B)
-#include "../port/gameplay/port_mutators.h"  // Hyperion: MutatorsOfGame, the x3 regen
 #include "../h/mutators.h"   // Hyperion: g_hxMutatorsOn
 
 void CUnit::EnergyUpdate()

@@ -71,6 +71,10 @@ void __fastcall tai_soldier_try_stim(CUnit *pUnit);
 // belongs to another player: the unit's owner is told it is under attack.
 void __fastcall gamesnd_under_attack(CUnit *pUnit);
 
+// Hyperion (gamesnd.cpp): the true lethal-blow worker alert. The attacker is
+// needed to distinguish enemy damage from other ways a worker can die.
+void __fastcall gamesnd_worker_killed(CUnit *pUnit, CUnit *pAttacker);
+
 // 0x4202C0 is the static __fastcall member CUnit::NewTarget, declared in CUnit.h.
 
 // GetVectorComponents (0x40C270) is a CFlingy member, declared in CFlingy.h:

@@ -21,10 +21,12 @@
 #include "../port/render/port_selection.h"  // Hyperion: PortSelectionImageShown
 #include "../port/render/port_view.h"  // Hyperion: g_portView
 #include "../port/gameplay/port_eud.h"  // Hyperion: EudFrameMissing
+#include "../port/platform/port_settings.h"  // Hyperion: the draw-pass energy bars' toggle
 #include "../gen/save117.h"
 #include "CSprite.h"        // ours: the class, the three free functions, the parked callees
 #include "Priority.h"       // ours: priority_init/add/iter_next -- bodies in Priority.cpp
 #include "CImage.h"         // ours: CImage's layout and the CImage callees below
+#include "CUnit.h"          // ours: the caster cache and direct health-bar allocation
 #include "../h/gamedata.h"  // Hyperion: array_data_t
 #include "CLink.h"          // ours: the four intrusive-list entry points
 #include "rect32.h"         // ours: the 32-bit screen rect three bodies below build
@@ -94,6 +96,7 @@ extern "C" void *__cdecl memset(void *, int, size_t);
 #define sgSpritesYAxisHead      (reinterpret_cast<CSprite **>(OC_VA(0x5C51D0u)))
 #define sgSpritesYAxisTail      (reinterpret_cast<CSprite **>(OC_VA(0x5C55D0u)))
 #define g_LocalHumanID          (*reinterpret_cast<DWORD *>(OC_VA(0x508D54u)))
+#define g_LocalNationID         (*reinterpret_cast<DWORD *>(OC_VA(0x508D50u)))
 #define gpNewUnits              (reinterpret_cast<CUnit **>(OC_VA(0x6A6070u)))
 #define gSelected               (reinterpret_cast<CUnit **>(OC_VA(0x6A5EF0u)))
 #define gPlayerData             (reinterpret_cast<PlayerData *>(OC_VA(0x6726C8u)))
@@ -138,6 +141,7 @@ extern CSprite sgSprites[POOL_SPRITES_STORE];
 extern CSprite *sprites_sgpFreeHead;
 extern CSprite *sprites_sgpFreeTail;
 extern DWORD    g_LocalHumanID;
+extern DWORD    g_LocalNationID;
 extern CUnit   *gpNewUnits[SELECTION_MAX] OC_UNALIGNED;
 extern CUnit   *gSelected[SELECTION_HUMANS * SELECTION_MAX] OC_UNALIGNED;        // extent: select_init's memset of 0x180
 extern PlayerTable<PlayerData, PlayerTagData> gPlayerData;
@@ -580,17 +584,25 @@ void CSprite::Decloak() {
 //           the id bounds differ from RemoveTeamCircle's, 0x231..0x23A against 0x23B..0x244.
 //           The two results meet in one variable through the `goto`, as in 1.17; a `return`
 //           in the loop tail-merges the two epilogues instead.
+// Hyperion: a sprite has at most one health bar in normal play. Tolerate and clean up duplicates
+// on the image-replacement, destruction and save paths; those paths must never return a health
+// bar to the general image pool or encode its non-general-pool pointer into a save.
+static void RemoveHealthbars(CSprite *pSprite) {
+  CImage *pImage = pSprite->pImageHead;
+  while (pImage) {
+    CImage *pNext = pImage->pNext;
+    if (pImage->bPaletteType == 0x0B)
+      pImage->RemoveHPBar();
+    pImage = pNext;
+  }
+}
+
 __declspec(noinline) BYTE CSprite::Deselect() {  // noinline: see the header
   if (!(this->flags.b & 8))
     return 0;
   this->flags.b &= ~8;
 
-  for (CImage *pImage = this->pImageHead; pImage; pImage = pImage->pNext) {
-    if (pImage->bPaletteType == 0x0B) {
-      pImage->RemoveHPBar();
-      break;
-    }
-  }
+  RemoveHealthbars(this);
 
   BYTE bColoringData;
   if (this->flags.b & 1) {
@@ -626,9 +638,72 @@ done:
 // CSprite::DrawAll runs (g_bHpBarsLast), with the colours of the sprite each belongs to.
 // Presentation only.
 static bool g_bHpBarsLast;
-static CImage *g_apHpBars[SELECTION_WIDE];  // a selection's, of 255 in Hyperion's (stage S)
-static CSprite *g_apHpBarSprites[SELECTION_WIDE];
+static CImage *g_apHpBars[SELECTION_HPBARS_WIDE];
+static CSprite *g_apHpBarSprites[SELECTION_HPBARS_WIDE];
 static int g_nHpBars;
+
+// A draw pass caches the local player's casters by sprite index. Draw then allocates an original
+// health bar directly for that unit, without searching the unit list for every visible sprite.
+// These are presentation-only caches: snapshots need not hold them because the next DrawAll
+// advances the generation and rebuilds them from game state and the current setting.
+static DWORD g_adwEnergyCasterMarks[POOL_SPRITES_STORE];
+static CUnit *g_apEnergyCasterUnits[POOL_SPRITES_STORE];
+static DWORD g_dwEnergyCasterPass;
+static bool g_bEnergyCasterBars;
+
+// Every unselected-caster allocation is ephemeral to one DrawAll pass. Track the image as soon
+// as it is allocated, not when the image walk queues or draws it, so hidden, clean and otherwise
+// skipped bars are reclaimed too. At most the 1,700 scratch slots are out; the selection's own
+// 255 bars remain persistent and are never in this list.
+static CImage *g_apEnergyCasterBars[SELECTION_HPBARS_EPHEMERAL];
+static int g_nEnergyCasterBars;
+
+static void EnergyCasterBarsBegin() {
+  g_nEnergyCasterBars = 0;
+  double fShown = 1.0;
+  PortSettingNumber("hyperion", "energyBars", &fShown);
+  g_bEnergyCasterBars = SelectionWide() && fShown > 0.5;
+  if (++g_dwEnergyCasterPass == 0) {
+    memset(g_adwEnergyCasterMarks, 0, sizeof g_adwEnergyCasterMarks);
+    g_dwEnergyCasterPass = 1;
+  }
+  if (!g_bEnergyCasterBars)
+    return;
+  for (CUnit *pUnit = CUnit::GetUsedList(); pUnit != NULL; pUnit = pUnit->pNext) {
+    CSprite *pSprite = pUnit->pSprite;
+    if (pSprite == NULL || pUnit->bPlayer != g_LocalNationID ||
+        (gulUnitTypeFlags[pUnit->wType] & 0x200000) == 0 ||
+        (pUnit->dwFlags & 0x40000000) != 0 || pSprite->wIndex >= POOL_SPRITES_STORE)
+      continue;  // an own, real spellcaster; Draw's priority list supplies the visibility rule
+    g_adwEnergyCasterMarks[pSprite->wIndex] = g_dwEnergyCasterPass;
+    g_apEnergyCasterUnits[pSprite->wIndex] = pUnit;
+  }
+}
+
+static void EnergyCasterBar(CSprite *pSprite) {
+  // g_bHpBarsLast restricts these allocations to DrawAll, rather than DrawBlackX's direct Draw.
+  // Selected bars use the original persistent selection path, and selection changes run outside
+  // drawing, so an unselected sprite has no bar to reuse when its pass allocation happens here.
+  if (!g_bHpBarsLast || (pSprite->flags.b & 8) != 0 || !g_bEnergyCasterBars ||
+      pSprite->wIndex >= POOL_SPRITES_STORE ||
+      g_adwEnergyCasterMarks[pSprite->wIndex] != g_dwEnergyCasterPass ||
+      g_nEnergyCasterBars >= SELECTION_HPBARS_EPHEMERAL)
+    return;
+  CUnit *pUnit = g_apEnergyCasterUnits[pSprite->wIndex];
+  CImage *pBar = CImage::AllocHealthbarForUnit(pSprite, pUnit);
+  if (pBar == NULL)
+    return;
+  g_apEnergyCasterBars[g_nEnergyCasterBars++] = pBar;
+  pBar->flags.b.Dirty = 1;  // EnergyUpdate's original dirtying covers selected bars only
+}
+
+static void EnergyCasterBarsEnd() {
+  // Reverse allocation order restores the free list to its pass-entry order. Later selected-bar
+  // allocations therefore do not depend on the camera, and no unselected bar or sprite-list link
+  // survives into a frame-end snapshot, including allocations that were never queued or drawn.
+  while (g_nEnergyCasterBars != 0)
+    g_apEnergyCasterBars[--g_nEnergyCasterBars]->RemoveHPBar();
+}
 
 // An image's frame through its own render procedure, as CSprite::Draw calls it.
 static void PortDrawImageNow(CImage *pImage, short w, short h) {
@@ -652,6 +727,7 @@ static void PortDrawImageNow(CImage *pImage, short w, short h) {
 }
 
 void CSprite::Draw() {
+  EnergyCasterBar(this);  // Hyperion: before the image walk, which may gain the original bar
   sub_41D740(this->bCreator);
   if (this->pMainImage != 0)
     prepare_visible_cloak_draw(this->pMainImage->bPaletteType, this->bCreator);
@@ -671,7 +747,7 @@ void CSprite::Draw() {
           if (((pImage->flags.w & 1) || IsInvalSet(pImage)) &&
               PortSelectionImageShown(pImage->wImageID, pImage->bPaletteType, this->bCreator)) {
             // Hyperion: a health bar waits for the end of the pass (above)
-            if (g_bHpBarsLast && pImage->bPaletteType == 0x0B && g_nHpBars < SELECTION_WIDE) {
+            if (g_bHpBarsLast && pImage->bPaletteType == 0x0B && g_nHpBars < SELECTION_HPBARS_WIDE) {
               g_apHpBars[g_nHpBars] = pImage;
               g_apHpBarSprites[g_nHpBars++] = this;
             } else {
@@ -695,6 +771,7 @@ void CSprite::Draw() {
 //           back, in list order. The body is CSprite::Draw spliced in by /Ob2, so
 //           Draw's definition above has to stay in this TU; 1.17 inlined it too.
 void CSprite::DrawAll() {
+  EnergyCasterBarsBegin();  // Hyperion: mark this pass's own casters before any sprite draws
   PortLightsBegin();  // Hyperion: the 2D lights (port_lights.cpp)
   PortLooksPassBegin();  // Hyperion: the looked units' sprites (port_looks.h)
   g_bHpBarsLast = true;  // Hyperion: the health bars after every sprite (above)
@@ -708,6 +785,7 @@ void CSprite::DrawAll() {
     PortDrawImageNow(g_apHpBars[i], g_apHpBars[i]->wDrawWidth, g_apHpBars[i]->wDrawHeight);
   }
   g_nHpBars = 0;
+  EnergyCasterBarsEnd();  // Hyperion: every temporary allocation, drawn or not
   PortLightsEnd();
 }
 
@@ -848,6 +926,11 @@ void CSprite::ForceInvalid() {
 //           clears bits 0 and 3. CSprite::RemoveCircle's byte return feeds AllocSelect here.
 void CSprite::ReplaceWith(WORD wSpriteID) {
   this->wSpriteID = wSpriteID;
+
+  // Hyperion: a draw-pass bar's width, offset and unit rows belong to the old sprite/type.
+  // Drop one defensively; the next DrawAll rebuilds it if this is still an own, real caster.
+  if (!(this->flags.b & 8))
+    RemoveHealthbars(this);
 
   if (this->flags.b & 8) {
     BYTE bColoringData = this->Deselect();
@@ -1289,6 +1372,9 @@ int CSprite::IsClickablePt(int x, int y) {
 //           GetYTile is defined later in this file, so it could not be inlined. The divide
 //           by 32 is signed, which is what makes the `< 0` arm reachable at all.
 void CSprite::Kill() {
+  // Hyperion: CImage::Kill belongs to the general image pool. Return selection/draw-pass
+  // health bars to their own pool first, including on an unselected sprite being destroyed.
+  RemoveHealthbars(this);
   CImage *pImage = this->pImageHead;
   while (pImage) {
     CImage *pNext = pImage->pNext;
@@ -1548,6 +1634,8 @@ void CSprite::SelectAdd(BYTE bSelectionIndex, BYTE bSelIndex) {
     return;
   this->bSelectionIndex = bSelectionIndex;
   this->flags.b |= 8;
+  // Selection changes happen outside DrawAll, after its unselected-caster bars have been
+  // reclaimed. Allocate this selected unit's original persistent bar through 1.17's path.
   CImage::AllocHealthbar(this);
   this->AllocSelect(bSelIndex);
 }
@@ -1963,6 +2051,11 @@ void CSprite::RemoveSelectsForSave() {
   DWORD n = g_pools.sprites;
   while (n != 0) {
     n--;
+    // Hyperion: sprite pointer encoding knows only the general image pool. Strip every health
+    // bar, not just the selected one Deselect finds, so even a defensive draw-pass remnant can
+    // never be saved as a sprite-list link. RestoreSelectsFromSave rebuilds selected bars;
+    // visible unselected casters' bars return for the next DrawAll only.
+    RemoveHealthbars(p);
     BYTE f = p->flags.b;
     if (f & 8)
       p->Deselect();
@@ -2125,6 +2218,9 @@ void CSprite::ChangeImage(int nImageID, int nDirection) {
     bSelColor = this->RemoveCircle();
   BYTE bTeamColor = this->RemoveTeamCircleIf();
 
+  // Hyperion: an unselected draw-pass bar must not reach CImage::Kill's general pool.
+  // Selected bars were already returned by Deselect; this also covers every stale duplicate.
+  RemoveHealthbars(this);
   CImage **ppHead = &this->pImageHead;
 
   for (CImage *pImage = this->pImageHead; pImage != 0; ) {
