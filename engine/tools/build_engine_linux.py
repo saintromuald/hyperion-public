@@ -705,6 +705,7 @@ def build(a):
     run(["clang++", "-shared", "-fuse-ld=lld", "-g", "-static-libstdc++", "-static-libgcc", "-Wl,--exclude-libs,ALL",
          "-o", os.path.join(OUT, "rt_observer.so"), obs_obj], "link rt_observer.so (%d calls from Hyperion)"
         % len(for_observer))
+    copy_huds()
     copy_web()
     say("OK -> %s" % os.path.relpath(os.path.join(OUT, PROGRAM[ARCH]), ENGINE))
     if a.check_align:
@@ -734,8 +735,15 @@ def link_mac(objs, libs, exports, obs_obj, n_observer):
     run(["clang++", "-dynamiclib", "-g"] + MAC_MIN + ["-undefined", "dynamic_lookup",
          "-o", os.path.join(OUT, "rt_observer.dylib"), obs_obj],
         "link rt_observer.dylib (%d calls from Hyperion)" % n_observer)
+    copy_huds()
     copy_web()
     say("OK -> %s" % os.path.relpath(program, ENGINE))
+
+
+def copy_huds():
+    """The built-in HUDs and Hyperion's own advisor recordings, beside the program."""
+    if os.path.isdir(os.path.join(ENGINE, "huds")):
+        shutil.copytree(os.path.join(ENGINE, "huds"), os.path.join(OUT, "huds"), dirs_exist_ok=True)
 
 
 def copy_web():

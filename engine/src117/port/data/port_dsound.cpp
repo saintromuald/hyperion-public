@@ -21,6 +21,8 @@
 #include "../front/port_frontscreens.h"  // FrontLog
 #include "../front/port_ui.h"  // PortCascRead
 #include "../platform/port_settings.h"
+#include "../platform/port_paths.h"  // PortPackagedFile, the worker advisor recordings
+#include "../platform/port_util.h"   // PortReadFile
 #include "Storm.h"  // SMemAlloc
 #include "port_audiodecode.h"  // a mod's sounds, decoded
 #include "../tools/port_startup.h"  // PortStartupStep
@@ -639,13 +641,85 @@ void *PortSoundLoad(const char *pszPath, DWORD *pcbSize)
   return pDecoded;
 }
 
-void PortSoundOneShot(std::shared_ptr<const std::vector<float>> pcm, float fGain)
+bool PortSoundOneShot(std::shared_ptr<const std::vector<float>> pcm, float fGain)
 {
   if (pcm == NULL || pcm->size() < 2 || fGain <= 0.0f || !OpenStream())
-    return;
+    return false;
   std::lock_guard<std::mutex> lock(g_mix);
-  if (g_oneShots.size() < 32)
-    g_oneShots.push_back({std::move(pcm), 0, fGain});
+  if (g_oneShots.size() >= 32)
+    return false;
+  g_oneShots.push_back({std::move(pcm), 0, fGain});
+  return true;
+}
+
+namespace {
+
+// The three clips are decoded once, on their first alert, and resampled to the mixer's stereo
+// rate. A missing or broken package is retried on the next alert rather than becoming a silent
+// permanent failure; every load attempt and every queue result is logged for troubleshooting.
+struct WorkerAlertVoice {
+  std::shared_ptr<const std::vector<float>> pcm;
+};
+
+WorkerAlertVoice g_aWorkerAlertVoices[3];
+const char *const kWorkerAlertFiles[] = {"worker-zerg.ogg", "worker-terran.ogg", "worker-protoss.ogg"};
+
+std::shared_ptr<const std::vector<float>> WorkerAlertPcm(int nRace)
+{
+  WorkerAlertVoice &voice = g_aWorkerAlertVoices[nRace];
+  if (voice.pcm != NULL)
+    return voice.pcm;
+  const std::string path = PortPackagedFile((std::string("huds\\files\\") + kWorkerAlertFiles[nRace]).c_str());
+  std::vector<unsigned char> bytes;
+  if (!PortReadFile(path, &bytes)) {
+    FrontKit::FrontLog("worker alert: cannot read %s", path.c_str());
+    return NULL;
+  }
+  AudioDecoder *pDec = AudioDecoderOpenMemory(std::move(bytes), path.c_str());
+  if (pDec == NULL) {
+    FrontKit::FrontLog("worker alert: cannot decode %s", path.c_str());
+    return NULL;
+  }
+  const int nRate = AudioDecoderRate(pDec), nChannels = AudioDecoderChannels(pDec);
+  std::vector<float> input;
+  float buf[4096 * 2];
+  if (nChannels == 1 || nChannels == 2) {
+    for (size_t n; (n = AudioDecoderRead(pDec, buf, 4096)) != 0;)
+      input.insert(input.end(), buf, buf + n * nChannels);
+  }
+  AudioDecoderClose(pDec);
+  const size_t nFrames = nChannels > 0 ? input.size() / nChannels : 0;
+  if (nRate <= 0 || nFrames == 0) {
+    FrontKit::FrontLog("worker alert: no speech decoded from %s", path.c_str());
+    return NULL;
+  }
+
+  const int nOut = static_cast<int>(static_cast<long long>(nFrames) * MIX_RATE / nRate);
+  auto pcm = std::make_shared<std::vector<float>>(static_cast<size_t>(nOut) * 2);
+  for (int i = 0; i < nOut; ++i) {
+    const double t = static_cast<double>(i) * nRate / MIX_RATE;
+    const size_t k = static_cast<size_t>(t), k1 = k + 1 < nFrames ? k + 1 : k;
+    const double f = t - k;
+    for (int ch = 0; ch < 2; ++ch) {
+      const int c = ch < nChannels ? ch : 0;
+      const double a = input[k * nChannels + c], b = input[k1 * nChannels + c];
+      (*pcm)[i * 2 + ch] = static_cast<float>(a + (b - a) * f);
+    }
+  }
+  voice.pcm = pcm;
+  FrontKit::FrontLog("worker alert: loaded %s, %d source frames", path.c_str(), static_cast<int>(nFrames));
+  return voice.pcm;
+}
+
+}  // namespace
+
+bool PortSoundWorkerAlert(int nRace, float fGain)
+{
+  if (nRace < 0 || nRace >= 3)
+    return false;
+  const bool bQueued = PortSoundOneShot(WorkerAlertPcm(nRace), fGain);
+  FrontKit::FrontLog("worker alert: %s %s", kWorkerAlertFiles[nRace], bQueued ? "queued" : "not queued");
+  return bQueued;
 }
 
 int PortSoundRate(void)
