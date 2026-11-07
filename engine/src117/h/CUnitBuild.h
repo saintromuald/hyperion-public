@@ -30,6 +30,17 @@ inline void ClipToMap(point16_t *pPos, WORD wType) {
 }
 #endif
 
+// Hyperion: an arrived worker either may pay and create its building, must wait
+// while deterministic blocker orders finish, or has a real placement/affordability
+// failure. Waiting never deducts the cost and never changes the worker's order.
+enum WorkerConstructionSiteResult {
+  WORKER_SITE_FAILED = 0,
+  WORKER_SITE_READY = 1,
+  WORKER_SITE_WAIT = 2,
+};
+WorkerConstructionSiteResult PrepareWorkerConstructionSite(
+    CUnit *pWorker, order_id_t nBuildOrder);
+
 // the free callees in other TUs that CUnit::Build, ReplaceGeyser and DispatchBuildSelf reach
 
 // 0x47CD70 (8 B), TU placebox.cpp. The whole body is

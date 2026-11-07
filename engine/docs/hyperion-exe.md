@@ -538,8 +538,9 @@ name (`standard`, `plenty`, `gold-rush`, `infinite`, `quick-start`; `rich` is Pl
 before rich bases), or values by name, separated
 by commas: `minerals` and `gas` as a share (`x2`, `1.5`, `50%`) or `endless`, `start` as
 minerals/gas (`1000/500`), `supply` as a cap or `unlimited`, `workers` 1 to 12, `boost` 0 to
-100 by 25, `fog` as `normal`, `explored` or `none`, `build` as a share of 1.17's times (`x0.5`)
-and `tech` as `normal`, `all`, `noupgrades` or `noresearch`; rich bases (`modules/gameplay.md`,
+100 by 25, `fog` as `normal`, `explored`, `none` or `resources` (resources and static obstacles
+remembered under fog, with no live sight opened), `build` as a share of 1.17's times (`x0.5`),
+`victory=production` (a side with no live production buildings loses), and `tech` as `normal`, `all`, `noupgrades` or `noresearch`; rich bases (`modules/gameplay.md`,
 "Rich bases") as `rich` (`off`, `naturals`, `radius`, `far` or `every`; `middle`, its name
 before v0.6.21, is `radius`), `radius` (tiles, 16 to 256, or `quarter`, `third` or `half` of the
 map, or a share such as `40%`), `chance` (25, 50, 75 or 100), `fair=off`, `atleast=off`,

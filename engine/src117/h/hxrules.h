@@ -50,10 +50,23 @@
 // field. Every new game by Hyperion's rules takes it, and the replay records it, so its
 // playback starts the workers the same way; a game recorded before it plays as it was.
 #define HX_OPT_START_SPLIT 0x200u
+// A selected larva morphing for a Hatchery/Lair/Hive, including its egg, right-clicks as that
+// building (rclick.cpp), so the click updates its rally and the hatchlings inherit it. Every new
+// game by Hyperion's rules takes it; a replay or save without it keeps 1.17's right-click rules.
+#define HX_OPT_MORPH_RALLY 0x400u
+// Repeated immediate energy-spell commands rotate through different selected casters, as Consume
+// already did. Recorded separately so an older replay keeps its former nearest-caster choice.
+#define HX_OPT_SMART_CAST_ROTATION 0x800u
+// Workers clear movable construction blockers, unburrow burrowed units and detonate Spider Mines.
+// Without the recorded option, placement and all three workers' state machines stay as recorded.
+#define HX_OPT_CONSTRUCTION_CLEAR 0x1000u
+// The Protoss Scout's Hyperion balance: 35 fewer minerals, 10 less gas and 120 fewer build frames.
+#define HX_OPT_SCOUT_BALANCE 0x2000u
 // The options this build plays back and loads.
 #define HX_OPT_KNOWN (HX_OPT_PATH_BUDGET_117 | HX_OPT_TEAMS | HX_OPT_AI_LEVELS | HX_OPT_STRESS | HX_OPT_EUD | \
                       HX_OPT_ORDER_QUEUE | HX_OPT_SELECTION | HX_OPT_HANDICAP | HX_OPT_MUTATORS | \
-                      HX_OPT_START_SPLIT)
+                      HX_OPT_START_SPLIT | HX_OPT_MORPH_RALLY | HX_OPT_SMART_CAST_ROTATION | \
+                      HX_OPT_CONSTRUCTION_CLEAR | HX_OPT_SCOUT_BALANCE)
 
 // The rule versions' names, as the rule record holds them.
 #define HX_RULE_CLASSIC "1.17"

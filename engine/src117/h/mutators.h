@@ -9,7 +9,8 @@
 // (placebox.cpp), the caps (count_init), the supply given (count.cpp, the computer's planner in
 // SAI_Build.cpp, the console in statdraw.cpp), and the research and upgrade gates (Allowed.cpp).
 // The fog, the times and the tech researched are set in the game's own tables as the map is
-// loaded and after each sight refresh (MutatorsMapLoaded, MutatorsVisionRefresh). In a game
+// loaded and after each sight refresh (MutatorsMapLoaded, MutatorsVisionRefresh). Resource fog's
+// explored tiles and static memories are seeded only in the initial map-loaded pass. In a game
 // without mutators, every game by classic rules among them, each gives 1.17's value back, so
 // the game plays as 1.17 does to the frame. Mutators play by Hyperion's rules (HX_OPT_MUTATORS,
 // hxrules.h), and the replay and the save hold them (port_mutators.h).
@@ -46,6 +47,9 @@ bool MutatorStartResources(int *pnMinerals, int *pnGas);
 // start, no upgrades, or neither upgrades nor the abilities that need research.
 enum { MUTATOR_FOG_CLASSIC, MUTATOR_FOG_EXPLORED, MUTATOR_FOG_NONE, MUTATOR_FOG_RESOURCES };
 enum { MUTATOR_TECH_CLASSIC, MUTATOR_TECH_ALL, MUTATOR_TECH_NO_UPGRADES, MUTATOR_TECH_NO_RESEARCH };
+// Production victory: a player, or all the mutually allied-victory players on a team together,
+// loses with no live production building (gubUnitCountInfo's factory bit). Incomplete ones count.
+enum { MUTATOR_VICTORY_CLASSIC, MUTATOR_VICTORY_PRODUCTION };
 int MutatorTechOf(void);
 
 // Rich bases (port_richbases.h): which bases may turn rich, past the naturals, outside a radius

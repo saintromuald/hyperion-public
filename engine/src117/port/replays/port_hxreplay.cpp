@@ -210,7 +210,7 @@ int ReplayHxWrite(void *pFile) {
   AiProfilesSave(abLevels);
   BYTE abHandicaps[PLAYER_SLOTS_MAX];
   HandicapsSave(abHandicaps);
-  BYTE abMutators[MUTATOR_RECORD_BYTES_NEWBIE];
+  BYTE abMutators[MUTATOR_RECORD_BYTES_VICTORY];
   MutatorsSave(abMutators);
   std::vector<unsigned int> rich;
   RichBasesRecord(&rich);
@@ -223,7 +223,7 @@ int ReplayHxWrite(void *pFile) {
       && (!ModRacesAny() || Put(f, kRace, abRaces, PlayerSlots(), 1))
       && ((g_hxRuleOptions & HX_OPT_AI_LEVELS) == 0 || Put(f, kAiLv, abLevels, PLAYER_SLOTS_MAX, AI_PROFILE_BYTES))
       && ((g_hxRuleOptions & HX_OPT_HANDICAP) == 0 || Put(f, kHcap, abHandicaps, PLAYER_SLOTS_MAX, 1))
-      && ((g_hxRuleOptions & HX_OPT_MUTATORS) == 0 || Put(f, kMuts, abMutators, 1, MUTATOR_RECORD_BYTES_NEWBIE))
+      && ((g_hxRuleOptions & HX_OPT_MUTATORS) == 0 || Put(f, kMuts, abMutators, 1, MUTATOR_RECORD_BYTES_VICTORY))
       && (!RichBasesInGame() || Put(f, kRich, rich.empty() ? NULL : &rich[0], static_cast<DWORD>(rich.size()), 4))
       && ((g_hxRuleOptions & HX_OPT_STRESS) == 0 || Put(f, kStrs, &rStress, 1, sizeof rStress))
       && (dwUnits == 0 || Put(f, kUnts, &dwUnits, 1, 4))
@@ -309,7 +309,7 @@ int ReplayHxRead(void *pFile) {
         return 0;
       HandicapsRecorded(abHandicaps, static_cast<int>(s.dwCount));
     } else if (s.dwId == kMuts && s.dwCount == 1 && MutatorRecordBytesRead(static_cast<int>(s.dwRecordSize))) {
-      BYTE abMutators[MUTATOR_RECORD_BYTES_NEWBIE];
+      BYTE abMutators[MUTATOR_RECORD_BYTES_VICTORY];
       if (fread(abMutators, s.dwRecordSize, 1, f) != 1)
         return 0;
       MutatorsRecorded(abMutators, static_cast<int>(s.dwRecordSize));

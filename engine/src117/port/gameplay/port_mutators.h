@@ -22,7 +22,8 @@ MutatorSet MutatorsClamp(const MutatorSet &m);
 // choices on its card, the radius and the chance (MUT_RICH_RADIUS, MUT_RICH_CHANCE, past the
 // cards' count).
 enum { MUT_MINERALS, MUT_GAS, MUT_START, MUT_SUPPLY, MUT_WORKERS, MUT_BOOST, MUT_FOG, MUT_BUILD, MUT_TECH, MUT_RICH,
-       MUT_NOCAP, MUT_ADDON, MUT_NOARMYKEY, MUT_ENERGY, MUT_NEWBIE, MUT_AUTOWORKERS, MUT_AUTOMINE, MUT_COUNT, MUT_RICH_CHANCE = MUT_COUNT, MUT_RICH_RADIUS };
+       MUT_NOCAP, MUT_ADDON, MUT_NOARMYKEY, MUT_ENERGY, MUT_NEWBIE, MUT_AUTOWORKERS, MUT_AUTOMINE, MUT_VICTORY,
+       MUT_COUNT, MUT_RICH_CHANCE = MUT_COUNT, MUT_RICH_RADIUS };
 // Rich bases' radius in tiles on a map nMapW by nMapH tiles: m's tiles, or its share of the
 // map's size, its width and height averaged.
 int MutatorRichRadiusTiles(const MutatorSet &m, int nMapW, int nMapH);
@@ -58,7 +59,7 @@ std::string MutatorsText(const MutatorSet &m, bool bShown = false);
 // A room's word on them (port_lanroom*.cpp, port_front_lan.cpp, web/lan/join.js): the set as
 // a JSON object, {"minerals":100,"gas":100,"startMinerals":50,"startGas":0,"supply":200,
 // "workers":4,"boost":0,"fog":0,"build":100,"tech":0,"rich":0,"richChance":50,"richRules":3,
-// "richRadius":48,"units":0},
+// "richRadius":48,"units":0,"victory":0},
 // and back, a missing value 1.17's.
 std::string MutatorsJson(const MutatorSet &m);
 MutatorSet MutatorsFromJson(const PortJson &j);
@@ -67,7 +68,8 @@ MutatorSet MutatorsFromJson(const PortJson &j);
 void MutatorsChoose(const MutatorSet &m);
 // --mutators: a preset's name, or values by name, e.g. "plenty", "minerals=200,gas=endless,
 // start=1000/500,supply=400,workers=8,boost=50,fog=explored,build=x0.5,tech=all,rich=radius,
-// radius=64,chance=75"; fog is normal, explored or none, tech normal, all, noupgrades or
+// radius=64,chance=75,victory=production"; fog is normal, explored, none or resources (the
+// resources and doodads remembered, never opponents revealed), tech normal, all, noupgrades or
 // noresearch, rich off, naturals, radius (middle, its name before 0.6.21, too), far or every,
 // radius in tiles or quarter, third or half (of the map), with fair=off, atleast=off and
 // richseed=map for the roll's rules and announce=off for no word at the start; units=auto or a
@@ -89,15 +91,23 @@ bool MutatorsChosenThisGame(void);
 void MutatorsForGame(void);
 // The game's set, as it plays.
 const MutatorSet &MutatorsOfGame(void);
+// Whether production victory is on: triggers_loop checks it even on a map with no triggers.
+bool MutatorProductionVictory(void);
 
 // As the map is loaded (game_init, after LoadMapData, before the start units are placed): a new
 // game's build, train, research and upgrade times at the build time mutator, its tech and
-// upgrades all researched if the tech mutator says so, and the fog as the fog mutator has it;
-// a loaded game's mod unit types' times, which come from the mod at each start and not from
-// the save. The times are the game's own tables, which every reader and the save then have.
+// upgrades all researched if the tech mutator says so, and the fog as the fog mutator has it.
+// Resource fog also seeds its static explored tiles and fogged memories here, once per new map.
+// A loaded game's mod unit types' times come from the mod at each start and not from the save;
+// the times are the game's own tables, which every reader and the save then have.
 void MutatorsMapLoaded(void);
+// During a revision-4 new map's initial CircleUpdate pass, suppress a resource's generic fog
+// copy: MutatorsResourcesRemember creates exactly one neutral copy a moment later. This is false
+// at every other time, and for player-owned resources whose initial copy is intentionally absent.
+bool MutatorFogSuppressInitialCopy(WORD wType);
 // After each sight refresh puts the fog back over the map (gameloop, sub_46C180): the fog
-// mutator's tiles, explored, or seen and explored, for every player.
+// mutator's tiles, explored, or seen and explored, for every player. Resource fog does no new
+// reveal here at revision 4; older records keep their original repeated reveal.
 void MutatorsVisionRefresh(void);
 
 // The unit limit's choices (MutatorSet::nUnits), Automatic first: the count of each, 0 for
@@ -109,19 +119,16 @@ int MutatorUnitLimitOf(int nUnits);
 // The rules' revision the game's mutators play by (MUTATOR_REVISION, or a replay's or save's).
 int MutatorsRevisionOf(void);
 
-// The replay's and the save's record, MUTATOR_RECORD_BYTES: the ten values, the rules'
-// revision, MUTATOR_REVISION, rich bases' four, the unit limit, and the no-cap and one
-// add-on mutators. 0.6.25's record (64) had the unit limit but not the last two, read with
-// neither; 0.6.21 to 0.6.24 wrote
-// MUTATOR_RECORD_BYTES_RADIUS, without the unit limit, read as Automatic; 0.6.16 to 0.6.20 wrote
-// MUTATOR_RECORD_BYTES_RICH, without the radius, read with 48 tiles; 0.6.10 to 0.6.15 wrote
-// MUTATOR_RECORD_BYTES_REVISION, without rich bases, read with none; 0.6.9
-// MUTATOR_RECORD_BYTES_TEN, the ten without the revision, whose supply boost rounds down to a
-// half; and its first builds MUTATOR_RECORD_BYTES_FIRST, the first seven, before fog, build time
-// and tech, read with the three at 1.17's. MutatorsRecorded(NULL, 0) forgets the last one read;
-// false for a record this build does not read.
-#define MUTATOR_RECORD_BYTES 72
+// The replay's and the save's record, MUTATOR_RECORD_BYTES_VICTORY: the ten values, the rules'
+// revision, MUTATOR_REVISION, rich bases' four, the unit limit, the later mutators, and finally
+// production victory. Every old size stays readable; a field a record predates takes Classic's
+// value. 100 (NEWBIE) ends at the automatic-upgrade masks, 72 through one add-on, 64 (UNITS)
+// at the unit limit, 60 (RADIUS) at rich bases' radius, 56 (RICH) before it, 44 (REVISION) before
+// rich bases, 40 (TEN) before the revision, and 28 (FIRST) after the first seven values.
+// MutatorsRecorded(NULL, 0) forgets the last one read; false for a record this build does not read.
+#define MUTATOR_RECORD_BYTES_VICTORY 104
 #define MUTATOR_RECORD_BYTES_NEWBIE 100
+#define MUTATOR_RECORD_BYTES 72
 #define MUTATOR_RECORD_BYTES_UNITS 64
 #define MUTATOR_RECORD_BYTES_RADIUS 60
 #define MUTATOR_RECORD_BYTES_RICH 56
@@ -131,7 +138,9 @@ int MutatorsRevisionOf(void);
 // 1: the supply boost gives whole supply (0.6.10; the user, 2026-10-24).
 // 2: the unit table grows with the supply cap past 200, and with the unit limit.
 // 3: the no-cap mutator and the one add-on's (2026-11-02), the record's two new words.
-#define MUTATOR_REVISION 3
+// 4: fog=resources seeds static memory once and never opens live sight; older records replay the
+// old, repeatedly revealed resource tiles as they were played.
+#define MUTATOR_REVISION 4
 bool MutatorRecordBytesRead(int nBytes);
 void MutatorsSave(unsigned char *pbOut);
 bool MutatorsRecorded(const unsigned char *pbIn, int nBytes);

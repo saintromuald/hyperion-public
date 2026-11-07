@@ -34,8 +34,6 @@
 #include "../../h/net_cmds.h"     // PlayerData, the saturated number's colour
 #include "../../h/hxrules.h"  // HX_OPT_START_SPLIT, the start workers split's option
 #include "../render/port_teamcolor.h"  // PortTeamColorGet, the saturated number's colour
-#include "../platform/port_settings.h"  // PortSettingNumber, the energy bars' setting
-#include "../../h/playervision.h"  // SpriteSeenBy, an enemy caster's bar only when seen
 #include "port_camkeys.h"  // PortCamKeysLocation, the saved cameras' minimap labels
 #include "port_onecard.h"  // the classic console's type-card count labels
 #include "../../h/rect32.h"   // rect32_t, the minimap's cage and the console's
@@ -90,13 +88,16 @@ struct Patch {
   int nOn;      // the workers on it now
 };
 
-// The worker's patch, or -1. Its persistent harvest link comes first: it still names the
-// resource while the worker carries gas back, when the immediate order targets the town hall.
-// The order target remains a fallback for a worker approaching a patch before linking to it.
+// The worker's patch, or -1. Its persistent harvest link comes first, then its immediate
+// order target. A worker returning with gas has released the harvest link and targets the
+// town hall, so its saved order target names the refinery; that union arm is a fallback only
+// during the active return_gas order, never a stale target from another order.
 // A refinery target finds the geyser it sits on.
 int PatchOf(const CUnit *pWorker, const std::vector<Patch> &ap)
 {
-  const CUnit *apTarget[2] = {pWorker->pUnionD0, pWorker->pOrderTarget};
+  const bool bReturningGas = pWorker->bOrderId == 0x54 && (pWorker->bCarryResource & 1) != 0;
+  const CUnit *apTarget[3] = {pWorker->pUnionD0, pWorker->pOrderTarget,
+                              bReturningGas ? pWorker->pUnionC8_SavedOrderTarget : NULL};
   for (const CUnit *pT : apTarget) {
     if (pT == NULL)
       continue;
@@ -242,15 +243,6 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   static std::vector<NydusLink> s_aNydus;
   static std::vector<int> s_aGroup;
   static std::vector<BaseInfo> s_aBase;
-  // a spellcaster the local player can see, for its energy bar: its sprite's place and
-  // size in map pixels and its energy, gathered on the scan's beat (the user, 2026-11-05)
-  struct CasterBar {
-    int nX, nY;
-    int nW, nH;
-    int nNow, nMax;
-  };
-  static std::vector<CasterBar> s_aBars;
-  static double s_fEnergyBars = 1.0;  // Settings' Interface toggle, on until it says no
   static int s_nIdle = 0;
   static unsigned int s_nLastFrame = 0;
   static unsigned int s_nNextScan = 0;
@@ -381,8 +373,8 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
       if (s_aGroup[k] < 0)
         s_aGroup[k] = static_cast<int>(k);
     }
-    // each base's number: its workers over three a patch, capped, and the hall nearest
-    // its minerals' middle to show it on (the user, 2026-11-03)
+    // each base's number: its workers over three a patch, including over-assignment, and
+    // the hall nearest its minerals' middle to show it on (the user, 2026-11-03)
     s_aBase.clear();
     for (size_t b = 0; b < s_abase.size(); ++b) {
       if (s_aGroup[b] != static_cast<int>(b) || s_abase[b]->pSprite == NULL)
@@ -409,8 +401,6 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
       for (size_t k = 0; k < s_abase.size(); ++k)
         if (s_aGroup[k] == static_cast<int>(b))
           base.nOn += s_anBack[k];
-      if (base.nOn > base.nOpt)
-        base.nOn = base.nOpt;
       fMidX /= nPatches;
       fMidY /= nPatches;
       double fBest = -1.0;
@@ -429,8 +419,8 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     }
 
     // the player's completed nydus canals (0x86), numbered in the used list's order: the
-    // number over each, and on the minimap the exit's N and the line linking them (the
-    // user, 2026-11-04)
+    // number over each, the exit's minimap N, and the world and minimap lines linking them
+    // (the user, 2026-11-04)
     s_aNydus.clear();
     for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
       if (p->bPlayer != nPlayer || p->wType != 0x86 || (p->dwFlags & 1) == 0 || p->pSprite == NULL)
@@ -442,37 +432,6 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
       link.nExitX = link.bExit ? static_cast<int>(p->pUnionD0->pSprite->wPosX) : 0;
       link.nExitY = link.bExit ? static_cast<int>(p->pUnionD0->pSprite->wPosY) : 0;
       s_aNydus.push_back(link);
-    }
-
-    // the spellcasters in the local player's sight, their own or another player's alike:
-    // the bars' rule is the bars' setting, and the fog keeps an unseen enemy's energy
-    // hidden, but a seen enemy caster's bar shows as one's own does (the user, 2026-11-05)
-    {
-      double d = 1.0;
-      PortSettingNumber("hyperion", "energyBars", &d);
-      s_fEnergyBars = d;
-    }
-    s_aBars.clear();
-    for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
-      if (p->pSprite == NULL || (gulUnitTypeFlags[p->wType] & 0x200000) == 0 ||
-          (p->dwFlags & 0x40000000) != 0)
-        continue;  // a caster, never a hallucination
-      if (!SpriteSeenBy(p->pSprite, nPlayer))
-        continue;
-      CasterBar bar;
-      bar.nX = static_cast<int>(p->pSprite->wPosX);
-      bar.nY = static_cast<int>(p->pSprite->wPosY);
-      bar.nW = SpriteGrpWidth(p->pSprite);
-      bar.nH = SpriteGrpHeight(p->pSprite);
-      bar.nMax = p->GetMaxEnergyReal();
-      if (bar.nMax <= 0)
-        continue;
-      bar.nNow = static_cast<int>(p->wEnergy) >> 8;
-      if (bar.nNow > bar.nMax)
-        bar.nNow = bar.nMax;
-      if (bar.nNow < 0)
-        bar.nNow = 0;
-      s_aBars.push_back(bar);
     }
 
     s_nIdle = nIdle;
@@ -493,6 +452,24 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   const float fScale = static_cast<float>(fH) / 480.0f;
   bool bDrew = false;
 
+  // Nydus links cross the world map as well as the minimap. Keep them inside the map
+  // viewport and beneath every world label, so the long guide never cuts through text.
+  const UiColor cNydusLink{1.0f, 1.0f, 1.0f, 0.35f};
+  if (bCamOk) {
+    UiPushClip(fX, fY, fX + fW, fY + fH);
+    for (size_t k = 0; k < s_aNydus.size() && k < 9; ++k) {
+      const NydusLink &link = s_aNydus[k];
+      if (!link.bExit)
+        continue;
+      UiLine(static_cast<float>(fX + (link.nX - fCamX) * fSx),
+             static_cast<float>(fY + (link.nY - fCamY) * fSy),
+             static_cast<float>(fX + (link.nExitX - fCamX) * fSx),
+             static_cast<float>(fY + (link.nExitY - fCamY) * fSy),
+             cNydusLink, 0.85f * fScale);
+    }
+    UiPopClip();
+  }
+
   // the number's colour: fully saturated, the player's own colour, the one their race
   // starts in; under it, plain white, as StarCraft II's counter sits (the user, 2026-11-02)
   const auto colour = [](int nOn, int nOpt) -> UiColor {
@@ -502,9 +479,8 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
   };
 
   // over each base's main hall the minerals' number, the scan's finding: the workers on
-  // the base's patches over three a patch - 0 / 24 on an eight-patch base - capped at the
-  // maximum, so a worker walking back does not push the counter past it (the user,
-  // 2026-11-03)
+  // the base's patches over three a patch - 0 / 24 on an eight-patch base. Over-assignment
+  // stays visible (35 / 24), with the saturated colour held at and above the optimum.
   for (const BaseInfo &base : s_aBase) {
     if (!bCamOk || base.nShow < 0 || base.nShow >= static_cast<int>(s_abase.size()))
       continue;
@@ -610,7 +586,7 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     for (int k = 0; k <= nMax; ++k) {
       const double t = nMax > 0 ? static_cast<double>(k) / nMax : 0.0;
       UiFill(static_cast<float>(ax + dx * t), static_cast<float>(ay + dy * t),
-             0.65f * fScale, 0.65f * fScale, c);
+             0.85f * fScale, 0.85f * fScale, c);
     }
   };
 
@@ -624,7 +600,7 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
       const double fSx0 = fX + (link.nX - fCamX) * fSx;
       const double fSy0 = fY + (link.nY - fCamY) * fSy;
       if (fSx0 > fX - 40 && fSx0 < fX + fW + 40 && fSy0 > fY - 40 && fSy0 < fY + fH) {
-        const float fSize = 6.0f;  // half the first world-label size
+        const float fSize = 12.0f;
         const float fWid = UiTextWidth(UI_FACE_BOLD, fSize, 0.0f, sz);
         const float fX0 = static_cast<float>(fSx0) - fWid / 2;
         const float fY0 = static_cast<float>(fSy0) - 30.0f;
@@ -635,9 +611,9 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
     if (link.bExit) {
       char szN[8];
       snprintf(szN, sizeof szN, "N%zu", k + 1);
-      // Half the camera labels' size and a little below them; the link is only a subtle guide.
+      // Small and a little below the camera labels; the link is only a subtle guide.
       minimapText(link.nExitX, link.nExitY, szN, RaceColour(), 4.0f, 4.0f);
-      minimapLine(link.nX, link.nY, link.nExitX, link.nExitY, UiColor{1.0f, 1.0f, 1.0f, 0.35f});
+      minimapLine(link.nX, link.nY, link.nExitX, link.nExitY, cNydusLink);
     }
   }
   // the saved camera locations' small labels on the minimap: c1 for F1, c2 for F2, and so
@@ -648,7 +624,7 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
       continue;
     char sz[8];
     snprintf(sz, sizeof sz, "c%d", n + 1);
-    minimapText(nx, ny, sz, UiColor{1.0f, 1.0f, 1.0f, 0.9f});
+    minimapText(nx, ny, sz, UiColor{1.0f, 1.0f, 1.0f, 0.9f}, 7.0f);
   }
 
   // the classic console's type cards: each label is that type's total over the whole
@@ -666,30 +642,6 @@ bool Draw(int nWidth, int nHeight, float fX, float fY, float fW, float fH)
       const float fy = fY + card.rc.top * fScale + 2.0f;
       UiText(fx + 1.0f, fy + 1.0f, UI_FACE_BOLD, fSize, 0.0f, UiColor{0.0f, 0.0f, 0.0f, 0.8f}, sz);
       UiText(fx, fy, UI_FACE_BOLD, fSize, 0.0f, UiColor{1.0f, 1.0f, 1.0f, 0.95f}, sz);
-    }
-  }
-
-  // the spellcasters' energy bars, over every caster in the local player's sight: over the
-  // sprite, its energy now over its maximum, full or empty alike, so which casters hold
-  // energy is read at a glance with nothing selected. Selected units' 1.17 energy row
-  // (rle_draw_hpfloat) stays as it is; the Interface setting turns the bars off.
-  if (s_fEnergyBars > 0.5 && bCamOk) {
-    for (const CasterBar &b : s_aBars) {
-      const double fSx0 = fX + (b.nX - fCamX) * fSx;
-      const double fSy0 = fY + (b.nY - fCamY) * fSy;
-      if (fSx0 < fX - 40 || fSx0 > fX + fW + 40 || fSy0 < fY - 60 || fSy0 > fY + fH)
-        continue;
-      const float fBarW = static_cast<float>(b.nW * fSx * 0.6);
-      if (fBarW < 8.0f)
-        continue;
-      const float fBarH = 2.5f * fScale;
-      const float fTop = static_cast<float>(fSy0 - b.nH * fSy) - fBarH - 4.0f;
-      const float fX0 = static_cast<float>(fSx0) - fBarW / 2;
-      UiFill(fX0, fTop, fBarW, fBarH, UiColor{0.02f, 0.05f, 0.12f, 0.75f});
-      if (b.nNow > 0)
-        UiFill(fX0, fTop, fBarW * static_cast<float>(b.nNow) / b.nMax, fBarH,
-               UiColor{0.25f, 0.6f, 1.0f, 0.95f});
-      bDrew = true;
     }
   }
 

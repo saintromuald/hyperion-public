@@ -51,7 +51,9 @@ unsigned ChosenOptions() {
   return (pszBudget != NULL && strcmp(pszBudget, "117") == 0 ? HX_OPT_PATH_BUDGET_117 : 0) |
          (TeamsThisGame() ? HX_OPT_TEAMS : 0) | (AiChosenThisGame() ? HX_OPT_AI_LEVELS : 0) |
          (PortBenchStressChosen() ? HX_OPT_STRESS : 0) | (HandicapChosenThisGame() ? HX_OPT_HANDICAP : 0) |
-         (MutatorsChosenThisGame() ? HX_OPT_MUTATORS : 0) | HX_OPT_ORDER_QUEUE | HX_OPT_SELECTION;
+         (MutatorsChosenThisGame() ? HX_OPT_MUTATORS : 0) | HX_OPT_ORDER_QUEUE | HX_OPT_SELECTION |
+         HX_OPT_MORPH_RALLY | HX_OPT_SMART_CAST_ROTATION | HX_OPT_CONSTRUCTION_CLEAR |
+         HX_OPT_SCOUT_BALANCE;
 }
 
 }  // namespace

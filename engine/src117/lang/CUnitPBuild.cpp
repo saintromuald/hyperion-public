@@ -8,6 +8,8 @@
 
 #include "oc_data.h"  // Hyperion: OC_VA
 #include "../h/CUnitPBuild.h"
+#include "../h/CUnitBuild.h"  // Hyperion: arrived-worker blocker clearing
+#include "../h/hxrules.h"     // Hyperion: recorded construction clearing
 #include "../h/CUnit.h"
 #include "../port/gameplay/port_cosmonarchy.h"  // Hyperion: the Cosmonarchy mod's rules
 #include "../h/CSprite.h"
@@ -70,6 +72,7 @@ void CUnit::DispatchBuildProtoss()
     break;
 
   case 2:
+  {
     if (bMoveFlags & 2)
       break;
     {
@@ -82,9 +85,19 @@ void CUnit::DispatchBuildProtoss()
         break;
       }
     }
-    if (!sub_41BCB0()) {
-      EndDispatchOrder();
-      break;
+    if ((g_hxRuleOptions & HX_OPT_CONSTRUCTION_CLEAR) == 0) {
+      if (!sub_41BCB0()) {
+        EndDispatchOrder();
+        break;
+      }
+    } else {
+      const WorkerConstructionSiteResult site = PrepareWorkerConstructionSite(this, 0x1F);
+      if (site == WORKER_SITE_WAIT)
+        break;
+      if (site == WORKER_SITE_FAILED || !sub_41BCB0()) {
+        EndDispatchOrder();
+        break;
+      }
     }
     {
       WORD wBuildType = wBuildQueue[bBuildQueueSlot];
@@ -116,6 +129,7 @@ void CUnit::DispatchBuildProtoss()
       gamesnd_play(0x210, this, 1, 0);
     }
     break;
+  }
 
   case 3:
     if (pOrderTarget != NULL && pOrderTarget->wType == 0x9D &&

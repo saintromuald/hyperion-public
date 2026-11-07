@@ -67,7 +67,7 @@ const int kFooterH = 20;
 const int kMaxRows = 9;
 const int kIcon = 32;
 
-// The permanent strip at the very top of the screen: one small cell per producing source,
+// The permanent strip at the very top of the screen: one small cell per kind and type of work,
 // Cosmonarchy's bar's place, beside the panels' full list (the user, 2026-11-05).
 const int kStripIcon = 20;
 const int kStripBar = 3;
@@ -105,8 +105,8 @@ struct PanelLayout {
   LayoutRow rows[kMaxRows];
   FBox target;  // the whole panel in window pixels, from the last draw
 };
-// The strip's cell: the row whose icon it shows (the source's active one), the source's
-// total queued count for the corner number, and the icon's and progress bar's boxes.
+// The strip's cell: the representative row whose icon, progress and source click it shows,
+// the group's total queued count for the corner number, and the icon's and progress bar's boxes.
 struct StripCell {
   int nRow = -1;
   int nCount = 0;
@@ -317,6 +317,56 @@ RowKey KeyOf(const Row &r)
 bool SameKey(const RowKey &a, const RowKey &b)
 {
   return a.kind == b.kind && a.id == b.id && a.dwSource == b.dwSource && a.nQueue == b.nQueue;
+}
+
+// Only the compact strip aggregates. The detailed queue keeps every source and waiting slot.
+// Kind is part of the key as well as id, so research, upgrades, training, morphs and construction
+// never borrow one another's icon or count (and equal numeric tech/upgrade ids stay distinct).
+bool SameStripGroup(const Row &a, const Row &b)
+{
+  return a.kind == b.kind && a.id == b.id;
+}
+
+// Highest known progress is closest to completion. Activity breaks a progress tie; otherwise the
+// first row stays, giving stable source choice. In particular an active unknown (-1) beats a
+// waiting unknown, while a genuinely known percentage beats either.
+bool BetterStripRepresentative(const Row &candidate, const Row &current)
+{
+  if (candidate.nProgress != current.nProgress)
+    return candidate.nProgress > current.nProgress;
+  return candidate.bActive && !current.bActive;
+}
+
+int LayoutStripCells(const std::vector<Row> &rows, StripCell *pCells, int nMax)
+{
+  if (pCells == NULL || nMax <= 0)
+    return 0;
+  int nCells = 0;
+  for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+    const Row &r = rows[i];
+    int k = 0;
+    while (k < nCells && !SameStripGroup(rows[pCells[k].nRow], r))
+      ++k;
+    if (k == nCells) {
+      if (k >= nMax)
+        continue;  // later rows can still add to one of the groups already on the strip
+      pCells[k].nRow = i;
+      pCells[k].nCount = 0;
+      ++nCells;
+    }
+    StripCell &c = pCells[k];
+    ++c.nCount;  // every queued unit counts, not merely every producing source
+    if (BetterStripRepresentative(r, rows[c.nRow]))
+      c.nRow = i;
+  }
+  return nCells;
+}
+
+// A live row with an unexposed time still has a progress well, empty at zero. Waiting rows retain
+// their no-bar meaning; the detailed panels likewise keep their original progress semantics.
+int StripProgress(const Row &r)
+{
+  return r.bActive ? SDL_max(0, r.nProgress) : r.nProgress;
 }
 
 CUnit *Source(DWORD dwId)
@@ -628,39 +678,18 @@ void MakeLayout(void)
     }
   }
 
-  // The strip: one cell per producing source, at the very top, centred. The cell's icon is
-  // the source's active unit row (a building's research yields to its production), its
-  // corner number the source's rows in all; empty production is no strip at all.
+  // The strip: one cell per kind+id at the very top, centred. Unit production therefore groups
+  // across every source, with xN counting all active and waiting copies. Research and upgrades
+  // remain their own kind+id groups. Representatives and counts are rebuilt from the fresh rows
+  // each frame, so completing one source automatically reveals the next closest; no rows is no
+  // strip at all.
   {
     StripLayout &s = g_strip;
     s.bShown = StripShown();
     s.nCells = 0;
     if (s.bShown) {
       const std::vector<Row> &rows = g_rows[PANEL_QUEUE];
-      DWORD adwSource[kStripMax];
-      for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
-        const Row &r = rows[i];
-        int k = 0;
-        while (k < s.nCells && adwSource[k] != r.dwSource)
-          ++k;
-        if (k == s.nCells) {
-          if (k >= kStripMax)
-            continue;
-          adwSource[k] = r.dwSource;
-          s.cells[k].nRow = i;  // the first row, until an active one takes the cell
-          s.cells[k].nCount = 0;
-          ++s.nCells;
-        }
-        StripCell &c = s.cells[k];
-        ++c.nCount;
-        if (!r.bActive)
-          continue;  // a waiting slot never takes the cell's icon
-        const Row &cur = rows[c.nRow];
-        if (!cur.bActive ||
-            (cur.kind == ROW_RESEARCH || cur.kind == ROW_UPGRADE) &&
-                (r.kind == ROW_TRAIN || r.kind == ROW_MORPH || r.kind == ROW_CONSTRUCT))
-          c.nRow = i;
-      }
+      s.nCells = LayoutStripCells(rows, s.cells, kStripMax);
       if (s.nCells > 0) {
         s.box.w = s.nCells * kStripCell + 2 * kStripPad;
         s.box.h = kStripPad + kStripIcon + kStripGap + kStripBar + kStripPad;
@@ -851,9 +880,9 @@ bool DrawOnePanel(int nPanel, float fX, float fY, float fW, float fH)
 }
 
 // The strip: the small permanent production bar at the very top of the screen, one cell
-// per producing source (the user, 2026-11-05). Each cell is the source's active icon with
-// its progress under it and its total rows at the corner; a click centres the source, as a
-// row's click does. The big panels and their hotkeys are unchanged.
+// per kind+id group (the user, 2026-11-05). Each cell is the closest-to-complete row's icon
+// with its progress under it and the group's total rows at the corner; a click centres that
+// representative's source, as a row's click does. The big panels and their hotkeys are unchanged.
 bool DrawStrip(float fX, float fY, float fW, float fH)
 {
   StripLayout &s = g_strip;
@@ -887,7 +916,7 @@ bool DrawStrip(float fX, float fY, float fW, float fH)
     UiRing(icon.x, icon.y, icon.w, icon.h, line, 2.0f * k, SDL_max(1.0f, k));
     const UiColor bar = r.kind == ROW_RESEARCH ? UiRgb(0x55b7d9) : r.kind == ROW_UPGRADE ? UiRgb(0xb497df)
                         : r.kind == ROW_CONSTRUCT ? UiRgb(0x82c66e) : UiRgb(0x6b9fd0);
-    DrawProgress(ToTarget(c.bar, fX, fY, fW, fH), r.nProgress, bar);
+    DrawProgress(ToTarget(c.bar, fX, fY, fW, fH), StripProgress(r), bar);
     if (c.nCount > 1) {
       char szN[8];
       snprintf(szN, sizeof szN, "x%d", c.nCount);
@@ -1113,7 +1142,7 @@ int PortProductionHdItems(PortHdUiItem *pItems, int nMax)
     item.nW = box.w;
     item.nH = box.h;
     item.nTints = 16;
-    memcpy(item.abTint, sgBmpTIcon_g + 3 * 16, 16);
+    memcpy(item.abTint, sgBmpTIcon_g, 16);  // the enabled command-icon palette, not the dim row
     r.bHdItem = true;
   };
   for (int nPanel = 0; nPanel < PANELS; ++nPanel) {

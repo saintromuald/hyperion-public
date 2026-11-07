@@ -33,6 +33,11 @@ bool g_hxMutatorsOn = false;
 
 namespace {
 
+// True only between a revision-4 new game or replay's MutatorsForGame and MutatorsMapLoaded (not
+// a save load). It gives the initial resource-memory pass one allocator, identically on record
+// and playback, instead of CircleUpdate plus the mutator.
+bool g_bFogResourcesInitial = false;
+
 const PortLogger Log("hyperion_mutators.log");
 
 // a cap the mutator lifts, in halves: past any supply a game reaches, and a team captain's
@@ -49,12 +54,13 @@ const int kCaps[] = {100, 200, 300, 400, 500, 600};
 const int kBoosts[] = {0, 25, 50, 75, 100};
 const int kWorkers[] = {2, 4, 6, 8, 10, 12};
 const int kWorkersMost = 12;
-const char *const kFogs[] = {PT_("Normal"), PT_("Explored"), PT_("None"), PT_("Explored + resources")};  // MUTATOR_FOG_*
+const char *const kFogs[] = {PT_("Normal"), PT_("Explored"), PT_("None"), PT_("Resources remembered")};  // MUTATOR_FOG_*
 const char *const kNoArmyKeys[] = {PT_("Off"), PT_("On")};                       // the army hotkey's mutator
 const char *const kEnergyRegens[] = {PT_("Normal"), PT_("x3")};                  // the energy regen's mutator
 const char *const kNewbies[] = {PT_("Off"), PT_("On")};                          // the newbie mode's mutator
 const char *const kAutoWorkers[] = {PT_("Off"), PT_("On")};                      // auto-train workers
 const char *const kAutoMines[] = {PT_("Off"), PT_("On")};                        // auto-mine efficiently
+const char *const kVictories[] = {PT_("Classic"), PT_("Production")};            // the victory mutator
 const int kBuilds[] = {25, 50, 75, 100};                        // a percent of 1.17's times
 const char *const kTechs[] = {PT_("Normal"), PT_("Researched"), PT_("No upgrades"),
                               PT_("No research")};  // MUTATOR_TECH_*
@@ -84,7 +90,7 @@ const char *const kNames[MUT_COUNT] = {PT_("Mineral fields"), PT_("Vespene geyse
                                        PT_("Fog of war"),     PT_("Build time"),      PT_("Tech and upgrades"),
                                        PT_("Rich resources"), PT_("No cap"),         PT_("One add-on"),
                                        PT_("No army key"), PT_("Energy regeneration"), PT_("Newbie mode"),
-                                       PT_("Auto train workers"), PT_("Auto mine efficiently")};
+                                       PT_("Auto train workers"), PT_("Auto mine efficiently"), PT_("Victory")};
 const char *const kLines[MUT_COUNT] = {
     PT_("What each mineral field holds, or that it never runs dry. Classic: 1,500, the small ones 750."),
     PT_("What each geyser holds before it runs dry, or that it never does. Classic: 5,000."),
@@ -93,7 +99,8 @@ const char *const kLines[MUT_COUNT] = {
     PT_("The workers each player begins with, beside the town hall. Classic: 4."),
     PT_("More supply from each depot, pylon, overlord and town hall. Classic: none, a depot\xe2\x80\x99s 8."),
     PT_("Explored: every player knows the map\xe2\x80\x99s land from the start, under the fog. None: every "
-        "player sees the whole map all game. Classic: the fog of war."),
+        "player sees the whole map all game. Resources: mineral fields, geysers, rocks and doodads "
+        "are explored and remembered once, without revealing opponents. Classic: the fog of war."),
     PT_("How long buildings, units, research and upgrades take to make: \xc3\x97" "0.5 takes half as long. "
         "Classic: \xc3\x97" "1."),
     PT_("Researched: every upgrade at its top level and every ability researched from the start. No "
@@ -115,6 +122,8 @@ const char *const kLines[MUT_COUNT] = {
     PT_("A completed town hall with nothing training and supply to spare trains its worker by itself."),
     PT_("Each base's patches take up to three workers, each geyser three; once a base is full, the workers "
         "that are free go to the next base with room, and to the built geysers."),
+    PT_("Production: a player or team with no live production buildings loses, and the last side with one "
+        "wins. Incomplete buildings count. Classic: the map's own victory conditions."),
 };
 
 // the presets' names, which --mutators also reads (MutatorsChooseList) from the English
@@ -201,7 +210,8 @@ bool Same(const MutatorSet &a, const MutatorSet &b) {
          (a.nRich != MUTATOR_RICH_RADIUS || a.nRichRadius == b.nRichRadius) && a.nUnits == b.nUnits &&
          a.nNoCap == b.nNoCap && a.nAddon == b.nAddon && a.nNoArmyKey == b.nNoArmyKey &&
          a.nEnergyRegen == b.nEnergyRegen && a.nNewbie == b.nNewbie && a.nAutoWorkers == b.nAutoWorkers &&
-         a.nAutoMine == b.nAutoMine && a.dwAutoUpgLo == b.dwAutoUpgLo && a.dwAutoUpgHi == b.dwAutoUpgHi;
+         a.nAutoMine == b.nAutoMine && a.dwAutoUpgLo == b.dwAutoUpgLo && a.dwAutoUpgHi == b.dwAutoUpgHi &&
+         a.nVictory == b.nVictory;
 }
 
 // A radius in words: "48 tiles", "a quarter of the map"; in English for a log or a key.
@@ -313,9 +323,10 @@ struct Record {
   DWORD dwNoCap, dwAddon;
   DWORD dwNoArmyKey, dwEnergyRegen;
   DWORD dwNewbie, dwAutoWorkers, dwAutoMine, dwAutoUpgLo, dwAutoUpgHi;
+  DWORD dwVictory;
 };
 #pragma pack(pop)
-static_assert(sizeof(Record) == MUTATOR_RECORD_BYTES_NEWBIE, "the record's size is fixed");
+static_assert(sizeof(Record) == MUTATOR_RECORD_BYTES_VICTORY, "the record's size is fixed");
 
 }  // namespace
 
@@ -351,6 +362,7 @@ MutatorSet MutatorsClamp(const MutatorSet &m) {
   c.nAutoMine = m.nAutoMine != 0;
   c.dwAutoUpgLo = m.dwAutoUpgLo;
   c.dwAutoUpgHi = m.dwAutoUpgHi;
+  c.nVictory = Clamp(m.nVictory, MUTATOR_VICTORY_CLASSIC, MUTATOR_VICTORY_PRODUCTION);
   return c;
 }
 
@@ -403,6 +415,7 @@ int MutatorChoices(int nMut) {
   case MUT_NEWBIE: return static_cast<int>(sizeof kNewbies / sizeof kNewbies[0]);
   case MUT_AUTOWORKERS: return static_cast<int>(sizeof kAutoWorkers / sizeof kAutoWorkers[0]);
   case MUT_AUTOMINE: return static_cast<int>(sizeof kAutoMines / sizeof kAutoMines[0]);
+  case MUT_VICTORY: return static_cast<int>(sizeof kVictories / sizeof kVictories[0]);
   case MUT_RICH_CHANCE: return static_cast<int>(sizeof kChances / sizeof kChances[0]);
   case MUT_RICH_RADIUS: return static_cast<int>(sizeof kRadii / sizeof kRadii[0]);
   }
@@ -430,6 +443,7 @@ std::string MutatorChoiceName(int nMut, int i) {
   case MUT_NEWBIE: return PortText(kNewbies[i]);
   case MUT_AUTOWORKERS: return PortText(kAutoWorkers[i]);
   case MUT_AUTOMINE: return PortText(kAutoMines[i]);
+  case MUT_VICTORY: return PortText(kVictories[i]);
   case MUT_RICH_CHANCE: return PortTextF("{0}% chance", {std::to_string(kChances[i])});
   case MUT_RICH_RADIUS: return RadiusChip(kRadii[i]);
   }
@@ -458,6 +472,7 @@ int MutatorChoiceOf(const MutatorSet &m, int nMut) {
   case MUT_NEWBIE: return m.nNewbie != 0 ? 1 : 0;
   case MUT_AUTOWORKERS: return m.nAutoWorkers != 0 ? 1 : 0;
   case MUT_AUTOMINE: return m.nAutoMine != 0 ? 1 : 0;
+  case MUT_VICTORY: return Clamp(m.nVictory, 0, MutatorChoices(nMut) - 1);
   case MUT_BUILD: return Nearest(kBuilds, MutatorChoices(nMut), m.nBuildTime);
   case MUT_TECH: return Clamp(m.nTech, 0, MutatorChoices(nMut) - 1);
   case MUT_RICH: return Clamp(m.nRich, 0, MutatorChoices(nMut) - 1);
@@ -492,6 +507,7 @@ void MutatorChoose(MutatorSet *pm, int nMut, int i) {
   case MUT_NEWBIE: pm->nNewbie = i != 0 ? 1 : 0; break;
   case MUT_AUTOWORKERS: pm->nAutoWorkers = i != 0 ? 1 : 0; break;
   case MUT_AUTOMINE: pm->nAutoMine = i != 0 ? 1 : 0; break;
+  case MUT_VICTORY: pm->nVictory = i; break;
   case MUT_BUILD: pm->nBuildTime = kBuilds[i]; break;
   case MUT_TECH: pm->nTech = i; break;
   case MUT_RICH: pm->nRich = i; break;
@@ -550,6 +566,7 @@ bool MutatorOn(const MutatorSet &m, int nMut) {
   case MUT_NEWBIE: return m.nNewbie != c.nNewbie;
   case MUT_AUTOWORKERS: return m.nAutoWorkers != c.nAutoWorkers;
   case MUT_AUTOMINE: return m.nAutoMine != c.nAutoMine;
+  case MUT_VICTORY: return m.nVictory != c.nVictory;
   }
   return false;
 }
@@ -662,7 +679,7 @@ std::string MutatorsText(const MutatorSet &m, bool bShown) {
   else if (m.nFog == MUTATOR_FOG_NONE)
     add(PT_("no fog of war"));
   else if (m.nFog == MUTATOR_FOG_RESOURCES)
-    add(PT_("the map and its resources explored"));
+    add(PT_("resources and obstacles remembered"));
   if (m.nBuildTime != s.nBuildTime)
     add(PT_("build time {0}"), {Share(m.nBuildTime)});
   if (m.nTech == MUTATOR_TECH_ALL)
@@ -708,6 +725,8 @@ std::string MutatorsText(const MutatorSet &m, bool bShown) {
     add(PT_("workers trained by themselves"));
   if (m.nAutoMine != s.nAutoMine)
     add(PT_("mining balanced by itself"));
+  if (m.nVictory == MUTATOR_VICTORY_PRODUCTION)
+    add(PT_("production victory"));
   return out;
 }
 
@@ -723,7 +742,8 @@ std::string MutatorsJson(const MutatorSet &m) {
          ",\"addon\":" + std::to_string(m.nAddon) + ",\"noArmyKey\":" + std::to_string(m.nNoArmyKey) +
          ",\"energyRegen\":" + std::to_string(m.nEnergyRegen) + ",\"newbie\":" + std::to_string(m.nNewbie) +
          ",\"autoWorkers\":" + std::to_string(m.nAutoWorkers) + ",\"autoMine\":" + std::to_string(m.nAutoMine) +
-         ",\"autoUpgLo\":" + std::to_string(m.dwAutoUpgLo) + ",\"autoUpgHi\":" + std::to_string(m.dwAutoUpgHi) + "}";
+         ",\"autoUpgLo\":" + std::to_string(m.dwAutoUpgLo) + ",\"autoUpgHi\":" + std::to_string(m.dwAutoUpgHi) +
+         ",\"victory\":" + std::to_string(m.nVictory) + "}";
 }
 
 MutatorSet MutatorsFromJson(const PortJson &j) {
@@ -753,6 +773,7 @@ MutatorSet MutatorsFromJson(const PortJson &j) {
   m.nAutoMine = static_cast<int>(j["autoMine"].Num(s.nAutoMine));
   m.dwAutoUpgLo = static_cast<unsigned>(j["autoUpgLo"].Num(s.dwAutoUpgLo));
   m.dwAutoUpgHi = static_cast<unsigned>(j["autoUpgHi"].Num(s.dwAutoUpgHi));
+  m.nVictory = static_cast<int>(j["victory"].Num(s.nVictory));
   return MutatorsClamp(m);
 }
 
@@ -835,10 +856,14 @@ bool MutatorsChooseList(const char *pszList) {
       m.nAutoWorkers = ParseOn(pszValue) ? 1 : 0;
     } else if (lstrcmpiA(key.c_str(), "automine") == 0) {
       m.nAutoMine = ParseOn(pszValue) ? 1 : 0;
+    } else if (lstrcmpiA(key.c_str(), "victory") == 0) {
+      m.nVictory = _strnicmp(pszValue, "prod", 4) == 0 || _strnicmp(pszValue, "on", 2) == 0
+                       ? MUTATOR_VICTORY_PRODUCTION
+                       : atoi(pszValue);  // classic, normal and off all read as 0
     } else if (lstrcmpiA(key.c_str(), "autoupg") == 0) {
       // the upgrades to research by themselves, by id or by a '+'-joined list of ids
       const char *p = pszValue;
-      while (*p != ' ') {
+      while (*p != '\0') {
         const int u = atoi(p);
         if (u >= 0 && u < 32)
           m.dwAutoUpgLo |= 1u << u;
@@ -853,7 +878,7 @@ bool MutatorsChooseList(const char *pszList) {
       m.nAddon = ParseOn(pszValue) ? 1 : 0;
     } else {
       Log("--mutators: %s is none of minerals, gas, start, supply, workers, boost, fog, build, tech, rich, radius, "
-          "chance, fair, atleast, announce, richseed, nocap, addon and units", key.c_str());
+          "chance, fair, atleast, announce, richseed, nocap, addon, units and victory", key.c_str());
       continue;
     }
     bAny = true;
@@ -885,9 +910,10 @@ std::string MutatorsList(const MutatorSet &m) {
   if (m.nSupplyBoost != c.nSupplyBoost)
     add("boost", std::to_string(m.nSupplyBoost));
   if (m.nFog != c.nFog)
-    add("fog", m.nFog == MUTATOR_FOG_EXPLORED ? std::string("explored")
-                 : m.nFog == MUTATOR_FOG_NONE   ? std::string("none")
-                                                : std::to_string(m.nFog));
+    add("fog", m.nFog == MUTATOR_FOG_EXPLORED  ? std::string("explored")
+                 : m.nFog == MUTATOR_FOG_NONE      ? std::string("none")
+                 : m.nFog == MUTATOR_FOG_RESOURCES ? std::string("resources")
+                                                   : std::to_string(m.nFog));
   if (m.nBuildTime != c.nBuildTime)
     add("build", std::to_string(m.nBuildTime) + "%");
   if (m.nTech != c.nTech)
@@ -927,6 +953,8 @@ std::string MutatorsList(const MutatorSet &m) {
     add("autoworkers", "on");
   if (m.nAutoMine != c.nAutoMine)
     add("automine", "on");
+  if (m.nVictory != c.nVictory)
+    add("victory", m.nVictory == MUTATOR_VICTORY_PRODUCTION ? std::string("production") : std::to_string(m.nVictory));
   if (m.dwAutoUpgLo != 0 || m.dwAutoUpgHi != 0) {
     // the upgrades to research by themselves, as a '+'-joined list of ids (the parser reads it back)
     std::string ids;
@@ -976,6 +1004,8 @@ void MutatorsForGame(void) {
   g_nRevision = bOld ? (g_bRecorded ? g_nRecordedRevision : 0) : MUTATOR_REVISION;
   g_bNet = false;
   g_hxMutatorsOn = !MutatorsStandard(g_game);
+  g_bFogResourcesInitial = gpLoadGameFile == NULL && g_hxMutatorsOn &&
+                           g_game.nFog == MUTATOR_FOG_RESOURCES && g_nRevision >= 4;
   Log("MutatorsForGame: on %d, options 0x%X, set %s", static_cast<int>(g_hxMutatorsOn),
       static_cast<unsigned>(g_hxRuleOptions), MutatorsText(g_game).c_str());
   if ((g_hxRuleOptions & HX_OPT_MUTATORS) != 0)
@@ -985,6 +1015,10 @@ void MutatorsForGame(void) {
 
 const MutatorSet &MutatorsOfGame(void) {
   return g_game;
+}
+
+bool MutatorProductionVictory(void) {
+  return g_hxMutatorsOn && g_game.nVictory == MUTATOR_VICTORY_PRODUCTION;
 }
 
 unsigned short MutatorResourceOf(unsigned short wAmount, bool bGas) {
@@ -1038,11 +1072,31 @@ int MutatorTechOf(void) {
   return g_game.nTech;
 }
 
+static void MutatorsResourcesRemember(void);
+
+static void ScoutBalance(void) {
+  // The Scout's requested Hyperion balance, applied after any UNIS map overrides and before the
+  // generic build-time mutator below. A save already carries the reduced table row.
+  const int nScout = 0x46;
+  guwUnitMineralsCost[nScout] = guwUnitMineralsCost[nScout] > 35 ?
+      guwUnitMineralsCost[nScout] - 35 : 0;
+  guwUnitGasesCost[nScout] = guwUnitGasesCost[nScout] > 10 ?
+      guwUnitGasesCost[nScout] - 10 : 0;
+  guwUnitTimeToBuild[nScout] = guwUnitTimeToBuild[nScout] > 120 ?
+      guwUnitTimeToBuild[nScout] - 120 : 1;
+  Log("Scout balance: %u minerals, %u gas, %u build frames",
+      static_cast<unsigned>(guwUnitMineralsCost[nScout]),
+      static_cast<unsigned>(guwUnitGasesCost[nScout]),
+      static_cast<unsigned>(guwUnitTimeToBuild[nScout]));
+}
+
 void MutatorsMapLoaded(void) {
   RichBasesMapLoaded();
+  const bool bLoaded = gpLoadGameFile != NULL;
+  if (!bLoaded && HxRules() && (g_hxRuleOptions & HX_OPT_SCOUT_BALANCE) != 0)
+    ScoutBalance();
   if (!g_hxMutatorsOn)
     return;
-  const bool bLoaded = gpLoadGameFile != NULL;
   if (g_game.nBuildTime != 100) {
     // a save gives 1.17's rows back as they were saved, at the mutator's times; a mod's unit
     // types are the mod's again at each start
@@ -1096,8 +1150,16 @@ void MutatorsMapLoaded(void) {
         guwUnitMineralsCost[kNoCapTypes[1]], static_cast<int>(gxUnitLife[kNoCapTypes[1]] >> 8),
         guwUnitEnergy[kNoCapTypes[1]]);
   }
-  if (!bLoaded)
+  // LoadMapData's initial CircleUpdate pass is over; ordinary later visibility changes must use
+  // the normal fog-memory path again whether or not this game has mutators.
+  g_bFogResourcesInitial = false;
+  if (!bLoaded) {
+    // Revision 4 remembers the static objects once, before any transient unit can be swept into
+    // the reveal. A save already holds those fogged copies and the explored bits.
+    if (g_game.nFog == MUTATOR_FOG_RESOURCES && g_nRevision >= 4)
+      MutatorsResourcesRemember();
     MutatorsVisionRefresh();
+  }
   Log("the map loaded%s: times at %d%%, tech %d, fog %d", bLoaded ? " for a saved game" : "", g_game.nBuildTime,
       g_game.nTech, g_game.nFog);
 }
@@ -1108,8 +1170,8 @@ void MutatorsVisionRefresh(void) {
   if (!g_hxMutatorsOn || g_game.nFog == MUTATOR_FOG_CLASSIC || gpSquareMap == NULL)
     return;
   // a tile's bits 0 to 7 hide it from players 0 to 7, bits 8 to 15 leave it unexplored.
-  // Explored + resources does NOT open the land: the fog of war stays as Classic, and only
-  // the resources, the eggs and the doodads show through it (the user, 2026-11-04)
+  // Resources remembered does NOT open the land. Revision 4's static memory was seeded as the
+  // map loaded; only the old replay path below opens resource tiles after a sight refresh.
   const bool bSeen = g_game.nFog == MUTATOR_FOG_NONE;
   const DWORD dwOpen = bSeen ? 0xFFFFu : g_game.nFog == MUTATOR_FOG_RESOURCES ? 0u : 0xFF00u;
   const int nTiles = static_cast<int>(gwMapWidth) * gwMapHeight;
@@ -1126,11 +1188,10 @@ void MutatorsVisionRefresh(void) {
       if (bSeen && pHidden != NULL)
         pHidden[i].Remove(s);
     }
-  // Explored + resources (the user, 2026-11-04): the land is known, as Explored, and the
-  // mineral fields, the geysers, the eggs and the doodads show for every player from the
-  // start. The resource tiles open for every player, so the resources themselves stay
-  // visible (CalcVisibility keeps them so); the rest of the map's units stay in the fog.
-  if (g_game.nFog == MUTATOR_FOG_RESOURCES) {
+  // Before revision 4, Explored + resources repeatedly opened the resource, egg and doodad
+  // tiles, live sight included. Keep that exact behaviour for an old replay or save; it is not
+  // the new rule, whose memory pass never touches the hidden sets.
+  if (g_game.nFog == MUTATOR_FOG_RESOURCES && g_nRevision < 4) {
     for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
       if (p->pSprite == NULL)
         continue;
@@ -1172,6 +1233,53 @@ static void RevealTilesFor(PlayerSet *pHidden, PlayerSet *pUnexplored, int nX, i
     }
 }
 
+// Revision 4: explore a static object's tiles without opening one live-visibility bit. Doodads
+// draw from the unexplored mask; a neutral resource also gets the usual fogged-unit copy, which
+// persists only while its placebox is out of sight. Nothing transient is visited again later.
+static void ExploreTilesFor(PlayerSet *pUnexplored, int nX, int nY) {
+  const int nTx = nX / 32, nTy = nY / 32;
+  for (int dy = -1; dy <= 1; ++dy)
+    for (int dx = -1; dx <= 1; ++dx) {
+      const int x = nTx + dx, y = nTy + dy;
+      if (x < 0 || y < 0 || x >= gwMapWidth || y >= gwMapHeight)
+        continue;
+      const int i = y * gwMapWidth + x;
+      gpSquareMap[i] &= ~0xFF00u;  // deliberately not 0x00FF: hidden is live sight
+      for (int s = PLAYER_LOBBY_117; s < PlayerSlots(); ++s)
+        if (pUnexplored != NULL)
+          pUnexplored[i].Remove(s);
+    }
+}
+
+static bool FogResourceType(WORD wType) {
+  return (wType >= 0xB0 && wType <= 0xB2) || wType == 0xBC;
+}
+
+bool MutatorFogSuppressInitialCopy(WORD wType) {
+  return g_bFogResourcesInitial && FogResourceType(wType);
+}
+
+static void MutatorsResourcesRemember(void) {
+  if (gpSquareMap == NULL)
+    return;
+  PlayerSet *pUnexplored = VisionHxUnexplored();
+  for (CUnit *p = CUnit::GetUsedList(); p != NULL; p = p->pNext) {
+    // An opponent can never qualify, even in a mod that gives it a resource-looking unit. Eggs
+    // and other transient or player-owned objects are not part of this initial static memory.
+    if (p->pSprite == NULL || PlayerIsLobby(p->bPlayer) || !FogResourceType(p->wType))
+      continue;
+    ExploreTilesFor(pUnexplored, static_cast<int>(p->pSprite->wPosX), static_cast<int>(p->pSprite->wPosY));
+    CThingy::AllocFromSprite(p->wType, p->pSprite);
+  }
+  // Rocks and the other static doodads need no fogged copy: their own sprites use exploration.
+  // Hyperion's widened thingy pool can hold more than 1.17's 500 initial doodads.
+  for (int n = 1; n <= g_pools.thingies; ++n) {
+    CThingy *pT = CThingy::GetDoodadThingy(n);
+    if (pT != NULL && pT->pSprite != NULL)
+      ExploreTilesFor(pUnexplored, static_cast<int>(pT->pSprite->wPosX), static_cast<int>(pT->pSprite->wPosY));
+  }
+}
+
 void MutatorsSave(unsigned char *pbOut) {
   const Record r = {static_cast<DWORD>(g_game.nMinerals),      static_cast<DWORD>(g_game.nGas),
                     static_cast<DWORD>(g_game.nStartMinerals), static_cast<DWORD>(g_game.nStartGas),
@@ -1185,12 +1293,13 @@ void MutatorsSave(unsigned char *pbOut) {
                     static_cast<DWORD>(g_game.nNoArmyKey),     static_cast<DWORD>(g_game.nEnergyRegen),
                     static_cast<DWORD>(g_game.nNewbie),        static_cast<DWORD>(g_game.nAutoWorkers),
                     static_cast<DWORD>(g_game.nAutoMine),      static_cast<DWORD>(g_game.dwAutoUpgLo),
-                    static_cast<DWORD>(g_game.dwAutoUpgHi)};
+                    static_cast<DWORD>(g_game.dwAutoUpgHi),    static_cast<DWORD>(g_game.nVictory)};
   memcpy(pbOut, &r, sizeof r);
 }
 
 bool MutatorRecordBytesRead(int nBytes) {
-  return nBytes == MUTATOR_RECORD_BYTES_NEWBIE || nBytes == MUTATOR_RECORD_BYTES || nBytes == MUTATOR_RECORD_BYTES_UNITS ||
+  return nBytes == MUTATOR_RECORD_BYTES_VICTORY || nBytes == MUTATOR_RECORD_BYTES_NEWBIE ||
+         nBytes == MUTATOR_RECORD_BYTES || nBytes == MUTATOR_RECORD_BYTES_UNITS ||
          nBytes == MUTATOR_RECORD_BYTES_RADIUS || nBytes == MUTATOR_RECORD_BYTES_RICH ||
          nBytes == MUTATOR_RECORD_BYTES_REVISION ||
          nBytes == MUTATOR_RECORD_BYTES_TEN || nBytes == MUTATOR_RECORD_BYTES_FIRST;
@@ -1208,7 +1317,8 @@ bool MutatorsRecorded(const unsigned char *pbIn, int nBytes) {
   // without the radius 48 tiles, one without the unit limit Automatic, and one without the no-cap
   // mutator and the one add-on's has neither
   Record r = {0, 0, 0, 0, 0, 0, 0, MUTATOR_FOG_CLASSIC, 100, MUTATOR_TECH_CLASSIC, 0, MUTATOR_RICH_OFF, 50,
-              MUTATOR_RICH_FAIR | MUTATOR_RICH_AT_LEAST_ONE, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+              MUTATOR_RICH_FAIR | MUTATOR_RICH_AT_LEAST_ONE, 48, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+              MUTATOR_VICTORY_CLASSIC};
   memcpy(&r, pbIn, nBytes);
   g_nRecordedRevision = static_cast<int>(r.dwRevision);
   MutatorSet m;
@@ -1236,6 +1346,7 @@ bool MutatorsRecorded(const unsigned char *pbIn, int nBytes) {
   m.nAutoMine = static_cast<int>(r.dwAutoMine);
   m.dwAutoUpgLo = r.dwAutoUpgLo;
   m.dwAutoUpgHi = r.dwAutoUpgHi;
+  m.nVictory = static_cast<int>(r.dwVictory);
   g_recorded = MutatorsClamp(m);
   g_bRecorded = true;
   return true;

@@ -181,7 +181,7 @@ msgstr "최대 속도"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:54
 #: src117/port/front/port_front_campaign.cpp:58
-#: src117/port/front/port_front_mutators.cpp:1033
+#: src117/port/front/port_front_mutators.cpp:1038
 #: src117/port/front/port_front_replays.cpp:50
 #: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
@@ -192,7 +192,7 @@ msgstr "저그"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:53
 #: src117/port/front/port_front_campaign.cpp:57
-#: src117/port/front/port_front_mutators.cpp:1033
+#: src117/port/front/port_front_mutators.cpp:1038
 #: src117/port/front/port_front_replays.cpp:50
 #: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
@@ -203,7 +203,7 @@ msgstr "테란"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:55
 #: src117/port/front/port_front_campaign.cpp:56
-#: src117/port/front/port_front_mutators.cpp:1033
+#: src117/port/front/port_front_mutators.cpp:1038
 #: src117/port/front/port_front_replays.cpp:50
 #: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
@@ -529,7 +529,7 @@ msgid "A minute, to see it runs"
 msgstr "1분, 정상 동작 확인용"
 
 #: src117/port/front/port_front_bench.cpp:138
-#: src117/port/gameplay/port_mutators.cpp:121
+#: src117/port/gameplay/port_mutators.cpp:130
 msgid "Standard"
 msgstr "표준"
 
@@ -671,10 +671,10 @@ msgid "at most {0} frames"
 msgstr "최대 {0}프레임"
 
 #: src117/port/front/port_front_bench.cpp:1474
-#: src117/port/front/port_front_mutators.cpp:1718
+#: src117/port/front/port_front_mutators.cpp:1724
 #: src117/port/front/port_front_theme.cpp:611
 #: src117/port/front/port_frontkit.cpp:389
-#: src117/port/gameplay/port_mutators.cpp:587
+#: src117/port/gameplay/port_mutators.cpp:604
 msgid "Custom"
 msgstr "사용자 지정"
 
@@ -716,7 +716,7 @@ msgstr "다른 게임이 됩니다. 실행 결과는 같은 시드에서만 비�
 
 #: src117/port/front/port_front_bench.cpp:1557
 #: src117/port/front/port_front_bench.cpp:1575
-#: src117/port/gameplay/port_mutators.cpp:83
+#: src117/port/gameplay/port_mutators.cpp:89
 msgid "Supply cap"
 msgstr "보급품 한도"
 
@@ -729,7 +729,7 @@ msgid "each player"
 msgstr "플레이어당"
 
 #: src117/port/front/port_front_bench.cpp:1563
-#: src117/port/gameplay/port_mutators.cpp:522
+#: src117/port/gameplay/port_mutators.cpp:538
 msgid "Unlimited"
 msgstr "무제한"
 
@@ -1267,9 +1267,9 @@ msgstr "느림"
 #: src117/port/front/port_front_bench.cpp:90
 #: src117/port/front/port_front_replays.cpp:123
 #: src117/port/front/port_front_skirmish.cpp:83
-#: src117/port/gameplay/port_mutators.cpp:52
-#: src117/port/gameplay/port_mutators.cpp:54
+#: src117/port/gameplay/port_mutators.cpp:57
 #: src117/port/gameplay/port_mutators.cpp:59
+#: src117/port/gameplay/port_mutators.cpp:65
 #: src117/port/tools/port_benchview.cpp:62
 msgid "Normal"
 msgstr "일반"
@@ -1890,6 +1890,7 @@ msgstr "항복"
 #: src117/port/front/port_front_score.cpp:568
 #: src117/port/front/port_front_score.cpp:584
 #: src117/port/front/port_front_score.cpp:917
+#: src117/port/gameplay/port_mutators.cpp:93
 msgid "Victory"
 msgstr "승리"
 
@@ -1917,7 +1918,7 @@ msgid "Resume Game"
 msgstr "게임 계속하기"
 
 #: src117/port/front/port_front_gamemenu.cpp:326
-#: src117/port/front/port_front_mutators.cpp:1615
+#: src117/port/front/port_front_mutators.cpp:1621
 msgid "Options"
 msgstr "설정"
 
@@ -2234,7 +2235,7 @@ msgid "Idle workers"
 msgstr "유휴 일꾼"
 
 #: src117/port/front/port_front_hud.cpp:604
-#: src117/port/front/port_front_mutators.cpp:1108
+#: src117/port/front/port_front_mutators.cpp:1113
 #: src117/port/gameplay/port_trainerview.cpp:420
 #: src117/port/gameplay/port_trainerview.cpp:1327
 #: src117/port/hud/port_hudinput.cpp:691
@@ -2470,7 +2471,7 @@ msgid "HUD"
 msgstr "HUD"
 
 #: src117/port/front/port_front_internal.h:53
-#: src117/port/gameplay/port_mutators.cpp:86
+#: src117/port/gameplay/port_mutators.cpp:92
 msgid "Newbie mode"
 msgstr ""
 
@@ -2698,506 +2699,518 @@ msgstr "Hyperion을 다시 시작하면 “{0}” 없이 게임이 진행됩니�
 msgid "“{0}” opens Hyperion's live channel while it is active. Programs on this computer that you run can then read and change your games through it. Allow it only for a mod you trust."
 msgstr "\"{0}\"은(는) 활성화된 동안 Hyperion의 라이브 채널을 엽니다. 직접 실행하는 이 컴퓨터의 프로그램이 이를 통해 게임을 읽고 바꿀 수 있게 됩니다. 신뢰하는 모드에만 허용하세요."
 
-#: src117/port/front/port_front_mutators.cpp:1039
+#: src117/port/front/port_front_mutators.cpp:1002
+msgid "Classic {0}"
+msgstr "클래식 {0}"
+
+#: src117/port/front/port_front_mutators.cpp:1044
 msgid "Town halls"
 msgstr "본진 건물"
 
-#: src117/port/front/port_front_mutators.cpp:1045
+#: src117/port/front/port_front_mutators.cpp:1050
 msgid "depot, pylon, overlord"
 msgstr "서플라이 디포, 파일론, 오버로드"
 
-#: src117/port/front/port_front_mutators.cpp:1090
+#: src117/port/front/port_front_mutators.cpp:1095
 msgid "Black until scouted"
 msgstr "정찰할 때까지 검은 화면"
 
-#: src117/port/front/port_front_mutators.cpp:1090
+#: src117/port/front/port_front_mutators.cpp:1095
 msgid "Land known, units in sight"
 msgstr "지형은 알고, 유닛은 시야 내에서만"
 
-#: src117/port/front/port_front_mutators.cpp:1091
+#: src117/port/front/port_front_mutators.cpp:1096
 msgid "The whole map, all game"
 msgstr "게임 내내 지도 전체 공개"
 
-#: src117/port/front/port_front_mutators.cpp:1091
-msgid "Fog, but the minerals and rocks show"
-msgstr ""
-
-#: src117/port/front/port_front_mutators.cpp:1109
-msgid "no select-army key or button"
-msgstr ""
-
-#: src117/port/front/port_front_mutators.cpp:1110
-msgid "the select-army key and button, as Hyperion has them"
+#: src117/port/front/port_front_mutators.cpp:1096
+msgid "Fog, with minerals and rocks remembered"
 msgstr ""
 
 #: src117/port/front/port_front_mutators.cpp:1114
+msgid "no select-army key or button"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1115
+msgid "the select-army key and button, as Hyperion has them"
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:1119
 msgid "off: the army is selected by hand, as Classic"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1123
-#: src117/port/gameplay/port_mutators.cpp:54
+#: src117/port/front/port_front_mutators.cpp:1128
+#: src117/port/gameplay/port_mutators.cpp:59
 msgid "x3"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1123
+#: src117/port/front/port_front_mutators.cpp:1128
 #: src117/port/tools/port_benchview.cpp:1470
 msgid "Energy"
 msgstr "에너지"
 
-#: src117/port/front/port_front_mutators.cpp:1125
+#: src117/port/front/port_front_mutators.cpp:1130
 msgid "energy comes back three times as fast"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1126
+#: src117/port/front/port_front_mutators.cpp:1131
 msgid "energy comes back as Classic"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1136
+#: src117/port/front/port_front_mutators.cpp:1141
 msgid "Newbie"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1137
+#: src117/port/front/port_front_mutators.cpp:1142
 msgid "the helpers are on"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1137
+#: src117/port/front/port_front_mutators.cpp:1142
 msgid "the helpers are off, as Classic"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1139
-#: src117/port/gameplay/port_mutators.cpp:708
+#: src117/port/front/port_front_mutators.cpp:1144
+#: src117/port/gameplay/port_mutators.cpp:725
 msgid "workers trained by themselves"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1139
+#: src117/port/front/port_front_mutators.cpp:1144
 msgid "workers by hand"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1140
-#: src117/port/gameplay/port_mutators.cpp:710
+#: src117/port/front/port_front_mutators.cpp:1145
+#: src117/port/gameplay/port_mutators.cpp:727
 msgid "mining balanced by itself"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1140
+#: src117/port/front/port_front_mutators.cpp:1145
 msgid "mining by hand"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1143
+#: src117/port/front/port_front_mutators.cpp:1148
 msgid "the upgrades chosen in Settings' Newbie mode tab research by themselves"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1160
+#: src117/port/front/port_front_mutators.cpp:1165
 msgid "This game · harder"
 msgstr "이 게임 · 더 어려움"
 
-#: src117/port/front/port_front_mutators.cpp:1163
+#: src117/port/front/port_front_mutators.cpp:1168
 msgid "{0} s"
 msgstr "{0}초"
 
-#: src117/port/front/port_front_mutators.cpp:1168
-#: src117/port/front/port_front_mutators.cpp:1216
+#: src117/port/front/port_front_mutators.cpp:1173
+#: src117/port/front/port_front_mutators.cpp:1221
 msgid "as Classic"
 msgstr "클래식과 동일"
 
-#: src117/port/front/port_front_mutators.cpp:1169
+#: src117/port/front/port_front_mutators.cpp:1174
 msgid "an SCV at {0}"
 msgstr "SCV 기준 {0}"
 
-#: src117/port/front/port_front_mutators.cpp:1172
+#: src117/port/front/port_front_mutators.cpp:1177
 msgid "Buildings, units, research and upgrades alike"
 msgstr "건물, 유닛, 연구, 업그레이드 모두"
 
-#: src117/port/front/port_front_mutators.cpp:1207
+#: src117/port/front/port_front_mutators.cpp:1212
 msgid "all to research"
 msgstr "모두 연구해야 함"
 
-#: src117/port/front/port_front_mutators.cpp:1207
+#: src117/port/front/port_front_mutators.cpp:1212
 msgid "all done at the start"
 msgstr "시작부터 모두 완료"
 
-#: src117/port/front/port_front_mutators.cpp:1207
-#: src117/port/gameplay/port_mutators.cpp:671
+#: src117/port/front/port_front_mutators.cpp:1212
+#: src117/port/gameplay/port_mutators.cpp:688
 msgid "no upgrades"
 msgstr "업그레이드 없음"
 
-#: src117/port/front/port_front_mutators.cpp:1208
+#: src117/port/front/port_front_mutators.cpp:1213
 msgid "nothing to research"
 msgstr "연구 없음"
 
-#: src117/port/front/port_front_mutators.cpp:1209
+#: src117/port/front/port_front_mutators.cpp:1214
 msgid "Upgrades"
 msgstr "업그레이드"
 
-#: src117/port/front/port_front_mutators.cpp:1210
+#: src117/port/front/port_front_mutators.cpp:1215
 #: src117/port/gameplay/port_trainerview.cpp:420
 msgid "Research"
 msgstr "연구"
 
-#: src117/port/front/port_front_mutators.cpp:1216
+#: src117/port/front/port_front_mutators.cpp:1221
 msgid "This game · {0}"
 msgstr "이 게임 · {0}"
 
-#: src117/port/front/port_front_mutators.cpp:1217
+#: src117/port/front/port_front_mutators.cpp:1222
 msgid "Classic · {0}"
 msgstr "클래식 · {0}"
 
-#: src117/port/front/port_front_mutators.cpp:1224
+#: src117/port/front/port_front_mutators.cpp:1229
 msgid "Weapons, Armor, U-238 Shells · Stim Packs, Lockdown, Siege Tech"
 msgstr "공격력, 방어력, U-238 쉘 · 스팀 팩, 락다운, 공성 모드"
 
-#: src117/port/front/port_front_mutators.cpp:1225
+#: src117/port/front/port_front_mutators.cpp:1230
 msgid "Three upgrades and three researches"
 msgstr "업그레이드 3개와 연구 3개"
 
-#: src117/port/front/port_front_mutators.cpp:1399
+#: src117/port/front/port_front_mutators.cpp:1405
 msgid "NEW"
 msgstr "신규"
 
-#: src117/port/front/port_front_mutators.cpp:1455
+#: src117/port/front/port_front_mutators.cpp:1461
 msgid "Classic’s."
 msgstr "클래식과 같습니다."
 
-#: src117/port/front/port_front_mutators.cpp:1457
+#: src117/port/front/port_front_mutators.cpp:1463
 msgid "Harder than Classic."
 msgstr "클래식보다 어렵습니다."
 
-#: src117/port/front/port_front_mutators.cpp:1588
+#: src117/port/front/port_front_mutators.cpp:1594
 #: src117/port/front/port_front_skirmish.cpp:2725
 msgid "GAME OPTIONS"
 msgstr "게임 설정"
 
-#: src117/port/front/port_front_mutators.cpp:1588
-#: src117/port/front/port_front_mutators.cpp:1692
-#: src117/port/front/port_front_mutators.cpp:1949
+#: src117/port/front/port_front_mutators.cpp:1594
+#: src117/port/front/port_front_mutators.cpp:1698
+#: src117/port/front/port_front_mutators.cpp:1955
 msgid "MUTATORS"
 msgstr "변이원"
 
-#: src117/port/front/port_front_mutators.cpp:1615
-#: src117/port/front/port_front_mutators.cpp:1694
+#: src117/port/front/port_front_mutators.cpp:1621
+#: src117/port/front/port_front_mutators.cpp:1700
 msgid "Mutators"
 msgstr "변이원"
 
-#: src117/port/front/port_front_mutators.cpp:1615
+#: src117/port/front/port_front_mutators.cpp:1621
 msgid "Game Options"
 msgstr "게임 설정"
 
-#: src117/port/front/port_front_mutators.cpp:1616
+#: src117/port/front/port_front_mutators.cpp:1622
 msgid "One set of mutators for every player: what the map holds, what each player starts with, supply, the fog, build time and tech. Hotkey: U"
 msgstr "모든 플레이어에게 같은 변이원 세트를 적용합니다. 지도의 자원, 각 플레이어의 시작 조건, 보급품, 시야, 건설 시간, 기술이 포함됩니다. 단축키: U"
 
-#: src117/port/front/port_front_mutators.cpp:1619
+#: src117/port/front/port_front_mutators.cpp:1625
 msgid "The game type, speed, rules and start positions, and the map. Hotkey: O"
 msgstr "게임 유형, 속도, 규칙, 시작 위치, 지도를 설정합니다. 단축키: O"
 
-#: src117/port/front/port_front_mutators.cpp:1627
+#: src117/port/front/port_front_mutators.cpp:1633
 msgid "{0} · Hyperion rules"
 msgstr "{0} · Hyperion 규칙"
 
-#: src117/port/front/port_front_mutators.cpp:1628
+#: src117/port/front/port_front_mutators.cpp:1634
 msgid "Custom set"
 msgstr "사용자 지정 세트"
 
-#: src117/port/front/port_front_mutators.cpp:1629
+#: src117/port/front/port_front_mutators.cpp:1635
 msgid "No mutators · as Classic"
 msgstr "변이원 없음 · 클래식과 동일"
 
-#: src117/port/front/port_front_mutators.cpp:1695
+#: src117/port/front/port_front_mutators.cpp:1701
 msgid "They change the game past the classic rules, the same for every player, so they play by Hyperion’s, and its replay and save keep them."
 msgstr "클래식 규칙을 넘어서 게임을 바꾸며, 모든 플레이어에게 똑같이 적용됩니다. 따라서 Hyperion의 규칙으로 진행되고, 리플레이와 저장된 게임에도 그대로 기록됩니다."
 
-#: src117/port/front/port_front_mutators.cpp:1701
+#: src117/port/front/port_front_mutators.cpp:1707
 msgid "One set for every player. Any mutator plays by Hyperion rules, and the replay keeps the set."
 msgstr "모든 플레이어에게 한 세트를 적용합니다. 변이원을 하나라도 쓰면 Hyperion 규칙으로 진행되며, 리플레이에 세트가 기록됩니다."
 
-#: src117/port/front/port_front_mutators.cpp:1702
+#: src117/port/front/port_front_mutators.cpp:1708
 msgid "The host’s set, the same for every player. Any mutator plays by Hyperion rules."
 msgstr "방장이 정한 세트가 모든 플레이어에게 똑같이 적용됩니다. 변이원을 하나라도 쓰면 Hyperion 규칙으로 진행됩니다."
 
-#: src117/port/front/port_front_mutators.cpp:1713
+#: src117/port/front/port_front_mutators.cpp:1719
 msgid "Presets"
 msgstr "프리셋"
 
-#: src117/port/front/port_front_mutators.cpp:1722
+#: src117/port/front/port_front_mutators.cpp:1728
 msgid "Any other set of the mutators below."
 msgstr "아래 변이원을 자유롭게 조합한 세트입니다."
 
-#: src117/port/front/port_front_mutators.cpp:1723
+#: src117/port/front/port_front_mutators.cpp:1729
 msgid "The host chooses the mutators."
 msgstr "변이원은 방장이 선택합니다."
 
-#: src117/port/front/port_front_mutators.cpp:1804
+#: src117/port/front/port_front_mutators.cpp:1810
 msgid "CLICK TO CHOOSE"
 msgstr "클릭하여 선택"
 
-#: src117/port/front/port_front_mutators.cpp:1858
+#: src117/port/front/port_front_mutators.cpp:1864
 #: src117/port/tools/port_benchview.cpp:2215
 #: src117/port/tools/port_benchview.cpp:2224
 #: src117/port/tools/port_benchview.cpp:2226
 msgid "Where"
 msgstr "위치"
 
-#: src117/port/front/port_front_mutators.cpp:1859
+#: src117/port/front/port_front_mutators.cpp:1865
 msgid "Which bases may turn rich: those past each start’s natural, those at least a distance from every start, only the farthest, or every base. Off has none, as Classic."
 msgstr "어느 기지가 풍부한 자원이 될 수 있는지 정합니다. 각 시작 지점의 앞마당 이후 기지, 모든 시작 지점에서 일정 거리 이상 떨어진 기지, 가장 먼 기지만, 또는 모든 기지입니다. 끄기는 클래식과 같이 하나도 없습니다."
 
-#: src117/port/front/port_front_mutators.cpp:1870
+#: src117/port/front/port_front_mutators.cpp:1876
 msgid "Distance"
 msgstr "거리"
 
-#: src117/port/front/port_front_mutators.cpp:1871
+#: src117/port/front/port_front_mutators.cpp:1877
 msgid "How far a base must be from every start, in a straight line, to turn rich: in tiles, or a share of the map’s size, its width and height averaged. For Outside a radius."
 msgstr "기지가 풍부한 자원이 되려면 모든 시작 지점에서 직선 거리로 얼마나 떨어져 있어야 하는지입니다. 타일 단위, 또는 지도 가로와 세로의 평균 크기에 대한 비율로 지정합니다. 반경 밖 설정에만 적용됩니다."
 
-#: src117/port/front/port_front_mutators.cpp:1880
+#: src117/port/front/port_front_mutators.cpp:1886
 msgid "Chance"
 msgstr "확률"
 
-#: src117/port/front/port_front_mutators.cpp:1881
+#: src117/port/front/port_front_mutators.cpp:1887
 msgid "The chance a base far enough from every start turns rich at. Bases that mirror each other are rolled together. Not for Off or Every base, which roll nothing."
 msgstr "모든 시작 지점에서 충분히 떨어진 기지가 풍부한 자원이 될 확률입니다. 서로 대칭인 기지는 함께 판정합니다. 끄기와 모든 기지는 판정하지 않으므로 적용되지 않습니다."
 
-#: src117/port/front/port_front_mutators.cpp:1904
-#: src117/port/front/port_front_mutators.cpp:1907
+#: src117/port/front/port_front_mutators.cpp:1910
+#: src117/port/front/port_front_mutators.cpp:1913
 msgid "Announce at the start"
 msgstr "시작할 때 알리기"
 
-#: src117/port/front/port_front_mutators.cpp:1908
+#: src117/port/front/port_front_mutators.cpp:1914
 msgid "On, the game’s first message says how many bases turned rich, or why none did. Off, it says nothing, and players find the gold and violet bases on the map."
 msgstr "켜면 게임의 첫 메시지로 풍부한 자원이 된 기지 수, 또는 하나도 없는 이유를 알립니다. 끄면 아무것도 알리지 않으며, 플레이어가 지도에서 금색과 보라색 기지를 직접 찾습니다."
 
-#: src117/port/front/port_front_mutators.cpp:1953
+#: src117/port/front/port_front_mutators.cpp:1959
 msgid "{0} ON"
 msgstr "{0}개 사용"
 
-#: src117/port/front/port_front_mutators.cpp:1954
+#: src117/port/front/port_front_mutators.cpp:1960
 msgid "NONE ON"
 msgstr "사용 없음"
 
-#: src117/port/front/port_front_mutators.cpp:1961
+#: src117/port/front/port_front_mutators.cpp:1967
 msgid "The game plays as Classic: the map’s resources, 50 minerals, 4 workers, 200 supply."
 msgstr "게임이 클래식과 같이 진행됩니다. 지도의 자원, 미네랄 50, 일꾼 4기, 보급품 200입니다."
 
-#: src117/port/front/port_front_mutators.cpp:2005
+#: src117/port/front/port_front_mutators.cpp:2011
 msgid "Change Mutators"
 msgstr "변이원 변경"
 
-#: src117/port/front/port_front_mutators.cpp:2006
+#: src117/port/front/port_front_mutators.cpp:2012
 msgid "Choose Mutators"
 msgstr "변이원 선택"
 
-#: src117/port/front/port_front_mutators.cpp:2007
+#: src117/port/front/port_front_mutators.cpp:2013
 msgid "See Mutators"
 msgstr "변이원 보기"
 
-#: src117/port/front/port_front_mutators.cpp:408
+#: src117/port/front/port_front_mutators.cpp:409
 msgid "a quarter as long"
 msgstr "4분의 1"
 
-#: src117/port/front/port_front_mutators.cpp:409
+#: src117/port/front/port_front_mutators.cpp:410
 msgid "half as long"
 msgstr "2분의 1"
 
-#: src117/port/front/port_front_mutators.cpp:410
+#: src117/port/front/port_front_mutators.cpp:411
 msgid "three quarters as long"
 msgstr "4분의 3"
 
-#: src117/port/front/port_front_mutators.cpp:411
+#: src117/port/front/port_front_mutators.cpp:412
 msgid "as long as Classic"
 msgstr "클래식과 동일"
 
-#: src117/port/front/port_front_mutators.cpp:412
+#: src117/port/front/port_front_mutators.cpp:413
 msgid "half again as long"
 msgstr "1.5배"
 
-#: src117/port/front/port_front_mutators.cpp:413
+#: src117/port/front/port_front_mutators.cpp:414
 msgid "twice as long"
 msgstr "2배"
 
-#: src117/port/front/port_front_mutators.cpp:414
+#: src117/port/front/port_front_mutators.cpp:415
 msgid "three times as long"
 msgstr "3배"
 
-#: src117/port/front/port_front_mutators.cpp:415
+#: src117/port/front/port_front_mutators.cpp:416
 msgid "four times as long"
 msgstr "4배"
 
-#: src117/port/front/port_front_mutators.cpp:416
+#: src117/port/front/port_front_mutators.cpp:417
 msgid "eight times as long"
 msgstr "8배"
 
-#: src117/port/front/port_front_mutators.cpp:421
+#: src117/port/front/port_front_mutators.cpp:422
 msgid "×{0} as long"
 msgstr "×{0}배"
 
-#: src117/port/front/port_front_mutators.cpp:450
+#: src117/port/front/port_front_mutators.cpp:451
 msgid "this map"
 msgstr "이 지도"
 
-#: src117/port/front/port_front_mutators.cpp:454
+#: src117/port/front/port_front_mutators.cpp:455
 msgid "Fields never run dry: a base can be mined all game."
 msgstr "미네랄이 고갈되지 않습니다. 게임 내내 한 기지에서 채취할 수 있습니다."
 
-#: src117/port/front/port_front_mutators.cpp:456
+#: src117/port/front/port_front_mutators.cpp:457
 msgid "A field holds {0}, the small ones {1}: a base lasts {2}."
 msgstr "미네랄 하나에 {0}, 작은 것에는 {1}이 있습니다. 한 기지가 {2} 동안 유지됩니다."
 
-#: src117/port/front/port_front_mutators.cpp:461
+#: src117/port/front/port_front_mutators.cpp:462
 msgid "Geysers never run dry."
 msgstr "가이저가 고갈되지 않습니다."
 
-#: src117/port/front/port_front_mutators.cpp:462
+#: src117/port/front/port_front_mutators.cpp:463
 msgid "A geyser holds {0} before it runs dry, then gives 2 a trip. It lasts {1}."
 msgstr "가이저는 {0}까지 나오고 고갈된 뒤에는 한 번에 2씩 나옵니다. {1} 동안 유지됩니다."
 
-#: src117/port/front/port_front_mutators.cpp:466
+#: src117/port/front/port_front_mutators.cpp:467
 msgid "Every base as the map made it."
 msgstr "모든 기지가 지도에 설정된 그대로입니다."
 
-#: src117/port/front/port_front_mutators.cpp:469
+#: src117/port/front/port_front_mutators.cpp:470
 msgid "Every mineral field and geyser on {0} is rich: a trip brings 11 minerals or 16 gas, Classic 8."
 msgstr "{0}의 모든 미네랄과 가이저가 풍부한 자원입니다. 한 번에 미네랄 11 또는 가스 16을 가져옵니다(클래식 8)."
 
-#: src117/port/front/port_front_mutators.cpp:475
+#: src117/port/front/port_front_mutators.cpp:476
 msgid "{0} ({1} tiles)"
 msgstr "{0}({1}타일)"
 
-#: src117/port/front/port_front_mutators.cpp:479
+#: src117/port/front/port_front_mutators.cpp:480
 msgid "that is no start’s main or natural"
 msgstr "본진도 앞마당도 아닌"
 
-#: src117/port/front/port_front_mutators.cpp:480
+#: src117/port/front/port_front_mutators.cpp:481
 msgid "{0} or more from every start"
 msgstr "모든 시작 지점에서 {0} 이상 떨어진"
 
-#: src117/port/front/port_front_mutators.cpp:481
+#: src117/port/front/port_front_mutators.cpp:482
 msgid "farthest from every start"
 msgstr "모든 시작 지점에서 가장 먼"
 
-#: src117/port/front/port_front_mutators.cpp:487
+#: src117/port/front/port_front_mutators.cpp:488
 msgid "Any base {0} may turn rich, at {1}%. Reading this map’s bases…"
 msgstr "{0} 기지는 {1}% 확률로 풍부한 자원이 될 수 있습니다. 이 지도의 기지를 읽는 중…"
 
-#: src117/port/front/port_front_mutators.cpp:489
+#: src117/port/front/port_front_mutators.cpp:490
 msgid "Any base {0} may turn rich, at {1}%. Read from the map as the game starts."
 msgstr "{0} 기지는 {1}% 확률로 풍부한 자원이 될 수 있습니다. 게임이 시작될 때 지도에서 읽습니다."
 
-#: src117/port/front/port_front_mutators.cpp:493
+#: src117/port/front/port_front_mutators.cpp:494
 msgid "{0} No base turns rich, so no player starts ahead."
 msgstr "{0} 풍부한 자원이 되는 기지가 없으므로 먼저 앞서는 플레이어가 없습니다."
 
-#: src117/port/front/port_front_mutators.cpp:496
+#: src117/port/front/port_front_mutators.cpp:497
 msgid "that are no start’s main or natural"
 msgstr "본진도 앞마당도 아닌"
 
-#: src117/port/front/port_front_mutators.cpp:498
+#: src117/port/front/port_front_mutators.cpp:499
 msgid "Up to {0} base {1} on {2} may turn rich, each at {3}%: a trip brings 11 minerals or 16 gas, Classic 8."
 msgid_plural "Up to {0} bases {1} on {2} may turn rich, each at {3}%: a trip brings 11 minerals or 16 gas, Classic 8."
 msgstr[0] "{2}에서 {1} 기지 최대 {0}개가 각각 {3}% 확률로 풍부한 자원이 될 수 있습니다. 한 번에 미네랄 11 또는 가스 16을 가져옵니다(클래식 8)."
 
-#: src117/port/front/port_front_mutators.cpp:506
+#: src117/port/front/port_front_mutators.cpp:507
 msgid "Each player begins with {0} minerals and {1} gas: {2} worker’s worth."
 msgid_plural "Each player begins with {0} minerals and {1} gas: {2} workers’ worth."
 msgstr[0] "각 플레이어는 미네랄 {0}과 가스 {1}로 시작합니다. 일꾼 {2}기 값에 해당합니다."
 
-#: src117/port/front/port_front_mutators.cpp:511
+#: src117/port/front/port_front_mutators.cpp:512
 msgid "Each player begins with {0} worker beside the town hall."
 msgid_plural "Each player begins with {0} workers beside the town hall."
 msgstr[0] "각 플레이어는 본진 건물 옆에서 일꾼 {0}기로 시작합니다."
 
-#: src117/port/front/port_front_mutators.cpp:515
+#: src117/port/front/port_front_mutators.cpp:516
 msgid "Not on this game: Use Map Settings keeps the map’s own start units."
 msgstr "이 게임에서는 적용되지 않습니다. 유즈맵 설정은 지도에 정해진 시작 유닛을 그대로 사용합니다."
 
-#: src117/port/front/port_front_mutators.cpp:520
+#: src117/port/front/port_front_mutators.cpp:521
 msgid "No cap: an army is held back only by the supply built."
 msgstr "한도 없음. 병력은 건설한 보급품만큼만 제한됩니다."
 
-#: src117/port/front/port_front_mutators.cpp:521
+#: src117/port/front/port_front_mutators.cpp:522
 msgid "Each player can hold {0} supply."
 msgstr "각 플레이어는 보급품 {0}까지 보유할 수 있습니다."
 
-#: src117/port/front/port_front_mutators.cpp:527
+#: src117/port/front/port_front_mutators.cpp:528
 msgid "A depot, pylon or overlord gives {0}, a command center {1}, a nexus {2}, a hatchery {3}: whole supply, rounded down."
 msgstr "서플라이 디포, 파일론, 오버로드가 {0}, 커맨드 센터가 {1}, 넥서스가 {2}, 해처리가 {3}을 제공합니다. 소수점은 버린 정수 보급품입니다."
 
-#: src117/port/front/port_front_mutators.cpp:530
+#: src117/port/front/port_front_mutators.cpp:531
 msgid "A depot, pylon or overlord gives {0}, a command center {1}, a nexus {2}, a hatchery {3}, as Classic."
 msgstr "서플라이 디포, 파일론, 오버로드가 {0}, 커맨드 센터가 {1}, 넥서스가 {2}, 해처리가 {3}을 제공합니다. 클래식과 같습니다."
 
-#: src117/port/front/port_front_mutators.cpp:536
+#: src117/port/front/port_front_mutators.cpp:537
 msgid "Every player knows the map’s land from the start. Units still show only in sight."
 msgstr "모든 플레이어가 시작부터 지도의 지형을 알고 있습니다. 유닛은 여전히 시야 안에서만 보입니다."
 
-#: src117/port/front/port_front_mutators.cpp:538
+#: src117/port/front/port_front_mutators.cpp:539
 msgid "Every player sees the whole map all game."
 msgstr "모든 플레이어가 게임 내내 지도 전체를 봅니다."
 
-#: src117/port/front/port_front_mutators.cpp:540
-msgid "The fog of war stays as Classic, but the mineral fields, geysers, eggs and obstacles show through it from the start, so a new player sees what the map offers. Other units show only in sight."
+#: src117/port/front/port_front_mutators.cpp:541
+msgid "The fog of war stays as Classic. Mineral fields, geysers, rocks and other doodads are explored and remembered from the start. Live sight is never opened, so opponents stay hidden until seen."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:541
+#: src117/port/front/port_front_mutators.cpp:542
 msgid "The fog of war, as Classic plays it."
 msgstr "클래식과 같은 전장의 안개입니다."
 
-#: src117/port/front/port_front_mutators.cpp:544
+#: src117/port/front/port_front_mutators.cpp:545
 msgid "The select-army key and its button do nothing, for a game played without them."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:545
+#: src117/port/front/port_front_mutators.cpp:546
 msgid "The select-army key and its button, as Hyperion has them."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:548
+#: src117/port/front/port_front_mutators.cpp:549
 msgid "Every unit’s energy comes back three times as fast."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:549
+#: src117/port/front/port_front_mutators.cpp:550
 msgid "Energy comes back as Classic."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:552
+#: src117/port/front/port_front_mutators.cpp:553
 msgid "Newbie helpers on: workers are trained by themselves, mining is balanced by itself, and the upgrades chosen in Settings' Newbie mode tab are researched by themselves."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:553
+#: src117/port/front/port_front_mutators.cpp:554
 msgid "Newbie helpers for a player learning the game, as Classic plays it by hand."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:556
-#: src117/port/gameplay/port_mutators.cpp:115
+#: src117/port/front/port_front_mutators.cpp:557
+#: src117/port/gameplay/port_mutators.cpp:122
 msgid "A completed town hall with nothing training and supply to spare trains its worker by itself."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:557
+#: src117/port/front/port_front_mutators.cpp:558
 msgid "Workers are trained by the player, as Classic."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:561
+#: src117/port/front/port_front_mutators.cpp:562
 msgid "Mining is assigned by the player, as Classic."
 msgstr ""
 
+#: src117/port/front/port_front_mutators.cpp:565
+msgid "A player or team with no live production buildings loses; the last side with one wins. Buildings still under construction count, while dying buildings, subunits and hallucinations do not."
+msgstr ""
+
 #: src117/port/front/port_front_mutators.cpp:566
+msgid "The map's own victory conditions, as Classic."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:571
 msgid "As Classic: an SCV trains in {0} s at {1}."
 msgstr "클래식과 같습니다. {1}에서 SCV 훈련에 {0}초가 걸립니다."
 
-#: src117/port/front/port_front_mutators.cpp:568
+#: src117/port/front/port_front_mutators.cpp:573
 msgid "Everything takes {0}: an SCV trains in {1} s at {2}, Classic {3} s."
 msgstr "모든 것이 {0} 걸립니다. {2}에서 SCV 훈련에 {1}초가 걸립니다(클래식 {3}초)."
 
-#: src117/port/front/port_front_mutators.cpp:574
+#: src117/port/front/port_front_mutators.cpp:579
 msgid "Every upgrade at its top level and every ability researched from the start."
 msgstr "모든 업그레이드가 최고 단계이고 모든 능력이 시작부터 연구되어 있습니다."
 
-#: src117/port/front/port_front_mutators.cpp:576
+#: src117/port/front/port_front_mutators.cpp:581
 msgid "Upgrades cannot be researched. Abilities still can."
 msgstr "업그레이드는 연구할 수 없습니다. 능력은 연구할 수 있습니다."
 
-#: src117/port/front/port_front_mutators.cpp:578
+#: src117/port/front/port_front_mutators.cpp:583
 msgid "Neither upgrades nor the abilities that need research."
 msgstr "업그레이드와 연구가 필요한 능력 모두 사용할 수 없습니다."
 
-#: src117/port/front/port_front_mutators.cpp:579
+#: src117/port/front/port_front_mutators.cpp:584
 msgid "Everything to research, as Classic."
 msgstr "클래식과 같이 모두 연구해야 합니다."
 
@@ -3214,38 +3227,39 @@ msgid "The start"
 msgstr "시작 조건"
 
 #: src117/port/front/port_front_mutators.cpp:71
-#: src117/port/front/port_front_mutators.cpp:1039
+#: src117/port/front/port_front_mutators.cpp:1044
 #: src117/port/gameplay/port_trainerview.cpp:409
 #: src117/port/hud/port_hudstats.cpp:415
 msgid "Supply"
 msgstr "보급품"
 
-#: src117/port/front/port_front_mutators.cpp:718
+#: src117/port/front/port_front_mutators.cpp:72
+msgid "Fog, time and tech"
+msgstr "시야, 시간, 기술"
+
+#: src117/port/front/port_front_mutators.cpp:723
 #: src117/port/gameplay/port_ai.cpp:64
 msgid "Harder"
 msgstr "더 어려움"
 
-#: src117/port/front/port_front_mutators.cpp:718
-#: src117/port/front/port_front_mutators.cpp:1160
+#: src117/port/front/port_front_mutators.cpp:723
+#: src117/port/front/port_front_mutators.cpp:1165
 msgid "This game"
 msgstr "이 게임"
 
-#: src117/port/front/port_front_mutators.cpp:718
-#: src117/port/front/port_front_mutators.cpp:865
-#: src117/port/front/port_front_mutators.cpp:1160
-#: src117/port/front/port_front_mutators.cpp:1777
+#: src117/port/front/port_front_mutators.cpp:723
+#: src117/port/front/port_front_mutators.cpp:870
+#: src117/port/front/port_front_mutators.cpp:1165
+#: src117/port/front/port_front_mutators.cpp:1783
 #: src117/port/front/port_front_replays.cpp:54
 #: src117/port/front/port_front_replays.cpp:1010
 #: src117/port/front/port_front_score.cpp:929
 #: src117/port/front/port_front_skirmish.cpp:2770
-#: src117/port/gameplay/port_mutators.cpp:73
-#: src117/port/gameplay/port_mutators.cpp:74
+#: src117/port/gameplay/port_mutators.cpp:63
+#: src117/port/gameplay/port_mutators.cpp:79
+#: src117/port/gameplay/port_mutators.cpp:80
 msgid "Classic"
 msgstr "클래식"
-
-#: src117/port/front/port_front_mutators.cpp:72
-msgid "Fog, time and tech"
-msgstr "시야, 시간, 기술"
 
 #: src117/port/front/port_front_mutators.cpp:75
 msgid "How much each mineral field holds, so how long a base can be mined."
@@ -3255,11 +3269,11 @@ msgstr "미네랄 하나에 들어 있는 양, 즉 한 기지에서 얼마나 �
 msgid "How much each geyser holds before it runs dry."
 msgstr "가이저가 고갈되기 전까지 나오는 양입니다."
 
-#: src117/port/front/port_front_mutators.cpp:762
+#: src117/port/front/port_front_mutators.cpp:767
 msgid "a geyser"
 msgstr "가이저"
 
-#: src117/port/front/port_front_mutators.cpp:762
+#: src117/port/front/port_front_mutators.cpp:767
 msgid "a field"
 msgstr "미네랄"
 
@@ -3267,31 +3281,31 @@ msgstr "미네랄"
 msgid "What each player has to spend at the first second."
 msgstr "각 플레이어가 시작 순간에 쓸 수 있는 자원입니다."
 
-#: src117/port/front/port_front_mutators.cpp:772
+#: src117/port/front/port_front_mutators.cpp:777
 msgid "never runs dry"
 msgstr "고갈되지 않음"
 
-#: src117/port/front/port_front_mutators.cpp:773
+#: src117/port/front/port_front_mutators.cpp:778
 msgid "lasts {0}"
 msgstr "{0} 유지"
 
-#: src117/port/front/port_front_mutators.cpp:774
+#: src117/port/front/port_front_mutators.cpp:779
 msgid "then 2 a trip"
 msgstr "이후 한 번에 2"
-
-#: src117/port/front/port_front_mutators.cpp:775
-msgid "the small ones {0}"
-msgstr "작은 것은 {0}"
-
-#: src117/port/front/port_front_mutators.cpp:776
-#: src117/port/gameplay/port_mutators.cpp:121
-#: src117/port/gameplay/port_mutators.cpp:145
-msgid "Infinite"
-msgstr "무한"
 
 #: src117/port/front/port_front_mutators.cpp:78
 msgid "The biggest army each player can keep."
 msgstr "각 플레이어가 유지할 수 있는 최대 병력입니다."
+
+#: src117/port/front/port_front_mutators.cpp:780
+msgid "the small ones {0}"
+msgstr "작은 것은 {0}"
+
+#: src117/port/front/port_front_mutators.cpp:781
+#: src117/port/gameplay/port_mutators.cpp:130
+#: src117/port/gameplay/port_mutators.cpp:154
+msgid "Infinite"
+msgstr "무한"
 
 #: src117/port/front/port_front_mutators.cpp:79
 msgid "How many workers each player starts with."
@@ -3325,28 +3339,28 @@ msgstr ""
 msgid "One Machine Shop serves every Factory, and the same for the other add-ons."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:860
+#: src117/port/front/port_front_mutators.cpp:865
 msgid "A trip brings"
 msgstr "한 번에 가져오는 양"
-
-#: src117/port/front/port_front_mutators.cpp:866
-msgid "Rich · off"
-msgstr "풍부한 자원 · 끄기"
-
-#: src117/port/front/port_front_mutators.cpp:867
-msgid "Rich · every base"
-msgstr "풍부한 자원 · 모든 기지"
-
-#: src117/port/front/port_front_mutators.cpp:868
-msgid "Rich · up to {0} base"
-msgid_plural "Rich · up to {0} bases"
-msgstr[0] "풍부한 자원 · 최대 {0}개 기지"
 
 #: src117/port/front/port_front_mutators.cpp:87
 msgid "No select-army key or button, for a game without them."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:870
+#: src117/port/front/port_front_mutators.cpp:871
+msgid "Rich · off"
+msgstr "풍부한 자원 · 끄기"
+
+#: src117/port/front/port_front_mutators.cpp:872
+msgid "Rich · every base"
+msgstr "풍부한 자원 · 모든 기지"
+
+#: src117/port/front/port_front_mutators.cpp:873
+msgid "Rich · up to {0} base"
+msgid_plural "Rich · up to {0} bases"
+msgstr[0] "풍부한 자원 · 최대 {0}개 기지"
+
+#: src117/port/front/port_front_mutators.cpp:875
 msgid "Rich · none far enough"
 msgstr "풍부한 자원 · 충분히 먼 기지 없음"
 
@@ -3354,11 +3368,11 @@ msgstr "풍부한 자원 · 충분히 먼 기지 없음"
 msgid "Every unit's energy comes back three times as fast."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:883
+#: src117/port/front/port_front_mutators.cpp:888
 msgid "Reading this map…"
 msgstr "이 지도를 읽는 중…"
 
-#: src117/port/front/port_front_mutators.cpp:883
+#: src117/port/front/port_front_mutators.cpp:888
 msgid "A sketch, not this map"
 msgstr "이 지도가 아닌 예시 그림"
 
@@ -3370,61 +3384,61 @@ msgstr ""
 msgid "A town hall with nothing training and supply to spare trains its worker by itself."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:903
+#: src117/port/front/port_front_mutators.cpp:908
 msgid "gas"
 msgstr "가스"
 
-#: src117/port/front/port_front_mutators.cpp:903
+#: src117/port/front/port_front_mutators.cpp:908
 msgid "minerals"
 msgstr "미네랄"
 
 #: src117/port/front/port_front_mutators.cpp:91
-#: src117/port/front/port_front_mutators.cpp:560
-#: src117/port/gameplay/port_mutators.cpp:116
+#: src117/port/front/port_front_mutators.cpp:561
+#: src117/port/gameplay/port_mutators.cpp:123
 msgid "Each base's patches take up to three workers, each geyser three; once a base is full, the workers that are free go to the next base with room, and to the built geysers."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:944
-#: src117/port/gameplay/port_mutators.cpp:73
-#: src117/port/gameplay/port_mutators.cpp:85
+#: src117/port/front/port_front_mutators.cpp:92
+msgid "Lose every production building and your side is out; the last side with one wins."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:949
+#: src117/port/gameplay/port_mutators.cpp:79
+#: src117/port/gameplay/port_mutators.cpp:91
 msgid "No cap"
 msgstr "한도 없음"
 
-#: src117/port/front/port_front_mutators.cpp:948
+#: src117/port/front/port_front_mutators.cpp:953
 msgid "supply has no limit"
 msgstr "보급품 제한 없음"
 
-#: src117/port/front/port_front_mutators.cpp:949
+#: src117/port/front/port_front_mutators.cpp:954
 msgid "supply, less than Classic: harder"
 msgstr "보급품, 클래식보다 적음: 더 어려움"
 
-#: src117/port/front/port_front_mutators.cpp:950
+#: src117/port/front/port_front_mutators.cpp:955
 msgid "supply, the most a player holds"
 msgstr "보급품, 플레이어 보유 최대치"
 
-#: src117/port/front/port_front_mutators.cpp:979
+#: src117/port/front/port_front_mutators.cpp:984
 msgid "Classic 200"
 msgstr "클래식 200"
 
-#: src117/port/front/port_front_mutators.cpp:985
+#: src117/port/front/port_front_mutators.cpp:990
 msgid "marines"
 msgstr "마린"
 
-#: src117/port/front/port_front_mutators.cpp:985
+#: src117/port/front/port_front_mutators.cpp:990
 msgid "zealots"
 msgstr "질럿"
 
-#: src117/port/front/port_front_mutators.cpp:985
+#: src117/port/front/port_front_mutators.cpp:990
 msgid "ultralisks"
 msgstr "울트라리스크"
 
-#: src117/port/front/port_front_mutators.cpp:993
+#: src117/port/front/port_front_mutators.cpp:998
 msgid "Any number of {0}"
 msgstr "{0} 무제한"
-
-#: src117/port/front/port_front_mutators.cpp:997
-msgid "Classic {0}"
-msgstr "클래식 {0}"
 
 #: src117/port/front/port_front_notes.cpp:159
 msgid "{0} {1} {2}"
@@ -4583,7 +4597,7 @@ msgid "Spellcasters’ energy bars"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1084
-msgid "The selected spellcaster’s original energy row shows beneath its health bar, on by default. Off hides that row; no extra overlay bar is drawn."
+msgid "Your visible spellcasters show the original green health bar with its purple energy row beneath it, even when unselected in Hyperion’s wide-selection games. Classic games keep the stack on selected units. On by default; no separate overlay bar is drawn."
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1085
@@ -4772,9 +4786,9 @@ msgid "Press a key"
 msgstr "키를 누르십시오"
 
 #: src117/port/front/port_front_settings.cpp:1876
-#: src117/port/gameplay/port_mutators.cpp:52
-#: src117/port/gameplay/port_mutators.cpp:421
-#: src117/port/gameplay/port_mutators.cpp:525
+#: src117/port/gameplay/port_mutators.cpp:57
+#: src117/port/gameplay/port_mutators.cpp:434
+#: src117/port/gameplay/port_mutators.cpp:541
 #: src117/port/tools/port_benchview.cpp:2237
 msgid "None"
 msgstr "없음"
@@ -6454,7 +6468,7 @@ msgid "{0} {1} {2}, {3}"
 msgstr "{2}년 {1} {0}일 {3}"
 
 #: src117/port/front/port_frontkit.cpp:349
-#: src117/port/gameplay/port_mutators.cpp:637
+#: src117/port/gameplay/port_mutators.cpp:654
 #: src117/port/gameplay/port_trainerview.cpp:228
 #: src117/port/hud/port_hudstats.cpp:473
 #: src117/port/tools/port_benchview.cpp:344
@@ -6732,369 +6746,382 @@ msgstr "치트: 극악"
 msgid "Location {0} saved."
 msgstr ""
 
-#: src117/port/gameplay/port_mineinfo.cpp:173
+#: src117/port/gameplay/port_mineinfo.cpp:177
 msgid "Larvae: "
 msgstr ""
 
-#: src117/port/gameplay/port_mineinfo.cpp:176
+#: src117/port/gameplay/port_mineinfo.cpp:180
 msgid "Enter selects Â· Esc cancels"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:102
+#: src117/port/gameplay/port_mutators.cpp:100
+msgid "More supply from each depot, pylon, overlord and town hall. Classic: none, a depot’s 8."
+msgstr "서플라이 디포, 파일론, 오버로드, 본진 건물이 제공하는 보급품을 늘립니다. 클래식: 증가 없음, 서플라이 디포는 8."
+
+#: src117/port/gameplay/port_mutators.cpp:101
+msgid "Explored: every player knows the map’s land from the start, under the fog. None: every player sees the whole map all game. Resources: mineral fields, geysers, rocks and doodads are explored and remembered once, without revealing opponents. Classic: the fog of war."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:104
+msgid "How long buildings, units, research and upgrades take to make: ×0.5 takes half as long. Classic: ×1."
+msgstr "건물과 유닛, 연구, 업그레이드에 걸리는 시간입니다. ×0.5는 절반으로 줄입니다. 클래식: ×1."
+
+#: src117/port/gameplay/port_mutators.cpp:106
+msgid "Researched: every upgrade at its top level and every ability researched from the start. No upgrades: none can be researched. No research: neither upgrades nor the abilities that need research. Classic: all to research."
+msgstr "연구 완료: 모든 업그레이드가 최고 단계이고 모든 능력이 시작부터 연구되어 있습니다. 업그레이드 없음: 업그레이드를 연구할 수 없습니다. 연구 없음: 업그레이드와 연구가 필요한 능력 모두 사용할 수 없습니다. 클래식: 모두 연구해야 합니다."
+
+#: src117/port/gameplay/port_mutators.cpp:109
 msgid "Bases away from every start may turn rich: gold mineral fields and violet geysers that give 11 minerals and 16 gas a trip, and run dry sooner. Never a start's main or natural; bases that mirror each other turn rich together. Every base: all of them. Classic: none."
 msgstr "모든 시작 지점에서 떨어진 기지가 풍부한 자원이 될 수 있습니다. 금색 미네랄과 보라색 가이저로 한 번에 미네랄 11과 가스 16을 주지만 더 빨리 고갈됩니다. 본진과 앞마당은 절대 해당되지 않으며, 서로 대칭인 기지는 함께 풍부한 자원이 됩니다. 모든 기지: 전부 적용됩니다. 클래식: 하나도 없습니다."
 
-#: src117/port/gameplay/port_mutators.cpp:105
+#: src117/port/gameplay/port_mutators.cpp:112
 msgid "Supply is not needed: every unit costs no supply and the cap is off, and a depot and a pylon cost 40 minerals with half their life, as they are built for their tech, not their supply. Classic: supply as 1.17's."
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:108
+#: src117/port/gameplay/port_mutators.cpp:115
 msgid "One add-on of a kind serves every building: one Machine Shop lets any Factory build Siege Tanks, and the same for the Control Tower's, the Covert Ops' and the Physics Lab's. Classic: each building needs its own."
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:111
+#: src117/port/gameplay/port_mutators.cpp:118
 msgid "No select-army key and no army button, for a game played without them. Classic: the key and the button."
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:112
+#: src117/port/gameplay/port_mutators.cpp:119
 msgid "Every unit's energy comes back three times as fast. Classic: the usual rate."
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:113
+#: src117/port/gameplay/port_mutators.cpp:120
 msgid "Newbie helpers for a player learning the game: workers, mining and research by themselves. The toggles are in Settings' Newbie mode tab."
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:121
+#: src117/port/gameplay/port_mutators.cpp:125
+msgid "Production: a player or team with no live production buildings loses, and the last side with one wins. Incomplete buildings count. Classic: the map's own victory conditions."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:130
 msgid "Plenty"
 msgstr "풍족"
 
-#: src117/port/gameplay/port_mutators.cpp:121
+#: src117/port/gameplay/port_mutators.cpp:130
 msgid "Gold Rush"
 msgstr "골드 러시"
 
-#: src117/port/gameplay/port_mutators.cpp:122
+#: src117/port/gameplay/port_mutators.cpp:131
 msgid "Quick Start"
 msgstr "빠른 시작"
 
-#: src117/port/gameplay/port_mutators.cpp:211
+#: src117/port/gameplay/port_mutators.cpp:221
 msgid "a quarter of the map"
 msgstr "지도의 4분의 1"
 
-#: src117/port/gameplay/port_mutators.cpp:212
+#: src117/port/gameplay/port_mutators.cpp:222
 msgid "a third of the map"
 msgstr "지도의 3분의 1"
 
-#: src117/port/gameplay/port_mutators.cpp:213
+#: src117/port/gameplay/port_mutators.cpp:223
 msgid "half the map"
 msgstr "지도의 절반"
 
-#: src117/port/gameplay/port_mutators.cpp:215
+#: src117/port/gameplay/port_mutators.cpp:225
 msgid "{0}% of the map"
 msgstr "지도의 {0}%"
 
-#: src117/port/gameplay/port_mutators.cpp:216
-#: src117/port/gameplay/port_mutators.cpp:227
+#: src117/port/gameplay/port_mutators.cpp:226
+#: src117/port/gameplay/port_mutators.cpp:237
 msgid "{0} tiles"
 msgstr "{0}타일"
 
-#: src117/port/gameplay/port_mutators.cpp:222
+#: src117/port/gameplay/port_mutators.cpp:232
 msgid "Quarter map"
 msgstr "지도 1/4"
 
-#: src117/port/gameplay/port_mutators.cpp:223
+#: src117/port/gameplay/port_mutators.cpp:233
 msgid "Third map"
 msgstr "지도 1/3"
 
-#: src117/port/gameplay/port_mutators.cpp:224
+#: src117/port/gameplay/port_mutators.cpp:234
 msgid "Half map"
 msgstr "지도 1/2"
 
-#: src117/port/gameplay/port_mutators.cpp:226
+#: src117/port/gameplay/port_mutators.cpp:236
 msgid "{0}% of map"
 msgstr "지도 {0}%"
 
-#: src117/port/gameplay/port_mutators.cpp:366
+#: src117/port/gameplay/port_mutators.cpp:378
 msgid "Automatic"
 msgstr "자동"
 
-#: src117/port/gameplay/port_mutators.cpp:433
-#: src117/port/gameplay/port_mutators.cpp:527
+#: src117/port/gameplay/port_mutators.cpp:447
+#: src117/port/gameplay/port_mutators.cpp:543
 msgid "{0}% chance"
 msgstr "확률 {0}%"
 
-#: src117/port/gameplay/port_mutators.cpp:52
+#: src117/port/gameplay/port_mutators.cpp:57
 msgid "Explored"
 msgstr "탐색 완료"
 
-#: src117/port/gameplay/port_mutators.cpp:52
-msgid "Explored + resources"
+#: src117/port/gameplay/port_mutators.cpp:57
+msgid "Resources remembered"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:53
-#: src117/port/gameplay/port_mutators.cpp:55
-#: src117/port/gameplay/port_mutators.cpp:56
-#: src117/port/gameplay/port_mutators.cpp:57
+#: src117/port/gameplay/port_mutators.cpp:58
+#: src117/port/gameplay/port_mutators.cpp:60
 #: src117/port/gameplay/port_mutators.cpp:61
+#: src117/port/gameplay/port_mutators.cpp:62
+#: src117/port/gameplay/port_mutators.cpp:67
 #: src117/port/lan/port_front_lanhost.cpp:1222
 msgid "Off"
 msgstr "끄기"
 
-#: src117/port/gameplay/port_mutators.cpp:53
-#: src117/port/gameplay/port_mutators.cpp:55
-#: src117/port/gameplay/port_mutators.cpp:56
-#: src117/port/gameplay/port_mutators.cpp:57
+#: src117/port/gameplay/port_mutators.cpp:58
+#: src117/port/gameplay/port_mutators.cpp:60
+#: src117/port/gameplay/port_mutators.cpp:61
+#: src117/port/gameplay/port_mutators.cpp:62
 #: src117/port/lan/port_front_lanhost.cpp:1222
 #: src117/port/lan/port_front_lanhost.cpp:1273
 #: src117/port/lan/port_front_lanhost.cpp:1330
 msgid "On"
 msgstr "켜기"
 
-#: src117/port/gameplay/port_mutators.cpp:59
-msgid "Researched"
-msgstr "연구 완료"
+#: src117/port/gameplay/port_mutators.cpp:63
+#: src117/port/gameplay/port_trainerview.cpp:420
+msgid "Production"
+msgstr "생산"
 
-#: src117/port/gameplay/port_mutators.cpp:59
-msgid "No upgrades"
-msgstr "업그레이드 없음"
-
-#: src117/port/gameplay/port_mutators.cpp:60
-msgid "No research"
-msgstr "연구 없음"
-
-#: src117/port/gameplay/port_mutators.cpp:61
-msgid "Past the naturals"
-msgstr "앞마당 이후"
-
-#: src117/port/gameplay/port_mutators.cpp:61
-msgid "Outside a radius"
-msgstr "반경 밖"
-
-#: src117/port/gameplay/port_mutators.cpp:61
-msgid "Farthest only"
-msgstr "가장 먼 기지만"
-
-#: src117/port/gameplay/port_mutators.cpp:62
-msgid "Every base"
-msgstr "모든 기지"
-
-#: src117/port/gameplay/port_mutators.cpp:631
+#: src117/port/gameplay/port_mutators.cpp:648
 msgctxt "list"
 msgid ", "
 msgstr ", "
 
-#: src117/port/gameplay/port_mutators.cpp:643
+#: src117/port/gameplay/port_mutators.cpp:65
+msgid "Researched"
+msgstr "연구 완료"
+
+#: src117/port/gameplay/port_mutators.cpp:65
+msgid "No upgrades"
+msgstr "업그레이드 없음"
+
+#: src117/port/gameplay/port_mutators.cpp:66
+msgid "No research"
+msgstr "연구 없음"
+
+#: src117/port/gameplay/port_mutators.cpp:660
 msgid "infinite mineral fields"
 msgstr "무한 미네랄"
 
-#: src117/port/gameplay/port_mutators.cpp:643
+#: src117/port/gameplay/port_mutators.cpp:660
 msgid "mineral fields {0}"
 msgstr "미네랄 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:645
+#: src117/port/gameplay/port_mutators.cpp:662
 msgid "infinite geysers"
 msgstr "무한 가이저"
 
-#: src117/port/gameplay/port_mutators.cpp:645
+#: src117/port/gameplay/port_mutators.cpp:662
 msgid "geysers {0}"
 msgstr "가이저 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:648
+#: src117/port/gameplay/port_mutators.cpp:665
 msgid "start resources {0} / {1}"
 msgstr "시작 자원 {0} / {1}"
 
-#: src117/port/gameplay/port_mutators.cpp:650
+#: src117/port/gameplay/port_mutators.cpp:667
 msgid "no supply cap"
 msgstr "보급품 한도 없음"
 
-#: src117/port/gameplay/port_mutators.cpp:650
+#: src117/port/gameplay/port_mutators.cpp:667
 msgid "supply cap {0}"
 msgstr "보급품 한도 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:654
+#: src117/port/gameplay/port_mutators.cpp:67
+msgid "Past the naturals"
+msgstr "앞마당 이후"
+
+#: src117/port/gameplay/port_mutators.cpp:67
+msgid "Outside a radius"
+msgstr "반경 밖"
+
+#: src117/port/gameplay/port_mutators.cpp:67
+msgid "Farthest only"
+msgstr "가장 먼 기지만"
+
+#: src117/port/gameplay/port_mutators.cpp:671
 msgid "{0} start worker"
 msgid_plural "{0} start workers"
 msgstr[0] "시작 일꾼 {0}기"
 
-#: src117/port/gameplay/port_mutators.cpp:659
+#: src117/port/gameplay/port_mutators.cpp:676
 msgid "supply +{0}%"
 msgstr "보급품 +{0}%"
 
-#: src117/port/gameplay/port_mutators.cpp:661
+#: src117/port/gameplay/port_mutators.cpp:678
 msgid "the map explored"
 msgstr "지도 탐색 완료"
 
-#: src117/port/gameplay/port_mutators.cpp:663
+#: src117/port/gameplay/port_mutators.cpp:68
+msgid "Every base"
+msgstr "모든 기지"
+
+#: src117/port/gameplay/port_mutators.cpp:680
 msgid "no fog of war"
 msgstr "전장의 안개 없음"
 
-#: src117/port/gameplay/port_mutators.cpp:665
-msgid "the map and its resources explored"
+#: src117/port/gameplay/port_mutators.cpp:682
+msgid "resources and obstacles remembered"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:667
+#: src117/port/gameplay/port_mutators.cpp:684
 msgid "build time {0}"
 msgstr "건설 시간 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:669
+#: src117/port/gameplay/port_mutators.cpp:686
 msgid "all researched"
 msgstr "모두 연구 완료"
 
-#: src117/port/gameplay/port_mutators.cpp:673
+#: src117/port/gameplay/port_mutators.cpp:690
 msgid "no research"
 msgstr "연구 없음"
 
-#: src117/port/gameplay/port_mutators.cpp:675
+#: src117/port/gameplay/port_mutators.cpp:692
 msgid "every base rich, not announced"
 msgstr "모든 기지 풍부한 자원, 알리지 않음"
 
-#: src117/port/gameplay/port_mutators.cpp:675
+#: src117/port/gameplay/port_mutators.cpp:692
 msgid "every base rich"
 msgstr "모든 기지 풍부한 자원"
 
-#: src117/port/gameplay/port_mutators.cpp:680
+#: src117/port/gameplay/port_mutators.cpp:697
 msgid "rich resources past the naturals at {0}%"
 msgstr "앞마당 이후 기지에 {0}% 확률로 풍부한 자원"
 
-#: src117/port/gameplay/port_mutators.cpp:683
+#: src117/port/gameplay/port_mutators.cpp:700
 msgid "rich resources {0} or more from every start at {1}%"
 msgstr "모든 시작 지점에서 {0} 이상 떨어진 기지에 {1}% 확률로 풍부한 자원"
 
-#: src117/port/gameplay/port_mutators.cpp:685
+#: src117/port/gameplay/port_mutators.cpp:702
 msgid "rich resources farthest only at {0}%"
 msgstr "가장 먼 기지에만 {0}% 확률로 풍부한 자원"
 
-#: src117/port/gameplay/port_mutators.cpp:687
+#: src117/port/gameplay/port_mutators.cpp:704
 msgid "each rolled alone"
 msgstr "각각 개별 판정"
 
-#: src117/port/gameplay/port_mutators.cpp:689
+#: src117/port/gameplay/port_mutators.cpp:706
 msgid "maybe none"
 msgstr "하나도 없을 수 있음"
 
-#: src117/port/gameplay/port_mutators.cpp:691
+#: src117/port/gameplay/port_mutators.cpp:708
 msgid "the same every game"
 msgstr "매 게임 동일"
 
-#: src117/port/gameplay/port_mutators.cpp:693
+#: src117/port/gameplay/port_mutators.cpp:710
 msgid "not announced"
 msgstr "알리지 않음"
 
-#: src117/port/gameplay/port_mutators.cpp:696
+#: src117/port/gameplay/port_mutators.cpp:713
 msgid "unit limit {0}"
 msgstr "유닛 한도 {0}"
 
-#: src117/port/gameplay/port_mutators.cpp:698
+#: src117/port/gameplay/port_mutators.cpp:715
 msgid "no supply, cheap depots and pylons"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:700
+#: src117/port/gameplay/port_mutators.cpp:717
 msgid "one add-on serves every building"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:702
+#: src117/port/gameplay/port_mutators.cpp:719
 msgid "no army hotkey"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:704
+#: src117/port/gameplay/port_mutators.cpp:721
 msgid "energy x3"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:706
+#: src117/port/gameplay/port_mutators.cpp:723
 msgid "newbie helpers"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:74
-#: src117/port/gameplay/port_mutators.cpp:85
+#: src117/port/gameplay/port_mutators.cpp:729
+msgid "production victory"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:80
+#: src117/port/gameplay/port_mutators.cpp:91
 msgid "One add-on"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:82
+#: src117/port/gameplay/port_mutators.cpp:88
 msgid "Mineral fields"
 msgstr "미네랄"
 
-#: src117/port/gameplay/port_mutators.cpp:82
+#: src117/port/gameplay/port_mutators.cpp:88
 msgid "Vespene geysers"
 msgstr "베스핀 가이저"
 
-#: src117/port/gameplay/port_mutators.cpp:82
+#: src117/port/gameplay/port_mutators.cpp:88
 msgid "Start resources"
 msgstr "시작 자원"
 
-#: src117/port/gameplay/port_mutators.cpp:83
+#: src117/port/gameplay/port_mutators.cpp:89
 msgid "Start workers"
 msgstr "시작 일꾼"
 
-#: src117/port/gameplay/port_mutators.cpp:83
+#: src117/port/gameplay/port_mutators.cpp:89
 msgid "Supply boost"
 msgstr "보급품 증가"
 
-#: src117/port/gameplay/port_mutators.cpp:84
+#: src117/port/gameplay/port_mutators.cpp:90
 msgid "Fog of war"
 msgstr "전장의 안개"
 
-#: src117/port/gameplay/port_mutators.cpp:84
+#: src117/port/gameplay/port_mutators.cpp:90
 msgid "Build time"
 msgstr "건설 시간"
 
-#: src117/port/gameplay/port_mutators.cpp:84
+#: src117/port/gameplay/port_mutators.cpp:90
 msgid "Tech and upgrades"
 msgstr "기술과 업그레이드"
 
-#: src117/port/gameplay/port_mutators.cpp:85
+#: src117/port/gameplay/port_mutators.cpp:91
 msgid "Rich resources"
 msgstr "풍부한 자원"
 
-#: src117/port/gameplay/port_mutators.cpp:86
+#: src117/port/gameplay/port_mutators.cpp:92
 msgid "No army key"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:86
+#: src117/port/gameplay/port_mutators.cpp:92
 msgid "Energy regeneration"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:87
+#: src117/port/gameplay/port_mutators.cpp:93
 msgid "Auto train workers"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:87
+#: src117/port/gameplay/port_mutators.cpp:93
 msgid "Auto mine efficiently"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:89
+#: src117/port/gameplay/port_mutators.cpp:95
 msgid "What each mineral field holds, or that it never runs dry. Classic: 1,500, the small ones 750."
 msgstr "미네랄 하나에 들어 있는 양, 또는 고갈되지 않게 할지 정합니다. 클래식: 1,500, 작은 것은 750."
 
-#: src117/port/gameplay/port_mutators.cpp:90
+#: src117/port/gameplay/port_mutators.cpp:96
 msgid "What each geyser holds before it runs dry, or that it never does. Classic: 5,000."
 msgstr "가이저가 고갈되기 전까지 나오는 양, 또는 고갈되지 않게 할지 정합니다. 클래식: 5,000."
 
-#: src117/port/gameplay/port_mutators.cpp:91
+#: src117/port/gameplay/port_mutators.cpp:97
 msgid "The minerals and gas each player begins with. Classic: 50 and 0."
 msgstr "각 플레이어가 시작할 때 보유하는 미네랄과 가스입니다. 클래식: 50과 0."
 
-#: src117/port/gameplay/port_mutators.cpp:92
+#: src117/port/gameplay/port_mutators.cpp:98
 msgid "The most supply each player can hold. Classic: 200."
 msgstr "각 플레이어가 보유할 수 있는 최대 보급품입니다. 클래식: 200."
 
-#: src117/port/gameplay/port_mutators.cpp:93
+#: src117/port/gameplay/port_mutators.cpp:99
 msgid "The workers each player begins with, beside the town hall. Classic: 4."
 msgstr "각 플레이어가 본진 건물 옆에서 시작할 때 보유하는 일꾼입니다. 클래식: 4."
-
-#: src117/port/gameplay/port_mutators.cpp:94
-msgid "More supply from each depot, pylon, overlord and town hall. Classic: none, a depot’s 8."
-msgstr "서플라이 디포, 파일론, 오버로드, 본진 건물이 제공하는 보급품을 늘립니다. 클래식: 증가 없음, 서플라이 디포는 8."
-
-#: src117/port/gameplay/port_mutators.cpp:95
-msgid "Explored: every player knows the map’s land from the start, under the fog. None: every player sees the whole map all game. Classic: the fog of war."
-msgstr "탐색 완료: 모든 플레이어가 시작부터 안개 아래의 지형을 알고 있습니다. 없음: 모든 플레이어가 게임 내내 지도 전체를 봅니다. 클래식: 전장의 안개가 적용됩니다."
-
-#: src117/port/gameplay/port_mutators.cpp:97
-msgid "How long buildings, units, research and upgrades take to make: ×0.5 takes half as long. Classic: ×1."
-msgstr "건물과 유닛, 연구, 업그레이드에 걸리는 시간입니다. ×0.5는 절반으로 줄입니다. 클래식: ×1."
-
-#: src117/port/gameplay/port_mutators.cpp:99
-msgid "Researched: every upgrade at its top level and every ability researched from the start. No upgrades: none can be researched. No research: neither upgrades nor the abilities that need research. Classic: all to research."
-msgstr "연구 완료: 모든 업그레이드가 최고 단계이고 모든 능력이 시작부터 연구되어 있습니다. 업그레이드 없음: 업그레이드를 연구할 수 없습니다. 연구 없음: 업그레이드와 연구가 필요한 능력 모두 사용할 수 없습니다. 클래식: 모두 연구해야 합니다."
 
 #: src117/port/gameplay/port_teams.cpp:310
 #: src117/port/gameplay/port_teams.cpp:400
@@ -7473,10 +7500,6 @@ msgstr "최고 APM"
 #: src117/port/gameplay/port_trainerview.cpp:1327
 msgid "Economy"
 msgstr "경제"
-
-#: src117/port/gameplay/port_trainerview.cpp:420
-msgid "Production"
-msgstr "생산"
 
 #: src117/port/gameplay/port_trainerview.cpp:443
 msgid "Unit {0}"

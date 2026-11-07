@@ -25,6 +25,7 @@
 #include "../h/net_cmds.h"          // PlayerData -- gPlayerData's element type
 #include "../h/CUnitProtoss.h"      // IsCellPowered (mtx_query_powered)
 #include "../h/order.h"             // get_units_in_rect (sub_412360)
+#include "../h/hxrules.h"           // Hyperion: recorded construction clearing
 #include "../gen/globals117.h"
 #include <string.h>                 // memset -- mtx_query_place's off-map tail
 
@@ -401,11 +402,22 @@ BOOL sub_4122D0(CUnit *pUnit, int nCellX, int nCellY)
   return 1;
 }
 
+// Hyperion: the worker view shares the complete placement walk. Its only
+// difference is that a clearable mobile unit is reported to the visitor and
+// skipped; all matrix, building and error-code handling stays identical.
+static int mtx_unit_there_worker(CUnit *pUnit, CUnit **ppList, int nX, int nY,
+                                 BYTE bArg4, BYTE bArg5,
+                                 ConstructionBlockerVisitor pfnVisitor,
+                                 void *pContext);
+
 // Scores each cell of the footprint against the units overlapping the placebox:
 // 4 for a blocking building, otherwise mtx_unit_there's verdict.
 // The coordinates are ints: the pixel centre shifts the raw parameter dword.
-int sub_412360(CUnit *pUnit, int nX, int nY, BYTE bPlayer, WORD nUnitType,
-               point16_t ptSize, int nArg6, int nArg7, int nArg8, int nArg9)
+static int sub_412360_mode(CUnit *pUnit, int nX, int nY, BYTE bPlayer,
+                           WORD nUnitType, point16_t ptSize, int nArg6,
+                           int nArg7, int nArg8, int nArg9, BOOL bWorkerView,
+                           ConstructionBlockerVisitor pfnVisitor,
+                           void *pContext)
 {
   DWORD *pCell = &gpSquareMap[gwMapWidth * PosS(nY) + PosS(nX)];
   BYTE bBest = 0;
@@ -443,8 +455,16 @@ int sub_412360(CUnit *pUnit, int nX, int nY, BYTE bPlayer, WORD nUnitType,
           }
           else
           {
-            BYTE bThere = (BYTE)mtx_unit_there(pUnit, ppList, PosS(nCurX), (short)nCurY,
-                                               (BYTE)nArg7, (BYTE)nArg8);
+            BYTE bThere;
+            if (bWorkerView) {
+              bThere = (BYTE)mtx_unit_there_worker(
+                  pUnit, ppList, PosS(nCurX), (short)nCurY, (BYTE)nArg7,
+                  (BYTE)nArg8, pfnVisitor, pContext);
+            } else {
+              bThere = (BYTE)mtx_unit_there(pUnit, ppList, PosS(nCurX),
+                                            (short)nCurY, (BYTE)nArg7,
+                                            (BYTE)nArg8);
+            }
 
             if (bThere)
               bVal = bThere;
@@ -466,6 +486,13 @@ int sub_412360(CUnit *pUnit, int nX, int nY, BYTE bPlayer, WORD nUnitType,
   finish_unit_iteration(ppList);
 
   return bBest;
+}
+
+int sub_412360(CUnit *pUnit, int nX, int nY, BYTE bPlayer, WORD nUnitType,
+               point16_t ptSize, int nArg6, int nArg7, int nArg8, int nArg9)
+{
+  return sub_412360_mode(pUnit, nX, nY, bPlayer, nUnitType, ptSize, nArg6,
+                         nArg7, nArg8, nArg9, FALSE, NULL, NULL);
 }
 
 // ---------------------------------------------------------------------------
@@ -564,10 +591,12 @@ int mtx_query_place(BYTE bPlayer, int nX, int nY, int nUnitType, int nIndex)
 // mode and each access grows a byte. The shared tail needs a `goto`, since two
 // textual copies are not tail-merged. And `nResult = 3` has to be assigned after
 // the flags read, because the oracle spills the index before it.
-int mtx_query_place_bldg(CUnit *pUnit, BYTE bPlayer, int nX, int nY,
-                         int nType, int nSlot, int nArg6, int nArg7,
-                         int nArg8)
+static int mtx_query_place_bldg_mode(
+    CUnit *pUnit, BYTE bPlayer, int nX, int nY, int nType, int nSlot,
+    int nArg6, int nArg7, int nArg8, BOOL bWorkerView,
+    ConstructionBlockerVisitor pfnVisitor, void *pContext)
 {
+  // The original public entry point is restored below this mode-taking body.
   // `shr eax, 1h / not eax / and eax, 1h` -- the value form of a bit test,
   // computed at the top of the function and used only by the last call.
   spos_t sX = PosS(nX);
@@ -619,8 +648,9 @@ int mtx_query_place_bldg(CUnit *pUnit, BYTE bPlayer, int nX, int nY,
         if (dword_6A2E80)
           pOwner = dword_6A2E80;
 
-        nSpread = sub_412360(pOwner, nX, nY, bPlayer, nType, size, nSlot,
-                             nNotBit1, nArg7, nArg8);
+        nSpread = sub_412360_mode(pOwner, nX, nY, bPlayer, nType, size, nSlot,
+                                  nNotBit1, nArg7, nArg8, bWorkerView,
+                                  pfnVisitor, pContext);
 
         if (nNear > nSpread)
           nSpread = nNear;
@@ -633,6 +663,26 @@ int mtx_query_place_bldg(CUnit *pUnit, BYTE bPlayer, int nX, int nY,
 done:
   memset(byte_675188[nSlot], nResult, 48);
   return nResult;
+}
+
+int mtx_query_place_bldg(CUnit *pUnit, BYTE bPlayer, int nX, int nY,
+                         int nType, int nSlot, int nArg6, int nArg7,
+                         int nArg8)
+{
+  return mtx_query_place_bldg_mode(pUnit, bPlayer, nX, nY, nType, nSlot,
+                                   nArg6, nArg7, nArg8, FALSE, NULL, NULL);
+}
+
+extern "C" int mtx_query_place_bldg_worker(
+    order_id_t nOrder, CUnit *pUnit, BYTE bPlayer, int nX, int nY, int nType,
+    int nSlot, int nArg6, int nArg7, int nArg8,
+    ConstructionBlockerVisitor pfnVisitor, void *pContext)
+{
+  const BOOL bWorker = HxRules() && (g_hxRuleOptions & HX_OPT_CONSTRUCTION_CLEAR) != 0 &&
+                       (nOrder == 0x19 || nOrder == 0x1E || nOrder == 0x1F);
+  return mtx_query_place_bldg_mode(pUnit, bPlayer, nX, nY, nType, nSlot,
+                                   nArg6, nArg7, nArg8, bWorker, pfnVisitor,
+                                   pContext);
 }
 
 // ---------------------------------------------------------------------------
@@ -813,6 +863,69 @@ int mtx_unit_there(CUnit *pUnit, CUnit **ppList, int nX, int nY,
         && g_pos_sort_y[*(DWORD *)&pU->_unmapped_138[0x0C]].nCoord < nY * 32 + 32
         && g_pos_sort_y[*(DWORD *)&pU->_unmapped_138[0x10]].nCoord > nY * 32)
       return bEnemy ? 1 : 4;
+
+    ppList++;
+  }
+
+  return 0;
+}
+
+// Hyperion: a unit the worker-placement view may ignore. Disabled units and
+// units without a move action remain hard placement errors. Burrow transitions
+// are included so the simulation attempt can finish Deburrow before moving the
+// unit; Spider Mines are handled by their own detonation path, before burrow.
+static BOOL construction_clearable_unit(CUnit *pUnit)
+{
+  if (pUnit->IsDisabled())
+    return FALSE;
+  if (pUnit->wType == 0x0D)
+    return TRUE;
+  if (pUnit->bOrderId == 0x74 || pUnit->bOrderId == 0x75 ||
+      pUnit->bOrderId == 0x76)
+    return TRUE;
+  if (pUnit->dwFlags & CUnit::UF_Burrowed)
+    return pUnit->wType == 0x67;
+  return pUnit->CanMove();
+}
+
+// The worker counterpart of mtx_unit_there. The filters and verdicts are the
+// same; a clearable unit merely calls the read-only visitor and the scan keeps
+// looking for a unit that must still block placement.
+static int mtx_unit_there_worker(CUnit *pUnit, CUnit **ppList, int nX, int nY,
+                                 BYTE bArg4, BYTE bArg5,
+                                 ConstructionBlockerVisitor pfnVisitor,
+                                 void *pContext)
+{
+  CUnit *pU;
+
+  while ((pU = *ppList) != NULL)
+  {
+    int bEnemy;
+
+    if (pUnit != NULL
+        && (pU->dwFlags & 0x300)
+        && !UnitDetectedBy(pU, pUnit->bPlayer))
+      bEnemy = 1;
+    else
+      bEnemy = 0;
+
+    if ((bArg4 != 0 || !(pU->dwFlags & 0x20000))
+        && pU != pUnit
+        && !(pU->dwFlags & 6)
+        && pU->wType != 0xCA
+        && pU->wType != 0x69
+        && (!bEnemy || bArg5 != 0)
+        && !(pU->pSprite->flags.b & 0x20)
+        && g_pos_sort_x[*(DWORD *)&pU->_unmapped_138[0x04]].nCoord < nX * 32 + 32
+        && g_pos_sort_x[*(DWORD *)&pU->_unmapped_138[0x08]].nCoord > nX * 32
+        && g_pos_sort_y[*(DWORD *)&pU->_unmapped_138[0x0C]].nCoord < nY * 32 + 32
+        && g_pos_sort_y[*(DWORD *)&pU->_unmapped_138[0x10]].nCoord > nY * 32)
+    {
+      if (!construction_clearable_unit(pU))
+        return bEnemy ? 1 : 4;
+      if (pfnVisitor != NULL)
+        pfnVisitor(pU, pContext);
+    }
 
     ppList++;
   }

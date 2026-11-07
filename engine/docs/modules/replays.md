@@ -46,7 +46,7 @@ count) and then its records, uncompressed. In write order (`ReplayHxWrite`):
 | `RACE` | a mod's race each slot played, when a slot has one |
 | `AILV` | each slot's computer level and style, in a game with `HX_OPT_AI_LEVELS` |
 | `HCAP` | each slot's handicap in percent, a byte a slot, in a game with `HX_OPT_HANDICAP` (`gameplay.md`) |
-| `MUTS` | the game's mutators, one record of sixteen 32-bit values, 64 bytes (fields' and geysers' shares in percent, 0 endless; start minerals and gas; supply cap, 0 none; start workers; supply boost in percent; fog, 0 normal, 1 explored, 2 none; build time in percent; tech, 0 normal, 1 researched, 2 no upgrades, 3 no research; the rules' revision; rich bases, 0 off, 1 past the naturals, 2 outside a radius (the middle ground before v0.6.21), 3 farthest only, 4 every base; its chance in percent; its rules, 1 fair, 2 at least one, 4 the same every game, 8 not announced at the start; its radius, tiles, or below 0 a share of the map in percent; the unit limit, 0 automatic), in a game with `HX_OPT_MUTATORS` (`gameplay.md`); the shorter records of earlier builds read with the values they lack at 1.17's: 60 bytes (v0.6.21 to v0.6.24, the unit limit automatic), 56 bytes (v0.6.16 to v0.6.20, the radius 48 tiles), 44 bytes (v0.6.10 to v0.6.15, no rich bases), 40 (v0.6.9, no revision) and 28 (v0.6.9's first builds, the first seven) |
+| `MUTS` | the game's mutators, one packed record of twenty-six 32-bit values, 104 bytes, in a game with `HX_OPT_MUTATORS` (`gameplay.md`): resource shares and start amounts; supply cap, workers and boost; fog (0 normal, 1 explored, 2 none, 3 resources); build time and tech; the mutator revision; rich bases' kind, chance, rules and radius; unit limit; no-cap and one-addon; no-army-key and energy regeneration; newbie, automatic workers and mining; the two automatic-upgrade masks; and victory (0 Classic, 1 Production), appended last. Every older record size still reads, with fields it predates at Classic's values: 100 bytes (through the upgrade masks), 72 (through one add-on), 64 (through the unit limit), 60 (through rich radius), 56 (through rich rules), 44 (through the revision), 40 (through tech, revision 0) and 28 (the first seven fields). Resource fog before revision 4 keeps its original repeated-reveal playback semantics |
 | `RICH` | the resources that turned rich, their unit indices, 4 bytes each, in a game with rich bases (`gameplay.md`, "Rich bases"); playback marks them in place of the read |
 | `STRS` | a benchmark's stress run, in a game with `HX_OPT_STRESS`: the units given each computer at the first frame and the pools' scale (`modules/tools.md`) |
 | `UNTS` | the unit table, one 32-bit count, when it is not the slots' 1,700 for each 8 (`loop.md`, "Caches for large games"); playback sizes the pools by it |
@@ -83,7 +83,7 @@ A game by Hyperion's rules (`HxSaveNeeded()`, the same test) adds sections of it
 | `HXRA` | after `HXRC` | each slot's mod race, when a slot has one |
 | `HXAI` | after `HXRA` | each slot's computer level and style, with `HX_OPT_AI_LEVELS` |
 | `HXHC` | after `HXAI` | each slot's handicap, with `HX_OPT_HANDICAP` |
-| `HXMU` | after `HXHC` | the game's mutators, `MUTS`'s record (either length, `PortLoadSectionBytes`), with `HX_OPT_MUTATORS` |
+| `HXMU` | after `HXHC` | the game's mutators, `MUTS`'s record (any accepted current or historical length, `PortLoadSectionBytes`), with `HX_OPT_MUTATORS` |
 | `HXUN` | after `HXMU` | the unit table, `UNTS`'s count, when it is not the slots' |
 | `HXST` | after `VIEW` | the state 1.17's save leaves out (below) and the state's hash as saved |
 | `HXWI` | after `HXST` | the high bytes of the ids x64 keeps in 16 bits where 1.17's records have a byte, and the high halves of the images' offsets into their scripts, record by record (`PortSave117HighGet`) for the units, bullets, orders and images, when a mod's id passes 255 or its scripts 64 KiB |
@@ -147,9 +147,11 @@ and so does a new game on an EUD map (`gameplay.md`).
 The options recorded so far are `HX_OPT_PATH_BUDGET_117`, `HX_OPT_TEAMS`, `HX_OPT_AI_LEVELS`,
 `HX_OPT_STRESS`, `HX_OPT_EUD`, `HX_OPT_ORDER_QUEUE`, `HX_OPT_SELECTION`, `HX_OPT_HANDICAP`
 (each slot's units at its share of their maximum life and shields, `gameplay.md`,
-"Handicaps"; the slots' percents in `HCAP` and `HXHC`) and `HX_OPT_MUTATORS` (the
-game's mutators, `gameplay.md`, "Mutators"; the set in `MUTS` and `HXMU`); a replay or save of
-an EUD game plays it as one from its rule record, whatever the map's triggers are.
+"Handicaps"; the slots' percents in `HCAP` and `HXHC`), `HX_OPT_MUTATORS` (the
+game's mutators, `gameplay.md`, "Mutators"; the set in `MUTS` and `HXMU`),
+`HX_OPT_START_SPLIT`, `HX_OPT_MORPH_RALLY`, `HX_OPT_SMART_CAST_ROTATION`,
+`HX_OPT_CONSTRUCTION_CLEAR` and `HX_OPT_SCOUT_BALANCE` (the gameplay helpers in `gameplay.md`).
+A replay or save of an EUD game plays it as one from its rule record, whatever the map's triggers are.
 `HX_OPT_SELECTION` is Hyperion's selection (`hud.md`): selections and groups of up to
 255 units, own buildings together and SC2's subgroups. Every new game by Hyperion's rules
 records it but one on an EUD map, whose triggers read 1.17's arrays. Its selections travel as

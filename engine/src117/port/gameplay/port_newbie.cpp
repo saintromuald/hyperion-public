@@ -45,7 +45,7 @@ bool Flag(const char *pszName)
   return d != 0.0;
 }
 
-// One order to one unit, without taking the selection over (SmartCaster's way).
+// One order to one unit, without taking the selection over (SelectSmartCaster's way).
 void OrderOne(CUnit *pUnit, void (*pfn)(CUnit *))
 {
   if (pUnit == NULL)

@@ -71,6 +71,9 @@ struct MutatorSet {
   int nAutoWorkers = 0;
   int nAutoMine = 0;
   unsigned dwAutoUpgLo = 0, dwAutoUpgHi = 0;
+  // Production victory (the user, 2026-11-07): a side with no live production buildings loses.
+  // Off by default; teams are counted together, and incomplete buildings still count.
+  int nVictory = 0;        // MUTATOR_VICTORY_*: the map's own conditions, or production victory
 };
 
 struct PortSession {
