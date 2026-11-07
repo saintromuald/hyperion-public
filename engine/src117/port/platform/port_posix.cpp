@@ -575,6 +575,8 @@ BOOL __stdcall WriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToW
       if (errno == EINTR)
         continue;
       FailErrno();
+      fprintf(stderr, "[compat] WriteFile fd %d: errno %d %s\n", f->fd, errno,
+              strerror(errno));
       if (lpNumberOfBytesWritten)
         *lpNumberOfBytesWritten = static_cast<DWORD>(done);
       return FALSE;
@@ -1331,9 +1333,36 @@ static std::vector<std::string> SplitCommandLine(const char *psz)
 #endif
 #endif
 
+BOOL __stdcall CreatePipe(PHANDLE phRead, PHANDLE phWrite, LPSECURITY_ATTRIBUTES, DWORD)
+{
+  int fds[2];
+  if (pipe(fds) != 0)
+    return FALSE;
+  // The ends live on high fds: the engine's other subsystems close low fd
+  // numbers, and a reused number reads as EPERM on write (the Pluto bridge's
+  // pipe died at frame 3 of every real game until now).
+  const int r = fcntl(fds[0], F_DUPFD_CLOEXEC, 256);
+  const int w = fcntl(fds[1], F_DUPFD_CLOEXEC, 256);
+  close(fds[0]);
+  close(fds[1]);
+  if (r < 0 || w < 0) {
+    if (r >= 0)
+      close(r);
+    if (w >= 0)
+      close(w);
+    return FALSE;
+  }
+  // The ends are FileObjects, not raw fds: WriteFile/ReadFile resolve handles
+  // through the live-object table, and a raw fd cast to HANDLE reads as an
+  // invalid handle there.
+  *phRead = new FileObject(r);
+  *phWrite = new FileObject(w);
+  return TRUE;
+}
+
 BOOL __stdcall CreateProcessA(LPCSTR lpApplicationName, LPSTR lpCommandLine, LPSECURITY_ATTRIBUTES,
-                              LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID, LPCSTR lpCurrentDirectory, LPSTARTUPINFOA,
-                              LPPROCESS_INFORMATION lpProcessInformation)
+                              LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID, LPCSTR lpCurrentDirectory,
+                              LPSTARTUPINFOA lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation)
 {
   std::vector<std::string> args = SplitCommandLine(lpCommandLine);
   std::string program = lpApplicationName ? OcPath(lpApplicationName) : args.empty() ? std::string() : OcPath(args[0].c_str());
@@ -1357,6 +1386,48 @@ BOOL __stdcall CreateProcessA(LPCSTR lpApplicationName, LPSTR lpCommandLine, LPS
       posix_spawn_file_actions_destroy(&actions);
   }
 #endif
+  // The child's std handles, when the caller names them (the Pluto bridge's
+  // pipes): each is dup2'd onto 0/1/2 and closed, so no fd leaks into the child.
+  // The handles are FileObjects (CreatePipe) or raw fds (a log file's); NULL
+  // means the child keeps the parent's own handle.
+  auto HandleFd = [](HANDLE h) {
+    if (h == NULL)
+      return -1;
+    FileObject *f = FileOf(h);
+    return f != NULL ? f->fd : static_cast<int>(reinterpret_cast<intptr_t>(h));
+  };
+  if (lpStartupInfo != NULL && (lpStartupInfo->dwFlags & STARTF_USESTDHANDLES)) {
+    if (!bActions && posix_spawn_file_actions_init(&actions) == 0)
+      bActions = true;
+    if (bActions) {
+      const HANDLE ah[3] = {lpStartupInfo->hStdInput, lpStartupInfo->hStdOutput,
+                            lpStartupInfo->hStdError};
+      // All the dup2s first, then one close per distinct fd: a handle shared by
+      // two std slots (the bridge's stderr riding its stdout pipe) must not be
+      // closed between its dup2s, or posix_spawn dies with EBADF.
+      for (int i = 0; i < 3; ++i) {
+        const int fd = HandleFd(ah[i]);
+        if (fd >= 0)
+          posix_spawn_file_actions_adddup2(&actions, fd, i);
+      }
+      // The stdin pipe also lands on fd 250, clear of the console fds: the Pluto
+      // bridge's fork detaches the console at start-up (killing 0/1/2), so the
+      // frame pipe must not depend on fd 0.
+      if (HandleFd(ah[0]) >= 0)
+        posix_spawn_file_actions_adddup2(&actions, HandleFd(ah[0]), 250);
+      for (int i = 0; i < 3; ++i) {
+        const int fd = HandleFd(ah[i]);
+        if (fd < 0)
+          continue;
+        bool bSeen = false;
+        for (int j = 0; j < i; ++j)
+          if (HandleFd(ah[j]) == fd)
+            bSeen = true;
+        if (!bSeen)
+          posix_spawn_file_actions_addclose(&actions, fd);
+      }
+    }
+  }
   const int r = posix_spawn(&pid, program.c_str(), bActions ? &actions : NULL, NULL, argv.data(), environ);
   if (bActions)
     posix_spawn_file_actions_destroy(&actions);

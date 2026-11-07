@@ -1298,6 +1298,23 @@ void KeyChip(const char *psz)
   Close();
 }
 
+// The room's netcode chip, beside its name in the rooms list: NETCODE when its matches play
+// online through the relay, LAN when they play on the room's own network relay.
+void NetChip(bool bNetcode)
+{
+  Decl k;
+  k.d.layout.padding = Pad(Fs(6), Fs(6), Fs(1), Fs(1));
+  k.d.layout.sizing.width = Fit();
+  k.d.layout.sizing.width.size.minMax.min = Sc(18);
+  k.d.layout.childAlignment.x = CLAY_ALIGN_X_CENTER;
+  k.d.backgroundColor = Col(bNetcode ? KitRgb(0x2f9e44, 0.16f) : KitRgb(0x868e96, 0.16f));
+  k.d.border = Border(bNetcode ? kGood : kLbItemRim, 1, 1, 1, 1);
+  Radius(k, 3);
+  Open(k);
+  Text(PortText(bNetcode ? "NETCODE" : "LAN"), UI_FACE_BOLD, Fs(12), 0.0f, bNetcode ? kGood : kLbInkDesc);
+  Close();
+}
+
 void Tick(UiColor c)
 {
   Decl t;
@@ -1456,7 +1473,14 @@ void RoomsBox(float x, float y, float w, float h)
     a.d.layout.sizing.width = Grow();
     a.d.layout.childGap = Gap(Fs(3));
     Open(a);
+    Decl nameRow;
+    nameRow.d.layout.childGap = Gap(Fs(10));
+    nameRow.d.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
+    Open(nameRow);
     Text(Keep(r.info["name"].Str(PortText("A room"))), UI_FACE_BOLD, Fs(19), 0.0f, kLbInkInfo);
+    if (r.bOk)
+      NetChip(r.bNetcode);
+    Close();
     Text(Keep(r.info["machine"].Str() + kDot + r.addr + kDot + VersionName(r.info["version"].Str()) + kDot +
               r.info["game"].Str("Brood War")),
          UI_FACE_TEXT, Fs(14), 0.0f, kInkPlayer);

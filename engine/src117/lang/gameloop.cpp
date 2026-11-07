@@ -398,6 +398,7 @@ int gameloop_update(int bFlag)
                 PortLabFrame();  // Hyperion: an AI lab worker's samples and end
                 PortScoreFrame();  // Hyperion: when each player went out, for the score screen
                 RichBasesFrame();  // Hyperion: which bases turned rich, said once
+                MutatorsFrame();  // Hyperion: the anti-meta start's roll, said once
             }
             if (gPlayback != 0)
                 sub_480FB0();

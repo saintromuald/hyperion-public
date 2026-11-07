@@ -276,6 +276,7 @@ the set-up's Mutators tab (`front-end.md`, "The Mutators tab").
 | Start resources | 50 / 0, 500 / 200, 1,000 / 500, 5,000 / 5,000, 10,000 / 10,000 | 50 / 0 | `gametype_mutator_resources` over `gametype_init_resources`'s, from `game_init`: `MutatorStartResources` |
 | Supply cap | 100, 200, 300, 400, 500, 600 | 200 | `count_init`: `MutatorSupplyCap` |
 | Start workers | 2, 4, 6, 8, 10, 12 | 4 | `PlaceStartingUnits` and `TeamPlaceStartingUnits` (`placebox.cpp`): `MutatorWorkers` |
+| Anti-meta start | Classic, Anti-meta | Classic | `MutatorsForGame`: one shared-seed roll of 4–8 workers, 100–300 minerals and 0–125 gas in steps of five; `MutatorsFrame` announces it once |
 | Supply boost | None, +25%, +50%, +75%, +100% | none | the supply a unit gives as it counts (`count_unit_complete`), the computer's count of the depots it needs (`SAI_Build.cpp`) and the console's line (`statdraw.cpp`): `MutatorFoodMade` |
 | Fog of war | Normal, Explored, None, Explored + resources | Normal | the map's tiles as the map loads (`MutatorsMapLoaded`) and after each refresh of the players' sight (`MutatorsVisionRefresh`, `gameloop.cpp`); resources' and doodads' static memory only as a new map loads |
 | Build time | ×0.25, ×0.5, ×0.75, ×1 | ×1 | the units' and buildings', upgrades' and techs' time tables as the map loads (`MutatorsMapLoaded`) |
@@ -311,6 +312,10 @@ hatchery's 1 stays 1 to +75%. 0.6.9 rounded down to a half (a command center's 1
 console showed as 13, so a player could be refused a unit with a supply shown free); its
 replays and saves have a record without the rules' revision and play by halves, as they were
 played (`MUTATOR_REVISION`, `port_mutators.h`).
+
+The anti-meta start mixes the shared fixed seed independently for workers, minerals and gas, so every
+seat gets the same roll. Its flag is not written into the replay record: the record instead preserves
+the rolled worker count and starting resources, avoiding a second roll on playback or save loading.
 
 The last three change the game's own tables and map once, in `MutatorsMapLoaded`, from
 `game_init` after `LoadMapData`: by then `maphdr_data_init` has read upgrades.dat and

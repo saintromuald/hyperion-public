@@ -1,0 +1,12 @@
+# the bot's binaries (tscmoo's release, not redistributable) and the runtime noise
+pluto/
+pluto.dll
+pluto.patched.dll
+pluto-bridge.exe
+dump/
+btest.err
+btest.log
+out.bin
+*.log
+bwapi-data/
+shim/

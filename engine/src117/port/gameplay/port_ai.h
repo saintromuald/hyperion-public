@@ -26,6 +26,7 @@ enum AiLevel {
   AI_LEVEL_CHEATER_VISION,  // Elite, and sees the whole map
   AI_LEVEL_CHEATER_MONEY,   // Elite, sees the whole map and brings back more, 1.5 times at 20 minutes
   AI_LEVEL_CHEATER_INSANE,  // Elite, sees the whole map and brings back 1.2 times, 2.0 at 20 minutes
+  AI_LEVEL_PLUTO,           // Pluto (tscmoo's self-play bot), through the bridge
   AI_LEVELS
 };
 

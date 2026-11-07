@@ -36,7 +36,7 @@ PortJson g_settings;  // the console's Settings, kept in lanroom.json
 std::string g_settingsText;
 bool g_bRunning = true, g_bStopAfter = false, g_bQuit = false;
 bool g_bDirty = true;
-uint64_t g_qwStarted, g_qwLastSent, g_qwLastAdvert, g_qwLastPing, g_qwAdminGone;
+uint64_t g_qwStarted, g_qwLastSent, g_qwLastAdvert, g_qwLastPing, g_qwAdminGone, g_qwLastAnnounce;
 bool g_bHadAdmin;
 Load g_load;
 
@@ -213,7 +213,14 @@ Match &NewMatch(const PortJson &j)
   m.nKey = static_cast<int>(j["key"].Num(m.nKey));
   m.nSpeed = static_cast<int>(j["speedN"].Num(m.nSpeed));
   m.bHyperion = j["rules"].Str() == "hyperion";
-  m.bSb = j["transport"].Str() == "sb";
+  // netcode on by default where the room can: with a relay coordinator configured, a new match
+  // plays online (transport "sb") unless its JSON says "lan"; the host's console toggle shows
+  // the choice and can change it per match
+  if (j["transport"].kind == PortJson::STRING)
+    m.bSb = j["transport"].Str() == "sb";
+  else
+    m.bSb = !Setting("sbCoordinator", "").empty() && !Setting("sbClientSeed", "").empty() &&
+            Setting("defaultTransport", "sb") == "sb";
   m.mut = MutatorsFromJson(j["mutators"]);
   m.nMapPlayers = static_cast<int>(j["players"].Num(8));
   if (m.nMapPlayers < 2 || m.nMapPlayers > kPlayers)
@@ -787,6 +794,10 @@ int PortLanRoomMain(void)
     if (qwNow - g_qwLastAdvert >= 1000) {
       g_qwLastAdvert = qwNow;
       Advertise();
+      if (qwNow - g_qwLastAnnounce >= 10000) {
+        g_qwLastAnnounce = qwNow;
+        Announce();
+      }
       ReadLoad();
     }
     Broadcast();

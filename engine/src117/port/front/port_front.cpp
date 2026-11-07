@@ -25,7 +25,8 @@
 #include "../tools/port_bench.h"  // PortBenchBackTo, PortBenchSettings, PortBenchFromMenus
 #include "../tools/port_crash.h"  // PortCrashNote
 #include "port_front.h"
-#include "../gameplay/port_launch.h"  // PortLaunchStart, PortLaunchMapFile, PortLaunchCanvas
+#include "../gameplay/port_launch.h"
+#include "../gameplay/port_pluto.h"  // PlutoGameEnd
 #include "../platform/port_paths.h"  // PortCommandOptions
 #include "../render/port_present.h"
 #include "../platform/port_winmsg.h"
@@ -1480,6 +1481,8 @@ int PortFrontReplays(void)
 // Custom's place, or 0x0C, the replay list's). Once per game.
 static int AfterGame(void)
 {
+  PlutoGameEnd();  // Hyperion: the Pluto bridge closes with the game
+
   const bool bSkirmish = g_bSkirmishGame && g_bOn;
   const bool bReplay = g_bReplayGame && g_bOn;
   g_bSkirmishGame = g_bReplayGame = false;

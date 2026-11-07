@@ -176,7 +176,7 @@ int Adopt(SOCKET listener, bool bRaw)
   return n;
 }
 
-void SendTo(SOCKET s, uint32_t dwAddr, int nPort, const void *pv, size_t cb)
+void SendToSocket(SOCKET s, uint32_t dwAddr, int nPort, const void *pv, size_t cb)
 {
   sockaddr_in a;
   memset(&a, 0, sizeof a);
@@ -226,6 +226,22 @@ void Fill(Conn &c)
 }
 
 }  // namespace
+
+void LanNet::SendTo(uint32_t dwAddr, int nPort, const void *pv, size_t cb)
+{
+  if (!Startup() || cb == 0)
+    return;
+  SOCKET s = g_query != INVALID_SOCKET ? g_query : g_finder;  // the host's or the joiner's
+  if (s != INVALID_SOCKET) {
+    SendToSocket(s, dwAddr, nPort, pv, cb);
+    return;
+  }
+  s = Udp(0, htonl(INADDR_ANY));  // a one-off: the room announces before it listens
+  if (s == INVALID_SOCKET)
+    return;
+  SendToSocket(s, dwAddr, nPort, pv, cb);
+  closesocket(s);
+}
 
 namespace LanNet {
 
@@ -583,8 +599,8 @@ void Query(void)
   if (g_finder == INVALID_SOCKET)
     return;
   const int nPort = GamePort() - 1;
-  SendTo(g_finder, htonl(INADDR_BROADCAST), nPort, kQuery, 4);
-  SendTo(g_finder, htonl(INADDR_LOOPBACK), nPort, kQuery, 4);
+  SendToSocket(g_finder, htonl(INADDR_BROADCAST), nPort, kQuery, 4);
+  SendToSocket(g_finder, htonl(INADDR_LOOPBACK), nPort, kQuery, 4);
   // hosts the broadcast does not reach: another subnet, or a network that drops broadcasts
   if (const char *psz = getenv("HYPERION_LAN_HOSTS")) {
     std::string all = psz;
@@ -596,7 +612,7 @@ void Query(void)
       const std::string one = all.substr(at, end - at);
       in_addr a;
       if (!one.empty() && inet_pton(AF_INET, one.c_str(), &a) == 1)
-        SendTo(g_finder, a.s_addr, nPort, kQuery, 4);
+        SendToSocket(g_finder, a.s_addr, nPort, kQuery, 4);
       at = end + 1;
     }
   }

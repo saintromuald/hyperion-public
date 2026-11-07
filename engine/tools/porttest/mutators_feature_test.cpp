@@ -1,5 +1,6 @@
 // mutators_feature_test.cpp -- record compatibility, serialization and resource-fog checks.
-// Build as C++17 with -ffunction-sections -fdata-sections and link with --gc-sections.
+// Build as C++17 with -ffunction-sections -fdata-sections and link with --gc-sections;
+// include src117/port/platform/port_json.cpp for the JSON round-trip.
 #include <assert.h>
 #include <string.h>
 #include <strings.h>
@@ -97,6 +98,14 @@ static void TestCliChoiceAndText() {
   assert(MutatorsList(Session().mut) == "fog=resources,victory=production");
   assert(MutatorsChooseList("victory=classic"));
   assert(Session().mut.nVictory == MUTATOR_VICTORY_CLASSIC);
+
+  assert(MutatorsChooseList("antimeta=on"));
+  assert(Session().mut.nAntiMeta == 1);
+  assert(MutatorsList(Session().mut) == "antimeta=on");
+  assert(MutatorsJson(Session().mut).find("\"antiMeta\":1") != std::string::npos);
+  PortJson j;
+  assert(PortJsonParse(MutatorsJson(Session().mut).c_str(), &j));
+  assert(MutatorsFromJson(j).nAntiMeta == 1);
 }
 
 static void TestResourceExplorationKeepsLiveHiddenBits() {

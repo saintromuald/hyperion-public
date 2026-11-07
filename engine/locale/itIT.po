@@ -181,7 +181,7 @@ msgstr "Velocità massima"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:54
 #: src117/port/front/port_front_campaign.cpp:58
-#: src117/port/front/port_front_mutators.cpp:1038
+#: src117/port/front/port_front_mutators.cpp:1039
 #: src117/port/front/port_front_replays.cpp:50
 #: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
@@ -192,7 +192,7 @@ msgstr "Zerg"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:53
 #: src117/port/front/port_front_campaign.cpp:57
-#: src117/port/front/port_front_mutators.cpp:1038
+#: src117/port/front/port_front_mutators.cpp:1039
 #: src117/port/front/port_front_replays.cpp:50
 #: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
@@ -203,7 +203,7 @@ msgstr "Terran"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_campaign.cpp:55
 #: src117/port/front/port_front_campaign.cpp:56
-#: src117/port/front/port_front_mutators.cpp:1038
+#: src117/port/front/port_front_mutators.cpp:1039
 #: src117/port/front/port_front_replays.cpp:50
 #: src117/port/front/port_front_skirmish.cpp:1629
 #: src117/port/front/port_front_trainer.cpp:48
@@ -303,7 +303,7 @@ msgstr "Livello del computer"
 #: src117/port/front/port_front_bench.cpp:1187
 #: src117/port/front/port_front_skirmish.cpp:2261
 #: src117/port/front/port_front_skirmish.cpp:2421
-#: src117/port/gameplay/port_ai.cpp:67
+#: src117/port/gameplay/port_ai.cpp:70
 msgid "Its own script"
 msgstr "Il suo script"
 
@@ -532,7 +532,7 @@ msgid "A minute, to see it runs"
 msgstr "Un minuto, per vedere se funziona"
 
 #: src117/port/front/port_front_bench.cpp:138
-#: src117/port/gameplay/port_mutators.cpp:130
+#: src117/port/gameplay/port_mutators.cpp:154
 msgid "Standard"
 msgstr "Standard"
 
@@ -675,10 +675,10 @@ msgid "at most {0} frames"
 msgstr "al massimo {0} fotogrammi"
 
 #: src117/port/front/port_front_bench.cpp:1474
-#: src117/port/front/port_front_mutators.cpp:1724
+#: src117/port/front/port_front_mutators.cpp:1726
 #: src117/port/front/port_front_theme.cpp:611
 #: src117/port/front/port_frontkit.cpp:389
-#: src117/port/gameplay/port_mutators.cpp:604
+#: src117/port/gameplay/port_mutators.cpp:634
 msgid "Custom"
 msgstr "Personalizzata"
 
@@ -720,7 +720,7 @@ msgstr "Un'altra partita. Le esecuzioni si confrontano solo a parità di seme: l
 
 #: src117/port/front/port_front_bench.cpp:1557
 #: src117/port/front/port_front_bench.cpp:1575
-#: src117/port/gameplay/port_mutators.cpp:89
+#: src117/port/gameplay/port_mutators.cpp:109
 msgid "Supply cap"
 msgstr "Limite di controllo"
 
@@ -733,7 +733,7 @@ msgid "each player"
 msgstr "per giocatore"
 
 #: src117/port/front/port_front_bench.cpp:1563
-#: src117/port/gameplay/port_mutators.cpp:538
+#: src117/port/gameplay/port_mutators.cpp:567
 msgid "Unlimited"
 msgstr "Illimitato"
 
@@ -1275,9 +1275,9 @@ msgstr "Lenta"
 #: src117/port/front/port_front_bench.cpp:90
 #: src117/port/front/port_front_replays.cpp:123
 #: src117/port/front/port_front_skirmish.cpp:83
-#: src117/port/gameplay/port_mutators.cpp:57
-#: src117/port/gameplay/port_mutators.cpp:59
-#: src117/port/gameplay/port_mutators.cpp:65
+#: src117/port/gameplay/port_mutators.cpp:74
+#: src117/port/gameplay/port_mutators.cpp:76
+#: src117/port/gameplay/port_mutators.cpp:82
 #: src117/port/tools/port_benchview.cpp:62
 msgid "Normal"
 msgstr "Normale"
@@ -1484,7 +1484,7 @@ msgstr "Gioca ora"
 #: src117/port/front/port_front_skirmish.cpp:1608
 #: src117/port/gameplay/port_trainerview.cpp:1496
 #: src117/port/lan/port_front_lan.cpp:1070
-#: src117/port/lan/port_front_lan.cpp:1589
+#: src117/port/lan/port_front_lan.cpp:1613
 #: src117/port/lan/port_front_lanhost.cpp:235
 #: src117/port/lan/port_front_lanhost.cpp:249
 #: src117/port/lan/port_front_lanhost.cpp:323
@@ -1559,7 +1559,7 @@ msgid "Watch Again"
 msgstr "Guarda di nuovo"
 
 #: src117/port/front/port_front_campaign.cpp:899
-#: src117/port/lan/port_front_lan.cpp:1809
+#: src117/port/lan/port_front_lan.cpp:1833
 #: src117/port/lan/port_front_lanhost.cpp:500
 msgid "Watch"
 msgstr "Guarda"
@@ -1899,7 +1899,7 @@ msgstr "Arrenditi"
 #: src117/port/front/port_front_score.cpp:568
 #: src117/port/front/port_front_score.cpp:584
 #: src117/port/front/port_front_score.cpp:917
-#: src117/port/gameplay/port_mutators.cpp:93
+#: src117/port/gameplay/port_mutators.cpp:113
 msgid "Victory"
 msgstr "Vittoria"
 
@@ -1927,7 +1927,7 @@ msgid "Resume Game"
 msgstr "Riprendi partita"
 
 #: src117/port/front/port_front_gamemenu.cpp:326
-#: src117/port/front/port_front_mutators.cpp:1621
+#: src117/port/front/port_front_mutators.cpp:1623
 msgid "Options"
 msgstr "Opzioni"
 
@@ -2244,7 +2244,7 @@ msgid "Idle workers"
 msgstr "Lavoratori inattivi"
 
 #: src117/port/front/port_front_hud.cpp:604
-#: src117/port/front/port_front_mutators.cpp:1113
+#: src117/port/front/port_front_mutators.cpp:1114
 #: src117/port/gameplay/port_trainerview.cpp:420
 #: src117/port/gameplay/port_trainerview.cpp:1327
 #: src117/port/hud/port_hudinput.cpp:691
@@ -2398,7 +2398,7 @@ msgid "Skirmish"
 msgstr "Scaramuccia"
 
 #: src117/port/front/port_front_internal.h:31
-#: src117/port/lan/port_front_lan.cpp:1632
+#: src117/port/lan/port_front_lan.cpp:1656
 msgid "Multiplayer"
 msgstr "Multigiocatore"
 
@@ -2480,7 +2480,7 @@ msgid "HUD"
 msgstr "HUD"
 
 #: src117/port/front/port_front_internal.h:53
-#: src117/port/gameplay/port_mutators.cpp:92
+#: src117/port/gameplay/port_mutators.cpp:112
 msgid "Newbie mode"
 msgstr ""
 
@@ -2708,521 +2708,521 @@ msgstr "Le partite si giocano senza «{0}» dal prossimo avvio di Hyperion."
 msgid "“{0}” opens Hyperion's live channel while it is active. Programs on this computer that you run can then read and change your games through it. Allow it only for a mod you trust."
 msgstr "«{0}» apre il canale live di Hyperion mentre è attiva. I programmi su questo computer che avvii potranno leggere e modificare le tue partite attraverso di esso. Consentilo solo per una mod di cui ti fidi."
 
-#: src117/port/front/port_front_mutators.cpp:1002
+#: src117/port/front/port_front_mutators.cpp:1003
 msgid "Classic {0}"
 msgstr "Classico {0}"
 
-#: src117/port/front/port_front_mutators.cpp:1044
+#: src117/port/front/port_front_mutators.cpp:1045
 msgid "Town halls"
 msgstr "Edifici principali"
 
-#: src117/port/front/port_front_mutators.cpp:1050
+#: src117/port/front/port_front_mutators.cpp:1051
 msgid "depot, pylon, overlord"
 msgstr "deposito, pilone, sorvegliante"
 
-#: src117/port/front/port_front_mutators.cpp:1095
+#: src117/port/front/port_front_mutators.cpp:1096
 msgid "Black until scouted"
 msgstr "Nero fino all'esplorazione"
 
-#: src117/port/front/port_front_mutators.cpp:1095
+#: src117/port/front/port_front_mutators.cpp:1096
 msgid "Land known, units in sight"
 msgstr "Terreno noto, unità a vista"
 
-#: src117/port/front/port_front_mutators.cpp:1096
+#: src117/port/front/port_front_mutators.cpp:1097
 msgid "The whole map, all game"
 msgstr "Tutta la mappa, per tutta la partita"
 
-#: src117/port/front/port_front_mutators.cpp:1096
+#: src117/port/front/port_front_mutators.cpp:1097
 msgid "Fog, with minerals and rocks remembered"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1114
+#: src117/port/front/port_front_mutators.cpp:1115
 msgid "no select-army key or button"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1115
+#: src117/port/front/port_front_mutators.cpp:1116
 msgid "the select-army key and button, as Hyperion has them"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1119
+#: src117/port/front/port_front_mutators.cpp:1120
 msgid "off: the army is selected by hand, as Classic"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1128
-#: src117/port/gameplay/port_mutators.cpp:59
+#: src117/port/front/port_front_mutators.cpp:1129
+#: src117/port/gameplay/port_mutators.cpp:76
 msgid "x3"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1128
+#: src117/port/front/port_front_mutators.cpp:1129
 #: src117/port/tools/port_benchview.cpp:1470
 msgid "Energy"
 msgstr "Energia"
 
-#: src117/port/front/port_front_mutators.cpp:1130
+#: src117/port/front/port_front_mutators.cpp:1131
 msgid "energy comes back three times as fast"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1131
+#: src117/port/front/port_front_mutators.cpp:1132
 msgid "energy comes back as Classic"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1141
+#: src117/port/front/port_front_mutators.cpp:1142
 msgid "Newbie"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1142
+#: src117/port/front/port_front_mutators.cpp:1143
 msgid "the helpers are on"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1142
+#: src117/port/front/port_front_mutators.cpp:1143
 msgid "the helpers are off, as Classic"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1144
-#: src117/port/gameplay/port_mutators.cpp:725
+#: src117/port/front/port_front_mutators.cpp:1145
+#: src117/port/gameplay/port_mutators.cpp:755
 msgid "workers trained by themselves"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1144
+#: src117/port/front/port_front_mutators.cpp:1145
 msgid "workers by hand"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1145
-#: src117/port/gameplay/port_mutators.cpp:727
+#: src117/port/front/port_front_mutators.cpp:1146
+#: src117/port/gameplay/port_mutators.cpp:757
 msgid "mining balanced by itself"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1145
+#: src117/port/front/port_front_mutators.cpp:1146
 msgid "mining by hand"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1148
+#: src117/port/front/port_front_mutators.cpp:1149
 msgid "the upgrades chosen in Settings' Newbie mode tab research by themselves"
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:1165
+#: src117/port/front/port_front_mutators.cpp:1166
 msgid "This game · harder"
 msgstr "Questa partita · più difficile"
 
-#: src117/port/front/port_front_mutators.cpp:1168
+#: src117/port/front/port_front_mutators.cpp:1169
 msgid "{0} s"
 msgstr "{0} s"
 
-#: src117/port/front/port_front_mutators.cpp:1173
-#: src117/port/front/port_front_mutators.cpp:1221
+#: src117/port/front/port_front_mutators.cpp:1174
+#: src117/port/front/port_front_mutators.cpp:1222
 msgid "as Classic"
 msgstr "come Classico"
 
-#: src117/port/front/port_front_mutators.cpp:1174
+#: src117/port/front/port_front_mutators.cpp:1175
 msgid "an SCV at {0}"
 msgstr "un SCV a {0}"
 
-#: src117/port/front/port_front_mutators.cpp:1177
+#: src117/port/front/port_front_mutators.cpp:1178
 msgid "Buildings, units, research and upgrades alike"
 msgstr "Strutture, unità, ricerche e potenziamenti allo stesso modo"
 
-#: src117/port/front/port_front_mutators.cpp:1212
+#: src117/port/front/port_front_mutators.cpp:1213
 msgid "all to research"
 msgstr "tutto da ricercare"
 
-#: src117/port/front/port_front_mutators.cpp:1212
+#: src117/port/front/port_front_mutators.cpp:1213
 msgid "all done at the start"
 msgstr "tutto fatto dall'inizio"
 
-#: src117/port/front/port_front_mutators.cpp:1212
-#: src117/port/gameplay/port_mutators.cpp:688
+#: src117/port/front/port_front_mutators.cpp:1213
+#: src117/port/gameplay/port_mutators.cpp:718
 msgid "no upgrades"
 msgstr "nessun potenziamento"
 
-#: src117/port/front/port_front_mutators.cpp:1213
+#: src117/port/front/port_front_mutators.cpp:1214
 msgid "nothing to research"
 msgstr "niente da ricercare"
 
-#: src117/port/front/port_front_mutators.cpp:1214
+#: src117/port/front/port_front_mutators.cpp:1215
 msgid "Upgrades"
 msgstr "Potenziamenti"
 
-#: src117/port/front/port_front_mutators.cpp:1215
+#: src117/port/front/port_front_mutators.cpp:1216
 #: src117/port/gameplay/port_trainerview.cpp:420
 msgid "Research"
 msgstr "Ricerca"
 
-#: src117/port/front/port_front_mutators.cpp:1221
+#: src117/port/front/port_front_mutators.cpp:1222
 msgid "This game · {0}"
 msgstr "Questa partita · {0}"
 
-#: src117/port/front/port_front_mutators.cpp:1222
+#: src117/port/front/port_front_mutators.cpp:1223
 msgid "Classic · {0}"
 msgstr "Classico · {0}"
 
-#: src117/port/front/port_front_mutators.cpp:1229
+#: src117/port/front/port_front_mutators.cpp:1230
 msgid "Weapons, Armor, U-238 Shells · Stim Packs, Lockdown, Siege Tech"
 msgstr "Armi, Corazza, Munizioni U-238 · Stimpack, Interferenza, Assetto d'assedio"
 
-#: src117/port/front/port_front_mutators.cpp:1230
+#: src117/port/front/port_front_mutators.cpp:1231
 msgid "Three upgrades and three researches"
 msgstr "Tre potenziamenti e tre ricerche"
 
-#: src117/port/front/port_front_mutators.cpp:1405
+#: src117/port/front/port_front_mutators.cpp:1407
 msgid "NEW"
 msgstr "NUOVO"
 
-#: src117/port/front/port_front_mutators.cpp:1461
+#: src117/port/front/port_front_mutators.cpp:1463
 msgid "Classic’s."
 msgstr "Come in Classico."
 
-#: src117/port/front/port_front_mutators.cpp:1463
+#: src117/port/front/port_front_mutators.cpp:1465
 msgid "Harder than Classic."
 msgstr "Più difficile di Classico."
 
-#: src117/port/front/port_front_mutators.cpp:1594
+#: src117/port/front/port_front_mutators.cpp:1596
 #: src117/port/front/port_front_skirmish.cpp:2725
 msgid "GAME OPTIONS"
 msgstr "OPZIONI DI GIOCO"
 
-#: src117/port/front/port_front_mutators.cpp:1594
-#: src117/port/front/port_front_mutators.cpp:1698
-#: src117/port/front/port_front_mutators.cpp:1955
+#: src117/port/front/port_front_mutators.cpp:1596
+#: src117/port/front/port_front_mutators.cpp:1700
+#: src117/port/front/port_front_mutators.cpp:1957
 msgid "MUTATORS"
 msgstr "MUTATORI"
 
-#: src117/port/front/port_front_mutators.cpp:1621
-#: src117/port/front/port_front_mutators.cpp:1700
+#: src117/port/front/port_front_mutators.cpp:1623
+#: src117/port/front/port_front_mutators.cpp:1702
 msgid "Mutators"
 msgstr "Mutatori"
 
-#: src117/port/front/port_front_mutators.cpp:1621
+#: src117/port/front/port_front_mutators.cpp:1623
 msgid "Game Options"
 msgstr "Opzioni di gioco"
 
-#: src117/port/front/port_front_mutators.cpp:1622
+#: src117/port/front/port_front_mutators.cpp:1624
 msgid "One set of mutators for every player: what the map holds, what each player starts with, supply, the fog, build time and tech. Hotkey: U"
 msgstr "Un unico insieme di mutatori per tutti i giocatori: cosa contiene la mappa, con cosa inizia ogni giocatore, il controllo, la nebbia, i tempi di costruzione e la tecnologia. Hotkey: U"
 
-#: src117/port/front/port_front_mutators.cpp:1625
+#: src117/port/front/port_front_mutators.cpp:1627
 msgid "The game type, speed, rules and start positions, and the map. Hotkey: O"
 msgstr "Il tipo di partita, la velocità, le regole, le posizioni di partenza e la mappa. Hotkey: O"
 
-#: src117/port/front/port_front_mutators.cpp:1633
+#: src117/port/front/port_front_mutators.cpp:1635
 msgid "{0} · Hyperion rules"
 msgstr "{0} · regole di Hyperion"
 
-#: src117/port/front/port_front_mutators.cpp:1634
+#: src117/port/front/port_front_mutators.cpp:1636
 msgid "Custom set"
 msgstr "Insieme personalizzato"
 
-#: src117/port/front/port_front_mutators.cpp:1635
+#: src117/port/front/port_front_mutators.cpp:1637
 msgid "No mutators · as Classic"
 msgstr "Nessun mutatore · come Classico"
 
-#: src117/port/front/port_front_mutators.cpp:1701
+#: src117/port/front/port_front_mutators.cpp:1703
 msgid "They change the game past the classic rules, the same for every player, so they play by Hyperion’s, and its replay and save keep them."
 msgstr "Cambiano la partita oltre le regole classiche, allo stesso modo per ogni giocatore, quindi si gioca con quelle di Hyperion, e il replay e il salvataggio li conservano."
 
-#: src117/port/front/port_front_mutators.cpp:1707
+#: src117/port/front/port_front_mutators.cpp:1709
 msgid "One set for every player. Any mutator plays by Hyperion rules, and the replay keeps the set."
 msgstr "Un unico insieme per tutti i giocatori. Qualsiasi mutatore fa giocare con le regole di Hyperion, e il replay conserva l'insieme."
 
-#: src117/port/front/port_front_mutators.cpp:1708
+#: src117/port/front/port_front_mutators.cpp:1710
 msgid "The host’s set, the same for every player. Any mutator plays by Hyperion rules."
 msgstr "L'insieme del creatore della partita, lo stesso per tutti i giocatori. Qualsiasi mutatore fa giocare con le regole di Hyperion."
 
-#: src117/port/front/port_front_mutators.cpp:1719
+#: src117/port/front/port_front_mutators.cpp:1721
 msgid "Presets"
 msgstr "Preset"
 
-#: src117/port/front/port_front_mutators.cpp:1728
+#: src117/port/front/port_front_mutators.cpp:1730
 msgid "Any other set of the mutators below."
 msgstr "Qualsiasi altro insieme dei mutatori qui sotto."
 
-#: src117/port/front/port_front_mutators.cpp:1729
+#: src117/port/front/port_front_mutators.cpp:1731
 msgid "The host chooses the mutators."
 msgstr "È il creatore della partita a scegliere i mutatori."
 
-#: src117/port/front/port_front_mutators.cpp:1810
+#: src117/port/front/port_front_mutators.cpp:1812
 msgid "CLICK TO CHOOSE"
 msgstr "CLICCA PER SCEGLIERE"
 
-#: src117/port/front/port_front_mutators.cpp:1864
+#: src117/port/front/port_front_mutators.cpp:1866
 #: src117/port/tools/port_benchview.cpp:2215
 #: src117/port/tools/port_benchview.cpp:2224
 #: src117/port/tools/port_benchview.cpp:2226
 msgid "Where"
 msgstr "Dove"
 
-#: src117/port/front/port_front_mutators.cpp:1865
+#: src117/port/front/port_front_mutators.cpp:1867
 msgid "Which bases may turn rich: those past each start’s natural, those at least a distance from every start, only the farthest, or every base. Off has none, as Classic."
 msgstr "Quali basi possono diventare ricche: quelle oltre la naturale di ogni partenza, quelle ad almeno una certa distanza da ogni partenza, solo la più lontana, oppure tutte. Disattivato non ne ha nessuna, come Classico."
 
-#: src117/port/front/port_front_mutators.cpp:1876
+#: src117/port/front/port_front_mutators.cpp:1878
 msgid "Distance"
 msgstr "Distanza"
 
-#: src117/port/front/port_front_mutators.cpp:1877
+#: src117/port/front/port_front_mutators.cpp:1879
 msgid "How far a base must be from every start, in a straight line, to turn rich: in tiles, or a share of the map’s size, its width and height averaged. For Outside a radius."
 msgstr "Quanto deve distare una base da ogni partenza, in linea retta, per diventare ricca: in tessere, o in frazione delle dimensioni della mappa, media di larghezza e altezza. Vale per Fuori da un raggio."
 
-#: src117/port/front/port_front_mutators.cpp:1886
+#: src117/port/front/port_front_mutators.cpp:1888
 msgid "Chance"
 msgstr "Probabilità"
 
-#: src117/port/front/port_front_mutators.cpp:1887
+#: src117/port/front/port_front_mutators.cpp:1889
 msgid "The chance a base far enough from every start turns rich at. Bases that mirror each other are rolled together. Not for Off or Every base, which roll nothing."
 msgstr "La probabilità con cui una base abbastanza lontana da ogni partenza diventa ricca. Le basi speculari tra loro vengono tirate insieme. Non vale per Disattivato o Tutte le basi, che non tirano nulla."
 
-#: src117/port/front/port_front_mutators.cpp:1910
-#: src117/port/front/port_front_mutators.cpp:1913
+#: src117/port/front/port_front_mutators.cpp:1912
+#: src117/port/front/port_front_mutators.cpp:1915
 msgid "Announce at the start"
 msgstr "Annuncia all'inizio"
 
-#: src117/port/front/port_front_mutators.cpp:1914
+#: src117/port/front/port_front_mutators.cpp:1916
 msgid "On, the game’s first message says how many bases turned rich, or why none did. Off, it says nothing, and players find the gold and violet bases on the map."
 msgstr "Attivo: il primo messaggio della partita dice quante basi sono diventate ricche, o perché nessuna lo è. Disattivo: non dice nulla, e i giocatori trovano da sé le basi d'oro e viola sulla mappa."
 
-#: src117/port/front/port_front_mutators.cpp:1959
+#: src117/port/front/port_front_mutators.cpp:1961
 msgid "{0} ON"
 msgstr "{0} ATTIVI"
 
-#: src117/port/front/port_front_mutators.cpp:1960
+#: src117/port/front/port_front_mutators.cpp:1962
 msgid "NONE ON"
 msgstr "NESSUNO ATTIVO"
 
-#: src117/port/front/port_front_mutators.cpp:1967
+#: src117/port/front/port_front_mutators.cpp:1969
 msgid "The game plays as Classic: the map’s resources, 50 minerals, 4 workers, 200 supply."
 msgstr "La partita si gioca come Classico: le risorse della mappa, 50 minerali, 4 lavoratori, 200 di controllo."
 
-#: src117/port/front/port_front_mutators.cpp:2011
+#: src117/port/front/port_front_mutators.cpp:2013
 msgid "Change Mutators"
 msgstr "Cambia mutatori"
 
-#: src117/port/front/port_front_mutators.cpp:2012
+#: src117/port/front/port_front_mutators.cpp:2014
 msgid "Choose Mutators"
 msgstr "Scegli i mutatori"
 
-#: src117/port/front/port_front_mutators.cpp:2013
+#: src117/port/front/port_front_mutators.cpp:2015
 msgid "See Mutators"
 msgstr "Vedi i mutatori"
 
-#: src117/port/front/port_front_mutators.cpp:409
+#: src117/port/front/port_front_mutators.cpp:410
 msgid "a quarter as long"
 msgstr "un quarto del tempo"
 
-#: src117/port/front/port_front_mutators.cpp:410
+#: src117/port/front/port_front_mutators.cpp:411
 msgid "half as long"
 msgstr "metà del tempo"
 
-#: src117/port/front/port_front_mutators.cpp:411
+#: src117/port/front/port_front_mutators.cpp:412
 msgid "three quarters as long"
 msgstr "tre quarti del tempo"
 
-#: src117/port/front/port_front_mutators.cpp:412
+#: src117/port/front/port_front_mutators.cpp:413
 msgid "as long as Classic"
 msgstr "lo stesso tempo di Classico"
 
-#: src117/port/front/port_front_mutators.cpp:413
+#: src117/port/front/port_front_mutators.cpp:414
 msgid "half again as long"
 msgstr "una volta e mezza il tempo"
 
-#: src117/port/front/port_front_mutators.cpp:414
+#: src117/port/front/port_front_mutators.cpp:415
 msgid "twice as long"
 msgstr "il doppio del tempo"
 
-#: src117/port/front/port_front_mutators.cpp:415
+#: src117/port/front/port_front_mutators.cpp:416
 msgid "three times as long"
 msgstr "il triplo del tempo"
 
-#: src117/port/front/port_front_mutators.cpp:416
+#: src117/port/front/port_front_mutators.cpp:417
 msgid "four times as long"
 msgstr "quattro volte il tempo"
 
-#: src117/port/front/port_front_mutators.cpp:417
+#: src117/port/front/port_front_mutators.cpp:418
 msgid "eight times as long"
 msgstr "otto volte il tempo"
 
-#: src117/port/front/port_front_mutators.cpp:422
+#: src117/port/front/port_front_mutators.cpp:423
 msgid "×{0} as long"
 msgstr "×{0} il tempo"
 
-#: src117/port/front/port_front_mutators.cpp:451
+#: src117/port/front/port_front_mutators.cpp:452
 msgid "this map"
 msgstr "questa mappa"
 
-#: src117/port/front/port_front_mutators.cpp:455
+#: src117/port/front/port_front_mutators.cpp:456
 msgid "Fields never run dry: a base can be mined all game."
 msgstr "I giacimenti non si esauriscono mai: una base si può sfruttare per tutta la partita."
 
-#: src117/port/front/port_front_mutators.cpp:457
+#: src117/port/front/port_front_mutators.cpp:458
 msgid "A field holds {0}, the small ones {1}: a base lasts {2}."
 msgstr "Un giacimento contiene {0}, quelli piccoli {1}: una base dura {2}."
 
-#: src117/port/front/port_front_mutators.cpp:462
+#: src117/port/front/port_front_mutators.cpp:463
 msgid "Geysers never run dry."
 msgstr "I geyser non si esauriscono mai."
 
-#: src117/port/front/port_front_mutators.cpp:463
+#: src117/port/front/port_front_mutators.cpp:464
 msgid "A geyser holds {0} before it runs dry, then gives 2 a trip. It lasts {1}."
 msgstr "Un geyser contiene {0} prima di esaurirsi, poi dà 2 per viaggio. Dura {1}."
 
-#: src117/port/front/port_front_mutators.cpp:467
+#: src117/port/front/port_front_mutators.cpp:468
 msgid "Every base as the map made it."
 msgstr "Ogni base come l'ha fatta la mappa."
 
-#: src117/port/front/port_front_mutators.cpp:470
+#: src117/port/front/port_front_mutators.cpp:471
 msgid "Every mineral field and geyser on {0} is rich: a trip brings 11 minerals or 16 gas, Classic 8."
 msgstr "Ogni giacimento di minerali e ogni geyser su {0} è ricco: un viaggio porta 11 minerali o 16 di gas, Classico 8."
 
-#: src117/port/front/port_front_mutators.cpp:476
+#: src117/port/front/port_front_mutators.cpp:477
 msgid "{0} ({1} tiles)"
 msgstr "{0} ({1} tessere)"
 
-#: src117/port/front/port_front_mutators.cpp:480
+#: src117/port/front/port_front_mutators.cpp:481
 msgid "that is no start’s main or natural"
 msgstr "che non sia la principale o la naturale di una partenza"
 
-#: src117/port/front/port_front_mutators.cpp:481
+#: src117/port/front/port_front_mutators.cpp:482
 msgid "{0} or more from every start"
 msgstr "a {0} o più da ogni partenza"
 
-#: src117/port/front/port_front_mutators.cpp:482
+#: src117/port/front/port_front_mutators.cpp:483
 msgid "farthest from every start"
 msgstr "più lontana da ogni partenza"
 
-#: src117/port/front/port_front_mutators.cpp:488
+#: src117/port/front/port_front_mutators.cpp:489
 msgid "Any base {0} may turn rich, at {1}%. Reading this map’s bases…"
 msgstr "Qualsiasi base {0} può diventare ricca, al {1}%. Lettura delle basi di questa mappa…"
 
-#: src117/port/front/port_front_mutators.cpp:490
+#: src117/port/front/port_front_mutators.cpp:491
 msgid "Any base {0} may turn rich, at {1}%. Read from the map as the game starts."
 msgstr "Qualsiasi base {0} può diventare ricca, al {1}%. Si legge dalla mappa all'avvio della partita."
 
-#: src117/port/front/port_front_mutators.cpp:494
+#: src117/port/front/port_front_mutators.cpp:495
 msgid "{0} No base turns rich, so no player starts ahead."
 msgstr "{0} Nessuna base diventa ricca, quindi nessun giocatore parte in vantaggio."
 
-#: src117/port/front/port_front_mutators.cpp:497
+#: src117/port/front/port_front_mutators.cpp:498
 msgid "that are no start’s main or natural"
 msgstr "che non siano la principale o la naturale di una partenza"
 
-#: src117/port/front/port_front_mutators.cpp:499
+#: src117/port/front/port_front_mutators.cpp:500
 msgid "Up to {0} base {1} on {2} may turn rich, each at {3}%: a trip brings 11 minerals or 16 gas, Classic 8."
 msgid_plural "Up to {0} bases {1} on {2} may turn rich, each at {3}%: a trip brings 11 minerals or 16 gas, Classic 8."
 msgstr[0] "Fino a {0} base {1} su {2} può diventare ricca, al {3}%: un viaggio porta 11 minerali o 16 di gas, Classico 8."
 msgstr[1] "Fino a {0} basi {1} su {2} possono diventare ricche, ognuna al {3}%: un viaggio porta 11 minerali o 16 di gas, Classico 8."
 
-#: src117/port/front/port_front_mutators.cpp:507
+#: src117/port/front/port_front_mutators.cpp:508
 msgid "Each player begins with {0} minerals and {1} gas: {2} worker’s worth."
 msgid_plural "Each player begins with {0} minerals and {1} gas: {2} workers’ worth."
 msgstr[0] "Ogni giocatore inizia con {0} minerali e {1} di gas: quanto rende {2} lavoratore."
 msgstr[1] "Ogni giocatore inizia con {0} minerali e {1} di gas: quanto rendono {2} lavoratori."
 
-#: src117/port/front/port_front_mutators.cpp:512
+#: src117/port/front/port_front_mutators.cpp:513
 msgid "Each player begins with {0} worker beside the town hall."
 msgid_plural "Each player begins with {0} workers beside the town hall."
 msgstr[0] "Ogni giocatore inizia con {0} lavoratore accanto all'edificio principale."
 msgstr[1] "Ogni giocatore inizia con {0} lavoratori accanto all'edificio principale."
 
-#: src117/port/front/port_front_mutators.cpp:516
+#: src117/port/front/port_front_mutators.cpp:517
 msgid "Not on this game: Use Map Settings keeps the map’s own start units."
 msgstr "Non in questa partita: Usa impostazioni mappa mantiene le unità iniziali della mappa."
 
-#: src117/port/front/port_front_mutators.cpp:521
+#: src117/port/front/port_front_mutators.cpp:522
 msgid "No cap: an army is held back only by the supply built."
 msgstr "Nessun limite: un esercito è limitato solo dal controllo costruito."
 
-#: src117/port/front/port_front_mutators.cpp:522
+#: src117/port/front/port_front_mutators.cpp:523
 msgid "Each player can hold {0} supply."
 msgstr "Ogni giocatore può arrivare a {0} di controllo."
 
-#: src117/port/front/port_front_mutators.cpp:528
+#: src117/port/front/port_front_mutators.cpp:529
 msgid "A depot, pylon or overlord gives {0}, a command center {1}, a nexus {2}, a hatchery {3}: whole supply, rounded down."
 msgstr "Un deposito, un pilone o un sorvegliante dà {0}, un centro di comando {1}, un nexus {2}, un vivaio {3}: controllo intero, arrotondato per difetto."
 
-#: src117/port/front/port_front_mutators.cpp:531
+#: src117/port/front/port_front_mutators.cpp:532
 msgid "A depot, pylon or overlord gives {0}, a command center {1}, a nexus {2}, a hatchery {3}, as Classic."
 msgstr "Un deposito, un pilone o un sorvegliante dà {0}, un centro di comando {1}, un nexus {2}, un vivaio {3}, come Classico."
 
-#: src117/port/front/port_front_mutators.cpp:537
+#: src117/port/front/port_front_mutators.cpp:538
 msgid "Every player knows the map’s land from the start. Units still show only in sight."
 msgstr "Ogni giocatore conosce il terreno della mappa dall'inizio. Le unità si vedono comunque solo a vista."
 
-#: src117/port/front/port_front_mutators.cpp:539
+#: src117/port/front/port_front_mutators.cpp:540
 msgid "Every player sees the whole map all game."
 msgstr "Ogni giocatore vede tutta la mappa per tutta la partita."
 
-#: src117/port/front/port_front_mutators.cpp:541
+#: src117/port/front/port_front_mutators.cpp:542
 msgid "The fog of war stays as Classic. Mineral fields, geysers, rocks and other doodads are explored and remembered from the start. Live sight is never opened, so opponents stay hidden until seen."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:542
+#: src117/port/front/port_front_mutators.cpp:543
 msgid "The fog of war, as Classic plays it."
 msgstr "La nebbia di guerra, come in Classico."
 
-#: src117/port/front/port_front_mutators.cpp:545
+#: src117/port/front/port_front_mutators.cpp:546
 msgid "The select-army key and its button do nothing, for a game played without them."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:546
+#: src117/port/front/port_front_mutators.cpp:547
 msgid "The select-army key and its button, as Hyperion has them."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:549
+#: src117/port/front/port_front_mutators.cpp:550
 msgid "Every unit’s energy comes back three times as fast."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:550
+#: src117/port/front/port_front_mutators.cpp:551
 msgid "Energy comes back as Classic."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:553
+#: src117/port/front/port_front_mutators.cpp:554
 msgid "Newbie helpers on: workers are trained by themselves, mining is balanced by itself, and the upgrades chosen in Settings' Newbie mode tab are researched by themselves."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:554
+#: src117/port/front/port_front_mutators.cpp:555
 msgid "Newbie helpers for a player learning the game, as Classic plays it by hand."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:557
-#: src117/port/gameplay/port_mutators.cpp:122
+#: src117/port/front/port_front_mutators.cpp:558
+#: src117/port/gameplay/port_mutators.cpp:143
 msgid "A completed town hall with nothing training and supply to spare trains its worker by itself."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:558
+#: src117/port/front/port_front_mutators.cpp:559
 msgid "Workers are trained by the player, as Classic."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:562
+#: src117/port/front/port_front_mutators.cpp:563
 msgid "Mining is assigned by the player, as Classic."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:565
+#: src117/port/front/port_front_mutators.cpp:566
 msgid "A player or team with no live production buildings loses; the last side with one wins. Buildings still under construction count, while dying buildings, subunits and hallucinations do not."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:566
+#: src117/port/front/port_front_mutators.cpp:567
 msgid "The map's own victory conditions, as Classic."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:571
+#: src117/port/front/port_front_mutators.cpp:572
 msgid "As Classic: an SCV trains in {0} s at {1}."
 msgstr "Come Classico: un SCV si addestra in {0} s a {1}."
 
-#: src117/port/front/port_front_mutators.cpp:573
+#: src117/port/front/port_front_mutators.cpp:574
 msgid "Everything takes {0}: an SCV trains in {1} s at {2}, Classic {3} s."
 msgstr "Tutto richiede {0}: un SCV si addestra in {1} s a {2}, Classico {3} s."
 
-#: src117/port/front/port_front_mutators.cpp:579
+#: src117/port/front/port_front_mutators.cpp:580
 msgid "Every upgrade at its top level and every ability researched from the start."
 msgstr "Ogni potenziamento al livello massimo e ogni abilità già ricercata dall'inizio."
 
-#: src117/port/front/port_front_mutators.cpp:581
+#: src117/port/front/port_front_mutators.cpp:582
 msgid "Upgrades cannot be researched. Abilities still can."
 msgstr "I potenziamenti non si possono ricercare. Le abilità sì."
 
-#: src117/port/front/port_front_mutators.cpp:583
+#: src117/port/front/port_front_mutators.cpp:584
 msgid "Neither upgrades nor the abilities that need research."
 msgstr "Né i potenziamenti né le abilità che richiedono ricerca."
 
-#: src117/port/front/port_front_mutators.cpp:584
+#: src117/port/front/port_front_mutators.cpp:585
 msgid "Everything to research, as Classic."
 msgstr "Tutto da ricercare, come Classico."
 
@@ -3239,7 +3239,7 @@ msgid "The start"
 msgstr "L'inizio"
 
 #: src117/port/front/port_front_mutators.cpp:71
-#: src117/port/front/port_front_mutators.cpp:1044
+#: src117/port/front/port_front_mutators.cpp:1045
 #: src117/port/gameplay/port_trainerview.cpp:409
 #: src117/port/hud/port_hudstats.cpp:415
 msgid "Supply"
@@ -3249,27 +3249,28 @@ msgstr "Controllo"
 msgid "Fog, time and tech"
 msgstr "Nebbia, tempi e tecnologia"
 
-#: src117/port/front/port_front_mutators.cpp:723
-#: src117/port/gameplay/port_ai.cpp:64
+#: src117/port/front/port_front_mutators.cpp:724
+#: src117/port/gameplay/port_ai.cpp:66
 msgid "Harder"
 msgstr "Più difficile"
 
-#: src117/port/front/port_front_mutators.cpp:723
-#: src117/port/front/port_front_mutators.cpp:1165
+#: src117/port/front/port_front_mutators.cpp:724
+#: src117/port/front/port_front_mutators.cpp:1166
 msgid "This game"
 msgstr "Questa partita"
 
-#: src117/port/front/port_front_mutators.cpp:723
-#: src117/port/front/port_front_mutators.cpp:870
-#: src117/port/front/port_front_mutators.cpp:1165
-#: src117/port/front/port_front_mutators.cpp:1783
+#: src117/port/front/port_front_mutators.cpp:724
+#: src117/port/front/port_front_mutators.cpp:871
+#: src117/port/front/port_front_mutators.cpp:1166
+#: src117/port/front/port_front_mutators.cpp:1785
 #: src117/port/front/port_front_replays.cpp:54
 #: src117/port/front/port_front_replays.cpp:1010
 #: src117/port/front/port_front_score.cpp:929
 #: src117/port/front/port_front_skirmish.cpp:2770
-#: src117/port/gameplay/port_mutators.cpp:63
-#: src117/port/gameplay/port_mutators.cpp:79
 #: src117/port/gameplay/port_mutators.cpp:80
+#: src117/port/gameplay/port_mutators.cpp:96
+#: src117/port/gameplay/port_mutators.cpp:97
+#: src117/port/gameplay/port_mutators.cpp:106
 msgid "Classic"
 msgstr "Classico"
 
@@ -3281,11 +3282,11 @@ msgstr "Quanto contiene ogni giacimento di minerali, e quindi per quanto si può
 msgid "How much each geyser holds before it runs dry."
 msgstr "Quanto contiene ogni geyser prima di esaurirsi."
 
-#: src117/port/front/port_front_mutators.cpp:767
+#: src117/port/front/port_front_mutators.cpp:768
 msgid "a geyser"
 msgstr "un geyser"
 
-#: src117/port/front/port_front_mutators.cpp:767
+#: src117/port/front/port_front_mutators.cpp:768
 msgid "a field"
 msgstr "un giacimento"
 
@@ -3293,29 +3294,29 @@ msgstr "un giacimento"
 msgid "What each player has to spend at the first second."
 msgstr "Quanto ha da spendere ogni giocatore al primo secondo."
 
-#: src117/port/front/port_front_mutators.cpp:777
+#: src117/port/front/port_front_mutators.cpp:778
 msgid "never runs dry"
 msgstr "non si esaurisce mai"
 
-#: src117/port/front/port_front_mutators.cpp:778
+#: src117/port/front/port_front_mutators.cpp:779
 msgid "lasts {0}"
 msgstr "dura {0}"
-
-#: src117/port/front/port_front_mutators.cpp:779
-msgid "then 2 a trip"
-msgstr "poi 2 per viaggio"
 
 #: src117/port/front/port_front_mutators.cpp:78
 msgid "The biggest army each player can keep."
 msgstr "L'esercito più grande che ogni giocatore può mantenere."
 
 #: src117/port/front/port_front_mutators.cpp:780
+msgid "then 2 a trip"
+msgstr "poi 2 per viaggio"
+
+#: src117/port/front/port_front_mutators.cpp:781
 msgid "the small ones {0}"
 msgstr "quelli piccoli {0}"
 
-#: src117/port/front/port_front_mutators.cpp:781
-#: src117/port/gameplay/port_mutators.cpp:130
+#: src117/port/front/port_front_mutators.cpp:782
 #: src117/port/gameplay/port_mutators.cpp:154
+#: src117/port/gameplay/port_mutators.cpp:178
 msgid "Infinite"
 msgstr "Infinito"
 
@@ -3351,7 +3352,7 @@ msgstr ""
 msgid "One Machine Shop serves every Factory, and the same for the other add-ons."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:865
+#: src117/port/front/port_front_mutators.cpp:866
 msgid "A trip brings"
 msgstr "Un viaggio porta"
 
@@ -3359,21 +3360,21 @@ msgstr "Un viaggio porta"
 msgid "No select-army key or button, for a game without them."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:871
+#: src117/port/front/port_front_mutators.cpp:872
 msgid "Rich · off"
 msgstr "Ricche · disattivato"
 
-#: src117/port/front/port_front_mutators.cpp:872
+#: src117/port/front/port_front_mutators.cpp:873
 msgid "Rich · every base"
 msgstr "Ricche · tutte le basi"
 
-#: src117/port/front/port_front_mutators.cpp:873
+#: src117/port/front/port_front_mutators.cpp:874
 msgid "Rich · up to {0} base"
 msgid_plural "Rich · up to {0} bases"
 msgstr[0] "Ricche · fino a {0} base"
 msgstr[1] "Ricche · fino a {0} basi"
 
-#: src117/port/front/port_front_mutators.cpp:875
+#: src117/port/front/port_front_mutators.cpp:876
 msgid "Rich · none far enough"
 msgstr "Ricche · nessuna abbastanza lontana"
 
@@ -3381,11 +3382,11 @@ msgstr "Ricche · nessuna abbastanza lontana"
 msgid "Every unit's energy comes back three times as fast."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:888
+#: src117/port/front/port_front_mutators.cpp:889
 msgid "Reading this map…"
 msgstr "Lettura di questa mappa…"
 
-#: src117/port/front/port_front_mutators.cpp:888
+#: src117/port/front/port_front_mutators.cpp:889
 msgid "A sketch, not this map"
 msgstr "Uno schizzo, non questa mappa"
 
@@ -3397,17 +3398,17 @@ msgstr ""
 msgid "A town hall with nothing training and supply to spare trains its worker by itself."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:908
+#: src117/port/front/port_front_mutators.cpp:909
 msgid "gas"
 msgstr "gas"
 
-#: src117/port/front/port_front_mutators.cpp:908
+#: src117/port/front/port_front_mutators.cpp:909
 msgid "minerals"
 msgstr "minerali"
 
 #: src117/port/front/port_front_mutators.cpp:91
-#: src117/port/front/port_front_mutators.cpp:561
-#: src117/port/gameplay/port_mutators.cpp:123
+#: src117/port/front/port_front_mutators.cpp:562
+#: src117/port/gameplay/port_mutators.cpp:144
 msgid "Each base's patches take up to three workers, each geyser three; once a base is full, the workers that are free go to the next base with room, and to the built geysers."
 msgstr ""
 
@@ -3415,41 +3416,45 @@ msgstr ""
 msgid "Lose every production building and your side is out; the last side with one wins."
 msgstr ""
 
-#: src117/port/front/port_front_mutators.cpp:949
-#: src117/port/gameplay/port_mutators.cpp:79
-#: src117/port/gameplay/port_mutators.cpp:91
+#: src117/port/front/port_front_mutators.cpp:93
+msgid "How many workers and how much minerals and gas each player starts with, rolled fresh every game."
+msgstr ""
+
+#: src117/port/front/port_front_mutators.cpp:950
+#: src117/port/gameplay/port_mutators.cpp:96
+#: src117/port/gameplay/port_mutators.cpp:111
 msgid "No cap"
 msgstr "Nessun limite"
 
-#: src117/port/front/port_front_mutators.cpp:953
+#: src117/port/front/port_front_mutators.cpp:954
 msgid "supply has no limit"
 msgstr "il controllo non ha limite"
 
-#: src117/port/front/port_front_mutators.cpp:954
+#: src117/port/front/port_front_mutators.cpp:955
 msgid "supply, less than Classic: harder"
 msgstr "di controllo, meno di Classico: più difficile"
 
-#: src117/port/front/port_front_mutators.cpp:955
+#: src117/port/front/port_front_mutators.cpp:956
 msgid "supply, the most a player holds"
 msgstr "di controllo, il massimo per giocatore"
 
-#: src117/port/front/port_front_mutators.cpp:984
+#: src117/port/front/port_front_mutators.cpp:985
 msgid "Classic 200"
 msgstr "Classico 200"
 
-#: src117/port/front/port_front_mutators.cpp:990
+#: src117/port/front/port_front_mutators.cpp:991
 msgid "marines"
 msgstr "marine"
 
-#: src117/port/front/port_front_mutators.cpp:990
+#: src117/port/front/port_front_mutators.cpp:991
 msgid "zealots"
 msgstr "zeloti"
 
-#: src117/port/front/port_front_mutators.cpp:990
+#: src117/port/front/port_front_mutators.cpp:991
 msgid "ultralisks"
 msgstr "ultralische"
 
-#: src117/port/front/port_front_mutators.cpp:998
+#: src117/port/front/port_front_mutators.cpp:999
 msgid "Any number of {0}"
 msgstr "{0} in numero illimitato"
 
@@ -3753,7 +3758,7 @@ msgid "Made {0}"
 msgstr "Creato {0}"
 
 #: src117/port/front/port_front_profile.cpp:838
-#: src117/port/lan/port_front_lan.cpp:1616
+#: src117/port/lan/port_front_lan.cpp:1640
 msgid "In {0}"
 msgstr "In {0}"
 
@@ -4028,8 +4033,8 @@ msgid "My Replays"
 msgstr "I miei replay"
 
 #: src117/port/front/port_front_replays.cpp:53
-#: src117/port/lan/port_front_lan.cpp:1650
-#: src117/port/lan/port_front_lan.cpp:1651
+#: src117/port/lan/port_front_lan.cpp:1674
+#: src117/port/lan/port_front_lan.cpp:1675
 msgid "Online"
 msgstr "Online"
 
@@ -4807,9 +4812,9 @@ msgid "Press a key"
 msgstr "Premi un tasto"
 
 #: src117/port/front/port_front_settings.cpp:1876
-#: src117/port/gameplay/port_mutators.cpp:57
-#: src117/port/gameplay/port_mutators.cpp:434
-#: src117/port/gameplay/port_mutators.cpp:541
+#: src117/port/gameplay/port_mutators.cpp:74
+#: src117/port/gameplay/port_mutators.cpp:460
+#: src117/port/gameplay/port_mutators.cpp:570
 #: src117/port/tools/port_benchview.cpp:2237
 msgid "None"
 msgstr "Nessuna"
@@ -5629,7 +5634,7 @@ msgid "Closed"
 msgstr "Chiuso"
 
 #: src117/port/front/port_front_skirmish.cpp:2106
-#: src117/port/lan/port_front_lan.cpp:1837
+#: src117/port/lan/port_front_lan.cpp:1861
 msgid "{0} (you)"
 msgstr "{0} (tu)"
 
@@ -5838,7 +5843,7 @@ msgstr "Le persone della stanza che non hanno un posto possono guardare la parti
 
 #: src117/port/front/port_front_skirmish.cpp:2660
 #: src117/port/lan/port_front_lan.cpp:762
-#: src117/port/lan/port_lanroom_proto.cpp:694
+#: src117/port/lan/port_lanroom_proto.cpp:745
 msgid "The host has turned watching off."
 msgstr "L'host ha disattivato la visione."
 
@@ -6498,7 +6503,7 @@ msgid "{0} {1} {2}, {3}"
 msgstr "{0} {1} {2}, {3}"
 
 #: src117/port/front/port_frontkit.cpp:349
-#: src117/port/gameplay/port_mutators.cpp:654
+#: src117/port/gameplay/port_mutators.cpp:684
 #: src117/port/gameplay/port_trainerview.cpp:228
 #: src117/port/hud/port_hudstats.cpp:473
 #: src117/port/tools/port_benchview.cpp:344
@@ -6731,46 +6736,50 @@ msgstr "sistema di Tarsonis · il pianeta capitale confederato"
 msgid "the Confederacy’s capital, two billion people"
 msgstr "la capitale della Confederazione, due miliardi di persone"
 
-#: src117/port/gameplay/port_ai.cpp:64
+#: src117/port/gameplay/port_ai.cpp:66
 #: src117/port/tools/port_benchview.cpp:870
 msgid "Classic AI"
 msgstr "IA classica"
 
-#: src117/port/gameplay/port_ai.cpp:64
+#: src117/port/gameplay/port_ai.cpp:66
 msgid "Very Easy"
 msgstr "Molto facile"
 
-#: src117/port/gameplay/port_ai.cpp:64
+#: src117/port/gameplay/port_ai.cpp:66
 msgid "Easy"
 msgstr "Facile"
 
-#: src117/port/gameplay/port_ai.cpp:64
+#: src117/port/gameplay/port_ai.cpp:66
 msgid "Medium"
 msgstr "Medio"
 
-#: src117/port/gameplay/port_ai.cpp:64
+#: src117/port/gameplay/port_ai.cpp:66
 msgid "Hard"
 msgstr "Difficile"
 
-#: src117/port/gameplay/port_ai.cpp:64
+#: src117/port/gameplay/port_ai.cpp:66
 msgid "Very Hard"
 msgstr "Molto difficile"
 
-#: src117/port/gameplay/port_ai.cpp:65
+#: src117/port/gameplay/port_ai.cpp:67
 msgid "Elite"
 msgstr "Elite"
 
-#: src117/port/gameplay/port_ai.cpp:65
+#: src117/port/gameplay/port_ai.cpp:67
 msgid "Cheater: vision"
 msgstr "Imbroglione: visuale"
 
-#: src117/port/gameplay/port_ai.cpp:65
+#: src117/port/gameplay/port_ai.cpp:67
 msgid "Cheater: resources"
 msgstr "Imbroglione: risorse"
 
-#: src117/port/gameplay/port_ai.cpp:65
+#: src117/port/gameplay/port_ai.cpp:67
 msgid "Cheater: insane"
 msgstr "Imbroglione: folle"
+
+#: src117/port/gameplay/port_ai.cpp:68
+msgid "Pluto"
+msgstr ""
 
 #: src117/port/gameplay/port_camkeys.cpp:103
 msgid "Location {0} saved."
@@ -6784,375 +6793,395 @@ msgstr ""
 msgid "Enter selects Â· Esc cancels"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:100
+#: src117/port/gameplay/port_mutators.cpp:1052
+msgid "Anti-meta start: {0} workers, {1} minerals, {2} gas."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:106
+msgid "Anti-meta"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:108
+msgid "Mineral fields"
+msgstr "Giacimenti di minerali"
+
+#: src117/port/gameplay/port_mutators.cpp:108
+msgid "Vespene geysers"
+msgstr "Geyser di vespene"
+
+#: src117/port/gameplay/port_mutators.cpp:108
+msgid "Start resources"
+msgstr "Risorse iniziali"
+
+#: src117/port/gameplay/port_mutators.cpp:109
+msgid "Start workers"
+msgstr "Lavoratori iniziali"
+
+#: src117/port/gameplay/port_mutators.cpp:109
+msgid "Supply boost"
+msgstr "Bonus al controllo"
+
+#: src117/port/gameplay/port_mutators.cpp:110
+msgid "Fog of war"
+msgstr "Nebbia di guerra"
+
+#: src117/port/gameplay/port_mutators.cpp:110
+msgid "Build time"
+msgstr "Tempo di costruzione"
+
+#: src117/port/gameplay/port_mutators.cpp:110
+msgid "Tech and upgrades"
+msgstr "Tecnologia e potenziamenti"
+
+#: src117/port/gameplay/port_mutators.cpp:111
+msgid "Rich resources"
+msgstr "Risorse ricche"
+
+#: src117/port/gameplay/port_mutators.cpp:112
+msgid "No army key"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:112
+msgid "Energy regeneration"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:113
+msgid "Auto train workers"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:113
+msgid "Auto mine efficiently"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:114
+msgid "Anti-meta start"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:116
+msgid "What each mineral field holds, or that it never runs dry. Classic: 1,500, the small ones 750."
+msgstr "Quanto contiene ogni giacimento di minerali, o che non si esaurisca mai. Classico: 1.500, quelli piccoli 750."
+
+#: src117/port/gameplay/port_mutators.cpp:117
+msgid "What each geyser holds before it runs dry, or that it never does. Classic: 5,000."
+msgstr "Quanto contiene ogni geyser prima di esaurirsi, o che non si esaurisca mai. Classico: 5.000."
+
+#: src117/port/gameplay/port_mutators.cpp:118
+msgid "The minerals and gas each player begins with. Classic: 50 and 0."
+msgstr "I minerali e il gas con cui inizia ogni giocatore. Classico: 50 e 0."
+
+#: src117/port/gameplay/port_mutators.cpp:119
+msgid "The most supply each player can hold. Classic: 200."
+msgstr "Il controllo massimo per giocatore. Classico: 200."
+
+#: src117/port/gameplay/port_mutators.cpp:120
+msgid "The workers each player begins with, beside the town hall. Classic: 4."
+msgstr "I lavoratori con cui inizia ogni giocatore, accanto all'edificio principale. Classico: 4."
+
+#: src117/port/gameplay/port_mutators.cpp:121
 msgid "More supply from each depot, pylon, overlord and town hall. Classic: none, a depot’s 8."
 msgstr "Più controllo da ogni deposito, pilone, sorvegliante ed edificio principale. Classico: nessuno, un deposito ne dà 8."
 
-#: src117/port/gameplay/port_mutators.cpp:101
+#: src117/port/gameplay/port_mutators.cpp:122
 msgid "Explored: every player knows the map’s land from the start, under the fog. None: every player sees the whole map all game. Resources: mineral fields, geysers, rocks and doodads are explored and remembered once, without revealing opponents. Classic: the fog of war."
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:104
+#: src117/port/gameplay/port_mutators.cpp:125
 msgid "How long buildings, units, research and upgrades take to make: ×0.5 takes half as long. Classic: ×1."
 msgstr "Quanto tempo richiedono strutture, unità, ricerche e potenziamenti: ×0,5 richiede metà del tempo. Classico: ×1."
 
-#: src117/port/gameplay/port_mutators.cpp:106
+#: src117/port/gameplay/port_mutators.cpp:127
 msgid "Researched: every upgrade at its top level and every ability researched from the start. No upgrades: none can be researched. No research: neither upgrades nor the abilities that need research. Classic: all to research."
 msgstr "Ricercato tutto: ogni potenziamento al livello massimo e ogni abilità già ricercata dall'inizio. Nessun potenziamento: non se ne può ricercare nessuno. Nessuna ricerca: né i potenziamenti né le abilità che richiedono ricerca. Classico: tutto da ricercare."
 
-#: src117/port/gameplay/port_mutators.cpp:109
+#: src117/port/gameplay/port_mutators.cpp:130
 msgid "Bases away from every start may turn rich: gold mineral fields and violet geysers that give 11 minerals and 16 gas a trip, and run dry sooner. Never a start's main or natural; bases that mirror each other turn rich together. Every base: all of them. Classic: none."
 msgstr "Le basi lontane da ogni partenza possono diventare ricche: giacimenti di minerali d'oro e geyser viola che danno 11 minerali e 16 di gas per viaggio, e si esauriscono prima. Mai la principale o la naturale di una partenza; le basi speculari tra loro diventano ricche insieme. Tutte le basi: tutte quante. Classico: nessuna."
 
-#: src117/port/gameplay/port_mutators.cpp:112
+#: src117/port/gameplay/port_mutators.cpp:133
 msgid "Supply is not needed: every unit costs no supply and the cap is off, and a depot and a pylon cost 40 minerals with half their life, as they are built for their tech, not their supply. Classic: supply as 1.17's."
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:115
+#: src117/port/gameplay/port_mutators.cpp:136
 msgid "One add-on of a kind serves every building: one Machine Shop lets any Factory build Siege Tanks, and the same for the Control Tower's, the Covert Ops' and the Physics Lab's. Classic: each building needs its own."
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:118
+#: src117/port/gameplay/port_mutators.cpp:139
 msgid "No select-army key and no army button, for a game played without them. Classic: the key and the button."
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:119
+#: src117/port/gameplay/port_mutators.cpp:140
 msgid "Every unit's energy comes back three times as fast. Classic: the usual rate."
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:120
+#: src117/port/gameplay/port_mutators.cpp:141
 msgid "Newbie helpers for a player learning the game: workers, mining and research by themselves. The toggles are in Settings' Newbie mode tab."
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:125
+#: src117/port/gameplay/port_mutators.cpp:146
 msgid "Production: a player or team with no live production buildings loses, and the last side with one wins. Incomplete buildings count. Classic: the map's own victory conditions."
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:130
+#: src117/port/gameplay/port_mutators.cpp:148
+msgid "The workers and the minerals and gas each player begins with, rolled fresh every game as it starts: 4 to 8 workers, 100 to 300 minerals and 0 to 125 gas, in steps of five. Classic: 4 workers, 50 minerals and no gas."
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:154
 msgid "Plenty"
 msgstr "Abbondanza"
 
-#: src117/port/gameplay/port_mutators.cpp:130
+#: src117/port/gameplay/port_mutators.cpp:154
 msgid "Gold Rush"
 msgstr "Corsa all'oro"
 
-#: src117/port/gameplay/port_mutators.cpp:131
+#: src117/port/gameplay/port_mutators.cpp:155
 msgid "Quick Start"
 msgstr "Partenza rapida"
 
-#: src117/port/gameplay/port_mutators.cpp:221
+#: src117/port/gameplay/port_mutators.cpp:245
 msgid "a quarter of the map"
 msgstr "un quarto della mappa"
 
-#: src117/port/gameplay/port_mutators.cpp:222
+#: src117/port/gameplay/port_mutators.cpp:246
 msgid "a third of the map"
 msgstr "un terzo della mappa"
 
-#: src117/port/gameplay/port_mutators.cpp:223
+#: src117/port/gameplay/port_mutators.cpp:247
 msgid "half the map"
 msgstr "metà della mappa"
 
-#: src117/port/gameplay/port_mutators.cpp:225
+#: src117/port/gameplay/port_mutators.cpp:249
 msgid "{0}% of the map"
 msgstr "{0}% della mappa"
 
-#: src117/port/gameplay/port_mutators.cpp:226
-#: src117/port/gameplay/port_mutators.cpp:237
+#: src117/port/gameplay/port_mutators.cpp:250
+#: src117/port/gameplay/port_mutators.cpp:261
 msgid "{0} tiles"
 msgstr "{0} tessere"
 
-#: src117/port/gameplay/port_mutators.cpp:232
+#: src117/port/gameplay/port_mutators.cpp:256
 msgid "Quarter map"
 msgstr "Un quarto"
 
-#: src117/port/gameplay/port_mutators.cpp:233
+#: src117/port/gameplay/port_mutators.cpp:257
 msgid "Third map"
 msgstr "Un terzo"
 
-#: src117/port/gameplay/port_mutators.cpp:234
+#: src117/port/gameplay/port_mutators.cpp:258
 msgid "Half map"
 msgstr "Metà"
 
-#: src117/port/gameplay/port_mutators.cpp:236
+#: src117/port/gameplay/port_mutators.cpp:260
 msgid "{0}% of map"
 msgstr "{0}% della mappa"
 
-#: src117/port/gameplay/port_mutators.cpp:378
+#: src117/port/gameplay/port_mutators.cpp:403
 msgid "Automatic"
 msgstr "Automatico"
 
-#: src117/port/gameplay/port_mutators.cpp:447
-#: src117/port/gameplay/port_mutators.cpp:543
+#: src117/port/gameplay/port_mutators.cpp:474
+#: src117/port/gameplay/port_mutators.cpp:572
 msgid "{0}% chance"
 msgstr "{0}% di probabilità"
 
-#: src117/port/gameplay/port_mutators.cpp:57
+#: src117/port/gameplay/port_mutators.cpp:678
+msgctxt "list"
+msgid ", "
+msgstr ", "
+
+#: src117/port/gameplay/port_mutators.cpp:690
+msgid "infinite mineral fields"
+msgstr "giacimenti di minerali infiniti"
+
+#: src117/port/gameplay/port_mutators.cpp:690
+msgid "mineral fields {0}"
+msgstr "giacimenti di minerali {0}"
+
+#: src117/port/gameplay/port_mutators.cpp:692
+msgid "infinite geysers"
+msgstr "geyser infiniti"
+
+#: src117/port/gameplay/port_mutators.cpp:692
+msgid "geysers {0}"
+msgstr "geyser {0}"
+
+#: src117/port/gameplay/port_mutators.cpp:695
+msgid "start resources {0} / {1}"
+msgstr "risorse iniziali {0} / {1}"
+
+#: src117/port/gameplay/port_mutators.cpp:697
+msgid "no supply cap"
+msgstr "nessun limite di controllo"
+
+#: src117/port/gameplay/port_mutators.cpp:697
+msgid "supply cap {0}"
+msgstr "limite di controllo {0}"
+
+#: src117/port/gameplay/port_mutators.cpp:701
+msgid "{0} start worker"
+msgid_plural "{0} start workers"
+msgstr[0] "{0} lavoratore iniziale"
+msgstr[1] "{0} lavoratori iniziali"
+
+#: src117/port/gameplay/port_mutators.cpp:706
+msgid "supply +{0}%"
+msgstr "controllo +{0}%"
+
+#: src117/port/gameplay/port_mutators.cpp:708
+msgid "the map explored"
+msgstr "mappa esplorata"
+
+#: src117/port/gameplay/port_mutators.cpp:710
+msgid "no fog of war"
+msgstr "nessuna nebbia di guerra"
+
+#: src117/port/gameplay/port_mutators.cpp:712
+msgid "resources and obstacles remembered"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:714
+msgid "build time {0}"
+msgstr "tempo di costruzione {0}"
+
+#: src117/port/gameplay/port_mutators.cpp:716
+msgid "all researched"
+msgstr "tutto ricercato"
+
+#: src117/port/gameplay/port_mutators.cpp:720
+msgid "no research"
+msgstr "nessuna ricerca"
+
+#: src117/port/gameplay/port_mutators.cpp:722
+msgid "every base rich, not announced"
+msgstr "tutte le basi ricche, senza annuncio"
+
+#: src117/port/gameplay/port_mutators.cpp:722
+msgid "every base rich"
+msgstr "tutte le basi ricche"
+
+#: src117/port/gameplay/port_mutators.cpp:727
+msgid "rich resources past the naturals at {0}%"
+msgstr "risorse ricche oltre le naturali al {0}%"
+
+#: src117/port/gameplay/port_mutators.cpp:730
+msgid "rich resources {0} or more from every start at {1}%"
+msgstr "risorse ricche a {0} o più da ogni partenza al {1}%"
+
+#: src117/port/gameplay/port_mutators.cpp:732
+msgid "rich resources farthest only at {0}%"
+msgstr "risorse ricche solo nella più lontana al {0}%"
+
+#: src117/port/gameplay/port_mutators.cpp:734
+msgid "each rolled alone"
+msgstr "tirate una per una"
+
+#: src117/port/gameplay/port_mutators.cpp:736
+msgid "maybe none"
+msgstr "forse nessuna"
+
+#: src117/port/gameplay/port_mutators.cpp:738
+msgid "the same every game"
+msgstr "le stesse a ogni partita"
+
+#: src117/port/gameplay/port_mutators.cpp:74
 msgid "Explored"
 msgstr "Esplorata"
 
-#: src117/port/gameplay/port_mutators.cpp:57
+#: src117/port/gameplay/port_mutators.cpp:74
 msgid "Resources remembered"
 msgstr ""
 
-#: src117/port/gameplay/port_mutators.cpp:58
-#: src117/port/gameplay/port_mutators.cpp:60
-#: src117/port/gameplay/port_mutators.cpp:61
-#: src117/port/gameplay/port_mutators.cpp:62
-#: src117/port/gameplay/port_mutators.cpp:67
+#: src117/port/gameplay/port_mutators.cpp:740
+msgid "not announced"
+msgstr "senza annuncio"
+
+#: src117/port/gameplay/port_mutators.cpp:743
+msgid "unit limit {0}"
+msgstr "limite di unità {0}"
+
+#: src117/port/gameplay/port_mutators.cpp:745
+msgid "no supply, cheap depots and pylons"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:747
+msgid "one add-on serves every building"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:749
+msgid "no army hotkey"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:75
+#: src117/port/gameplay/port_mutators.cpp:77
+#: src117/port/gameplay/port_mutators.cpp:78
+#: src117/port/gameplay/port_mutators.cpp:79
+#: src117/port/gameplay/port_mutators.cpp:84
 #: src117/port/lan/port_front_lanhost.cpp:1222
 msgid "Off"
 msgstr "Disattivato"
 
-#: src117/port/gameplay/port_mutators.cpp:58
-#: src117/port/gameplay/port_mutators.cpp:60
-#: src117/port/gameplay/port_mutators.cpp:61
-#: src117/port/gameplay/port_mutators.cpp:62
+#: src117/port/gameplay/port_mutators.cpp:75
+#: src117/port/gameplay/port_mutators.cpp:77
+#: src117/port/gameplay/port_mutators.cpp:78
+#: src117/port/gameplay/port_mutators.cpp:79
 #: src117/port/lan/port_front_lanhost.cpp:1222
 #: src117/port/lan/port_front_lanhost.cpp:1273
 #: src117/port/lan/port_front_lanhost.cpp:1330
 msgid "On"
 msgstr "Attivo"
 
-#: src117/port/gameplay/port_mutators.cpp:63
+#: src117/port/gameplay/port_mutators.cpp:751
+msgid "energy x3"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:753
+msgid "newbie helpers"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:759
+msgid "production victory"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:761
+msgid "anti-meta start"
+msgstr ""
+
+#: src117/port/gameplay/port_mutators.cpp:80
 #: src117/port/gameplay/port_trainerview.cpp:420
 msgid "Production"
 msgstr "Produzione"
 
-#: src117/port/gameplay/port_mutators.cpp:648
-msgctxt "list"
-msgid ", "
-msgstr ", "
-
-#: src117/port/gameplay/port_mutators.cpp:65
+#: src117/port/gameplay/port_mutators.cpp:82
 msgid "Researched"
 msgstr "Ricercato tutto"
 
-#: src117/port/gameplay/port_mutators.cpp:65
+#: src117/port/gameplay/port_mutators.cpp:82
 msgid "No upgrades"
 msgstr "Nessun potenziamento"
 
-#: src117/port/gameplay/port_mutators.cpp:66
+#: src117/port/gameplay/port_mutators.cpp:83
 msgid "No research"
 msgstr "Nessuna ricerca"
 
-#: src117/port/gameplay/port_mutators.cpp:660
-msgid "infinite mineral fields"
-msgstr "giacimenti di minerali infiniti"
-
-#: src117/port/gameplay/port_mutators.cpp:660
-msgid "mineral fields {0}"
-msgstr "giacimenti di minerali {0}"
-
-#: src117/port/gameplay/port_mutators.cpp:662
-msgid "infinite geysers"
-msgstr "geyser infiniti"
-
-#: src117/port/gameplay/port_mutators.cpp:662
-msgid "geysers {0}"
-msgstr "geyser {0}"
-
-#: src117/port/gameplay/port_mutators.cpp:665
-msgid "start resources {0} / {1}"
-msgstr "risorse iniziali {0} / {1}"
-
-#: src117/port/gameplay/port_mutators.cpp:667
-msgid "no supply cap"
-msgstr "nessun limite di controllo"
-
-#: src117/port/gameplay/port_mutators.cpp:667
-msgid "supply cap {0}"
-msgstr "limite di controllo {0}"
-
-#: src117/port/gameplay/port_mutators.cpp:67
+#: src117/port/gameplay/port_mutators.cpp:84
 msgid "Past the naturals"
 msgstr "Oltre le naturali"
 
-#: src117/port/gameplay/port_mutators.cpp:67
+#: src117/port/gameplay/port_mutators.cpp:84
 msgid "Outside a radius"
 msgstr "Fuori da un raggio"
 
-#: src117/port/gameplay/port_mutators.cpp:67
+#: src117/port/gameplay/port_mutators.cpp:84
 msgid "Farthest only"
 msgstr "Solo la più lontana"
 
-#: src117/port/gameplay/port_mutators.cpp:671
-msgid "{0} start worker"
-msgid_plural "{0} start workers"
-msgstr[0] "{0} lavoratore iniziale"
-msgstr[1] "{0} lavoratori iniziali"
-
-#: src117/port/gameplay/port_mutators.cpp:676
-msgid "supply +{0}%"
-msgstr "controllo +{0}%"
-
-#: src117/port/gameplay/port_mutators.cpp:678
-msgid "the map explored"
-msgstr "mappa esplorata"
-
-#: src117/port/gameplay/port_mutators.cpp:68
+#: src117/port/gameplay/port_mutators.cpp:85
 msgid "Every base"
 msgstr "Tutte le basi"
 
-#: src117/port/gameplay/port_mutators.cpp:680
-msgid "no fog of war"
-msgstr "nessuna nebbia di guerra"
-
-#: src117/port/gameplay/port_mutators.cpp:682
-msgid "resources and obstacles remembered"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:684
-msgid "build time {0}"
-msgstr "tempo di costruzione {0}"
-
-#: src117/port/gameplay/port_mutators.cpp:686
-msgid "all researched"
-msgstr "tutto ricercato"
-
-#: src117/port/gameplay/port_mutators.cpp:690
-msgid "no research"
-msgstr "nessuna ricerca"
-
-#: src117/port/gameplay/port_mutators.cpp:692
-msgid "every base rich, not announced"
-msgstr "tutte le basi ricche, senza annuncio"
-
-#: src117/port/gameplay/port_mutators.cpp:692
-msgid "every base rich"
-msgstr "tutte le basi ricche"
-
-#: src117/port/gameplay/port_mutators.cpp:697
-msgid "rich resources past the naturals at {0}%"
-msgstr "risorse ricche oltre le naturali al {0}%"
-
-#: src117/port/gameplay/port_mutators.cpp:700
-msgid "rich resources {0} or more from every start at {1}%"
-msgstr "risorse ricche a {0} o più da ogni partenza al {1}%"
-
-#: src117/port/gameplay/port_mutators.cpp:702
-msgid "rich resources farthest only at {0}%"
-msgstr "risorse ricche solo nella più lontana al {0}%"
-
-#: src117/port/gameplay/port_mutators.cpp:704
-msgid "each rolled alone"
-msgstr "tirate una per una"
-
-#: src117/port/gameplay/port_mutators.cpp:706
-msgid "maybe none"
-msgstr "forse nessuna"
-
-#: src117/port/gameplay/port_mutators.cpp:708
-msgid "the same every game"
-msgstr "le stesse a ogni partita"
-
-#: src117/port/gameplay/port_mutators.cpp:710
-msgid "not announced"
-msgstr "senza annuncio"
-
-#: src117/port/gameplay/port_mutators.cpp:713
-msgid "unit limit {0}"
-msgstr "limite di unità {0}"
-
-#: src117/port/gameplay/port_mutators.cpp:715
-msgid "no supply, cheap depots and pylons"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:717
-msgid "one add-on serves every building"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:719
-msgid "no army hotkey"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:721
-msgid "energy x3"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:723
-msgid "newbie helpers"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:729
-msgid "production victory"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:80
-#: src117/port/gameplay/port_mutators.cpp:91
+#: src117/port/gameplay/port_mutators.cpp:97
+#: src117/port/gameplay/port_mutators.cpp:111
 msgid "One add-on"
 msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:88
-msgid "Mineral fields"
-msgstr "Giacimenti di minerali"
-
-#: src117/port/gameplay/port_mutators.cpp:88
-msgid "Vespene geysers"
-msgstr "Geyser di vespene"
-
-#: src117/port/gameplay/port_mutators.cpp:88
-msgid "Start resources"
-msgstr "Risorse iniziali"
-
-#: src117/port/gameplay/port_mutators.cpp:89
-msgid "Start workers"
-msgstr "Lavoratori iniziali"
-
-#: src117/port/gameplay/port_mutators.cpp:89
-msgid "Supply boost"
-msgstr "Bonus al controllo"
-
-#: src117/port/gameplay/port_mutators.cpp:90
-msgid "Fog of war"
-msgstr "Nebbia di guerra"
-
-#: src117/port/gameplay/port_mutators.cpp:90
-msgid "Build time"
-msgstr "Tempo di costruzione"
-
-#: src117/port/gameplay/port_mutators.cpp:90
-msgid "Tech and upgrades"
-msgstr "Tecnologia e potenziamenti"
-
-#: src117/port/gameplay/port_mutators.cpp:91
-msgid "Rich resources"
-msgstr "Risorse ricche"
-
-#: src117/port/gameplay/port_mutators.cpp:92
-msgid "No army key"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:92
-msgid "Energy regeneration"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:93
-msgid "Auto train workers"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:93
-msgid "Auto mine efficiently"
-msgstr ""
-
-#: src117/port/gameplay/port_mutators.cpp:95
-msgid "What each mineral field holds, or that it never runs dry. Classic: 1,500, the small ones 750."
-msgstr "Quanto contiene ogni giacimento di minerali, o che non si esaurisca mai. Classico: 1.500, quelli piccoli 750."
-
-#: src117/port/gameplay/port_mutators.cpp:96
-msgid "What each geyser holds before it runs dry, or that it never does. Classic: 5,000."
-msgstr "Quanto contiene ogni geyser prima di esaurirsi, o che non si esaurisca mai. Classico: 5.000."
-
-#: src117/port/gameplay/port_mutators.cpp:97
-msgid "The minerals and gas each player begins with. Classic: 50 and 0."
-msgstr "I minerali e il gas con cui inizia ogni giocatore. Classico: 50 e 0."
-
-#: src117/port/gameplay/port_mutators.cpp:98
-msgid "The most supply each player can hold. Classic: 200."
-msgstr "Il controllo massimo per giocatore. Classico: 200."
-
-#: src117/port/gameplay/port_mutators.cpp:99
-msgid "The workers each player begins with, beside the town hall. Classic: 4."
-msgstr "I lavoratori con cui inizia ogni giocatore, accanto all'edificio principale. Classico: 4."
 
 #: src117/port/gameplay/port_teams.cpp:310
 #: src117/port/gameplay/port_teams.cpp:400
@@ -7994,7 +8023,7 @@ msgid "The host’s console"
 msgstr "La console dell'host"
 
 #: src117/port/lan/port_front_lan.cpp:1040
-#: src117/port/lan/port_front_lan.cpp:1747
+#: src117/port/lan/port_front_lan.cpp:1771
 msgid "The room"
 msgstr "La stanza"
 
@@ -8104,302 +8133,302 @@ msgstr "I posti, le opzioni di gioco e chi è nella stanza vengono dopo, poi Avv
 msgid "The server could not start"
 msgstr "Non è stato possibile avviare il server"
 
-#: src117/port/lan/port_front_lan.cpp:1319
-msgid "Nothing answers at {0}"
-msgstr "Nessuna risposta a {0}"
-
 #: src117/port/lan/port_front_lan.cpp:132
 msgid "Another room or game on this machine has its port. Close it, then start the server."
 msgstr "Un'altra stanza o partita su questa macchina occupa la sua porta. Chiudila, poi avvia il server."
 
-#: src117/port/lan/port_front_lan.cpp:1320
+#: src117/port/lan/port_front_lan.cpp:1336
+msgid "Nothing answers at {0}"
+msgstr "Nessuna risposta a {0}"
+
+#: src117/port/lan/port_front_lan.cpp:1337
 msgid "A room is joined on port 6112, and found on 6111."
 msgstr "A una stanza si entra sulla porta 6112, e si trova sulla 6111."
 
-#: src117/port/lan/port_front_lan.cpp:1350
+#: src117/port/lan/port_front_lan.cpp:1367
 msgid "That is not an address"
 msgstr "Non è un indirizzo"
 
-#: src117/port/lan/port_front_lan.cpp:1351
+#: src117/port/lan/port_front_lan.cpp:1368
 msgid "An address on this network is four numbers, like 192.168.1.20."
 msgstr "Un indirizzo su questa rete è composto da quattro numeri, come 192.168.1.20."
 
-#: src117/port/lan/port_front_lan.cpp:1409
+#: src117/port/lan/port_front_lan.cpp:1426
 msgid "The game, installed here"
 msgstr "Il gioco, installato qui"
 
-#: src117/port/lan/port_front_lan.cpp:1410
+#: src117/port/lan/port_front_lan.cpp:1427
 msgid "{0}, from this PC’s copy"
 msgstr "{0}, dalla copia di questo PC"
 
-#: src117/port/lan/port_front_lan.cpp:1410
-#: src117/port/lan/port_front_lan.cpp:1555
+#: src117/port/lan/port_front_lan.cpp:1427
+#: src117/port/lan/port_front_lan.cpp:1579
 msgid "StarCraft and Brood War"
 msgstr "StarCraft e Brood War"
 
-#: src117/port/lan/port_front_lan.cpp:1411
+#: src117/port/lan/port_front_lan.cpp:1428
 msgid "A wired network"
 msgstr "Una rete via cavo"
 
-#: src117/port/lan/port_front_lan.cpp:1411
+#: src117/port/lan/port_front_lan.cpp:1428
 msgid "Wi-Fi works, with more delay"
 msgstr "Il Wi-Fi funziona, con più ritardo"
 
-#: src117/port/lan/port_front_lan.cpp:1412
+#: src117/port/lan/port_front_lan.cpp:1429
 msgid "A graphics card that makes video"
 msgstr "Una scheda grafica che codifica video"
 
-#: src117/port/lan/port_front_lan.cpp:1413
+#: src117/port/lan/port_front_lan.cpp:1430
 msgid "For players in a browser, which is not available yet"
 msgstr "Per i giocatori in un browser, cosa non ancora disponibile"
 
-#: src117/port/lan/port_front_lan.cpp:1432
+#: src117/port/lan/port_front_lan.cpp:1449
 msgid "Rooms on This Network"
 msgstr "Stanze su questa rete"
 
-#: src117/port/lan/port_front_lan.cpp:1439
+#: src117/port/lan/port_front_lan.cpp:1456
 msgid "No room answers on this network yet. A room appears here a moment after its host starts it."
 msgstr "Nessuna stanza risponde ancora su questa rete. Una stanza appare qui poco dopo che il suo host l'ha avviata."
 
-#: src117/port/lan/port_front_lan.cpp:1459
+#: src117/port/lan/port_front_lan.cpp:1480
 msgid "A room"
 msgstr "Una stanza"
 
-#: src117/port/lan/port_front_lan.cpp:1464
-#: src117/port/lan/port_front_lan.cpp:1749
+#: src117/port/lan/port_front_lan.cpp:1488
+#: src117/port/lan/port_front_lan.cpp:1773
 msgid "{0} device in the room"
 msgid_plural "{0} devices in the room"
 msgstr[0] "{0} dispositivo nella stanza"
 msgstr[1] "{0} dispositivi nella stanza"
 
-#: src117/port/lan/port_front_lan.cpp:1465
+#: src117/port/lan/port_front_lan.cpp:1489
 msgid "{0} match running"
 msgid_plural "{0} matches running"
 msgstr[0] "{0} partita in corso"
 msgstr[1] "{0} partite in corso"
 
-#: src117/port/lan/port_front_lan.cpp:1466
+#: src117/port/lan/port_front_lan.cpp:1490
 msgid "asks for a password"
 msgstr "richiede una password"
 
-#: src117/port/lan/port_front_lan.cpp:1482
-#: src117/port/lan/port_front_lan.cpp:1511
-#: src117/port/lan/port_front_lan.cpp:1585
+#: src117/port/lan/port_front_lan.cpp:1506
+#: src117/port/lan/port_front_lan.cpp:1535
+#: src117/port/lan/port_front_lan.cpp:1609
 msgid "Join"
 msgstr "Entra"
 
-#: src117/port/lan/port_front_lan.cpp:1485
+#: src117/port/lan/port_front_lan.cpp:1509
 msgid "Can’t join"
 msgstr "Impossibile entrare"
 
-#: src117/port/lan/port_front_lan.cpp:1499
+#: src117/port/lan/port_front_lan.cpp:1523
 msgid "Or an address"
 msgstr "Oppure un indirizzo"
 
-#: src117/port/lan/port_front_lan.cpp:1520
+#: src117/port/lan/port_front_lan.cpp:1544
 msgid "Two Ways to Play"
 msgstr "Due modi per giocare"
 
-#: src117/port/lan/port_front_lan.cpp:1525
+#: src117/port/lan/port_front_lan.cpp:1549
 msgid "In a browser, streamed"
 msgstr "In un browser, in streaming"
 
-#: src117/port/lan/port_front_lan.cpp:1526
+#: src117/port/lan/port_front_lan.cpp:1550
 msgid "Phones, tablets, Macs, Chromebooks, a television: anything with a browser. The host runs that player’s game and sends it as video; nothing is installed and nothing of the game leaves the host. Not available yet."
 msgstr "Telefoni, tablet, Mac, Chromebook, un televisore: qualsiasi cosa con un browser. L'host esegue la partita di quel giocatore e la invia come video; non si installa nulla e nulla del gioco lascia l'host. Non ancora disponibile."
 
-#: src117/port/lan/port_front_lan.cpp:1528
+#: src117/port/lan/port_front_lan.cpp:1552
 msgid "Installed, from the host"
 msgstr "Installato, dall'host"
 
-#: src117/port/lan/port_front_lan.cpp:1529
+#: src117/port/lan/port_front_lan.cpp:1553
 msgid "Windows and Linux PCs, x64 or ARM. Each plays the game itself at its own resolution, and sends its commands through the host."
 msgstr "PC Windows e Linux, x64 o ARM. Ognuno esegue il gioco da sé alla propria risoluzione, e invia i suoi comandi attraverso l'host."
 
-#: src117/port/lan/port_front_lan.cpp:1546
+#: src117/port/lan/port_front_lan.cpp:1570
 msgid "Both kinds play in one match: every seat sends its commands through the host, and every seat computes the same game from them."
 msgstr "Entrambi i tipi giocano nella stessa partita: ogni posto invia i suoi comandi attraverso l'host, e ogni posto ne calcola la stessa partita."
 
-#: src117/port/lan/port_front_lan.cpp:1548
+#: src117/port/lan/port_front_lan.cpp:1572
 msgid "THIS COPY"
 msgstr "QUESTA COPIA"
 
-#: src117/port/lan/port_front_lan.cpp:1551
+#: src117/port/lan/port_front_lan.cpp:1575
 msgid "the mod {0}"
 msgstr "la mod {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1552
+#: src117/port/lan/port_front_lan.cpp:1576
 msgid "no mod"
 msgstr "nessuna mod"
 
-#: src117/port/lan/port_front_lan.cpp:1554
+#: src117/port/lan/port_front_lan.cpp:1578
 msgid "{0}, {1}, {2}"
 msgstr "{0}, {1}, {2}"
 
-#: src117/port/lan/port_front_lan.cpp:1558
+#: src117/port/lan/port_front_lan.cpp:1582
 msgid "A room plays only with copies that match it: the same version, the same game data ({0}), the same mod."
 msgstr "Una stanza gioca solo con copie che le corrispondono: la stessa versione, gli stessi dati di gioco ({0}), la stessa mod."
 
-#: src117/port/lan/port_front_lan.cpp:1562
+#: src117/port/lan/port_front_lan.cpp:1586
 msgid "Rooms are for this network only, and everyone playing needs their own copy of StarCraft."
 msgstr "Le stanze valgono solo per questa rete, e chi gioca ha bisogno della propria copia di StarCraft."
 
-#: src117/port/lan/port_front_lan.cpp:1572
+#: src117/port/lan/port_front_lan.cpp:1596
 msgid "Join {0}"
 msgstr "Entra in {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1573
+#: src117/port/lan/port_front_lan.cpp:1597
 msgid "The room asks for its password. The host’s console shows it, under Join This Room."
 msgstr "La stanza richiede la sua password. La console dell'host la mostra, sotto Entra in questa stanza."
 
-#: src117/port/lan/port_front_lan.cpp:1578
+#: src117/port/lan/port_front_lan.cpp:1602
 msgid "the password"
 msgstr "la password"
 
-#: src117/port/lan/port_front_lan.cpp:1622
+#: src117/port/lan/port_front_lan.cpp:1646
 msgid "Couldn’t join {0}"
 msgstr "Impossibile entrare in {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1626
+#: src117/port/lan/port_front_lan.cpp:1650
 msgid "Nothing answers in {0}"
 msgstr "Nessuna risposta entro {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1626
+#: src117/port/lan/port_front_lan.cpp:1650
 msgid "The room may have stopped."
 msgstr "La stanza può essersi fermata."
 
-#: src117/port/lan/port_front_lan.cpp:1633
+#: src117/port/lan/port_front_lan.cpp:1657
 msgid "Joining {0}…"
 msgstr "Ingresso in {0}…"
 
-#: src117/port/lan/port_front_lan.cpp:1634
+#: src117/port/lan/port_front_lan.cpp:1658
 msgid "Couldn’t join: {0} {1}"
 msgstr "Impossibile entrare: {0} {1}"
 
-#: src117/port/lan/port_front_lan.cpp:1635
+#: src117/port/lan/port_front_lan.cpp:1659
 msgid "Play with others on this network: host a room here, or join one"
 msgstr "Gioca con altri su questa rete: ospita una stanza qui, o entra in una"
 
-#: src117/port/lan/port_front_lan.cpp:1645
+#: src117/port/lan/port_front_lan.cpp:1669
 msgid "This Network"
 msgstr "Questa rete"
 
-#: src117/port/lan/port_front_lan.cpp:1652
+#: src117/port/lan/port_front_lan.cpp:1676
 msgid "Not available yet. Online play comes later, on the same connection the network uses."
 msgstr "Non ancora disponibile. Il gioco online arriverà più avanti, sulla stessa connessione che usa la rete."
 
-#: src117/port/lan/port_front_lan.cpp:1657
+#: src117/port/lan/port_front_lan.cpp:1681
 msgid "The Original’s Screens"
 msgstr "Le schermate dell'originale"
 
-#: src117/port/lan/port_front_lan.cpp:1661
+#: src117/port/lan/port_front_lan.cpp:1685
 msgid "The original’s screens"
 msgstr "Le schermate dell'originale"
 
-#: src117/port/lan/port_front_lan.cpp:1662
+#: src117/port/lan/port_front_lan.cpp:1686
 msgid "StarCraft’s own multiplayer screens, as the original draws them: Local Area Network, its game list and chat room. Hotkey: O"
 msgstr "Le schermate multigiocatore di StarCraft, come le disegna l'originale: Local Area Network, il suo elenco delle partite e la chat. Hotkey: O"
 
-#: src117/port/lan/port_front_lan.cpp:1670
+#: src117/port/lan/port_front_lan.cpp:1694
 msgid "Host a Room"
 msgstr "Ospita una stanza"
 
-#: src117/port/lan/port_front_lan.cpp:1671
+#: src117/port/lan/port_front_lan.cpp:1695
 msgid "This machine hosts. Everyone else on the network joins with Hyperion installed, from Join a Room."
 msgstr "Questa macchina fa da host. Tutti gli altri sulla rete entrano con Hyperion installato, da Entra in una stanza."
 
-#: src117/port/lan/port_front_lan.cpp:1672
+#: src117/port/lan/port_front_lan.cpp:1696
 msgid "Your room is running: H opens its console."
 msgstr "La tua stanza è in funzione: H apre la sua console."
 
-#: src117/port/lan/port_front_lan.cpp:1673
+#: src117/port/lan/port_front_lan.cpp:1697
 msgid "Installed players cost the host next to nothing; as many as the network holds."
 msgstr "I giocatori con il gioco installato costano all'host quasi nulla; quanti ne regge la rete."
 
-#: src117/port/lan/port_front_lan.cpp:1680
+#: src117/port/lan/port_front_lan.cpp:1704
 msgid "{0} room found on this network"
 msgid_plural "{0} rooms found on this network"
 msgstr[0] "{0} stanza trovata su questa rete"
 msgstr[1] "{0} stanze trovate su questa rete"
 
-#: src117/port/lan/port_front_lan.cpp:1681
+#: src117/port/lan/port_front_lan.cpp:1705
 msgid "Join a Room"
 msgstr "Entra in una stanza"
 
-#: src117/port/lan/port_front_lan.cpp:1682
+#: src117/port/lan/port_front_lan.cpp:1706
 msgid "Play in a room on this network. Pick one below, or type its address. This copy plays there itself, as one of the room’s installed players."
 msgstr "Gioca in una stanza su questa rete. Scegline una qui sotto, o digita il suo indirizzo. Questa copia gioca lì da sé, come uno dei giocatori della stanza con il gioco installato."
 
-#: src117/port/lan/port_front_lan.cpp:1684
+#: src117/port/lan/port_front_lan.cpp:1708
 msgid "{0}, {1} this copy can join"
 msgstr "{0}, {1} in cui questa copia può entrare"
 
-#: src117/port/lan/port_front_lan.cpp:1748
+#: src117/port/lan/port_front_lan.cpp:1772
 msgid "Hosted on {0}"
 msgstr "Ospitata su {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1759
+#: src117/port/lan/port_front_lan.cpp:1783
 msgid "The Lobby"
 msgstr "La lobby"
 
-#: src117/port/lan/port_front_lan.cpp:1762
+#: src117/port/lan/port_front_lan.cpp:1786
 msgid "The lobby"
 msgstr "La lobby"
 
-#: src117/port/lan/port_front_lan.cpp:1763
+#: src117/port/lan/port_front_lan.cpp:1787
 msgid "The host seats you in a match; its lobby opens then."
 msgstr "L'host ti assegna un posto in una partita; la sua lobby si apre allora."
 
-#: src117/port/lan/port_front_lan.cpp:1768
+#: src117/port/lan/port_front_lan.cpp:1792
 msgid "Leave Room"
 msgstr "Esci dalla stanza"
 
-#: src117/port/lan/port_front_lan.cpp:1772
+#: src117/port/lan/port_front_lan.cpp:1796
 msgid "Matches"
 msgstr "Partite"
 
-#: src117/port/lan/port_front_lan.cpp:1775
+#: src117/port/lan/port_front_lan.cpp:1799
 msgid "No match yet. The host opens one, and seats the room’s people in it."
 msgstr "Ancora nessuna partita. L'host ne apre una, e vi assegna i posti alle persone della stanza."
 
-#: src117/port/lan/port_front_lan.cpp:1789
+#: src117/port/lan/port_front_lan.cpp:1813
 #: src117/port/lan/port_front_lanhost.cpp:543
 msgid "Choosing a map"
 msgstr "Scelta della mappa"
 
-#: src117/port/lan/port_front_lan.cpp:1790
+#: src117/port/lan/port_front_lan.cpp:1814
 msgid "in its lobby"
 msgstr "nella sua lobby"
 
-#: src117/port/lan/port_front_lan.cpp:1791
+#: src117/port/lan/port_front_lan.cpp:1815
 #: src117/port/lan/port_front_lanhost.cpp:545
 msgid "starting"
 msgstr "in avvio"
 
-#: src117/port/lan/port_front_lan.cpp:1792
+#: src117/port/lan/port_front_lan.cpp:1816
 msgid "playing for {0}"
 msgstr "in corso da {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1793
+#: src117/port/lan/port_front_lan.cpp:1817
 #: src117/port/lan/port_front_lanhost.cpp:546
 msgid "ended"
 msgstr "terminata"
 
-#: src117/port/lan/port_front_lan.cpp:1794
+#: src117/port/lan/port_front_lan.cpp:1818
 #: src117/port/lan/port_front_lanhost.cpp:547
 msgid "ended: {0}"
 msgstr "terminata: {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1811
+#: src117/port/lan/port_front_lan.cpp:1835
 #: src117/port/lan/port_front_lanhost.cpp:503
 msgid "Watch this match"
 msgstr "Guarda questa partita"
 
-#: src117/port/lan/port_front_lan.cpp:1814
+#: src117/port/lan/port_front_lan.cpp:1838
 msgid "From this machine, {0} s behind the players, with the replay player’s camera."
 msgstr "Da questa macchina, con {0} s di ritardo sui giocatori, con la telecamera del lettore di replay."
 
-#: src117/port/lan/port_front_lan.cpp:1820
+#: src117/port/lan/port_front_lan.cpp:1844
 msgid "In the Room"
 msgstr "Nella stanza"
 
@@ -8413,29 +8442,29 @@ msgstr "La tua stanza è ancora aperta"
 msgid "This console is back in it."
 msgstr "Questa console è tornata al suo interno."
 
-#: src117/port/lan/port_front_lan.cpp:1947
+#: src117/port/lan/port_front_lan.cpp:1971
 msgid "The Match Did Not Come"
 msgstr "La partita non è arrivata"
 
-#: src117/port/lan/port_front_lan.cpp:1947
+#: src117/port/lan/port_front_lan.cpp:1971
 msgid "The room sent nothing of it. It may have ended."
 msgstr "La stanza non ne ha inviato nulla. Può essere terminata."
 
-#: src117/port/lan/port_front_lan.cpp:2095
+#: src117/port/lan/port_front_lan.cpp:2119
 msgid "The server stopped"
 msgstr "Il server si è fermato"
 
-#: src117/port/lan/port_front_lan.cpp:2095
+#: src117/port/lan/port_front_lan.cpp:2119
 msgid "Nobody can join until it starts again."
 msgstr "Nessuno può entrare finché non riparte."
 
-#: src117/port/lan/port_front_lan.cpp:2102
+#: src117/port/lan/port_front_lan.cpp:2126
 msgid "The match did not start"
 msgstr "La partita non è iniziata"
 
-#: src117/port/lan/port_front_lan.cpp:2115
-#: src117/port/lan/port_front_lan.cpp:2124
-#: src117/port/lan/port_front_lan.cpp:2138
+#: src117/port/lan/port_front_lan.cpp:2139
+#: src117/port/lan/port_front_lan.cpp:2148
+#: src117/port/lan/port_front_lan.cpp:2162
 msgid "The match could not start here"
 msgstr "La partita non è potuta iniziare qui"
 
@@ -8485,7 +8514,7 @@ msgid "Playing {0}"
 msgstr "Sta giocando {0}"
 
 #: src117/port/lan/port_front_lan.cpp:423
-#: src117/port/lan/port_front_lan.cpp:1801
+#: src117/port/lan/port_front_lan.cpp:1825
 #: src117/port/lan/port_front_lanhost.cpp:578
 #: src117/port/lan/port_lanlobby.cpp:108
 msgid "a computer"
@@ -8755,7 +8784,7 @@ msgid "By time in the room"
 msgstr "Per tempo nella stanza"
 
 #: src117/port/lan/port_front_landevices.cpp:335
-#: src117/port/lan/port_lanroom_proto.cpp:692
+#: src117/port/lan/port_lanroom_proto.cpp:743
 msgid "That match is not being played now."
 msgstr "Quella partita non è in corso adesso."
 
@@ -9438,60 +9467,60 @@ msgstr "ognuno con il motivo, sulla sua scheda"
 msgid "Nobody has joined yet. The join card on the right says how."
 msgstr "Ancora nessuno è entrato. La scheda d'ingresso a destra spiega come."
 
-#: src117/port/lan/port_lanclient.cpp:241
+#: src117/port/lan/port_lanclient.cpp:257
 msgid "Another version"
 msgstr "Un'altra versione"
 
-#: src117/port/lan/port_lanclient.cpp:243
+#: src117/port/lan/port_lanclient.cpp:259
 msgid "Its host plays {0}, and this copy is {1}: the two compute the game differently."
 msgstr "Il suo host usa {0}, e questa copia è {1}: le due calcolano la partita in modo diverso."
 
-#: src117/port/lan/port_lanclient.cpp:245
+#: src117/port/lan/port_lanclient.cpp:261
 msgid "Its host's page offers its version to install beside this one."
 msgstr "La pagina del suo host offre la sua versione da installare accanto a questa."
 
-#: src117/port/lan/port_lanclient.cpp:247
+#: src117/port/lan/port_lanclient.cpp:263
 msgid "Needs a mod"
 msgstr "Richiede una mod"
 
-#: src117/port/lan/port_lanclient.cpp:249
+#: src117/port/lan/port_lanclient.cpp:265
 msgid "This copy has the mod {0} active, and the room plays without one."
 msgstr "Questa copia ha la mod {0} attiva, e la stanza gioca senza mod."
 
-#: src117/port/lan/port_lanclient.cpp:250
+#: src117/port/lan/port_lanclient.cpp:266
 msgid "Its host plays the mod {0}, which this copy does not have active."
 msgstr "Il suo host usa la mod {0}, che questa copia non ha attiva."
 
-#: src117/port/lan/port_lanclient.cpp:251
-#: src117/port/lan/port_lanroom_proto.cpp:369
+#: src117/port/lan/port_lanclient.cpp:267
+#: src117/port/lan/port_lanroom_proto.cpp:412
 msgid "Turn it off under Mods, then join."
 msgstr "Disattivala in Mod, poi entra."
 
-#: src117/port/lan/port_lanclient.cpp:252
+#: src117/port/lan/port_lanclient.cpp:268
 msgid "Activate {0} under Mods, then join."
 msgstr "Attiva {0} in Mod, poi entra."
 
-#: src117/port/lan/port_lanclient.cpp:254
+#: src117/port/lan/port_lanclient.cpp:270
 msgid "Other game data"
 msgstr "Altri dati di gioco"
 
-#: src117/port/lan/port_lanclient.cpp:256
+#: src117/port/lan/port_lanclient.cpp:272
 msgid "Its game data is not this copy's (fingerprint {0})."
 msgstr "I suoi dati di gioco non sono quelli di questa copia (impronta {0})."
 
-#: src117/port/lan/port_lanclient.cpp:257
+#: src117/port/lan/port_lanclient.cpp:273
 msgid "Its host's page has the game data to install."
 msgstr "La pagina del suo host ha i dati di gioco da installare."
 
-#: src117/port/lan/port_lanclient.cpp:260
+#: src117/port/lan/port_lanclient.cpp:276
 msgid "Plays here"
 msgstr "Si gioca qui"
 
-#: src117/port/lan/port_lanclient.cpp:390
+#: src117/port/lan/port_lanclient.cpp:406
 msgid "The host removed you from the room."
 msgstr "L'host ti ha rimosso dalla stanza."
 
-#: src117/port/lan/port_lanclient.cpp:392
+#: src117/port/lan/port_lanclient.cpp:408
 msgid "The room has closed."
 msgstr "La stanza è stata chiusa."
 
@@ -9528,51 +9557,51 @@ msgstr "Una partita"
 msgid "Starting the match"
 msgstr "Avvio della partita"
 
-#: src117/port/lan/port_lanroom_proto.cpp:323
+#: src117/port/lan/port_lanroom_proto.cpp:366
 msgid "The host's web\\play folder is from another build of Hyperion; play streamed meanwhile."
 msgstr "La cartella web\\play dell'host è di un'altra build di Hyperion; nel frattempo gioca in streaming."
 
-#: src117/port/lan/port_lanroom_proto.cpp:354
+#: src117/port/lan/port_lanroom_proto.cpp:397
 msgid "The room is not taking anyone now."
 msgstr "La stanza non accetta nessuno adesso."
 
-#: src117/port/lan/port_lanroom_proto.cpp:355
+#: src117/port/lan/port_lanroom_proto.cpp:398
 msgid "Ask the host to start the server."
 msgstr "Chiedi all'host di avviare il server."
 
-#: src117/port/lan/port_lanroom_proto.cpp:358
+#: src117/port/lan/port_lanroom_proto.cpp:401
 msgid "Choose another name."
 msgstr "Scegli un altro nome."
 
-#: src117/port/lan/port_lanroom_proto.cpp:360
+#: src117/port/lan/port_lanroom_proto.cpp:403
 msgid "The room asks for its password."
 msgstr "La stanza richiede la sua password."
 
-#: src117/port/lan/port_lanroom_proto.cpp:360
+#: src117/port/lan/port_lanroom_proto.cpp:403
 msgid "That is not the room's password."
 msgstr "Quella non è la password della stanza."
 
-#: src117/port/lan/port_lanroom_proto.cpp:361
+#: src117/port/lan/port_lanroom_proto.cpp:404
 msgid "The host's console shows it, under Join This Room."
 msgstr "La console dell'host la mostra, sotto Entra in questa stanza."
 
-#: src117/port/lan/port_lanroom_proto.cpp:365
+#: src117/port/lan/port_lanroom_proto.cpp:408
 msgid "The host's page offers the room's version to install."
 msgstr "La pagina dell'host offre la versione della stanza da installare."
 
-#: src117/port/lan/port_lanroom_proto.cpp:369
+#: src117/port/lan/port_lanroom_proto.cpp:412
 msgid "Activate it under Mods, then join."
 msgstr "Attivala in Mod, poi entra."
 
-#: src117/port/lan/port_lanroom_proto.cpp:372
+#: src117/port/lan/port_lanroom_proto.cpp:415
 msgid "The host's page has the game data to install."
 msgstr "La pagina dell'host ha i dati di gioco da installare."
 
-#: src117/port/lan/port_lanroom_proto.cpp:545
+#: src117/port/lan/port_lanroom_proto.cpp:588
 msgid "The room has a new password."
 msgstr "La stanza ha una nuova password."
 
-#: src117/port/lan/port_lanroom_proto.cpp:562
+#: src117/port/lan/port_lanroom_proto.cpp:613
 msgid "The server stops after the last match; nobody new can join."
 msgstr "Il server si ferma dopo l'ultima partita; non può entrare nessun altro."
 
