@@ -8,7 +8,9 @@ static int sgnHelpSndTimer;
 #endif
 #include "oc_data.h"  // Hyperion: OC_VA
 #include <vector>  // Hyperion: one worker-killed alert per base in a frame
+#include <math.h>  // Hyperion: the advisor recording's volume gain
 #include "../h/gamesnd.h"
+#include "../port/data/port_soundshot.h"  // Hyperion: the worker-specific advisor recordings
 #include "../gen/globals117.h"
 
 // Hyperion: worker-killed alerts are presentation state, not part of the game's
@@ -1039,12 +1041,26 @@ void __fastcall gamesnd_under_attack(CUnit *__restrict pUnit) {
   statport_talking_portrait(pUnit, nDeadline, 1, 0x10, nSoundId);
 }
 
-// Hyperion: the stock tables have no worker-specific under-attack advisor cue.
-// Keep the fallback in one helper so exact clips can replace it without touching
-// the alert path. These are zerg_advisor_zadupd01, terran_advisor_tadupd01 and
-// protoss_advisor_padupd01 in sfxdata.tbl.
-static int gamesnd_worker_killed_cue(BYTE bRace) {
-  return 120 + bRace;
+// Hyperion's own worker-specific advisor recordings, never the stock attack cue. Use the same
+// volume table as gamesnd_play's advisor path; speech-muted alerts keep its one-fifth volume.
+#ifndef sgSndVolTbl_g
+#ifdef OC_DLL_MODE
+#define sgSndVolTbl_g (reinterpret_cast<const LONG *>(OC_VA(0x4EFC00u)))
+#else
+extern const LONG sgSndVolTbl_g[100];
+#endif
+#endif
+static bool gamesnd_worker_killed_cue(BYTE bRace) {
+  if (gnSfxVolume == 0)
+    return false;
+  const int nVolume = gbSpeechMuted_g != 0 ? 99 / 5 : 99;
+  int nIndex = gnSfxVolume * nVolume / 100;
+  if (nIndex < 0)
+    nIndex = 0;
+  if (nIndex > 99)
+    nIndex = 99;
+  const float fGain = powf(10.0f, static_cast<float>(sgSndVolTbl_g[nIndex]) / 2000.0f);
+  return PortSoundWorkerAlert(bRace, fGain);
 }
 
 // The completed friendly resource depot whose centre is nearest the killing

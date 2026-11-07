@@ -1,0 +1,21 @@
+Exact spoken text in all three recordings: "Our workers are getting killed."
+
+These are new synthetic, race-themed advisor recordings made for Hyperion, not Blizzard audio
+and not imitations of a specific actor. The generic "forces under attack" cue is never used
+for this alert.
+
+Voices:
+- worker-terran.ogg: Piper en_US-lessac-medium, length 0.95, noise 0.35/0.45; radio band
+  filtering, light presence boost and compression.
+- worker-protoss.ogg: Piper en_US-libritts_r-medium, speaker 11, length 0.96, noise
+  0.30/0.40; slightly raised pitch, short restrained echoes and compression.
+- worker-zerg.ogg: Piper en_US-lessac-medium, length 1.02, noise 0.40/0.50; lowered pitch,
+  low-mid weight, short restrained echoes and compression.
+
+Final masters: Ogg Vorbis, 48 kHz, loudnorm I=-16, TP=-1.5, LRA=9.
+Durations: Terran 1.521 s, Protoss 1.235 s, Zerg 1.870 s.
+
+Validation on 2026-11-07: whisper.cpp ggml-large-v3-turbo transcribed every final Ogg
+independently as exactly "Our workers are getting killed." ffmpeg/ffprobe verified that
+all three decode successfully and are non-empty. See engine/tools/porttest/worker_alert_test.cpp
+for the runtime asset/playback-selection checks.

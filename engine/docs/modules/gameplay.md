@@ -595,8 +595,10 @@ Mineral saturation displays the actual assignment above the optimum (for example
 returning gas worker keeps its refinery association through `pUnionC8_SavedOrderTarget`, so `3 / 3`
 stays steady and takes the saturated colour. Nydus labels are 12 px in the world and 4 px on the
 minimap, with a thin white link in both; saved-camera labels are 7 px. A lethal enemy blow to a local
-worker emits the red attack ping at each affected base even for simultaneous deaths, with a
-race-appropriate advisor warning batched separately from the pings.
+worker emits the red attack ping at each affected base even for simultaneous deaths. The dedicated
+advisor plays Hyperion's own race-themed Terran, Protoss or Zerg recording of “Our workers are
+getting killed” from `huds/files`, never the generic attack cue; its voice batching and cooldown do
+not suppress any base's ping.
 
 ### The score
 
