@@ -58,8 +58,8 @@ UiColor Alpha(UiColor c, float a)
 
 // The list's order and its groups (mutators.js GROUPS), and what each one does in a sentence
 // over its picture (gist).
-const int kOrder[] = {MUT_MINERALS, MUT_GAS,  MUT_RICH,  MUT_START, MUT_WORKERS, MUT_SUPPLY,
-                      MUT_BOOST,    MUT_NOCAP, MUT_FOG, MUT_BUILD, MUT_TECH,    MUT_ADDON,
+const int kOrder[] = {MUT_MINERALS, MUT_GAS,  MUT_RICH,  MUT_START, MUT_WORKERS, MUT_ANTIMETA,
+                      MUT_SUPPLY,   MUT_BOOST, MUT_NOCAP, MUT_FOG, MUT_BUILD, MUT_TECH, MUT_ADDON,
                       MUT_NOARMYKEY, MUT_ENERGY, MUT_NEWBIE, MUT_AUTOWORKERS, MUT_AUTOMINE, MUT_VICTORY};
 const int kOrderCount = static_cast<int>(sizeof kOrder / sizeof kOrder[0]);
 struct Group {
@@ -67,10 +67,10 @@ struct Group {
   int nFirst, nCount;  // in kOrder
 };
 const Group kGroups[] = {{PT_("Resources"), 0, 3},
-                         {PT_("The start"), 3, 2},
-                         {PT_("Supply"), 5, 3},
-                         {PT_("Fog, time and tech"), 8, 4},
-                         {PT_("Play"), 12, 6}};
+                         {PT_("The start"), 3, 3},
+                         {PT_("Supply"), 6, 3},
+                         {PT_("Fog, time and tech"), 9, 4},
+                         {PT_("Play"), 13, 6}};
 const char *const kGists[MUT_COUNT] = {
     PT_("How much each mineral field holds, so how long a base can be mined."),
     PT_("How much each geyser holds before it runs dry."),
@@ -90,6 +90,7 @@ const char *const kGists[MUT_COUNT] = {
     PT_("A town hall with nothing training and supply to spare trains its worker by itself."),
     PT_("Each base's patches take up to three workers, each geyser three; once a base is full, the workers that are free go to the next base with room, and to the built geysers."),
     PT_("Lose every production building and your side is out; the last side with one wins."),
+    PT_("How many workers and how much minerals and gas each player starts with, rolled fresh every game."),
 };
 
 int g_nSel = MUT_MINERALS;  // the mutator briefed
@@ -1259,6 +1260,7 @@ void DrawPicture(float x, float y, float w, float h, void *pCtx)
   case MUT_RICH: StillRich(p, m); break;
   case MUT_START: StillStart(p, m); break;
   case MUT_WORKERS: StillWorkers(p, m); break;
+  case MUT_ANTIMETA: StillStart(p, m); break;  // the workers and resources rolled, the start's picture
   case MUT_SUPPLY: StillSupply(p, m); break;
   case MUT_BOOST: StillBoost(p, m); break;
   case MUT_NOCAP: StillSupply(p, m); break;  // the cheapened depots and pylons, the supply picture's
@@ -1777,7 +1779,7 @@ bool MutatorsTab(float x, float y, float w, float h, const MutatorsSetUp &s)
       Text(MutatorName(i), UI_FACE_BOLD, Fs(16), 0.0f, kScInkLabel);
       // the new mutator's tag until it is chosen: then its choice takes the room ("Rich resources"
       // and "Outside a radius" with the tag wrapped)
-      if ((i == MUT_RICH || i == MUT_NOCAP || i == MUT_ADDON) && !bOn)
+      if ((i == MUT_RICH || i == MUT_NOCAP || i == MUT_ADDON || i == MUT_ANTIMETA) && !bOn)
         NewTag();
       Spacer();
       Text(bOn ? Keep(MutatorValueName(m, i)) : PortText("Classic"), bOn ? UI_FACE_BOLD : UI_FACE_TEXT, Fs(15), 0.0f,

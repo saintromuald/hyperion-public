@@ -505,6 +505,18 @@ with no manual steps beyond the toolchain installs.
         that need no StarCraft files;
       - `engine/docs/modules/lan.md` gained the "Online play" section; the parked
         item is un-parked.
-      Left for later, noted in the docs: the console's transport toggle (the
-      scripted console sets `"transport":"sb"` directly today) and the two-seat
-      gates on CI (they need the game's files).
+- [x] **The console's transport toggle**: the host's lobby (the room's
+      skirmish set-up) carries the match's transport beside Start and Back —
+      `THIS NETWORK` (the room's own relay) or `ONLINE (RELAY)`; the guest sees
+      the host's choice as the same strip. The choice rides the match message
+      (`"transport"`), the room's JSON carries it, and the room applies the
+      change like the rules'. The LAN reference flow also works again
+      (`lan_ref.sh`: the scripted console's start now carries the match id —
+      two seats play a room match, hashes agreed).
+      Left for later, noted in the docs: the two-seat gates on CI (they need
+      the game's files).
+- [x] **The release branch**: the finished work is on `release-v0.7.1`
+      (pushed to the fork), alongside the working branch `netcode/sb-rally-port`.
+      The fork's push rules decline the `pre-release` line while it carries the
+      vendored ShieldBattery platform (the ladder port's Phase 0 — a push-rule
+      content scan, not a code problem).

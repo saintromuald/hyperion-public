@@ -216,7 +216,13 @@ std::vector<LanRoomFound> LanClientRooms(void)
     PortJson info;
     if (!PortJsonParse(r.S().c_str(), &info))
       continue;
-    Heard &h = g_heard[LanNet::AddrText(a.dwAddr) + ":" + std::to_string(static_cast<int>(info["port"].Num()))];
+    // a directory answers with rooms it has heard from (the same summary, with "host" the
+    // address the players join at): the reply's own address is then the directory's, not the
+    // room's. A room on this network leaves "host" out; its address is where the reply came from.
+    std::string addr = LanNet::AddrText(a.dwAddr);
+    if (info["host"].kind == PortJson::STRING && !info["host"].Str().empty())
+      addr = info["host"].Str();
+    Heard &h = g_heard[addr + ":" + std::to_string(static_cast<int>(info["port"].Num()))];
     h.info = info;
     h.qwSeen = qwNow;
     h.nPort = static_cast<int>(info["port"].Num(LanNet::GamePort()));
@@ -226,6 +232,8 @@ std::vector<LanRoomFound> LanClientRooms(void)
     LanNet::Query();
   }
   std::vector<LanRoomFound> out;
+  std::vector<std::string> seen;  // room names, once: a directory's row for a room this network
+                                  // also answers for is the same room, not a second one
   for (auto it = g_heard.begin(); it != g_heard.end();) {
     if (qwNow - it->second.qwSeen > 5000) {
       it = g_heard.erase(it);
@@ -235,6 +243,14 @@ std::vector<LanRoomFound> LanClientRooms(void)
     f.addr = it->first.substr(0, it->first.find(':'));
     f.nPort = it->second.nPort;
     f.info = it->second.info;
+    f.bNetcode = f.info["netcode"].b;
+    const std::string name = f.info["name"].Str();
+    if (!name.empty() && std::find(seen.begin(), seen.end(), name) != seen.end()) {
+      ++it;
+      continue;
+    }
+    if (!name.empty())
+      seen.push_back(name);
     const PortJson &i = f.info;
     const std::string version = i["version"].Str(), mod = i["mod"].Str(), fp = i["fp"].Str();
     if (version != HYPERION_VERSION_TEXT || static_cast<int>(i["sim"].Num()) != HX_SIM_REVISION) {

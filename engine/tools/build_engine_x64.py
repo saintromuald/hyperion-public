@@ -132,7 +132,24 @@ LIBS = ["user32.lib", "shell32.lib", "imm32.lib", "gdi32.lib", "advapi32.lib",
 
 
 def vs_env():
-    out = subprocess.run('cmd /s /c ""%s" amd64 >nul && set"' % VCVARS,
+    vcvars = os.environ.get("HYPERION_VCVARS")
+    if not vcvars or not os.path.isfile(vcvars):
+        # the newest Visual Studio's (vswhere; a CI runner or another VS than the build's own),
+        # then the path this build expects
+        vswhere = r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+        if os.path.isfile(vswhere):
+            found = subprocess.run(
+                [vswhere, "-latest", "-products", "*",
+                 "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                 "-property", "installationPath"],
+                capture_output=True, text=True).stdout.strip()
+            if found:
+                maybe = os.path.join(found, "VC", "Auxiliary", "Build", "vcvarsall.bat")
+                if os.path.isfile(maybe):
+                    vcvars = maybe
+    if not vcvars or not os.path.isfile(vcvars):
+        vcvars = VCVARS
+    out = subprocess.run('cmd /s /c ""%s" amd64 >nul && set"' % vcvars,
                          capture_output=True, text=True, check=True).stdout
     env = {k.upper(): v for k, v in os.environ.items()}
     for line in out.splitlines():

@@ -200,6 +200,7 @@ void EndMatch(Match &m, const std::string &why);
 void SendJson(Device &d, const std::string &json);
 std::string RoomJson(const Device *pFor);
 void Advertise(void);
+void Announce(void);
 void Heard(Device &d, const std::string &text);
 
 // This machine's work (port_lanroom_host.cpp).

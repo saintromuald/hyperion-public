@@ -18,6 +18,7 @@
 #include "port_bench.h"
 #include "../gameplay/port_launch.h"  // PortLaunchBench, PortLaunchBenchReplay
 #include "../gameplay/port_mutators.h"  // MutatorsOfGame, MutatorsJson
+#include "../gameplay/port_pluto.h"    // PlutoGameStart, PlutoNoteResult
 #include "../gameplay/port_session.h"  // SessionClear
 #include "../gameplay/port_teams.h"    // TeamsSidesLeft
 #include "../platform/port_paths.h"  // PortCommandOptions, PortDataFolder, PortOptions
@@ -379,6 +380,12 @@ void PortBenchEnd(const char *pszReason)
   }
   // the state the game ended in, as the replay check hashes it: its domains folded into one
   const unsigned long long qEnd = SyncHashFold();
+  int nLastPlayer = -1;
+  TeamsSidesLeft(&nLastPlayer);
+  // Only a completed elimination has a truthful bandit result. A frame-limit
+  // finish or an aborted run is not a loss and must not train the policy.
+  if (strcmp(pszReason, "last") == 0)
+    PlutoNoteResult(nLastPlayer);
   char sz[256];
   std::string t = "{\r\n";
   snprintf(sz, sizeof sz, "  \"ended\": \"%s\",\r\n  \"seconds\": %.1f,\r\n", pszReason, dSeconds);
@@ -394,8 +401,10 @@ void PortBenchEnd(const char *pszReason)
   snprintf(sz, sizeof sz, "  \"game_frames\": %u,\r\n  \"game_frames_per_s\": %.1f,\r\n  \"units_most\": %u,\r\n",
            nGameFrames, dSeconds > 0.0 ? nGameFrames / dSeconds : 0.0, g_nUnitsMost);
   t += sz;
-  snprintf(sz, sizeof sz, "  \"units_most_at\": %u,\r\n  \"end_frame\": %u,\r\n  \"end_state\": \"%016llX\",\r\n",
-           g_dwUnitsMostAt, oc_dwReplayFrame, qEnd);
+  snprintf(sz, sizeof sz,
+           "  \"units_most_at\": %u,\r\n  \"end_frame\": %u,\r\n  \"end_state\": \"%016llX\",\r\n"
+           "  \"last_player\": %d,\r\n",
+           g_dwUnitsMostAt, oc_dwReplayFrame, qEnd, nLastPlayer);
   t += sz;
   t += "  \"ms_per_game_frame\": {";
   for (int i = 0; i < PERF_PARTS; ++i) {
@@ -441,11 +450,15 @@ void PortBenchEnd(const char *pszReason)
       continue;
     SyncSlot slot;
     SyncSlotRead(s, &slot);
+    const std::string name = PortJsonQuote(gPlayerData[s].szName);
     snprintf(sz, sizeof sz,
-             "%s\r\n    {\"slot\": %d, \"race\": %d, \"team\": %d, \"level\": \"%s\", \"minerals_gathered\": %d, "
-             "\"gas_gathered\": %d, \"units\": %d}",
-             bFirst ? "" : ",", s, gPlayerData[s].nRace, gPlayerData[s].nTeam, AiLevelName(AiProfileOf(s).bLevel),
-             static_cast<int>(slot.nMineralsGathered), static_cast<int>(slot.nGasGathered), anUnits[s]);
+             "%s\r\n    {\"slot\": %d, \"name\": %s, \"race\": %d, \"team\": %d, \"level\": \"%s\", \"minerals\": %d, \"gas\": %d, "
+             "\"minerals_gathered\": %d, \"gas_gathered\": %d, \"units\": %d, "
+             "\"units_made\": %u, \"units_lost\": %u, \"units_killed\": %u}",
+             bFirst ? "" : ",", s, name.c_str(), gPlayerData[s].nRace, gPlayerData[s].nTeam, AiLevelName(AiProfileOf(s).bLevel),
+             static_cast<int>(slot.nMinerals), static_cast<int>(slot.nGas),
+             static_cast<int>(slot.nMineralsGathered), static_cast<int>(slot.nGasGathered), anUnits[s],
+             slot.adwScores[2], slot.adwScores[3], slot.adwScores[4]);
     t += sz;
     bFirst = false;
   }
@@ -969,6 +982,9 @@ void PortBenchFrame(void)
   }
   // the run's clock starts with its first game frame, past the loading
   if (PortBenchPlaying() && !PortBenchRunning() && g_endReason.empty()) {
+    // The made game's bridge closed with that game. This transition, not an
+    // ordinary replay's setup, is where the live benchmark run begins.
+    PlutoGameStart();
     QueryPerformanceCounter(&g_start);
     g_lastShown = g_start;
     ClearRun();

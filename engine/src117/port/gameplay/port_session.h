@@ -74,6 +74,9 @@ struct MutatorSet {
   // Production victory (the user, 2026-11-07): a side with no live production buildings loses.
   // Off by default; teams are counted together, and incomplete buildings still count.
   int nVictory = 0;        // MUTATOR_VICTORY_*: the map's own conditions, or production victory
+  // The anti-meta start: workers and starting resources rolled fresh from the shared game seed.
+  // The flag itself is not recorded; the rolled values are what replays and saves preserve.
+  int nAntiMeta = 0;
 };
 
 struct PortSession {

@@ -4,6 +4,7 @@
 // transport only.
 #include "port_lanroom_internal.h"
 #include <stdio.h>
+#include <stdlib.h>  // atoi
 #include "../../../hyperion/version.h"  // HYPERION_VERSION_TEXT
 #include "../../h/hxsim.h"              // HX_SIM_REVISION
 #include "port_lannet.h"
@@ -209,8 +210,9 @@ std::string RoomJson(const Device *pFor)
   return s + "]}";
 }
 
-// The summary a query is answered with, and Multiplayer lists.
-void Advertise(void)
+// The summary a query is answered with, and Multiplayer lists: a room's facts plus, when the
+// host names an address (an announce to a directory), the address the players join at.
+std::string AdvertJson(const std::string &host)
 {
   int nPeople = 0, nLive = 0;
   for (const auto &kv : g_devices)
@@ -218,18 +220,59 @@ void Advertise(void)
                !Nobody(kv.second);
   for (const auto &kv : g_matches)
     nLive += kv.second->state == "live";
-  const std::string json = "{\"name\":" + PortJsonQuote(g_name) + ",\"machine\":" + PortJsonQuote(g_machine) +
-                           ",\"port\":" + std::to_string(LanNet::GamePort()) + ",\"web\":" + std::to_string(LanWeb::Port()) +
-                           ",\"version\":" + PortJsonQuote(HYPERION_VERSION_TEXT) + ",\"sim\":" + std::to_string(HX_SIM_REVISION) +
-                           ",\"fp\":" + PortJsonQuote(Setting("fp", "")) + ",\"mod\":" + PortJsonQuote(Setting("mod", "")) +
-                           ",\"game\":" + PortJsonQuote(Setting("game", "Brood War")) + ",\"rules\":" + PortJsonQuote(Setting("rules", "classic")) +
-                           ",\"people\":" + std::to_string(nPeople) + ",\"matches\":" + std::to_string(nLive) +
-                           ",\"password\":" + Bool(PasswordOn()) + ",\"cup\":false}";
+  // netcode on: the room has a relay coordinator, so its matches can play online (and do, by
+  // default -- defaultTransport "sb")
+  const bool bNetcode = !Setting("sbCoordinator", "").empty() && !Setting("sbClientSeed", "").empty();
+  std::string json = "{\"name\":" + PortJsonQuote(g_name) + ",\"machine\":" + PortJsonQuote(g_machine) +
+                     ",\"port\":" + std::to_string(LanNet::GamePort()) + ",\"web\":" + std::to_string(LanWeb::Port()) +
+                     ",\"version\":" + PortJsonQuote(HYPERION_VERSION_TEXT) + ",\"sim\":" + std::to_string(HX_SIM_REVISION) +
+                     ",\"fp\":" + PortJsonQuote(Setting("fp", "")) + ",\"mod\":" + PortJsonQuote(Setting("mod", "")) +
+                     ",\"game\":" + PortJsonQuote(Setting("game", "Brood War")) + ",\"rules\":" + PortJsonQuote(Setting("rules", "classic")) +
+                     ",\"people\":" + std::to_string(nPeople) + ",\"matches\":" + std::to_string(nLive) +
+                     ",\"password\":" + Bool(PasswordOn()) + ",\"cup\":false,\"netcode\":" + Bool(bNetcode);
+  if (!host.empty())
+    json += ",\"host\":" + PortJsonQuote(host);
+  return json + "}";
+}
+
+void Advertise(void)
+{
   Writer w;
   w.W(kProtocol);
   w.B(ADVERT_ROOM);
-  w.S(json);
+  w.S(AdvertJson(""));
   LanNet::SetAdvert(g_bRunning ? w.v : std::vector<uint8_t>());
+}
+
+// The announce to a directory (lanroom.json "announce": "host:port", with "announceHost" the
+// address players join at and "announceSecret" the directory's shared secret): the summary as
+// one UDP datagram, "HXLR", every ten seconds. The directory lists the room; its own page and
+// each joiner's game list show it until the announces stop.
+void Announce(void)
+{
+  const std::string setting = Setting("announce", "");
+  if (setting.empty() || !g_bRunning)
+    return;
+  std::string where = setting;
+  const size_t colon = where.find(':');
+  int port = LanNet::GamePort() - 1;  // where a directory answers the game's queries
+  if (colon != std::string::npos) {
+    port = atoi(where.c_str() + colon + 1);
+    where = where.substr(0, colon);
+  }
+  if (port < 1 || port > 65535)
+    port = LanNet::GamePort() - 1;
+  uint32_t addr = 0;
+  if (!LanNet::AddrParse(where.c_str(), &addr))
+    return;
+  std::string payload = "HXLR" + AdvertJson(Setting("announceHost", ""));
+  const std::string secret = Setting("announceSecret", "");
+  if (!secret.empty()) {
+    payload.pop_back();  // the summary's closing brace
+    payload += ",\"secret\":" + PortJsonQuote(secret) + "}";
+  }
+  payload += '\0';
+  LanNet::SendTo(addr, port, payload.data(), payload.size());
 }
 
 // A device's hello: who it is, and whether its copy plays here. A refused device stays in the
@@ -549,8 +592,16 @@ void Admin(Device &d, const std::string &t, const PortJson &j)
     PortJson parsed;
     const std::string raw = j["raw"].Str();
     if (!raw.empty() && PortJsonParse(raw.c_str(), &parsed)) {
+      // the keys that live in lanroom.json by hand -- the netcode's coordinator and the
+      // directory's announce -- are not the console's to keep: its Settings screen knows
+      // nothing of them and would write them away. They ride along on every save.
+      static const char *const kKept[] = {"announce", "announceHost", "announceSecret", "defaultTransport",
+                                          "sbCoordinator", "sbTenant", "sbKid", "sbClientSeed", "sbServerName"};
+      for (const char *pszKey : kKept)
+        if (g_settings[pszKey].kind != PortJson::NONE && parsed[pszKey].kind == PortJson::NONE)
+          parsed.members.emplace_back(PortJsonMember{pszKey, g_settings[pszKey]});
       g_settings = parsed;
-      g_settingsText = raw;
+      g_settingsText = PortJsonWrite(parsed);
       SettingsSave();
     }
     if (g_settings["name"].kind == PortJson::STRING && !g_settings["name"].s.empty())

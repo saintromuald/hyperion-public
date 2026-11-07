@@ -77,6 +77,7 @@
     }
     if (u.units) out.push('unit limit ' + n(u.units));
     if (u.victory === 1) out.push('production victory');
+    if (u.antiMeta) out.push('anti-meta start');
     return out.filter(Boolean).join(', ');
   }
   var SPEED = { slowest: 'Slowest', slower: 'Slower', slow: 'Slow', normal: 'Normal', fast: 'Fast', faster: 'Faster', fastest: 'Fastest' };
