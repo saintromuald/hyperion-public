@@ -39,7 +39,28 @@
 #include "../../../tools/pluto-bridge/hxp_late.h"  // HXP4 late-state producer
 #include <fcntl.h>
 #include <sys/stat.h>
+#if defined(_MSC_VER)
+// Native Windows cannot create the POSIX FIFO used by the Wine bridge. Keep
+// the client compilable there; mkfifo fails cleanly before any bridge starts.
+#include <errno.h>
+#include <io.h>
+#define open _open
+#define close _close
+#define write _write
+#define unlink _unlink
+#ifndef O_RDWR
+#define O_RDWR _O_RDWR
+#endif
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
+static int mkfifo(const char *, int) {
+  errno = ENOSYS;
+  return -1;
+}
+#else
 #include <unistd.h>
+#endif
 #include "../../gen/globals117.h"  // gPlayerData, gPlayerMinerals, gPlayerGas, gwMapWidth, gStartLocations
 #include "../platform/port_log.h"  // PortLogger
 #include "../platform/port_paths.h"  // PortDataFolder
@@ -361,7 +382,7 @@ bool WriteAll(HANDLE h, const void *pv, size_t cb) {
       }
     }
     while (cb) {
-      const ssize_t n = write(s_fifoFrames, p, cb);
+      const auto n = write(s_fifoFrames, p, cb);
       if (n < 0) {
         if (errno == EINTR)
           continue;

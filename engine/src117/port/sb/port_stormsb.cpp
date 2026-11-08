@@ -633,7 +633,7 @@ bool Pump()
       SessionGone();
       return false;
     }
-    g_pollBuf.resize(std::min(g_pollBuf.size() * 2, static_cast<size_t>(1024 * 1024 + 64)));
+    g_pollBuf.resize((std::min)(g_pollBuf.size() * 2, static_cast<size_t>(1024 * 1024 + 64)));
   }
   if (n < 0) {
     const int32_t st = rp_status(g_session);
