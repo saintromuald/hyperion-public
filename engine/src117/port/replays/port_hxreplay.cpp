@@ -21,6 +21,7 @@
 #include "../../h/maplimits.h"
 #include "../../h/net_cmds.h"   // PlayerData
 #include "../../h/port_hxreplay.h"
+#include "../../h/port_replayonline.h"
 #include "../../h/port_synchash.h"
 #include "../../h/hxsim.h"
 #include "../../h/hxrules.h"
@@ -157,7 +158,8 @@ void DataFingerprint(BYTE abOut[20]) {
 
 bool PutVersioned(FILE *f, DWORD dwId, WORD wVersion, const void *pData, DWORD dwCount, DWORD dwRecordSize) {
   Section s = {dwId, wVersion, 0, dwCount, dwRecordSize, dwCount * dwRecordSize};
-  return fwrite(&s, sizeof s, 1, f) == 1 && (s.dwBytes == 0 || fwrite(pData, s.dwBytes, 1, f) == 1);
+  return ReplayOnline::Write(&s, sizeof s, 1, f) == 1 &&
+         (s.dwBytes == 0 || ReplayOnline::Write(pData, s.dwBytes, 1, f) == 1);
 }
 
 bool Put(FILE *f, DWORD dwId, const void *pData, DWORD dwCount, DWORD dwRecordSize) {
@@ -218,7 +220,8 @@ int ReplayHxWrite(void *pFile) {
   const StressRecord rStress = {static_cast<DWORD>(stress.nArmy), static_cast<DWORD>(stress.nPools)};
   const DWORD dwUnits = static_cast<DWORD>(PoolsUnitsToRecord());
 
-  return fwrite(kMarker, sizeof kMarker, 1, f) == 1 && fwrite(&kFormatVersion, 4, 1, f) == 1
+  return ReplayOnline::Write(kMarker, sizeof kMarker, 1, f) == 1 &&
+         ReplayOnline::Write(&kFormatVersion, 4, 1, f) == 1
       && Put(f, kRule, &rule, 1, sizeof rule)
       && (!ModRacesAny() || Put(f, kRace, abRaces, PlayerSlots(), 1))
       && ((g_hxRuleOptions & HX_OPT_AI_LEVELS) == 0 || Put(f, kAiLv, abLevels, PLAYER_SLOTS_MAX, AI_PROFILE_BYTES))

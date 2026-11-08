@@ -96,6 +96,7 @@ sys.path.insert(0, os.path.join(ENGINE, "tools"))
 sys.path.insert(0, os.path.join(ENGINE, "tools", "wave117"))
 from port_files import port_path, tu_path  # noqa: E402
 import third_party_patches  # noqa: E402
+import build_curl  # noqa: E402
 
 # Hyperion's own resources: the front end's typefaces (port_ui.cpp) as RT_RCDATA, and the
 # version (init.cpp's get_program_version_info) as RT_VERSION, as hyperion.rc gives them on
@@ -617,6 +618,8 @@ def build(a):
     image = build_image_lib(os.path.join(OUT, "libs"), "clang", AR, THIRD, a.libs, workers)
     dav1d = build_dav1d_lib(os.path.join(OUT, "libs"), "clang", AR, THIRD, a.libs, workers)
     webrtc = build_webrtc(a.webrtc, workers)
+    curl = build_curl.build(ENGINE, OUT, webrtc, mac=MAC, again=a.curl, mac_flags=CMAKE_MAC)
+    PORT.extend(["-DCURL_STATICLIB", "-I" + curl["include"]])
     sb_lib = build_sb(a.no_sb)
     if sb_lib is None:
         PORT.append("-DSB_NETCODE_OFF")
@@ -668,7 +671,10 @@ def build(a):
                  os.path.join(OUT, "resources_s.o")))
     compile_many(jobs, "clang -c", workers)
 
-    objs = sorted(os.path.join(OUT, f) for f in os.listdir(OUT) if f.endswith(".o"))
+    # abs_globals.o is generated below. Exclude any prior copy so a rebuild
+    # does not link it twice (once from this listing and once after binding).
+    objs = sorted(os.path.join(OUT, f) for f in os.listdir(OUT)
+                  if f.endswith(".o") and f != "abs_globals.o")
     game = [o for o in objs if os.path.basename(o) not in NOT_GAME + ["resources_s.o"]]
     abs_s = os.path.join(OUT, "abs_globals.S")
     bind_globals(game, abs_s)
@@ -683,7 +689,7 @@ def build(a):
     _, obs_undef = symbols([obs_obj])
     for_observer = sorted(c_name(n) for n in obs_undef if n in defined and not c_name(n).startswith("_Z"))
     exports += for_observer
-    libs = [storm, casc, webm, image, dav1d] + [os.path.join(webrtc, "lib", l) for l in WEBRTC_LIBS]
+    libs = [storm, casc, webm, image, dav1d, curl["lib"]] + [os.path.join(webrtc, "lib", l) for l in WEBRTC_LIBS]
     if sb_lib is not None:
         libs.append(sb_lib)
     if MAC:
@@ -797,6 +803,7 @@ def main():
     ap.add_argument("--sdl", action="store_true", help="build SDL3 again")
     ap.add_argument("--libs", action="store_true", help="build StormLib and CascLib again")
     ap.add_argument("--webrtc", action="store_true", help="build the streamed seats' libraries again")
+    ap.add_argument("--curl", action="store_true", help="build Replay Kraken's libcurl again")
     ap.add_argument("--no-sb", action="store_true",
                     help="skip the rallypoint bridge (the online SB relay provider) and link without it")
     ap.add_argument("-j", "--jobs", type=int, default=0)
@@ -819,6 +826,7 @@ def main():
            "-v", "%s:/src" % REPO.replace("\\", "/"), image, "python3",
            "/src/engine/tools/build_engine_linux.py", "--inside"]
     cmd += (["--sdl"] if a.sdl else []) + (["--libs"] if a.libs else []) + (["--webrtc"] if a.webrtc else [])
+    cmd += ["--curl"] if a.curl else []
     cmd += ["-j", str(a.jobs)] if a.jobs else []
     cmd += ["--check-align"] if a.check_align else []
     say("in the %s image" % image)

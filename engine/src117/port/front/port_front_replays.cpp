@@ -15,21 +15,29 @@
 #include <stdio.h>
 #include <string.h>
 #include <algorithm>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 #include "../gameplay/port_launch.h"  // PortLaunchReplayFile
 #include "../platform/port_paths.h"   // PortExplorer
+#include "../platform/port_settings.h"
 #include "oc_data.h"           // OC_VA, where 1.17's data is
 #include "Storm.h"             // SStrCopy
 #include "grid.h"              // IsBroodwar
 #include "../../h/hxsim.h"        // HX_SIM_REVISION
 #include "../../h/hxrules.h"      // HX_RULE_HYPERION
 #include "../../h/port_hxreplay.h"  // ReplayHxPeek
+#include "../../h/port_replaycatalog.h"
+#include "../../h/port_replaykraken.h"
+#include "../../h/port_replaylibrary.h"
+#include "../../h/port_replayonline.h"
 #include "port_frontkit.h"
 #include "port_frontlobby.h"
 #include "port_frontscreens.h"
 #include "port_ui.h"
 #include "../data/port_stormapi.h"  // SFileGetUserDataPath
+#include "../data/port_moddata.h"
 #include "../platform/port_util.h"  // PortSpeedFrameMs
 #include "../render/port_maptext.h"  // MapTextUtf8
 #include "../../gen/globals117.h"
@@ -58,40 +66,20 @@ const char *const kFormats[] = {PT_("Any format"), PT_("Classic"), PT_("Hyperion
 const float kTop = 176, kSide = 520;
 const float kCols[] = {200, 190, 80, 120, 40};  // map, players, length, played, state
 
-enum { VERDICT_OK, VERDICT_NO, VERDICT_BAD };
+enum { VERDICT_OK, VERDICT_NO, VERDICT_BAD, VERDICT_WAIT };
 
 struct Verdict {
   int nKind;
   std::string head, line, needs;
 };
 
-struct Player {
-  std::string name;
-  int nRace;    // 0 Zerg, 1 Terran, 2 Protoss, else none
-  int nType;    // 1 a computer, 2 a person
-  int nTeam;
-  int nColour;  // kSlotColours, or -1
-};
+using Replay = ReplayCatalog::Entry;
+using Player = ReplayCatalog::Player;
 
-struct Replay {
-  std::string path;  // the file
-  std::string rel;   // under maps\replays
-  std::string name;  // its name, without .rep
-  FILETIME when;
-  bool bOk = false;  // read
-  ReplayHxInfo info;
-  std::vector<Player> players;
-  std::string map, type, matchup;
-  bool bExpansion = false;
-  unsigned dwFrames = 0;
-  int nSpeed = 6;  // the speed it was recorded at, Slowest (0) to Fastest (6)
-  int nWidth = 0, nHeight = 0, nTileset = 0, nGameType = 0;
-  unsigned nMission = 0;
-};
-
-std::string g_root;                 // maps\replays in the data folder, with its backslash
-std::string g_keep;                 // the replay picked when the screen closed
-std::vector<Replay> g_reps;
+std::string g_root;                 // maps\replays in the data folder
+std::string g_keep;                 // the replay path picked when the screen closed
+std::string g_keepContent;          // and its rename-stable identity
+const std::vector<Replay> &g_reps = ReplayCatalog::Entries();
 std::vector<int> g_shown;           // the replays the filters pass, in order
 int g_nPick = -1;                   // the replay picked, in g_reps
 int g_nFirst;                       // the first row shown
@@ -106,11 +94,40 @@ bool g_bSearch;                     // the search box has the keyboard
 std::string g_note;
 int g_nResult;
 MapPicture g_pic;                   // the picked replay's map
+std::string g_picContent;
 bool g_bRename;
 std::string g_newName;
 bool g_bDelete;
 float g_fSideScroll;                // the side, scrolled down this far
 float g_fSideMax;                   // as far as it scrolls, from the last frame
+int g_nTab = 0;                     // 0 Local, 1 Online
+ReplayOnline::State g_online;
+int g_nOnlinePick = -1;
+int g_nOnlineFirst = 0;
+std::vector<int> g_onlineShown;
+ReplayKraken::Query g_query;
+std::string g_onlineSearch;
+bool g_bOnlineSearch;
+bool g_bOnlinePlayerEdit, g_bOnlineMatchupEdit;
+ReplayLibrary::Data g_library;
+std::string g_activeCollection;
+std::string g_activeQuery;
+std::string g_savedServerApi;
+std::string g_selectAfterDownload;
+bool g_bFavouriteOnly, g_bStartedOnly, g_bNotesOnly;
+bool g_bNoteDialog, g_bViewDialog, g_bExportDialog, g_bImportDialog;
+bool g_bNoteTagsEdit;
+std::string g_editNote, g_editTags, g_editName, g_editPath;
+bool g_editShared;
+std::string g_editNoteId;
+std::string g_noteTarget;
+bool g_exportFavourites, g_exportNotes, g_exportQueries, g_exportCollections;
+std::map<std::string, ReplayHxInfo> g_downloadInfo;
+std::set<std::string> g_handledDownloads;
+std::set<std::string> g_validationPosted;
+std::string g_onlineKeep;
+const void *g_onlinePageData = nullptr;
+size_t g_onlinePageSize = 0;
 
 // ---------------------------------------------------------------------------
 // Reading the folder.
@@ -118,6 +135,14 @@ float g_fSideMax;                   // as far as it scrolls, from the last frame
 ULONGLONG Ticks(const FILETIME &ft)
 {
   return static_cast<ULONGLONG>(ft.dwHighDateTime) << 32 | ft.dwLowDateTime;
+}
+
+FILETIME FileTimeOf(uint64_t ticks)
+{
+  FILETIME out;
+  out.dwLowDateTime = static_cast<DWORD>(ticks);
+  out.dwHighDateTime = static_cast<DWORD>(ticks >> 32);
+  return out;
 }
 
 const char *const kSpeedNames[kPortSpeeds] = {PT_("Slowest"), PT_("Slower"), PT_("Slow"),  PT_("Normal"),
@@ -135,11 +160,11 @@ std::string Clock(unsigned dwFrames, int nSpeed)
   return sz;
 }
 
-std::string Age(const FILETIME &ft)
+std::string Age(uint64_t when)
 {
   FILETIME now;
   GetSystemTimeAsFileTime(&now);
-  const double h = Ticks(now) > Ticks(ft) ? (Ticks(now) - Ticks(ft)) / 36e9 : 0.0;
+  const double h = Ticks(now) > when ? (Ticks(now) - when) / 36e9 : 0.0;
   if (h < 1.0 / 60)
     return PortText("just now");
   if (h < 1) {
@@ -158,6 +183,7 @@ std::string Age(const FILETIME &ft)
   }
   FILETIME local;
   SYSTEMTIME st;
+  const FILETIME ft = FileTimeOf(when);
   FileTimeToLocalFileTime(&ft, &local);
   FileTimeToSystemTime(&local, &st);
   // day and month, in the language's order
@@ -172,114 +198,6 @@ std::string Field(const unsigned char *p, size_t n)
   return MapTextUtf8(std::string(psz, SDL_strnlen(psz, n)).c_str());
 }
 
-// Who played and against whom: two players by their races (TvZ), teams by their sizes (2v2),
-// and more players with no teams as a free for all. Teams count in the team types and Use Map
-// Settings' forces.
-std::string Matchup(const Replay &r)
-{
-  const bool bTeams = r.nGameType == 0x0A || (r.nGameType >= 0x0B && r.nGameType <= 0x0F);
-  std::vector<int> teams, sizes;
-  for (const Player &p : r.players) {
-    const int t = bTeams ? p.nTeam : static_cast<int>(teams.size()) + 1000;
-    const auto it = std::find(teams.begin(), teams.end(), t);
-    if (it == teams.end()) {
-      teams.push_back(t);
-      sizes.push_back(1);
-    } else {
-      ++sizes[it - teams.begin()];
-    }
-  }
-  if (r.players.empty())
-    return "";
-  if (r.players.size() == 2 && teams.size() == 2) {
-    std::string s;
-    for (const Player &p : r.players) {
-      if (!s.empty())
-        s += "v";
-      s += p.nRace >= 0 && p.nRace < 3 ? kRaceLetters[p.nRace] : 'R';
-    }
-    return s;
-  }
-  if (teams.size() == r.players.size())
-    return PortTextF("{0} players, free for all", {std::to_string(r.players.size())});
-  std::string s;
-  for (int n : sizes)
-    s += (s.empty() ? "" : "v") + std::to_string(n);
-  return s;
-}
-
-// The header's player records, and a Hyperion replay's past 1.17's 12: a person or a computer
-// in each, with the colour of the slot it played from.
-void ReadPlayers(Replay &r)
-{
-  r.players.clear();
-  const unsigned char *pSlots = r.info.abHead + 0xA1;
-  const size_t nPast = r.info.past.size() / 36;
-  for (size_t i = 0; i < 12 + nPast; ++i) {
-    const unsigned char *s = i < 12 ? pSlots + i * 36 : r.info.past.data() + (i - 12) * 36;
-    if (s[8] != 1 && s[8] != 2)
-      continue;
-    Player p;
-    p.nType = s[8];
-    p.nRace = s[9] < 3 ? s[9] : -1;
-    p.nTeam = s[10];
-    p.name = Field(s + 11, 25);
-    const DWORD dwId = *reinterpret_cast<const DWORD *>(s);
-    p.nColour = dwId < 8 ? static_cast<int>(dwId) : -1;
-    r.players.push_back(p);
-  }
-}
-
-void ReadReplay(Replay &r)
-{
-  r.bOk = ReplayHxPeek(r.path.c_str(), &r.info, NULL);
-  if (!r.bOk)
-    return;
-  const unsigned char *h = r.info.abHead;
-  r.bExpansion = h[0] != 0;
-  r.dwFrames = *reinterpret_cast<const DWORD *>(h + 0x01);
-  r.nSpeed = h[0x3A];  // the game's speed, which 1.17's replay panel counts the time by
-  r.nMission = *reinterpret_cast<const WORD *>(h + 0x05);
-  // the game header at 0x14, its description at 0x1C in it (gamedesc_t)
-  r.nWidth = *reinterpret_cast<const WORD *>(h + 0x34);
-  r.nHeight = *reinterpret_cast<const WORD *>(h + 0x36);
-  r.nGameType = h[0x3C];
-  r.nTileset = *reinterpret_cast<const WORD *>(h + 0x44) & 7;
-  r.map = Field(h + 0x61, 0x20);
-  r.type = r.nMission != 0 ? PortText("Campaign mission") : GameTypeName(r.nGameType);
-  ReadPlayers(r);
-  r.matchup = Matchup(r);
-}
-
-void Walk(const std::string &dir, const std::string &rel, int nDepth)
-{
-  if (nDepth > 4 || g_reps.size() > 2000)
-    return;
-  WIN32_FIND_DATAA fd;
-  const HANDLE h = FindFirstFileA((dir + "*").c_str(), &fd);
-  if (h == INVALID_HANDLE_VALUE)
-    return;
-  do {
-    const std::string name = fd.cFileName;
-    if (name == "." || name == "..")
-      continue;
-    if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-      Walk(dir + name + "\\", rel + name + "\\", nDepth + 1);
-      continue;
-    }
-    const size_t nDot = name.rfind('.');
-    if (nDot == std::string::npos || lstrcmpiA(name.c_str() + nDot, ".rep") != 0)
-      continue;
-    Replay r;
-    r.path = dir + name;
-    r.rel = rel + name;
-    r.name = name.substr(0, nDot);
-    r.when = fd.ftLastWriteTime;
-    g_reps.push_back(r);
-  } while (FindNextFileA(h, &fd));
-  FindClose(h);
-}
-
 bool IsLast(const Replay &r)
 {
   return lstrcmpiA(r.rel.c_str(), "LastReplay.rep") == 0;
@@ -289,12 +207,20 @@ bool IsLast(const Replay &r)
 // rules, data and simulation.
 bool CanWatch(const Replay &r)
 {
-  return r.bOk && r.info.refusal.empty() && (!r.bExpansion || IsBroodwar());
+  return !r.bPending && r.bOk && r.info.refusal.empty() && (!r.bExpansion || IsBroodwar()) &&
+         (r.info.bHx || ModDataId()[0] == 0);  // A classic header cannot prove modified-data compatibility.
 }
 
 Verdict VerdictOf(const Replay &r)
 {
   Verdict v;
+  if (r.bPending) {
+    v.nKind = VERDICT_WAIT;
+    v.head = PortText(r.bDeferred ? "Waiting for the writer" : "Reading replay");
+    v.line = r.bDeferred ? PortText("This file changed recently. It will be inspected after it stops being written.")
+                         : PortText("The incremental catalog has not inspected this file yet.");
+    return v;
+  }
   if (!r.bOk) {
     v.nKind = VERDICT_BAD;
     v.head = PortText("Unreadable");
@@ -305,6 +231,12 @@ Verdict VerdictOf(const Replay &r)
     v.nKind = VERDICT_NO;
     v.head = PortText("Can\xe2\x80\x99t play in this build");
     v.line = PortText("A Brood War game, and Brood War is not installed.");
+    return v;
+  }
+  if (!r.info.bHx && ModDataId()[0]) {
+    v.nKind = VERDICT_NO;
+    v.head = PortText("Can\xe2\x80\x99t verify with this mod");
+    v.line = PortText("A classic replay has no Hyperion data fingerprint. Disable the mod to check playback safely.");
     return v;
   }
   if (!r.info.bHx) {
@@ -345,8 +277,47 @@ Verdict VerdictOf(const Replay &r)
   return v;
 }
 
+const ReplayLibrary::Record *LibraryRecord(const std::string &id)
+{
+  return id.empty() ? nullptr : ReplayLibrary::Find(g_library, id);
+}
+
+bool IsDownloaded(const Replay &r)
+{
+  if (r.rel.find("Replay Kraken/") == 0 || r.rel.find("Replay Kraken\\") == 0)
+    return true;
+  const ReplayLibrary::Record *record = LibraryRecord(r.contentId);
+  return record && !record->sources.empty();
+}
+
 bool Passes(const Replay &r)
 {
+  const ReplayLibrary::Record *record = LibraryRecord(r.contentId);
+  if (!g_activeCollection.empty()) {
+    const auto list = std::find_if(g_library.collections.begin(), g_library.collections.end(), [](const auto &candidate) {
+      return candidate.id == g_activeCollection;
+    });
+    if (list == g_library.collections.end() || !ReplayLibrary::InCollection(*list, r.contentId))
+      return false;
+  }
+  if (g_bFavouriteOnly && (!record || !record->bFavourite))
+    return false;
+  if (g_bStartedOnly && (!record || !record->startedAt))
+    return false;
+  if (g_bNotesOnly && !ReplayLibrary::HasNotes(g_library, r.contentId))
+    return false;
+  if (!g_query.matchup.empty() && ReplayKraken::MatchupKey(r.matchup) != ReplayKraken::MatchupKey(g_query.matchup))
+    return false;
+  if (!g_query.race.empty()) {
+    const std::string race = PortLower(g_query.race);
+    const bool bFound = std::any_of(r.players.begin(), r.players.end(), [&](const Player &player) {
+      return player.nRace >= 0 && player.nRace < 3 && PortLower(PortText(kRaceNames[player.nRace])) == race;
+    });
+    if (!bFound)
+      return false;
+  }
+  if (!g_query.result.empty() && PortLower(g_query.result) != "unknown")
+    return false;  // Hyperion's local replay headers do not carry authoritative results.
   if (g_nFormat == 1 && (!r.bOk || r.info.bHx))
     return false;
   if (g_nFormat == 2 && (!r.bOk || !r.info.bHx))
@@ -375,7 +346,7 @@ bool Passes(const Replay &r)
   return true;
 }
 
-Replay *Picked(void)
+const Replay *Picked(void)
 {
   return g_nPick >= 0 && g_nPick < static_cast<int>(g_reps.size()) ? &g_reps[g_nPick] : NULL;
 }
@@ -404,10 +375,13 @@ void Pick(int nRep)
     g_fSideScroll = 0.0f;
   g_nPick = nRep;
   g_note.clear();
-  Replay *r = Picked();
-  if (r == NULL || g_pic.of == r->path)
+  const Replay *r = Picked();
+  if (r == NULL || (g_pic.of == r->path && g_picContent == r->contentId))
     return;
   g_pic = MapPicture();
+  g_picContent = r->contentId;
+  if (r->bPending)
+    return;
   g_pic.nSlot = 1;
   g_pic.of = r->path;
   ReplayHxInfo info;
@@ -416,64 +390,78 @@ void Pick(int nRep)
     MapPictureRead(&g_pic, r->path, chk.data(), static_cast<DWORD>(chk.size()));
 }
 
+void RebuildWho(const std::string &whoWas)
+{
+  g_who.clear();
+  for (const Replay &r : g_reps)
+    for (const Player &p : r.players)
+      if (p.nType == 2 && !p.name.empty() && std::find(g_who.begin(), g_who.end(), p.name) == g_who.end())
+        g_who.push_back(p.name);
+  const auto who = std::find(g_who.begin(), g_who.end(), whoWas);
+  g_nWho = whoWas.empty() || who == g_who.end() ? 0 : static_cast<int>(who - g_who.begin()) + 1;
+}
+
+void RestoreSelection(const std::string &path, const std::string &content)
+{
+  g_nPick = -1;
+  for (size_t i = 0; i < g_reps.size(); ++i)
+    if ((!path.empty() && g_reps[i].path == path) || (!content.empty() && g_reps[i].contentId == content)) {
+      g_nPick = static_cast<int>(i);
+      break;
+    }
+  Filter();
+  g_bReveal = true;
+}
+
+void SyncCatalog(void)
+{
+  const std::string path = Picked() ? Picked()->path : g_keep;
+  const std::string content = Picked() ? Picked()->contentId : g_keepContent;
+  const std::string whoWas = g_nWho > 0 && g_nWho <= static_cast<int>(g_who.size()) ? g_who[g_nWho - 1] : "";
+  RebuildWho(whoWas);
+  RestoreSelection(path, content);
+}
+
 void ListReplays(void)
 {
   char sz[MAX_PATH];
   sz[0] = 0;
   SFileGetUserDataPath(sz, sizeof sz, 1);
   g_root = std::string(sz) + "maps\\replays\\";
-  const std::string pickWas = Picked() != NULL ? Picked()->path : g_keep;
-  const std::string whoWas = g_nWho > 0 && g_nWho <= static_cast<int>(g_who.size()) ? g_who[g_nWho - 1] : "";
-  g_reps.clear();
-  Walk(g_root, "", 0);
-  for (Replay &r : g_reps)
-    ReadReplay(r);
-  std::stable_sort(g_reps.begin(), g_reps.end(), [](const Replay &a, const Replay &b) {
-    if (IsLast(a) != IsLast(b))
-      return IsLast(a);
-    return Ticks(a.when) > Ticks(b.when);
-  });
-  // the profiles that played them
-  g_who.clear();
-  for (const Replay &r : g_reps)
-    for (const Player &p : r.players)
-      if (p.nType == 2 && !p.name.empty() && std::find(g_who.begin(), g_who.end(), p.name) == g_who.end())
-        g_who.push_back(p.name);
-  // the filter follows its name, which this scan's order may have moved
-  const auto who = std::find(g_who.begin(), g_who.end(), whoWas);
-  g_nWho = whoWas.empty() || who == g_who.end() ? 0 : static_cast<int>(who - g_who.begin()) + 1;
-  Filter();
-  g_nPick = -1;
-  for (size_t i = 0; i < g_reps.size(); ++i)
-    if (g_reps[i].path == pickWas)
-      g_nPick = static_cast<int>(i);
-  if (g_nPick < 0 && !g_shown.empty())
-    g_nPick = g_shown[0];
-  g_pic.of.clear();
-  Pick(g_nPick);
-  g_bReveal = true;
+  ReplayCatalog::Open(g_root);
+  SyncCatalog();
 }
 
 // ---------------------------------------------------------------------------
 // What can be done with the one picked.
 
+bool WatchPath(const std::string &path, const std::string &contentId, const std::string &shownName)
+{
+  if (!PortLaunchReplayFile(path.c_str())) {
+    g_note = PortText("That replay could not be started.");
+    FrontLog("replays: %s did not start\n", shownName.c_str());
+    return false;
+  }
+  FrontLog("replays: watching %s\n", shownName.c_str());
+  if (!contentId.empty()) {
+    ReplayLibrary::MarkStarted(&g_library, contentId, ReplayLibrary::NowSeconds());
+    ReplayOnline::SaveLibrary(g_library);  // Started means accepted, not a claimed full watch.
+  }
+  g_nResult = FRONT_REPLAY_STARTED;
+  return true;
+}
+
 void Watch(void)
 {
-  Replay *r = Picked();
+  const Replay *r = Picked();
   if (r == NULL || !CanWatch(*r))
     return;
-  if (PortLaunchReplayFile(r->path.c_str())) {
-    FrontLog("replays: watching %s\n", r->rel.c_str());
-    g_nResult = FRONT_REPLAY_STARTED;
-  } else {
-    g_note = PortText("That replay could not be started.");
-    FrontLog("replays: %s did not start\n", r->rel.c_str());
-  }
+  WatchPath(r->path, r->contentId, r->rel);
 }
 
 void ShowInFolder(void)
 {
-  Replay *r = Picked();
+  const Replay *r = Picked();
   if (r == NULL)
     return;
   const std::string args = "/select,\"" + r->path + "\"";
@@ -493,7 +481,7 @@ bool NameAllowed(const std::string &s)
 
 void Rename(void)
 {
-  Replay *r = Picked();
+  const Replay *r = Picked();
   if (r == NULL)
     return;
   if (!NameAllowed(g_newName)) {
@@ -510,7 +498,11 @@ void Rename(void)
     return;
   }
   FrontLog("replays: %s renamed %s\n", r->rel.c_str(), g_newName.c_str());
-  r->path = to;
+  const std::string oldPath = r->path;
+  ReplayCatalog::Renamed(oldPath, to);
+  ReplayOnline::LocalRenamed(oldPath, to);
+  g_keep = to;
+  g_keepContent = r->contentId;
   g_bRename = false;
   g_note.clear();
   ListReplays();
@@ -518,7 +510,7 @@ void Rename(void)
 
 void Delete(void)
 {
-  Replay *r = Picked();
+  const Replay *r = Picked();
   g_bDelete = false;
   if (r == NULL)
     return;
@@ -527,12 +519,17 @@ void Delete(void)
     return;
   }
   FrontLog("replays: %s deleted\n", r->rel.c_str());
+  const std::string deletedPath = r->path;
   int nNext = -1;
   for (size_t k = 0; k < g_shown.size(); ++k)
     if (g_shown[k] == g_nPick)
       nNext = k + 1 < g_shown.size() ? g_shown[k + 1] : k > 0 ? g_shown[k - 1] : -1;
   const std::string next = nNext >= 0 ? g_reps[nNext].path : std::string();
+  ReplayCatalog::Deleted(deletedPath);
+  ReplayOnline::LocalDeleted(deletedPath);
   g_nPick = -1;
+  g_keep = next;
+  g_keepContent.clear();
   ListReplays();
   for (size_t i = 0; i < g_reps.size(); ++i)
     if (g_reps[i].path == next)
@@ -595,13 +592,21 @@ void Tabs(void)
   Open(row);
   for (int i = 0; i < 4; ++i) {
     Decl t = Box("rptab", i);
-    const bool bOff = i != 0;
+    const bool bOff = i >= 2;
     const bool bHot = !bOff && Over(t.d.id);
+    if (!bOff && Clicked(t.d.id) && g_nTab != i) {
+      g_nTab = i;
+      g_note.clear();
+      if (i == 1)
+        ReplayOnline::Fetch(g_query, true);
+      else
+        ReplayCatalog::Refresh();
+    }
     t.d.layout.sizing.height = Fixed(Sc(46));
     t.d.layout.padding = Pad(Fs(22), Fs(22), 0, 0);
     t.d.layout.childGap = Gap(Fs(10));
     t.d.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
-    t.d.custom.customData = Custom(DrawTab, kScTab, 0.0f, (i == 0 ? 1 : 0) | (bHot ? 2 : 0));
+    t.d.custom.customData = Custom(DrawTab, kScTab, 0.0f, (i == g_nTab ? 1 : 0) | (bHot ? 2 : 0));
     Open(t);
     Decl chip;
     chip.d.layout.sizing.width = Fixed(Sc(22));
@@ -613,16 +618,14 @@ void Tabs(void)
     Text(Keep(std::to_string(i + 1)), UI_FACE_TEXT, Fs(13), 0.0f, bOff ? kScInkOff : kOk);
     Close();
     Text(Keep(Upper(PortText(kTabs[i]))), UI_FACE_WIDE, Fs(16), 0.05f,
-         bOff ? kScInkOff : i == 0 ? kScInkHi : kScInkButton);
+         bOff ? kScInkOff : i == g_nTab ? kScInkHi : kScInkButton);
     Close();
     if (bOff)
       TipOn(t.d.id, PortText(kTabs[i]),
-            i == 1 ? PortText("Replays others put online, which Hyperion Online will keep and check. It does not exist "
-                              "yet.")
-            : i == 2
-                ? PortText("Hyperion Online's boards, whose games can be watched. They wait for Hyperion Online.")
-                : PortText("One game after another, the camera going where the fighting is. It waits for Hyperion "
-                           "Online, and for a director that reads the replay ahead of the picture."));
+            i == 2 ? PortText("Leaderboards are outside this Replay Kraken workspace; the server has no native rating contract.")
+                   : PortText("Continuous online Replay TV is outside this workspace. The in-playback director remains available."));
+    else if (i == 1)
+      TipOn(t.d.id, PortText("Online"), PortText("Browse, filter, download and watch replays on the configured self-hosted Replay Kraken server."));
   }
   Close();
 }
@@ -636,8 +639,8 @@ void DrawFmt(float x, float y, float w, float h, void *pCtx)
 
 void FmtTag(const Replay &r)
 {
-  const char *psz = !r.bOk ? "?" : r.info.bHx ? "HX" : "CL";
-  const UiColor c = !r.bOk ? kNoInk : r.info.bHx ? kHxInk : k117Ink;
+  const char *psz = r.bPending ? "..." : !r.bOk ? "?" : r.info.bHx ? "HX" : "CL";
+  const UiColor c = r.bPending ? kLbInkDesc : !r.bOk ? kNoInk : r.info.bHx ? kHxInk : k117Ink;
   Decl tag;
   tag.d.layout.sizing.width = Fixed(Sc(38));
   tag.d.layout.sizing.height = Fixed(Sc(20));
@@ -718,6 +721,223 @@ void Tools(void)
   Close();
 }
 
+int CurrentView(void)
+{
+  if (!g_activeCollection.empty()) {
+    for (size_t i = 0; i < g_library.collections.size(); ++i)
+      if (g_library.collections[i].id == g_activeCollection)
+        return static_cast<int>(4 + g_library.queries.size() + i);
+  }
+  if (!g_activeQuery.empty()) {
+    for (size_t i = 0; i < g_library.queries.size(); ++i)
+      if (g_library.queries[i].id == g_activeQuery)
+        return static_cast<int>(4 + i);
+  }
+  if (g_bFavouriteOnly)
+    return 1;
+  if (g_bStartedOnly)
+    return 2;
+  if (g_bNotesOnly)
+    return 3;
+  return 0;
+}
+
+void ApplyView(int choice)
+{
+  g_bFavouriteOnly = g_bStartedOnly = g_bNotesOnly = false;
+  g_activeCollection.clear();
+  g_activeQuery.clear();
+  g_savedServerApi.clear();
+  if (choice == 1)
+    g_bFavouriteOnly = true;
+  else if (choice == 2)
+    g_bStartedOnly = true;
+  else if (choice == 3)
+    g_bNotesOnly = true;
+  else if (choice >= 4 && choice < static_cast<int>(4 + g_library.queries.size())) {
+    g_activeQuery = g_library.queries[choice - 4].id;
+    const ReplayLibrary::Filters &f = g_library.queries[choice - 4].filters;
+    g_search = f.search;
+    g_onlineSearch = f.search;
+    g_savedServerApi = f.serverApi;
+    g_nFormat = f.format;
+    g_nGame = f.game;
+    g_bFavouriteOnly = f.bFavourites;
+    g_bStartedOnly = f.bStarted;
+    g_bNotesOnly = f.bNotes;
+    g_query.player = f.who;
+    g_query.matchup = f.matchup;
+    g_query.race = f.race;
+    g_query.result = f.result;
+    g_query.from = f.from;
+    g_query.to = f.to;
+    g_query.followedBy = f.followedBy;
+    g_nWho = 0;
+    if (!f.who.empty()) {
+      const auto who = std::find(g_who.begin(), g_who.end(), f.who);
+      g_nWho = who == g_who.end() ? 0 : static_cast<int>(who - g_who.begin()) + 1;
+    }
+  } else if (choice >= static_cast<int>(4 + g_library.queries.size())) {
+    const size_t index = static_cast<size_t>(choice - 4 - g_library.queries.size());
+    if (index < g_library.collections.size())
+      g_activeCollection = g_library.collections[index].id;
+  }
+  Filter();
+  g_nFirst = 0;
+}
+
+ReplayLibrary::Filters CurrentFilters(void)
+{
+  ReplayLibrary::Filters filters;
+  filters.search = g_search;
+  filters.who = g_nWho > 0 && g_nWho <= static_cast<int>(g_who.size()) ? g_who[g_nWho - 1] : g_query.player;
+  filters.matchup = g_query.matchup;
+  filters.race = g_query.race;
+  filters.result = g_query.result;
+  filters.from = g_query.from;
+  filters.to = g_query.to;
+  filters.followedBy = g_query.followedBy;
+  filters.serverApi = g_online.serverApi;
+  filters.format = g_nFormat;
+  filters.game = g_nGame;
+  filters.bFavourites = g_bFavouriteOnly;
+  filters.bStarted = g_bStartedOnly;
+  filters.bNotes = g_bNotesOnly;
+  return filters;
+}
+
+void SaveQuery(const std::string &name)
+{
+  ReplayLibrary::SavedQuery query;
+  query.id = ReplayKraken::UuidNew();
+  query.name = name.empty() ? PortText("Saved query") : name;
+  query.filters = CurrentFilters();
+  query.updatedAt = ReplayLibrary::NowSeconds();
+  g_library.queries.push_back(query);
+  g_activeQuery = query.id;
+  g_activeCollection.clear();
+  ReplayOnline::SaveLibrary(g_library);
+}
+
+void ToggleFixedMembership(void)
+{
+  const Replay *r = Picked();
+  if (!r)
+    return;
+  auto list = std::find_if(g_library.collections.begin(), g_library.collections.end(), [](const auto &candidate) {
+    return candidate.id == g_activeCollection;
+  });
+  if (list == g_library.collections.end())
+    return;
+  const auto at = std::find(list->recordIds.begin(), list->recordIds.end(), r->contentId);
+  if (at == list->recordIds.end())
+    list->recordIds.push_back(r->contentId);
+  else
+    list->recordIds.erase(at);
+  list->updatedAt = ReplayLibrary::NowSeconds();
+  ReplayOnline::SaveLibrary(g_library);
+  Filter();
+}
+
+const char *UploadPhaseName(ReplayOnline::UploadPhase phase);
+
+const ReplayOnline::UploadView *LatestOutboxJob(void)
+{
+  for (auto at = g_online.uploads.rbegin(); at != g_online.uploads.rend(); ++at)
+    if (at->phase != ReplayOnline::UploadPhase::Uploaded)
+      return &*at;
+  return nullptr;
+}
+
+const ReplayOnline::UploadView *LatestRetryJob(void)
+{
+  for (auto at = g_online.uploads.rbegin(); at != g_online.uploads.rend(); ++at)
+    if (at->bCommitted && at->phase != ReplayOnline::UploadPhase::Uploaded && at->phase != ReplayOnline::UploadPhase::Uploading &&
+        at->phase != ReplayOnline::UploadPhase::Preparing && at->phase != ReplayOnline::UploadPhase::Queued &&
+        at->phase != ReplayOnline::UploadPhase::RetryWaiting)
+      return &*at;
+  return nullptr;
+}
+
+void LibraryTools(void)
+{
+  Decl row;
+  row.d.layout.sizing.width = Grow();
+  row.d.layout.padding = Pad(Fs(12), Fs(12), Fs(4), Fs(8));
+  row.d.layout.childGap = Gap(Fs(8));
+  row.d.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
+  Open(row);
+  std::vector<std::string> views = {PortText("All replays"), PortText("Favourites"), PortText("Started"), PortText("With notes")};
+  for (const auto &query : g_library.queries)
+    views.push_back(PortTextF("Query: {0}", {query.name}));
+  for (const auto &list : g_library.collections)
+    views.push_back(PortTextF("List: {0}", {list.name}));
+  const int view = Pulldown("rpviews", 0, 220, views, CurrentView());
+  if (view >= 0)
+    ApplyView(view);
+  Decl save = Box("rpsaveview");
+  save.d.layout.sizing.height = Fixed(Sc(32));
+  if (ScMini(save, PortText("Save query"), 0)) {
+    g_bViewDialog = true;
+    g_editName = PortText("Replay query");
+  }
+  Decl list = Box("rpnewlist");
+  list.d.layout.sizing.height = Fixed(Sc(32));
+  if (ScMini(list, PortText("New list"), 0, Picked() != nullptr)) {
+    ReplayLibrary::Collection collection;
+    collection.id = ReplayKraken::UuidNew();
+    collection.name = PortTextF("Replay list {0}", {std::to_string(g_library.collections.size() + 1)});
+    collection.recordIds = {Picked()->contentId};
+    collection.updatedAt = ReplayLibrary::NowSeconds();
+    g_library.collections.push_back(collection);
+    g_activeCollection = collection.id;
+    ReplayOnline::SaveLibrary(g_library);
+    Filter();
+  }
+  if (!g_activeCollection.empty()) {
+    Decl member = Box("rplistmember");
+    member.d.layout.sizing.height = Fixed(Sc(32));
+    if (ScMini(member, PortText("List +/-"), 0, Picked() != nullptr))
+      ToggleFixedMembership();
+  }
+  Decl refresh = Box("rprefresh");
+  refresh.d.layout.sizing.height = Fixed(Sc(32));
+  if (ScMini(refresh, PortText("Refresh"), 'R'))
+    ReplayCatalog::Refresh();
+  if (const ReplayOnline::UploadView *pending = LatestOutboxJob()) {
+    Text(Keep(PortTextF("Outbox: {0}", {PortText(UploadPhaseName(pending->phase))})), UI_FACE_TEXT, Fs(13), 0.0f,
+         pending->phase == ReplayOnline::UploadPhase::Failed || pending->phase == ReplayOnline::UploadPhase::Conflict ? kNoInk : kLbInkDesc);
+    if (pending->bCommitted && pending->phase != ReplayOnline::UploadPhase::Preparing &&
+        pending->phase != ReplayOnline::UploadPhase::Uploading && pending->phase != ReplayOnline::UploadPhase::Queued &&
+        pending->phase != ReplayOnline::UploadPhase::RetryWaiting) {
+      Decl retry = Box("rpoutboxretry");
+      retry.d.layout.sizing.height = Fixed(Sc(32));
+      if (ScMini(retry, PortText("Retry outbox"), 0))
+        ReplayOnline::Retry(pending->uuid);
+    }
+    if (pending->bCommitted) {
+      Decl discard = Box("rpoutboxdiscard");
+      discard.d.layout.sizing.height = Fixed(Sc(32));
+      if (ScMini(discard, PortText("Discard job"), 0))
+        ReplayOnline::Discard(pending->uuid);
+    }
+  }
+  Decl import = Box("rpimport");
+  import.d.layout.sizing.height = Fixed(Sc(32));
+  if (ScMini(import, PortText("Import"), 0)) {
+    g_bImportDialog = true;
+    g_editPath = "replay-library-import.json";
+  }
+  Decl exportButton = Box("rpexport");
+  exportButton.d.layout.sizing.height = Fixed(Sc(32));
+  if (ScMini(exportButton, PortText("Export"), 0, Picked() != nullptr)) {
+    g_bExportDialog = true;
+    g_editPath = "replay-library-export.json";
+    g_exportFavourites = g_exportNotes = g_exportQueries = g_exportCollections = false;
+  }
+  Close();
+}
+
 void List(void)
 {
   Decl box = Box("rplist");
@@ -728,6 +948,7 @@ void List(void)
   InnerBox(box);
   Open(box);
   Tools();
+  LibraryTools();
 
   Decl head;
   head.d.layout.sizing.width = Grow();
@@ -850,7 +1071,7 @@ void List(void)
 
   Clay_ElementData data = Clay_GetElementData(Id("rplist"));
   if (data.found) {
-    const int n = static_cast<int>((data.boundingBox.height - Sc(36) - Sc(64)) / fRow);
+    const int n = static_cast<int>((data.boundingBox.height - Sc(36) - Sc(108)) / fRow);
     g_nShownRows = n > 1 ? n : 1;
   }
 }
@@ -898,6 +1119,93 @@ void Fact(const char *pszKey, const std::string &value, bool bOff = false)
   Text(Keep(value), UI_FACE_TEXT, Fs(14), 0.0f, bOff ? kNoInk : kLbInkInfo, -1, 1.3f);
   Close();
   Close();
+}
+
+const ReplayOnline::UploadView *UploadForContent(const std::string &contentId)
+{
+  for (auto at = g_online.uploads.rbegin(); at != g_online.uploads.rend(); ++at)
+    if (at->contentId == contentId)
+      return &*at;
+  return nullptr;
+}
+
+bool CanSubmit(const Replay &r)
+{
+  if (r.bPending || !r.bOk || IsDownloaded(r) || g_online.serverApi.empty())
+    return false;
+  const ReplayOnline::UploadView *job = UploadForContent(r.contentId);
+  return !job || job->phase == ReplayOnline::UploadPhase::Failed || job->phase == ReplayOnline::UploadPhase::Conflict ||
+         job->phase == ReplayOnline::UploadPhase::Unsupported;
+}
+
+void Submit(void)
+{
+  const Replay *r = Picked();
+  if (!r || !CanSubmit(*r))
+    return;
+  ReplayKraken::UploadMetadata metadata;
+  if (!ReplayCatalog::ReadUploadMetadata(*r, &metadata)) {
+    g_note = PortText("The replay has no authoritative upload metadata.");
+    return;
+  }
+  if (ReplayOnline::Submit(r->path, metadata, r->contentId, false).empty())
+    g_note = PortText("The durable upload queue could not be started.");
+  else
+    g_note = PortText("Preparing an immutable upload snapshot; Queued appears only after it is committed.");
+}
+
+void ToggleFavourite(void)
+{
+  const Replay *r = Picked();
+  if (!r || r->contentId.empty())
+    return;
+  ReplayLibrary::Record &record = ReplayLibrary::For(&g_library, r->contentId);
+  record.bFavourite = !record.bFavourite;
+  ReplayOnline::SaveLibrary(g_library);
+}
+
+void OpenNoteFor(const std::string &id)
+{
+  if (id.empty())
+    return;
+  g_noteTarget = id;
+  g_bNoteDialog = true;
+  g_bNoteTagsEdit = false;
+  g_editNote.clear();
+  g_editTags.clear();
+  g_editNoteId.clear();
+  g_editShared = false;
+  if (const ReplayLibrary::Record *record = LibraryRecord(id); record && !record->notes.empty()) {
+    const ReplayLibrary::Note &note = record->notes.front();
+    g_editNoteId = note.id;
+    g_editNote = note.text;
+    g_editShared = note.bShared;
+    for (size_t i = 0; i < note.tags.size(); ++i)
+      g_editTags += (i ? ", " : "") + note.tags[i];
+  }
+}
+
+void OpenNote(void)
+{
+  const Replay *r = Picked();
+  if (r)
+    OpenNoteFor(r->contentId);
+}
+
+const char *UploadPhaseName(ReplayOnline::UploadPhase phase)
+{
+  switch (phase) {
+    case ReplayOnline::UploadPhase::Preparing: return "Preparing snapshot";
+    case ReplayOnline::UploadPhase::Disabled: return "Disabled";
+    case ReplayOnline::UploadPhase::Queued: return "Queued";
+    case ReplayOnline::UploadPhase::Uploading: return "Uploading";
+    case ReplayOnline::UploadPhase::RetryWaiting: return "Retry waiting";
+    case ReplayOnline::UploadPhase::Uploaded: return "Uploaded";
+    case ReplayOnline::UploadPhase::Failed: return "Failed";
+    case ReplayOnline::UploadPhase::Conflict: return "Conflict / Needs review";
+    case ReplayOnline::UploadPhase::Unsupported: return "Unsupported / Protocol";
+  }
+  return "Unknown";
 }
 
 void Side(void)
@@ -956,15 +1264,16 @@ void Side(void)
   vb.d.layout.padding = Pad(Fs(14), Fs(14), Fs(10), Fs(10));
   vb.d.layout.childGap = Gap(Fs(4));
   const bool bOkV = v.nKind == VERDICT_OK;
-  vb.d.backgroundColor = Col(bOkV ? kOkFill : kNoFill);
-  vb.d.border = Border(bOkV ? kOkInk : kNoInk, Fs(4), 0, 0, 0);
+  const bool bWait = v.nKind == VERDICT_WAIT;
+  vb.d.backgroundColor = Col(bOkV ? kOkFill : bWait ? kScMenuFill : kNoFill);
+  vb.d.border = Border(bOkV ? kOkInk : bWait ? kLbDivider : kNoInk, Fs(4), 0, 0, 0);
   Radius(vb, 3);
   Decl gap;
   gap.d.layout.sizing.height = Fixed(Sc(10));
   Open(gap);
   Close();
   Open(vb);
-  Text(Keep(v.head), UI_FACE_BOLD, Fs(17), 0.0f, bOkV ? kOkInk : kNoInk);
+  Text(Keep(v.head), UI_FACE_BOLD, Fs(17), 0.0f, bOkV ? kOkInk : bWait ? kLbInkDesc : kNoInk);
   Text(Keep(v.line), UI_FACE_TEXT, Fs(15), 0.0f, kLbInkInfo, -1, 1.35f);
   if (!v.needs.empty())
     Text(Keep(v.needs), UI_FACE_TEXT, Fs(15), 0.0f, kScInkHi, -1, 1.35f);
@@ -1025,7 +1334,7 @@ void Side(void)
     } else if (!r->info.bHx) {
       Fact(PortText("State checks"), PortText("None: the classic format has no room for them"));
     }
-    Fact(PortText("File"), r->rel + kDot + FileDate(r->when));
+    Fact(PortText("File"), r->rel + kDot + FileDate(FileTimeOf(r->when)));
   }
   Close();
   Close();
@@ -1051,16 +1360,30 @@ void Side(void)
     Watch();
   if (!CanWatch(*r))
     TipOn(Id("rpwatch"), v.head.c_str(), (v.needs.empty() ? v.line : v.needs).c_str());
+  if (const ReplayOnline::UploadView *job = UploadForContent(r->contentId)) {
+    Text(Keep(PortTextF("Upload: {0} · {1}", {PortText(UploadPhaseName(job->phase)), job->account.empty() ? PortText("account unknown") : job->account})),
+         UI_FACE_TEXT, Fs(14), 0.0f, job->phase == ReplayOnline::UploadPhase::Uploaded ? kOkInk : kLbInkDesc, -1, 1.25f);
+    if (!job->error.empty())
+      Text(Keep(job->error), UI_FACE_TEXT, Fs(13), 0.0f, kNoInk, -1, 1.25f);
+    if (job->bCommitted && (job->phase == ReplayOnline::UploadPhase::Failed || job->phase == ReplayOnline::UploadPhase::Conflict ||
+        job->phase == ReplayOnline::UploadPhase::Unsupported || job->phase == ReplayOnline::UploadPhase::Disabled)) {
+      Decl retry = Box("rpretry");
+      retry.d.layout.sizing.height = Fixed(Sc(32));
+      if (ScMini(retry, PortText("Retry upload"), 0))
+        ReplayOnline::Retry(job->uuid);
+    }
+  }
   Decl row;
   row.d.layout.sizing.width = Grow();
   row.d.layout.childGap = Gap(Fs(4));
   Open(row);
   Decl sub2 = Box("rpsubmit");
   sub2.d.layout.sizing.height = Fixed(Sc(32));
-  ScMini(sub2, PortText("Submit"), 'U', false);
-  TipOn(Id("rpsubmit"), PortText("Submit Online"),
-        PortText("Puts the replay on Hyperion Online, which plays it to its end with no screen and checks each state "
-                 "check. It waits for Hyperion Online."));
+  if (ScMini(sub2, PortText("Submit"), 'U', CanSubmit(*r)))
+    Submit();
+  TipOn(Id("rpsubmit"), PortText("Submit to Replay Kraken"),
+        IsDownloaded(*r) ? PortText("Downloaded replays are never submitted again.")
+                         : PortText("Commits an immutable snapshot, then uploads this locally recorded game with a stable UUID. Notes and tags are never included."));
   Decl rn = Box("rprename");
   rn.d.layout.sizing.height = Fixed(Sc(32));
   if (ScMini(rn, PortText("Rename"), 'N')) {
@@ -1076,6 +1399,467 @@ void Side(void)
   if (ScMini(del, PortText("Delete"), 0))
     g_bDelete = true;
   TipOn(Id("rpdelete"), PortText("Delete"), PortText("Deletes the file, after asking. Hotkey: Delete"));
+  Close();
+  Decl organization;
+  organization.d.layout.sizing.width = Grow();
+  organization.d.layout.childGap = Gap(Fs(6));
+  Open(organization);
+  const ReplayLibrary::Record *libraryRecord = LibraryRecord(r->contentId);
+  Decl favourite = Box("rp favourite");
+  favourite.d.layout.sizing.height = Fixed(Sc(32));
+  if (ScMini(favourite, libraryRecord && libraryRecord->bFavourite ? PortText("Favourited") : PortText("Favourite"), 0))
+    ToggleFavourite();
+  Decl notes = Box("rpnotes");
+  notes.d.layout.sizing.height = Fixed(Sc(32));
+  if (ScMini(notes, ReplayLibrary::HasNotes(g_library, r->contentId) ? PortText("Edit note") : PortText("Add note"), 0))
+    OpenNote();
+  Close();
+  Close();
+  Close();
+}
+
+std::string OnlineId(const ReplayKraken::Match &match)
+{
+  ReplayKraken::Endpoint endpoint;
+  std::string error;
+  return ReplayKraken::EndpointParse(match.serverApi, &endpoint, &error) ?
+             ReplayKraken::ServerRecordId(endpoint, match.uuid) : "";
+}
+
+const ReplayOnline::DownloadView *DownloadFor(const ReplayKraken::Match &match)
+{
+  for (const auto &view : g_online.downloads)
+    if (view.serverApi == match.serverApi && view.uuid == match.uuid)
+      return &view;
+  return nullptr;
+}
+
+const ReplayLibrary::Record *OnlineRecord(const ReplayKraken::Match &match)
+{
+  if (const ReplayOnline::DownloadView *download = DownloadFor(match); download && !download->contentId.empty()) {
+    if (const ReplayLibrary::Record *linked = LibraryRecord(download->contentId))
+      return linked;
+  }
+  return LibraryRecord(OnlineId(match));
+}
+
+const ReplayKraken::Match *OnlinePicked(void)
+{
+  return g_nOnlinePick >= 0 && g_nOnlinePick < static_cast<int>(g_online.list.page.matches.size())
+             ? &g_online.list.page.matches[g_nOnlinePick] : nullptr;
+}
+
+bool OnlinePasses(const ReplayKraken::Match &match)
+{
+  if (!g_savedServerApi.empty() && match.serverApi != g_savedServerApi)
+    return false;
+  const std::string id = OnlineId(match);
+  const ReplayLibrary::Record *record = OnlineRecord(match);
+  if (g_query.bFavourites && (!record || !record->bFavourite))
+    return false;
+  if (g_query.bStarted && (!record || !record->startedAt))
+    return false;
+  if (g_query.bNotes && !(record && std::any_of(record->notes.begin(), record->notes.end(), [](const auto &note) {
+        return !note.text.empty() || !note.tags.empty();
+      })))
+    return false;
+  if (!g_activeCollection.empty()) {
+    const auto list = std::find_if(g_library.collections.begin(), g_library.collections.end(), [](const auto &candidate) {
+      return candidate.id == g_activeCollection;
+    });
+    const ReplayOnline::DownloadView *download = DownloadFor(match);
+    const bool bMember = list != g_library.collections.end() &&
+                         (ReplayLibrary::InCollection(*list, id) ||
+                          (download && ReplayLibrary::InCollection(*list, download->contentId)));
+    if (!bMember)
+      return false;
+  }
+  if (!g_query.player.empty()) {
+    const std::string needle = PortLower(g_query.player);
+    const bool bFound = std::any_of(match.players.begin(), match.players.end(), [&](const auto &player) {
+      return PortLower(player.name).find(needle) != std::string::npos;
+    });
+    if (!bFound)
+      return false;
+  }
+  if (!g_query.race.empty()) {
+    const std::string race = PortLower(g_query.race);
+    const bool bFound = std::any_of(match.players.begin(), match.players.end(), [&](const auto &player) {
+      return PortLower(player.race) == race;
+    });
+    if (!bFound)
+      return false;
+  }
+  if (!g_query.result.empty()) {
+    const std::string result = PortLower(g_query.result);
+    const bool bFound = std::any_of(match.players.begin(), match.players.end(), [&](const auto &player) {
+      return PortLower(player.result) == result;
+    });
+    if (!bFound)
+      return false;
+  }
+  if (!g_query.matchup.empty() && ReplayKraken::MatchupKey(match.matchup) != ReplayKraken::MatchupKey(g_query.matchup))
+    return false;
+  if (!g_onlineSearch.empty()) {
+    std::string hay = PortLower(match.map + " " + match.gameVersion + " " + match.uploadedBy + " " + match.uuid + " " +
+                                match.gameType + " " + match.matchup);
+    for (const auto &player : match.players)
+      hay += " " + PortLower(player.name);
+    if (hay.find(PortLower(g_onlineSearch)) == std::string::npos)
+      return false;
+  }
+  return true;
+}
+
+void OnlineFilter(void)
+{
+  const std::string uuid = OnlinePicked() ? OnlinePicked()->uuid : "";
+  g_onlineShown.clear();
+  g_nOnlinePick = -1;
+  for (size_t i = 0; i < g_online.list.page.matches.size(); ++i) {
+    if (!OnlinePasses(g_online.list.page.matches[i]))
+      continue;
+    g_onlineShown.push_back(static_cast<int>(i));
+    if (g_online.list.page.matches[i].uuid == uuid)
+      g_nOnlinePick = static_cast<int>(i);
+  }
+  if (g_nOnlinePick < 0 && !g_onlineShown.empty())
+    g_nOnlinePick = g_onlineShown.front();
+}
+
+void OnlineMove(int by)
+{
+  if (g_onlineShown.empty())
+    return;
+  int at = 0;
+  for (size_t i = 0; i < g_onlineShown.size(); ++i)
+    if (g_onlineShown[i] == g_nOnlinePick)
+      at = static_cast<int>(i);
+  at = std::max(0, std::min(at + by, static_cast<int>(g_onlineShown.size()) - 1));
+  g_nOnlinePick = g_onlineShown[at];
+}
+
+const Replay *OnlineLocalReplay(const ReplayKraken::Match &match)
+{
+  const ReplayOnline::DownloadView *download = DownloadFor(match);
+  if (!download || download->phase != ReplayOnline::DownloadPhase::Ready)
+    return nullptr;
+  for (const Replay &entry : g_reps)
+    if (entry.path == download->path)
+      return &entry;
+  const auto info = g_downloadInfo.find(match.serverApi + ":" + match.uuid);
+  if (info == g_downloadInfo.end())
+    return nullptr;
+  static Replay local;
+  local = Replay();
+  local.path = download->path;
+  local.rel = download->path;
+  local.contentId = download->contentId;
+  local.name = match.map.empty() ? match.uuid : match.map;
+  local.bPending = false;
+  local.bOk = true;
+  local.info = info->second;
+  local.bExpansion = local.info.abHead[0] != 0;
+  return &local;
+}
+
+void OnlineWatch(void)
+{
+  const ReplayKraken::Match *match = OnlinePicked();
+  if (!match)
+    return;
+  const Replay *local = OnlineLocalReplay(*match);
+  if (!local || !CanWatch(*local))
+    return;
+  const ReplayOnline::DownloadView *download = DownloadFor(*match);
+  WatchPath(local->path, download->contentId, match->uuid);
+}
+
+void OnlineTools(void)
+{
+  Decl tools;
+  tools.d.layout.sizing.width = Grow();
+  tools.d.layout.padding = Pad(Fs(12), Fs(12), Fs(10), Fs(10));
+  tools.d.layout.childGap = Gap(Fs(8));
+  tools.d.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
+  tools.d.border = Border(kLbDivider, 0, 0, 0, Fs(2));
+  Open(tools);
+  Decl search = Box("rponlinesearch");
+  search.d.layout.sizing.width = Fixed(Sc(280));
+  search.d.layout.sizing.height = Fixed(Sc(36));
+  if (Clicked(search.d.id))
+    g_bOnlineSearch = true;
+  else if (g_bPressed && !Over(search.d.id))
+    g_bOnlineSearch = false;
+  const std::string was = g_onlineSearch;
+  ScEdit(search, &g_onlineSearch, 120, PortText("Search fetched rows"), g_bOnlineSearch);
+  if (was != g_onlineSearch) {
+    g_query.search = g_onlineSearch;
+    OnlineFilter();
+  }
+  Decl player = Box("rponlineplayer");
+  player.d.layout.sizing.width = Fixed(Sc(190));
+  player.d.layout.sizing.height = Fixed(Sc(36));
+  if (Clicked(player.d.id)) {
+    g_bOnlinePlayerEdit = true;
+    g_bOnlineSearch = g_bOnlineMatchupEdit = false;
+  }
+  ScEdit(player, &g_query.player, 80, PortText("Player (archive)"), g_bOnlinePlayerEdit);
+  Decl matchup = Box("rponlinematchup");
+  matchup.d.layout.sizing.width = Fixed(Sc(125));
+  matchup.d.layout.sizing.height = Fixed(Sc(36));
+  if (Clicked(matchup.d.id)) {
+    g_bOnlineMatchupEdit = true;
+    g_bOnlineSearch = g_bOnlinePlayerEdit = false;
+  }
+  ScEdit(matchup, &g_query.matchup, 24, PortText("TvZ"), g_bOnlineMatchupEdit);
+  const std::vector<std::string> races = {PortText("Any race"), PortText("Zerg"), PortText("Terran"), PortText("Protoss")};
+  int race = 0;
+  if (!g_query.race.empty()) {
+    const std::vector<std::string> keys = {"", "zerg", "terran", "protoss"};
+    const auto at = std::find(keys.begin(), keys.end(), PortLower(g_query.race));
+    race = at == keys.end() ? 0 : static_cast<int>(at - keys.begin());
+  }
+  const int chosenRace = Pulldown("rponlinerace", 0, 145, races, race);
+  if (chosenRace >= 0) {
+    static const char *const keys[] = {"", "zerg", "terran", "protoss"};
+    g_query.race = keys[chosenRace];
+  }
+  Decl apply = Box("rp online apply");
+  apply.d.layout.sizing.height = Fixed(Sc(32));
+  if (ScMini(apply, PortText("Apply"), 0, !g_online.serverApi.empty()))
+    ReplayOnline::Fetch(g_query, true);
+  Decl following = Box("rponlinefollowing");
+  following.d.layout.sizing.height = Fixed(Sc(32));
+  if (ScMini(following, g_query.followedBy.empty() ? PortText("Following only") : PortText("All matches"), 0,
+             g_online.bTokenPresent)) {
+    g_query.followedBy = g_query.followedBy.empty() ? "@me" : "";
+    ReplayOnline::Fetch(g_query, true);
+  }
+  Decl more = Box("rp online more");
+  more.d.layout.sizing.height = Fixed(Sc(32));
+  const bool bMore = !g_online.list.bLoading && !g_online.list.page.bComplete && !g_online.list.bOffline;
+  if (ScMini(more, g_online.list.bPaginating ? PortText("Loading…") : PortText("Load more"), 0, bMore))
+    ReplayOnline::LoadMore();
+  Close();
+}
+
+void OnlineList(void)
+{
+  Decl box = Box("rplist");
+  box.d.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
+  box.d.layout.sizing.width = Grow();
+  box.d.layout.sizing.height = Grow();
+  box.d.clip.vertical = true;
+  InnerBox(box);
+  Open(box);
+  OnlineTools();
+  Decl head;
+  head.d.layout.sizing.height = Fixed(Sc(34));
+  head.d.layout.padding = Pad(Fs(12), Fs(12), 0, 0);
+  head.d.layout.childGap = Gap(Fs(12));
+  Open(head);
+  const char *const titles[] = {PortText("MAP / MATCH"), PortText("PLAYERS"), PortText("LENGTH"), PortText("UPLOADER"), PortText("VERSION"), PortText("STATE")};
+  const float widths[] = {280, 130, 90, 145, 135, 120};
+  for (int i = 0; i < 6; ++i) {
+    Decl cell;
+    cell.d.layout.sizing.width = Fixed(Sc(widths[i]));
+    Open(cell);
+    Text(titles[i], UI_FACE_WIDE, Fs(11), 0.03f, kScInkHead);
+    Close();
+  }
+  Close();
+  const int rows = g_nShownRows;
+  const int maxFirst = std::max(0, static_cast<int>(g_onlineShown.size()) - rows);
+  g_nOnlineFirst = std::max(0, std::min(g_nOnlineFirst, maxFirst));
+  g_nOnlineFirst += WheelRows(Over(Id("rplist")));
+  g_nOnlineFirst = std::max(0, std::min(g_nOnlineFirst, maxFirst));
+  for (int k = g_nOnlineFirst; k < static_cast<int>(g_onlineShown.size()) && k < g_nOnlineFirst + rows; ++k) {
+    const int index = g_onlineShown[k];
+    const ReplayKraken::Match &match = g_online.list.page.matches[index];
+    Decl row = Box("rponlinerow", index);
+    const bool bPick = index == g_nOnlinePick;
+    const bool bHot = Over(row.d.id);
+    if (Clicked(row.d.id)) {
+      g_nOnlinePick = index;
+      if (DoubleClicked(row.d.id)) {
+        if (DownloadFor(match) && DownloadFor(match)->phase == ReplayOnline::DownloadPhase::Ready)
+          OnlineWatch();
+        else
+          ReplayOnline::Download(match);
+      }
+    }
+    row.d.layout.sizing.width = Grow();
+    row.d.layout.sizing.height = Fixed(Sc(58));
+    row.d.layout.padding = Pad(Fs(12), Fs(12), 0, 0);
+    row.d.layout.childGap = Gap(Fs(12));
+    row.d.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
+    row.d.border = Border(bPick ? kScSelLine2 : kLbDivider, bPick ? Fs(3) : 0, 0, 0, 1);
+    if (bPick)
+      row.d.backgroundColor = Col(kLbItemHi);
+    else if (bHot)
+      row.d.backgroundColor = Col(kLbItem);
+    Open(row);
+    const float widths[] = {280, 130, 90, 145, 135, 120};
+    const std::string duration = Clock(match.durationFrames, 6);
+    const std::string players = match.matchup.empty() ? PortText("Unknown") : match.matchup;
+    const ReplayOnline::DownloadView *download = DownloadFor(match);
+    std::string state = PortText("Not downloaded");
+    if (download) {
+      switch (download->phase) {
+        case ReplayOnline::DownloadPhase::Queued: state = PortText("Queued"); break;
+        case ReplayOnline::DownloadPhase::Downloading: state = PortText("Downloading"); break;
+        case ReplayOnline::DownloadPhase::Validating: state = PortText("Validating"); break;
+        case ReplayOnline::DownloadPhase::Ready: state = PortText("Downloaded"); break;
+        case ReplayOnline::DownloadPhase::Failed: state = PortText("Download failed"); break;
+      }
+    }
+    const std::string values[] = {match.map.empty() ? PortText("Unknown map") : match.map, players, duration,
+                                  match.uploadedBy.empty() ? PortText("Unknown") : match.uploadedBy,
+                                  match.gameVersion.empty() ? PortText("Unknown") : match.gameVersion, state};
+    for (int i = 0; i < 6; ++i) {
+      Decl cell;
+      cell.d.layout.sizing.width = Fixed(Sc(widths[i]));
+      cell.d.clip.horizontal = true;
+      Open(cell);
+      Text(Keep(Elide(values[i], UI_FACE_TEXT, Fs(i == 0 ? 16 : 14), Sc(widths[i]))), UI_FACE_TEXT,
+           Fs(i == 0 ? 16 : 14), 0.0f, bPick || bHot ? kScInkHi : kLbInkInfo);
+      Close();
+    }
+    Close();
+  }
+  if (g_onlineShown.empty()) {
+    Decl none;
+    none.d.layout.padding = Pad(Fs(24), Fs(24), Fs(24), Fs(24));
+    Open(none);
+    Text(Keep(g_online.list.bLoading ? std::string(PortText("Loading the Replay Kraken archive…")) :
+         !g_online.list.error.empty() ? g_online.list.error :
+         g_online.list.page.matches.empty() ? std::string(PortText("No online matches. Configure the server in Settings, or refresh.")) :
+                                             std::string(PortText("No fetched row matches these filters."))),
+         UI_FACE_TEXT, Fs(16), 0.0f, g_online.list.bUnauthorized ? kNoInk : kLbInkDesc, -1, 1.3f);
+    Close();
+  }
+  if (!g_online.list.error.empty() && !g_online.list.page.matches.empty())
+    Text(Keep((g_online.list.bStale ? PortText("Offline · showing stale cache · ") : PortText("Offline · ")) + g_online.list.error),
+         UI_FACE_TEXT, Fs(14), 0.0f, kNoInk, -1, 1.25f);
+  if (!g_online.lastError.empty())
+    Text(Keep(g_online.lastError), UI_FACE_TEXT, Fs(13), 0.0f, kNoInk, -1, 1.25f);
+  Close();
+}
+
+void OnlineSide(void)
+{
+  Decl side = Box("rpside");
+  side.d.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
+  side.d.layout.sizing.width = Fixed(Sc(kSide));
+  side.d.layout.sizing.height = Grow();
+  InnerBox(side);
+  Open(side);
+  Decl body = Box("rpsidebody");
+  body.d.layout.sizing.width = Grow();
+  body.d.layout.sizing.height = Grow();
+  body.d.clip.vertical = true;
+  body.d.layout.padding = Pad(Fs(18), Fs(18), Fs(16), Fs(12));
+  body.d.layout.layoutDirection = CLAY_TOP_TO_BOTTOM;
+  body.d.layout.childGap = Gap(Fs(8));
+  Open(body);
+  const ReplayKraken::Match *match = OnlinePicked();
+  if (!match) {
+    Text(PortText("Pick an online replay."), UI_FACE_TEXT, Fs(16), 0.0f, kLbInkDesc);
+    Close();
+    Close();
+    return;
+  }
+  Text(Keep(match->map.empty() ? PortTextF("Replay {0}", {match->uuid.substr(0, 8)}) : match->map), UI_FACE_BOLD,
+       Fs(23), 0.0f, kLbInkInfo);
+  Text(Keep((match->matchup.empty() ? PortText("Matchup unknown") : match->matchup) + kDot + match->uploadedAt),
+       UI_FACE_TEXT, Fs(14), 0.0f, kLbInkDesc);
+  Fact(PortText("Game version"), match->gameVersion.empty() ? PortText("Unknown") : match->gameVersion);
+  Fact(PortText("Game type"), match->gameType.empty() ? PortText("Unknown") : match->gameType);
+  Fact(PortText("Duration"), match->durationFrames ? Clock(match->durationFrames, 6) + kDot + Thousands(match->durationFrames) + " frames" : PortText("Unknown"));
+  Fact(PortText("Uploader"), match->uploadedBy.empty() ? PortText("Unknown") : match->uploadedBy);
+  Fact(PortText("Server"), match->serverOrigin);
+  for (const auto &player : match->players) {
+    Decl row;
+    row.d.layout.childGap = Gap(Fs(8));
+    row.d.layout.childAlignment.y = CLAY_ALIGN_Y_CENTER;
+    Open(row);
+    Chip(0xb4b4b4, 12);
+    Text(Keep(Elide(player.name.empty() ? PortText("Unknown") : player.name, UI_FACE_BOLD, Fs(14), Sc(180))),
+         UI_FACE_BOLD, Fs(14), 0.0f, kScInkHi);
+    Text(Keep(player.race.empty() ? PortText("Unknown") : player.race), UI_FACE_TEXT, Fs(14), 0.0f, kLbInkDesc);
+    Text(Keep(PortTextF("slot {0} · {1} · {2}", {std::to_string(player.slot),
+          player.type.empty() ? PortText("type unknown") : player.type,
+          player.result.empty() ? PortText("result unknown") : player.result})), UI_FACE_TEXT, Fs(13), 0.0f, kLbInkDesc);
+    Close();
+  }
+  if (match->players.empty())
+    Text(PortText("Players and results: Unknown."), UI_FACE_TEXT, Fs(14), 0.0f, kLbInkDesc);
+  if (!match->players.empty()) {
+    const ReplayKraken::Player *target = &match->players.front();
+    for (const auto &player : match->players)
+      if (player.type == "human") {
+        target = &player;
+        break;
+      }
+    const bool bFollowing = std::find(g_online.following.begin(), g_online.following.end(), target->name) != g_online.following.end();
+    Decl follow = Box("rpfollowplayer");
+    follow.d.layout.sizing.height = Fixed(Sc(32));
+    const std::string label = PortTextF("{0} {1}", {bFollowing ? PortText("Unfollow") : PortText("Follow"),
+                                      Elide(target->name, UI_FACE_TEXT, Fs(14), Sc(220))});
+    if (ScMini(follow, Keep(label), 0, g_online.bTokenPresent))
+      ReplayOnline::Follow(target->name, !bFollowing);
+    TipOn(Id("rpfollowplayer"), PortText("Replay Kraken follow"),
+          PortText("Uses the configured server's real follow endpoint. Following-only filtering then applies archive-wide."));
+  }
+  const Replay *local = OnlineLocalReplay(*match);
+  if (local) {
+    const Verdict verdict = VerdictOf(*local);
+    Text(Keep(verdict.head), UI_FACE_BOLD, Fs(16), 0.0f, CanWatch(*local) ? kOkInk : kNoInk);
+    Text(Keep(verdict.line), UI_FACE_TEXT, Fs(14), 0.0f, kLbInkInfo, -1, 1.3f);
+  }
+  const ReplayOnline::UploadView *job = nullptr;
+  for (const auto &candidate : g_online.uploads)
+    if (candidate.uuid == match->uuid && candidate.serverApi == match->serverApi && !candidate.account.empty() &&
+        candidate.account == match->uploadedBy)
+      job = &candidate;
+  Fact(PortText("Upload state"), job ? PortText(UploadPhaseName(job->phase)) : PortText("Unknown"));
+  const ReplayLibrary::Record *record = OnlineRecord(*match);
+  Decl organization;
+  organization.d.layout.childGap = Gap(Fs(8));
+  Open(organization);
+  const std::string id = record ? record->id : OnlineId(*match);
+  Decl favourite = Box("rp online favourite");
+  favourite.d.layout.sizing.height = Fixed(Sc(32));
+  if (ScMini(favourite, record && record->bFavourite ? PortText("Favourited") : PortText("Favourite"), 0)) {
+    ReplayLibrary::Record &edit = ReplayLibrary::For(&g_library, id);
+    edit.bFavourite = !edit.bFavourite;
+    ReplayOnline::SaveLibrary(g_library);
+  }
+  Decl note = Box("rp online note");
+  note.d.layout.sizing.height = Fixed(Sc(32));
+  if (ScMini(note, PortText("Note / tags"), 0))
+    OpenNoteFor(id);
+  Close();
+  const ReplayOnline::DownloadView *download = DownloadFor(*match);
+  Decl actions;
+  actions.d.layout.childGap = Gap(Fs(8));
+  Open(actions);
+  if (!download || download->phase == ReplayOnline::DownloadPhase::Failed) {
+    Decl get = Box("rpdownload");
+    get.d.layout.sizing.height = Fixed(Sc(44));
+    if (ScButton(get, PortText("Download"), 'D', true, g_online.bAvailable))
+      ReplayOnline::Download(*match);
+  } else if (download->phase == ReplayOnline::DownloadPhase::Ready) {
+    Decl watch = Box("rp online watch");
+    watch.d.layout.sizing.height = Fixed(Sc(44));
+    if (ScButton(watch, PortText("Watch Replay"), 'W', true, local && CanWatch(*local)))
+      OnlineWatch();
+    if (!local || !CanWatch(*local))
+      TipOn(Id("rp online watch"), PortText("Cannot watch"), PortText("The download is being indexed, or Hyperion refused its rules, data, simulation or mod requirements."));
+  } else {
+    Text(PortText("Download in progress; Hyperion validation follows before install."), UI_FACE_TEXT, Fs(14), 0.0f, kLbInkDesc);
+  }
   Close();
   Close();
   Close();
@@ -1114,6 +1898,230 @@ void RenameDialog(void)
   }
 }
 
+std::vector<std::string> NoteTags(const std::string &text)
+{
+  std::vector<std::string> tags;
+  size_t at = 0;
+  while (at <= text.size() && tags.size() < 32) {
+    const size_t comma = text.find(',', at);
+    std::string tag = text.substr(at, comma == std::string::npos ? std::string::npos : comma - at);
+    const size_t first = tag.find_first_not_of(" \t\r\n");
+    const size_t last = tag.find_last_not_of(" \t\r\n");
+    if (first != std::string::npos) {
+      tag = tag.substr(first, last - first + 1);
+      if (tag.size() <= 128 && std::find(tags.begin(), tags.end(), tag) == tags.end())
+        tags.push_back(tag);
+    }
+    if (comma == std::string::npos)
+      break;
+    at = comma + 1;
+  }
+  return tags;
+}
+
+void SaveNote(void)
+{
+  if (g_noteTarget.empty())
+    return;
+  ReplayLibrary::Record &record = ReplayLibrary::For(&g_library, g_noteTarget);
+  if (g_editNoteId.empty())
+    g_editNoteId = ReplayKraken::UuidNew();
+  ReplayLibrary::Note note;
+  note.id = g_editNoteId;
+  note.text = g_editNote.substr(0, 65536);
+  note.tags = NoteTags(g_editTags);
+  note.bShared = g_editShared;
+  note.updatedAt = ReplayLibrary::NowSeconds();
+  bool bFound = false;
+  for (ReplayLibrary::Note &old : record.notes)
+    if (old.id == note.id) {
+      old = note;
+      bFound = true;
+      break;
+    }
+  if (!bFound)
+    record.notes.push_back(note);
+  ReplayOnline::SaveLibrary(g_library);
+  g_bNoteDialog = false;
+}
+
+void NoteDialog(void)
+{
+  const bool bOut = DialogOpen("rpnotedlg", 820, 430, 360);
+  DialogTitle(PortText("REPLAY NOTE AND TAGS"));
+  Decl text = Box("rpnotetext");
+  text.d.layout.sizing.width = Grow();
+  text.d.layout.sizing.height = Fixed(Sc(48));
+  if (Clicked(text.d.id))
+    g_bNoteTagsEdit = false;
+  ScEdit(text, &g_editNote, 2000, PortText("Private note (one line)"), !g_bNoteTagsEdit);
+  Decl tags = Box("rpnotetags");
+  tags.d.layout.sizing.width = Grow();
+  tags.d.layout.sizing.height = Fixed(Sc(44));
+  if (Clicked(tags.d.id))
+    g_bNoteTagsEdit = true;
+  ScEdit(tags, &g_editTags, 512, PortText("Tags, comma separated"), g_bNoteTagsEdit);
+  Decl visibility = Box("rpnotevisibility");
+  visibility.d.layout.sizing.height = Fixed(Sc(34));
+  if (ScMini(visibility, g_editShared ? PortText("Shared (export allowed)") : PortText("Private (never exported)"), 0))
+    g_editShared = !g_editShared;
+  Text(PortText("Private is the default. Uploading a replay never includes its note or tags."),
+       UI_FACE_TEXT, Fs(14), 0.0f, kLbInkDesc);
+  Decl row;
+  row.d.layout.childGap = Gap(Fs(12));
+  Open(row);
+  Decl save = Box("rpnotesave");
+  save.d.layout.sizing.width = Fixed(Sc(210));
+  save.d.layout.sizing.height = Fixed(Sc(48));
+  const bool bSave = ScButton(save, PortText("Save note"), 0, true);
+  Decl cancel = Box("rpnotecancel");
+  cancel.d.layout.sizing.width = Fixed(Sc(210));
+  cancel.d.layout.sizing.height = Fixed(Sc(48));
+  const bool bCancel = ScButton(cancel, PortText("Cancel"), 0, false);
+  Close();
+  Close();
+  if (bSave)
+    SaveNote();
+  else if (bCancel || bOut)
+    g_bNoteDialog = false;
+}
+
+void ViewDialog(void)
+{
+  const bool bOut = DialogOpen("rpviewdlg", 700, 240, 260);
+  DialogTitle(PortText("SAVE DYNAMIC QUERY"));
+  Decl edit = Box("rpviewname");
+  edit.d.layout.sizing.width = Grow();
+  edit.d.layout.sizing.height = Fixed(Sc(44));
+  ScEdit(edit, &g_editName, 100, PortText("Query name"), true);
+  Text(PortText("The complete filter is saved, not the currently rendered rows."), UI_FACE_TEXT, Fs(14), 0.0f, kLbInkDesc);
+  Decl save = Box("rpviewsave");
+  save.d.layout.sizing.height = Fixed(Sc(46));
+  const bool bSave = ScButton(save, PortText("Save query"), 0, true);
+  Close();
+  if (bSave) {
+    SaveQuery(g_editName);
+    g_bViewDialog = false;
+  } else if (bOut) {
+    g_bViewDialog = false;
+  }
+}
+
+void RunLibraryTransfer(bool bImport)
+{
+  if (bImport) {
+    ReplayOnline::ImportLibrary(g_editPath);
+    g_bImportDialog = false;
+    return;
+  }
+  ReplayLibrary::ExportSelection selection;
+  if (g_nTab == 0 && Picked())
+    selection.recordIds.push_back(Picked()->contentId);
+  else if (g_nTab == 1 && OnlinePicked()) {
+    const ReplayLibrary::Record *record = OnlineRecord(*OnlinePicked());
+    selection.recordIds.push_back(record ? record->id : OnlineId(*OnlinePicked()));
+  }
+  if (g_exportQueries)
+    for (const auto &query : g_library.queries)
+      selection.queryIds.push_back(query.id);
+  if (g_exportCollections)
+    for (const auto &list : g_library.collections)
+      selection.collectionIds.push_back(list.id);
+  selection.bFavourites = g_exportFavourites;
+  selection.bSharedNotes = g_exportNotes;
+  ReplayOnline::ExportLibrary(selection, g_editPath);
+  g_bExportDialog = false;
+}
+
+void ExportImportDialog(bool bImport)
+{
+  const bool bOut = DialogOpen(bImport ? "rpimportdlg" : "rpexportdlg", 820, bImport ? 240 : 390, 340);
+  DialogTitle(bImport ? PortText("IMPORT REPLAY LIBRARY") : PortText("EXPORT REPLAY LIBRARY"));
+  Decl path = Box("rplibrarypath");
+  path.d.layout.sizing.width = Grow();
+  path.d.layout.sizing.height = Fixed(Sc(44));
+  ScEdit(path, &g_editPath, 2048, PortText("JSON file path"), true);
+  if (!bImport) {
+    Decl fav = Box("rpexportfav");
+    fav.d.layout.sizing.height = Fixed(Sc(32));
+    if (ScMini(fav, g_exportFavourites ? PortText("[x] Include favourite") : PortText("[ ] Include favourite"), 0))
+      g_exportFavourites = !g_exportFavourites;
+    Decl notes = Box("rpexportnotes");
+    notes.d.layout.sizing.height = Fixed(Sc(32));
+    if (ScMini(notes, g_exportNotes ? PortText("[x] Include shared notes/tags") : PortText("[ ] Include shared notes/tags"), 0))
+      g_exportNotes = !g_exportNotes;
+    Decl queries = Box("rpexportqueries");
+    queries.d.layout.sizing.height = Fixed(Sc(32));
+    if (ScMini(queries, g_exportQueries ? PortText("[x] Include saved queries") : PortText("[ ] Include saved queries"), 0))
+      g_exportQueries = !g_exportQueries;
+    Decl lists = Box("rpexportlists");
+    lists.d.layout.sizing.height = Fixed(Sc(32));
+    if (ScMini(lists, g_exportCollections ? PortText("[x] Include fixed lists") : PortText("[ ] Include fixed lists"), 0))
+      g_exportCollections = !g_exportCollections;
+    Text(PortText("Only this replay and explicitly selected content is exported. Private notes and their tags are always excluded."),
+         UI_FACE_TEXT, Fs(14), 0.0f, kLbInkDesc);
+  }
+  Decl run = Box("rplibraryrun");
+  run.d.layout.sizing.height = Fixed(Sc(46));
+  const bool bRun = ScButton(run, bImport ? PortText("Import and merge") : PortText("Export"), 0, true);
+  Close();
+  if (bRun) {
+    RunLibraryTransfer(bImport);
+  } else if (bOut) {
+    g_bImportDialog = g_bExportDialog = false;
+  }
+}
+
+void PumpServices(void)
+{
+  static uint64_t lastCatalogSync = 0;
+  const bool catalogChanged = ReplayCatalog::Pump();
+  const ReplayCatalog::Status catalogStatus = ReplayCatalog::GetStatus();
+  const uint64_t now = PortNowMs();
+  if (catalogChanged && ((catalogStatus.pending == 0 && !catalogStatus.bScanning) || now - lastCatalogSync >= 250)) {
+    lastCatalogSync = now;
+    SyncCatalog();
+  }
+  if (const ReplayKraken::Match *selected = OnlinePicked())
+    g_onlineKeep = selected->uuid;
+  const void *oldData = g_onlinePageData;
+  const size_t oldSize = g_onlinePageSize;
+  g_online = ReplayOnline::Snapshot();
+  if (!g_onlineKeep.empty())
+    for (size_t i = 0; i < g_online.list.page.matches.size(); ++i)
+      if (g_online.list.page.matches[i].uuid == g_onlineKeep)
+        g_nOnlinePick = static_cast<int>(i);
+  if (oldData != g_online.list.page.matches.data() || oldSize != g_online.list.page.matches.size() || g_onlineShown.empty()) {
+    OnlineFilter();
+    g_onlinePageData = g_online.list.page.matches.data();
+    g_onlinePageSize = g_online.list.page.matches.size();
+  }
+  for (const ReplayOnline::DownloadView &download : g_online.downloads) {
+    if (download.phase == ReplayOnline::DownloadPhase::Failed)
+      g_validationPosted.erase(download.serverApi + ":" + download.uuid);
+    if (download.phase == ReplayOnline::DownloadPhase::Validating && !download.tempPath.empty() &&
+        g_validationPosted.insert(download.serverApi + ":" + download.uuid).second) {
+      ReplayHxInfo info;
+      std::vector<unsigned char> chk;
+      const bool bValid = ReplayHxPeek(download.tempPath.c_str(), &info, &chk);
+      if (bValid)
+        g_downloadInfo[download.serverApi + ":" + download.uuid] = info;
+      ReplayOnline::DownloadValidated(download.serverApi, download.uuid, bValid,
+                                      bValid ? "" : "The download is not a complete replay Hyperion can read.");
+    }
+    if (download.phase == ReplayOnline::DownloadPhase::Ready && !download.path.empty()) {
+      const std::string key = download.serverApi + ":" + download.uuid;
+      if (g_handledDownloads.insert(key).second) {
+        g_selectAfterDownload = download.path;
+        g_keep = download.path;
+        g_keepContent = download.contentId;
+        ReplayCatalog::Refresh();
+      }
+    }
+  }
+  g_library = ReplayOnline::LibrarySnapshot();
+}
+
 }  // namespace
 
 namespace FrontKit {
@@ -1126,8 +2134,16 @@ void ReplaysOpen(void)
   g_nResult = 0;
   g_note.clear();
   g_lbOpen.clear();
-  g_bRename = g_bDelete = g_bSearch = false;
+  g_bRename = g_bDelete = g_bSearch = g_bOnlineSearch = false;
+  ReplayOnline::Start(PortDataFolder(), PortProgramFolder());
+  char server[2048] = {};
+  PortSettingString("hyperion", "replayKrakenServer", server, sizeof server);
+  double automatic = 0.0;
+  PortSettingNumber("hyperion", "replayKrakenAuto", &automatic);
+  ReplayOnline::Configure(server, automatic != 0.0);
+  g_library = ReplayOnline::LibrarySnapshot();
   ListReplays();
+  ReplayOnline::Fetch(g_query, true);
   size_t nHx = 0, nBad = 0;
   for (const Replay &r : g_reps) {
     nHx += r.bOk && r.info.bHx;
@@ -1139,11 +2155,16 @@ void ReplaysOpen(void)
 
 void ReplaysClose(void)
 {
-  g_keep = Picked() != NULL ? Picked()->path : std::string();
+  g_keep = Picked() != NULL ? Picked()->path : g_keep;
+  g_keepContent = Picked() != NULL ? Picked()->contentId : g_keepContent;
   g_nPick = -1;
-  g_reps.clear();
   g_shown.clear();
   g_pic = MapPicture();
+  g_picContent.clear();
+  const ReplayCatalog::Status status = ReplayCatalog::GetStatus();
+  FrontLog("replays catalog: worst ReplayHxPeek %.3f ms, last engine batch %.3f ms\n", status.worstEnginePeekMs,
+           status.lastEngineBatchMs);
+  ReplayCatalog::Close();
 }
 
 int ReplaysResult(void)
@@ -1153,6 +2174,7 @@ int ReplaysResult(void)
 
 void ReplaysScreen(void)
 {
+  PumpServices();
   MapPreviewFrame();
   Tabs();
   Decl panel = Box("rppanel");
@@ -1167,21 +2189,36 @@ void ReplaysScreen(void)
   static UiCustom frame = {0.0f, DrawScFrame, NULL};
   panel.d.custom.customData = &frame;
   Open(panel);
-  // {0} the profile playing
-  Head(PortText("My Replays"),
-       std::string(PortText("replays\\ in Hyperion\xe2\x80\x99s data folder")) + kDot +
-           PortTextNF("{0} replay", "{0} replays", static_cast<long long>(g_reps.size()),
-                      {std::to_string(g_reps.size())}) +
-           kDot +
-           (gLocalPlayerName[0] ? PortTextF("{0} is playing", {gLocalPlayerName})
-                                : std::string(PortText("no profile yet"))));
+  if (g_nTab == 0) {
+    const ReplayCatalog::Status status = ReplayCatalog::GetStatus();
+    std::string line = PortTextNF("{0} replay", "{0} replays", static_cast<long long>(g_reps.size()),
+                                  {std::to_string(g_reps.size())});
+    if (status.pending || status.bScanning)
+      line += kDot + PortTextF("indexing {0}", {std::to_string(status.pending)});
+    if (status.deferred)
+      line += kDot + PortTextF("{0} still being written", {std::to_string(status.deferred)});
+    if (status.bLimited)
+      line += kDot + PortTextF("limit {0} (Settings)", {std::to_string(status.limit)});
+    Head(PortText("My Replays"), line);
+  } else {
+    std::string line = g_online.serverApi.empty() ? PortText("Set the Replay Kraken server in Settings · Data and mods") : g_online.serverApi;
+    line += kDot + PortTextF("{0} archive matches", {std::to_string(g_online.list.page.total)});
+    if (g_online.list.bStale)
+      line += std::string(kDot) + PortText("stale offline cache");
+    Head(PortText("Online Replays"), line);
+  }
   Decl body;
   body.d.layout.sizing.width = Grow();
   body.d.layout.sizing.height = Grow();
   body.d.layout.childGap = Gap(Fs(14));
   Open(body);
-  List();
-  Side();
+  if (g_nTab == 0) {
+    List();
+    Side();
+  } else {
+    OnlineList();
+    OnlineSide();
+  }
   Close();
   Close();
   if (g_bRename)
@@ -1198,12 +2235,47 @@ void ReplaysScreen(void)
     else if (n == 1)
       g_bDelete = false;
   }
+  if (g_bNoteDialog)
+    NoteDialog();
+  if (g_bViewDialog)
+    ViewDialog();
+  if (g_bExportDialog)
+    ExportImportDialog(false);
+  if (g_bImportDialog)
+    ExportImportDialog(true);
   DrawTip();
   PulldownCloseOutside();
 }
 
 bool ReplaysKeys(void)
 {
+  if (g_bNoteDialog) {
+    if (Key(VK_TAB))
+      g_bNoteTagsEdit = !g_bNoteTagsEdit;
+    else if (Key('V'))
+      g_editShared = !g_editShared;
+    else if (Key(VK_RETURN))
+      SaveNote();
+    else if (Key(VK_ESCAPE))
+      g_bNoteDialog = false;
+    return true;
+  }
+  if (g_bViewDialog) {
+    if (Key(VK_RETURN)) {
+      SaveQuery(g_editName);
+      g_bViewDialog = false;
+    } else if (Key(VK_ESCAPE))
+      g_bViewDialog = false;
+    return true;
+  }
+  if (g_bExportDialog || g_bImportDialog) {
+    const bool bImport = g_bImportDialog;
+    if (Key(VK_RETURN))
+      RunLibraryTransfer(bImport);
+    else if (Key(VK_ESCAPE))
+      g_bExportDialog = g_bImportDialog = false;
+    return true;
+  }
   if (g_bRename) {
     if (Key(VK_RETURN))
       Rename();
@@ -1220,32 +2292,54 @@ bool ReplaysKeys(void)
   }
   if (PulldownKeys())
     return true;
-  if (g_bSearch) {
+  if (g_bSearch || g_bOnlineSearch || g_bOnlinePlayerEdit || g_bOnlineMatchupEdit) {
     if (Key(VK_ESCAPE) || Key(VK_RETURN))
-      g_bSearch = false;
+      g_bSearch = g_bOnlineSearch = g_bOnlinePlayerEdit = g_bOnlineMatchupEdit = false;
     else if (Key(VK_DOWN))
-      Move(1);
+      g_nTab == 0 ? Move(1) : OnlineMove(1);
     else if (Key(VK_UP))
-      Move(-1);
+      g_nTab == 0 ? Move(-1) : OnlineMove(-1);
+    return true;
+  }
+  if (Key('1') || Key('2')) {
+    g_nTab = Key('1') ? 0 : 1;
+    if (g_nTab == 1)
+      ReplayOnline::Fetch(g_query, true);
+    else
+      ReplayCatalog::Refresh();
     return true;
   }
   if (Key(VK_DOWN))
-    Move(1);
+    g_nTab == 0 ? Move(1) : OnlineMove(1);
   else if (Key(VK_UP))
-    Move(-1);
+    g_nTab == 0 ? Move(-1) : OnlineMove(-1);
   else if (Key(VK_NEXT))
-    Move(g_nShownRows);
+    g_nTab == 0 ? Move(g_nShownRows) : OnlineMove(g_nShownRows);
   else if (Key(VK_PRIOR))
-    Move(-g_nShownRows);
+    g_nTab == 0 ? Move(-g_nShownRows) : OnlineMove(-g_nShownRows);
   else if (Key('W') || Key(VK_RETURN))
-    Watch();
-  else if (Key('N') && Picked() != NULL) {
+    g_nTab == 0 ? Watch() : OnlineWatch();
+  else if (Key('D') && g_nTab == 1 && OnlinePicked())
+    ReplayOnline::Download(*OnlinePicked());
+  else if (Key('M') && g_nTab == 1)
+    ReplayOnline::LoadMore();
+  else if (Key('U') && g_nTab == 0)
+    Submit();
+  else if (Key('V') && g_nTab == 0)
+    ToggleFavourite();
+  else if (Key('T') && g_nTab == 0 && Picked())
+    OpenNote();
+  else if (Key('R'))
+    g_nTab == 0 ? ReplayCatalog::Refresh() : ReplayOnline::Fetch(g_query, true);
+  else if (Key('O') && g_nTab == 0 && LatestRetryJob())
+    ReplayOnline::Retry(LatestRetryJob()->uuid);
+  else if (Key('N') && g_nTab == 0 && Picked() != NULL) {
     g_bRename = true;
     g_newName = Picked()->name;
-    g_typed.clear();  // the N is not the name's
-  } else if (Key('F'))
+    g_typed.clear();
+  } else if (Key('F') && g_nTab == 0)
     ShowInFolder();
-  else if (Key(VK_DELETE) && Picked() != NULL)
+  else if (Key(VK_DELETE) && g_nTab == 0 && Picked() != NULL)
     g_bDelete = true;
   else if (Key(VK_ESCAPE) || Key('B'))
     g_nResult = FRONT_REPLAYS_HOME;

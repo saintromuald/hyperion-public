@@ -6,6 +6,7 @@
 
 #include "../h/gds_appcrit.h"
 #include "../h/gds_file.h"
+#include "../h/port_replayonline.h"
 #include "../gen/globals117.h"
 
 // The CRT entry points, declared here rather than through <stdio.h>, as init.cpp
@@ -99,5 +100,8 @@ int __fastcall pfseek(void *pFile, int nOffset, int nOrigin)
 // 0x4CC4A0 (28 B).
 BOOL __fastcall pfwrite(const void *pBuf, int nSize, void *pFile)
 {
-  return fwrite(pBuf, nSize, 1, pFile) == 1;
+  const BOOL bOk = fwrite(pBuf, nSize, 1, pFile) == 1;
+  if (bOk)
+    ReplayOnline::CaptureWrite(pBuf, static_cast<size_t>(nSize), pFile);
+  return bOk;
 }

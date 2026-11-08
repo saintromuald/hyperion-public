@@ -7,6 +7,7 @@
 
 #include "oc_data.h"  // Hyperion: OC_VA
 #include "../h/replay.h"
+#include "../h/port_replayonline.h"
 #include "../h/gds_log.h"
 #include "../h/dlg_effects.h"
 #include "../h/glues.h"
@@ -1429,6 +1430,7 @@ int write_replay(const char *pszName, BOOL bOverwrite)
     pFile = pfopen(szPath, 0x17);
     if (pFile == NULL)
       return 0;
+    ReplayOnline::CaptureBegin(pFile);
 
     oc_ReplayHdrBlob.bIsExpansion = oc_b536720;
     oc_ReplayHdrBlob.bValid = 1;
@@ -1441,6 +1443,7 @@ int write_replay(const char *pszName, BOOL bOverwrite)
       PortWatchPatchHeader(&hdr, sizeof hdr);  // and a watched skirmish's
     // Hyperion: a game past 1.17's limits writes Hyperion's replay
     dwWord = ReplayHxNoted() ? REPLAY_MAGIC_HX : 0x53526572;
+    ReplayOnline::CaptureHeader(&hdr, sizeof hdr);
     nOk = compress(&dwWord, 4, pFile);
     if (nOk == 0)
       goto done;
@@ -1472,6 +1475,7 @@ int write_replay(const char *pszName, BOOL bOverwrite)
     }
 
 done:
+    ReplayOnline::CaptureFinish(pFile, nOk != 0);
     pfclose(pFile);
     if (nOk == 0)
       pfdelete(szPath, FALSE);

@@ -29,6 +29,7 @@ import coff  # noqa: E402
 import third_party_patches  # noqa: E402
 import shader_layout  # noqa: E402
 import shader_msl  # noqa: E402
+import build_curl  # noqa: E402
 from port_files import port_path, tu_path, SHADERS as SHADER_SRC  # noqa: E402
 
 SRC = os.path.join(ENGINE, "src117")
@@ -412,6 +413,7 @@ def main():
     ap.add_argument("--webm", action="store_true",
                     help="build libvpx, libwebm's parser and stb_vorbis again, and libwebp's decoder and stb_image")
     ap.add_argument("--dav1d", action="store_true", help="build dav1d again")
+    ap.add_argument("--curl", action="store_true", help="build Replay Kraken's libcurl again")
     ap.add_argument("--no-install", action="store_true", help="leave the folders install_to.txt names as they are")
     ap.add_argument("--no-sb", action="store_true", help="build without the ShieldBattery relay provider")
     a = ap.parse_args()
@@ -481,6 +483,8 @@ def main():
     sb_lib = build_sb(a.no_sb, env)
     if sb_lib is None:
         PORT.append("/DSB_NETCODE_OFF")
+    curl = build_curl.build(ENGINE, OUT, WEBRTC, windows=True, again=a.curl, env=env)
+    PORT.extend(["/DCURL_STATICLIB", "/I" + curl["include"]])
     ports = tus("port")
     write_build_id()
     # the snapshots' ranges follow the global blocks' layout (tools/snapranges.py); a tree without
@@ -543,7 +547,7 @@ def main():
          "@" + lrsp, os.path.join(OUT, "hyperion.res"), os.path.join(OUT, "fonts.res"),
          os.path.join(OUT, "stormlib", "stormlib.lib"), casclib, webm, image, dav1d,
          os.path.join(SDL3, "lib", "x64", "SDL3.lib"), "/DELAYLOAD:SDL3.dll", "delayimp.lib",
-         "bcrypt.lib"] + sb_libs + [os.path.join(WEBRTC, "lib", l) for l in WEBRTC_LIBS] + ["iphlpapi.lib"] + LIBS,
+         "bcrypt.lib", curl["lib"]] + sb_libs + [os.path.join(WEBRTC, "lib", l) for l in WEBRTC_LIBS] + ["iphlpapi.lib"] + LIBS,
         env, "link Hyperion.exe")
     # The replay observer (docs/replay-test.md), which the harness loads into the game.
     rt = os.path.join(ENGINE, "tools", "replaytest")

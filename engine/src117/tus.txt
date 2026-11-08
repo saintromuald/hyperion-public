@@ -360,6 +360,12 @@ port port_zip
 port port_players
 port port_teamcolor
 port port_hxreplay
+port port_replaykraken
+port port_replaylibrary
+port port_replayonline
+port port_replaycatalog
+port port_replayclaims
+port port_http
 port port_rules
 port port_selwide
 port port_teams
