@@ -3306,6 +3306,11 @@ bool SkirmishGameNow(SkirmishGame *pOut)
   return true;
 }
 
+void SkirmishRoomTransport(bool bSb)
+{
+  g_bSb = bSb;
+}
+
 bool SkirmishRoomNow(SkirmishRoomSetUp *pOut)
 {
   if (RoomMode() == 0 || g_map.name.empty() || g_nType >= static_cast<int>(g_types.size()))

@@ -97,6 +97,8 @@ struct SkirmishRoomSetUp {
 };
 // The host's set-up as the room should have it; false before a map is chosen.
 bool SkirmishRoomNow(SkirmishRoomSetUp *pOut);
+// Adopt the room's transport when a lobby opens, before HostSync writes its set-up back.
+void SkirmishRoomTransport(bool bSb);
 // The room's people in the host's open seats, each frame; a guest's whole set-up likewise.
 void SkirmishRoomSeats(const std::vector<SkirmishRoomSeat> &seats);
 void SkirmishGuestSetUp(const SkirmishRoomSetUp &r);
