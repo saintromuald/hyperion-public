@@ -136,7 +136,17 @@ static bool LaunchMap(const PortOptions *pOptions)
   const char *pszSeats = pOptions->bBench || pOptions->bTrainer ? pOptions->szBenchRaces : "";
   const size_t nSeats = strlen(pszSeats);
   auto seatRace = [&](size_t i, BYTE bOther) -> BYTE {
-    const char c = i < nSeats ? static_cast<char>(tolower(pszSeats[i])) : '\0';
+    // The bench accepts both contiguous letters and comma-separated races.
+    // Seat numbers are ordinal, not byte offsets: seat 1 is 't' in "z,t",
+    // never the comma that happens to precede it.
+    size_t at = 0;
+    for (size_t seat = 0; at < nSeats && seat < i; ++at) {
+      if (pszSeats[at] != ',')
+        ++seat;
+    }
+    while (at < nSeats && pszSeats[at] == ',')
+      ++at;
+    const char c = at < nSeats ? static_cast<char>(tolower(pszSeats[at])) : '\0';
     return c == 'z' ? 0 : c == 't' ? 1 : c == 'p' ? 2 : c == 'r' ? RACE_RANDOM : bOther;
   };
   if (pOptions->bBench) {

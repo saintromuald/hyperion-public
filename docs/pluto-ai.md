@@ -93,8 +93,8 @@ every unit): obs N=9 every step, real commands out (select + move), zero faults
 over repeated runs. The wire format and the traps are in `pluto-protocol.md`.
 
 Staged for the play test: `~/Games/hyperion/Hyperion.x86_64.pluto` (the client)
-and `~/Games/hyperion/Data/pluto/` (pluto-bridge.exe, pluto.patched.dll,
-pluto/pluto_infer.exe, pluto_weights.bin).
+and `~/Games/hyperion/Data/pluto/` (pluto-bridge.exe, official unmodified
+pluto.dll, pluto/pluto_infer.exe, pluto_weights.bin).
 
 ## The rig (tools/pluto-rig) — status 2026-11-01, session 3
 

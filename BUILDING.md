@@ -165,6 +165,7 @@ These tests need none of the game's files:
 | `huds` | every built-in HUD design passes Hyperion's own check |
 | `maps` | a map written from nothing passes the map check, and compiles to the same classic map twice |
 | `mods` | every built-in mod's files read |
+| `replays` | ReplayKraken protocol, identity, persistence/privacy and synthetic-library contracts |
 
 `--game <StarCraft folder>` adds the full check of each built-in mod against your game's files.
 `--only huds,maps` runs some of them.

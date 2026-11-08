@@ -1,0 +1,21 @@
+{
+  "matches": [
+    {
+      "uuid": "33333333-3333-4333-8333-333333333333",
+      "game_version": "Hyperion-v0.7.1-beta",
+      "map": "Third Fixture",
+      "game_type": "Use Map Settings",
+      "duration_frames": 900,
+      "matchup": "TvZ",
+      "uploaded_by": "alice",
+      "uploaded_at": "2026-11-07T10:00:00Z",
+      "players": [
+        {"name": "Alice", "race": "Terran", "slot": 0, "result": "unknown", "type": "human", "discord_id": ""},
+        {"name": "Computer", "race": "Zerg", "slot": 1, "result": "unknown", "type": "computer", "discord_id": ""}
+      ]
+    }
+  ],
+  "total": 3,
+  "limit": 2,
+  "offset": 2
+}

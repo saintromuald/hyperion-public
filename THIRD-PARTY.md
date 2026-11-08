@@ -23,7 +23,9 @@ license, and every package carries the licenses of what it contains.
 | [usrsctp](https://github.com/sctplab/usrsctp), [libSRTP](https://github.com/cisco/libsrtp) | pinned commits | BSD-3-Clause | SCTP and SRTP, for the streamed seats |
 | [plog](https://github.com/SergiusTheBest/plog), [nlohmann/json](https://github.com/nlohmann/json) | as libdatachannel pins them | MIT | libdatachannel's logging and JSON |
 | [OpenH264](https://github.com/cisco/openh264) | as `fetch_webrtc.py` pins it | BSD-2-Clause | video for the streamed seats |
-| [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) | as `fetch_webrtc.py` pins it | Apache-2.0 | encryption for the streamed seats |
+| [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) | as `fetch_webrtc.py` pins it | Apache-2.0 | encryption for the streamed seats and Replay Kraken HTTPS |
+| [curl](https://curl.se/) | 8.23.0 | curl (MIT/X-style) | bounded native Replay Kraken HTTP/HTTPS transport (`fetch_curl.py`, `build_curl.py`) |
+| [Mozilla CA root certificates](https://curl.se/docs/caextract.html) | bundle dated 2026-11-05 (`fetch_cacert.py`) | MPL-2.0 (certificate data) | the trust roots libcurl's Mbed TLS backend verifies against; shipped as `cacert.pem` |
 | [Opus](https://opus-codec.org/) | as `fetch_webrtc.py` pins it | BSD-3-Clause | sound for the streamed seats |
 | [rally-point2](https://github.com/ShieldBattery/rally-point2) | fork `saintromuald/rally-point2`, branch `bridge`, commit `95dd16f` (`engine/tools/rallypoint2/PINNED.md`) | MIT / Apache-2.0 | the online match's relay netcode; the `rally-point-bridge` static library links the client driver, and the relay and coordinator ship beside the engine (this one IS copied into the repository, as a subtree under `engine/tools/rallypoint2/`) |
 

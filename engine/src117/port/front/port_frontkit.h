@@ -331,6 +331,7 @@ bool ScMiniTab(Decl b, const char *pszLabel, char cKey, bool bOn);
 // SC2's edit box (StandardEditBoxTemplate): the text, with the frame's typing and Backspace
 // applied while it has the keyboard, at most nMax characters; the placeholder while empty.
 void ScEdit(Decl b, std::string *pText, size_t nMax, const char *pszPlaceholder, bool bFocus = true);
+void ScEditMasked(Decl b, std::string *pText, size_t nMax, const char *pszPlaceholder, bool bFocus = true);
 
 }  // namespace FrontKit
 

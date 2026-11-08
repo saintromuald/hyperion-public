@@ -63,6 +63,7 @@ from pathlib import Path
 ENGINE = Path(__file__).resolve().parents[1]
 REPO = ENGINE.parent
 BUILT = ENGINE / "src117" / "build" / "x64" / "Hyperion.exe"
+CACERT = BUILT.with_name("cacert.pem")
 SDL3 = ENGINE / "third_party" / "SDL3-3.4.16" / "lib" / "x64" / "SDL3.dll"
 MODS = ENGINE / "mods"
 # Hyperion's mods for its own testing, in no package or install (the user, 2026-10-27: "For
@@ -564,8 +565,8 @@ def package_linux(args, ver: str) -> int:
     """The Linux package: the same files as the zip's, as a .tar.gz for unpacking in place."""
     built = ENGINE / "src117" / "build" / f"linux-{args.linux}"
     name = "Hyperion.x86_64" if args.linux == "x64" else "Hyperion.aarch64"
-    program, sdl = built / name, built / "libSDL3.so.0"
-    for p in [program, sdl, *DOCS]:
+    program, sdl, ca = built / name, built / "libSDL3.so.0", built / "cacert.pem"
+    for p in [program, sdl, ca, *DOCS]:
         if not p.exists():
             sys.exit(f"missing {p} (python tools/build_engine_linux.py --arch {args.linux})")
     out = args.out / f"hyperion_{ver}_linux-{args.linux}_{time.strftime('%Y%m%d_%H%M%S')}"
@@ -581,6 +582,7 @@ def package_linux(args, ver: str) -> int:
             listing.append(f"{name}  {len(data)} bytes  sha1 {hashlib.sha1(data).hexdigest()}")
         put(name, program.read_bytes(), 0o755)
         put("libSDL3.so.0", sdl.read_bytes(), 0o755)
+        put("cacert.pem", ca.read_bytes())
         for f in shipped_mod_files():
             put("Data/mods/" + f.relative_to(MODS).as_posix(), f.read_bytes())
         for f in sorted((NOTES / "media").rglob("*")) if (NOTES / "media").is_dir() else []:
@@ -621,8 +623,8 @@ def package_mac(args, ver: str) -> int:
         sys.exit("--mac packages on a Mac: tools/mac_sync.py sends the tree there")
     import shutil
     built = ENGINE / "src117" / "build" / "mac-arm64"
-    program, sdl = built / "Hyperion.arm64", built / "libSDL3.0.dylib"
-    for p in [program, sdl, *DOCS]:
+    program, sdl, ca = built / "Hyperion.arm64", built / "libSDL3.0.dylib", built / "cacert.pem"
+    for p in [program, sdl, ca, *DOCS]:
         if not p.exists():
             sys.exit(f"missing {p} (python3 tools/build_engine_linux.py)")
     out = args.out / f"hyperion_{ver}_mac-arm64_{time.strftime('%Y%m%d_%H%M%S')}"
@@ -641,6 +643,7 @@ def package_mac(args, ver: str) -> int:
 
     put("Hyperion.app/Contents/MacOS/Hyperion", program.read_bytes(), 0o755)
     put("Hyperion.app/Contents/MacOS/libSDL3.0.dylib", sdl.read_bytes(), 0o755)
+    put("Hyperion.app/Contents/MacOS/cacert.pem", ca.read_bytes())
     m = re.search(r"v?(\d+)\.(\d+)\.(\d+)", ver)
     short = ".".join(m.groups()) if m else "0.0.0"
     number = re.search(r"HYPERION_BUILD_NUMBER (\d+)", (built / "build_id.h").read_text()) if (built / "build_id.h").exists() else None
@@ -704,7 +707,7 @@ def package_mac(args, ver: str) -> int:
 
 def windows_files(ver: str) -> list:
     """The Windows zip's files: each its name in the zip and its source, a file or the bytes."""
-    files = [("Hyperion.exe", BUILT), ("SDL3.dll", SDL3)]
+    files = [("Hyperion.exe", BUILT), ("SDL3.dll", SDL3), ("cacert.pem", CACERT)]
     for f in shipped_mod_files():
         files.append(("Data/mods/" + f.relative_to(MODS).as_posix(), f))
     for f in sorted((NOTES / "media").rglob("*")) if (NOTES / "media").is_dir() else []:
@@ -800,7 +803,7 @@ def install_write(path: Path, data: bytes) -> str:
 def install(folders: list, ver: str) -> int:
     """The Windows zip's files put in each folder as unzipping it there would: only what differs
     is written, and nothing else in the folder is touched."""
-    for p in [BUILT, SDL3, *DOCS]:
+    for p in [BUILT, SDL3, CACERT, *DOCS]:
         if not p.exists():
             sys.exit(f"missing {p}")
     files = windows_files(ver)
@@ -873,7 +876,7 @@ def main() -> int:
         if not folders:
             sys.exit(f"--install: no folder given and none in {INSTALL_TO}")
         return install(folders, version())
-    for p in [BUILT, SDL3, *DOCS]:
+    for p in [BUILT, SDL3, CACERT, *DOCS]:
         if not p.exists():
             sys.exit(f"missing {p}")
 

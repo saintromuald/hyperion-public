@@ -12,6 +12,7 @@ pass. The tests:
              to the same classic map twice (--hxm-compile)
   mods       every built-in mod's JSON reads; with --game, each also passes --mod-check against
              that StarCraft
+  replays    ReplayKraken protocol, identity, persistence/privacy and synthetic-library contracts
 
 The replay comparisons that keep the game the same as the original need the game's files and
 a replay collection, and are run before each release.
@@ -123,6 +124,10 @@ def test_maps(a):
         return True, ["plays; %d-byte classic map, the same twice" % len(chks[0])]
 
 
+def test_replays(a):
+    return tool("replay-tests/run_tests.py")
+
+
 def test_mods(a):
     folder = os.path.join(ENGINE, "mods")
     bad, mods = [], sorted(d for d in os.listdir(folder) if os.path.isdir(os.path.join(folder, d)))
@@ -145,7 +150,7 @@ def test_mods(a):
 
 
 TESTS = [("notes", test_notes), ("catalogs", test_catalogs), ("huds", test_huds), ("maps", test_maps),
-         ("mods", test_mods)]
+         ("mods", test_mods), ("replays", test_replays)]
 
 
 def main():

@@ -43,6 +43,8 @@
 #include "../data/port_subtitles.h"  // PortSubtitlesSet
 #include "../data/port_chatfilter.h"  // PortChatFilterSet
 #include "../platform/port_settings.h"
+#include "../../h/port_replayonline.h"
+#include "../../h/port_replaycatalog.h"
 #include "../lan/port_instance.h"  // PortInstanceRestart
 #include "port_ui.h"
 #include "../../gen/globals117.h"
@@ -67,7 +69,7 @@ namespace Front {
 
 // CTL_THEME: the colour theme's presets and Custom's picker (port_front_theme.cpp)
 // CTL_HEAD is a section's heading in a tab, the rows after it its own (Hotkeys' Addons).
-enum Control { CTL_TOGGLE, CTL_SLIDER, CTL_STEPS, CTL_CHOICE, CTL_KEYS, CTL_PATH, CTL_BUTTON, CTL_THEME, CTL_HEAD };
+enum Control { CTL_TOGGLE, CTL_SLIDER, CTL_STEPS, CTL_CHOICE, CTL_KEYS, CTL_PATH, CTL_BUTTON, CTL_THEME, CTL_HEAD, CTL_EDIT };
 
 // The rows the dialog draws, applies or checks its own way; BIND_NONE for the rest, whose row
 // says all there is.
@@ -98,6 +100,8 @@ enum Bind {
   BIND_MODS_FOLDER,     // where the mods are, with Browse (g_modsPick)
   BIND_THEME,           // the menus' colours (port_frontkit.cpp) and Custom's picker (g_custom)
   BIND_LANGUAGE,        // the language (port_language.cpp), its words made as the row is read
+  BIND_KRAKEN_SERVER,   // Replay Kraken's editable URL and masked token replacement
+  BIND_KRAKEN_TOKEN,
 };
 
 struct SetValue {
@@ -180,6 +184,10 @@ std::string g_classicNote;          // why the folder Browse gave was not taken
 std::string g_modsPick;             // "Mods folder" as the dialog shows it
 
 std::string g_modsOpened;           // and as it was when the dialog opened
+
+std::string g_krakenServer, g_krakenServerOpened;
+std::string g_krakenToken, g_krakenTokenOpened;
+int g_krakenEdit = -1;             // which editable row has the keyboard
 
 float Clamp01(float f)
 {
@@ -752,6 +760,82 @@ bool WriteModsFolder(const Setting &, const SetValue &)
   return false;
 }
 
+SetValue ReadKrakenServer(const Setting &)
+{
+  char server[2048] = {};
+  PortSettingString("hyperion", "replayKrakenServer", server, sizeof server);
+  g_krakenServer = server;
+  return Value(0.0f);
+}
+
+bool WriteKrakenServer(const Setting &, const SetValue &)
+{
+  PortSettingSetString("hyperion", "replayKrakenServer", g_krakenServer.c_str());
+  double automatic = 0.0;
+  PortSettingNumber("hyperion", "replayKrakenAuto", &automatic);
+  ReplayOnline::Configure(g_krakenServer, automatic != 0.0);
+  return false;
+}
+
+bool WriteKrakenAutomatic(const Setting &, const SetValue &v)
+{
+  PortSettingSetNumber("hyperion", "replayKrakenAuto", v.f > 0.5f ? 1.0 : 0.0);
+  ReplayOnline::Configure(g_krakenServer, v.f > 0.5f);
+  return false;
+}
+
+SetValue ReadKrakenToken(const Setting &)
+{
+  g_krakenToken.clear();  // Never read the secret back into a visible settings field.
+  return Value(0.0f);
+}
+
+bool WriteKrakenToken(const Setting &, const SetValue &)
+{
+  if (!g_krakenToken.empty())
+    ReplayOnline::SetToken(g_krakenToken);
+  return false;
+}
+
+bool WriteKrakenTokenClear(const Setting &, const SetValue &)
+{
+  ReplayOnline::SetToken("");
+  return false;
+}
+
+SetValue ReadIndexChoice(const Setting &s)
+{
+  double value = strcmp(s.pszKey, "replayIndexDepth") == 0 ? 16.0 : 10000.0;
+  PortSettingNumber("hyperion", s.pszKey, &value);
+  if (strcmp(s.pszKey, "replayIndexDepth") == 0) {
+    const int choices[] = {4, 8, 16, 32, 64};
+    int best = 0;
+    for (int i = 0; i < 5; ++i)
+      if (abs(static_cast<int>(value) - choices[i]) < abs(static_cast<int>(value) - choices[best]))
+        best = i;
+    return Value(static_cast<float>(best));
+  }
+  const int choices[] = {1000, 10000, 50000, 100000};
+  int best = 1;
+  for (int i = 0; i < 4; ++i)
+    if (abs(static_cast<int>(value) - choices[i]) < abs(static_cast<int>(value) - choices[best]))
+      best = i;
+  return Value(static_cast<float>(best));
+}
+
+bool WriteIndexChoice(const Setting &s, const SetValue &v)
+{
+  static const int limits[] = {1000, 10000, 50000, 100000};
+  static const int depths[] = {4, 8, 16, 32, 64};
+  const int index = static_cast<int>(lroundf(v.f));
+  if (strcmp(s.pszKey, "replayIndexDepth") == 0)
+    PortSettingSetNumber("hyperion", "replayIndexDepth", depths[std::max(0, std::min(index, 4))]);
+  else
+    PortSettingSetNumber("hyperion", "replayIndexLimit", limits[std::max(0, std::min(index, 3))]);
+  ReplayCatalog::Refresh();
+  return false;
+}
+
 // "colourTheme", 0 to 5, Custom the last; Custom's colours are saved apart (ThemeCustomSave).
 SetValue ReadTheme(const Setting &)
 {
@@ -956,6 +1040,18 @@ const Setting kSettings[] = {
      NULL, WriteModsFolder, NULL, PT_("Where the mods are, each in a folder with its mod.json. A new folder takes a restart, as the chosen mod\xE2\x80\x99""s data is read when Hyperion starts.")},
     {"hyperion", PT_("Check a mod\xE2\x80\x99""s fingerprint"), CTL_TOGGLE, NULL, 1.0f, false, "Hyperion", NULL, "live", BIND_NONE,
      ReadFlag, WriteFlag, "checkModFingerprint", PT_("A mod that changes the rules is named by a hash of its data, so a replay or a saved game made with another version of it is refused. Off, it plays all the same, for a mod\xE2\x80\x99""s author trying a change; it may go its own way where the data differs.")},
+    {"hyperion", PT_("Replay Kraken server"), CTL_EDIT, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_KRAKEN_SERVER,
+     ReadKrakenServer, WriteKrakenServer, NULL, PT_("Self-hosted Replay Kraken URL. https://host and https://host/api are equivalent and use exactly one /api prefix. Plain HTTP is accepted only for an explicit loopback test server. Changing it never moves pending uploads.")},
+    {"hyperion", PT_("Automatically upload completed games"), CTL_TOGGLE, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+     ReadFlag, WriteKrakenAutomatic, "replayKrakenAuto", PT_("Off by default. On, eligible newly completed live games are snapshotted after their replay is written, including LastReplay with AutoSave off. Playback, benchmarks and tests never upload. One LAN seat per room submits. Notes and tags are never sent.")},
+    {"hyperion", PT_("Replay Kraken token"), CTL_EDIT, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_KRAKEN_TOKEN,
+     ReadKrakenToken, WriteKrakenToken, NULL, PT_("Masked bearer token entry. The current token is not shown; type a replacement and Accept to store it in the private token file for this server. It never enters settings.json, replay metadata or logs.")},
+    {"hyperion", PT_("Clear the saved Replay Kraken token"), CTL_TOGGLE, NULL, 0.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+     ReadFlag, WriteKrakenTokenClear, "replayKrakenTokenClear", PT_("Deletes this server's private token file when Accept is pressed. Pending snapshots remain bound to their original server and account.")},
+    {"hyperion", PT_("Replay index file limit"), CTL_CHOICE, PT_("1,000|10,000|50,000|100,000"), 1.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+     ReadIndexChoice, WriteIndexChoice, "replayIndexLimit", PT_("The visible safety bound for incremental replay discovery. Reaching it is reported in Replays rather than silently omitting games. Raise it only when your library and storage can support it.")},
+    {"hyperion", PT_("Replay index folder depth"), CTL_CHOICE, PT_("4|8|16|32|64"), 2.0f, false, "Hyperion", NULL, "live", BIND_NONE,
+     ReadIndexChoice, WriteIndexChoice, "replayIndexDepth", PT_("How many nested folders the cancellable replay scan visits. Symbolic-link folders are not followed.")},
     {"hyperion", PT_("Hyperion\xE2\x80\x99""s menus"), CTL_TOGGLE, NULL, 1.0f, false, "Hyperion", NULL, "restart", BIND_NONE,
      ReadFlag, WriteFlag, "menus", PT_("Off: the original menus. Hyperion\xE2\x80\x99""s menus need the GPU renderer, which is the default.")},
     {"hyperion", PT_("Show in Discord"), CTL_TOGGLE, NULL, 1.0f, false, "Hyperion", NULL, "live", BIND_NONE,
@@ -1140,6 +1236,10 @@ bool SameValue(const Setting &s, const SetValue &a, const SetValue &b)
     return g_remasteredPick == g_remasteredOpened;
   if (s.bind == BIND_MODS_FOLDER)
     return g_modsPick == g_modsOpened;
+  if (s.bind == BIND_KRAKEN_SERVER)
+    return g_krakenServer == g_krakenServerOpened;
+  if (s.bind == BIND_KRAKEN_TOKEN)
+    return g_krakenToken == g_krakenTokenOpened;
   return fabsf(a.f - b.f) < 0.001f && (!s.bToggle || a.bOn == b.bOn);
 }
 
@@ -1187,6 +1287,9 @@ void SettingsOpen(bool bInGame, const char *pszTab)
   g_remasteredPick = g_remasteredOpened = PortCascFolder();
   g_remasteredNote.clear();
   g_modsPick = g_modsOpened = PortModsFolder();
+  g_krakenServerOpened = g_krakenServer;
+  g_krakenTokenOpened = g_krakenToken;
+  g_krakenEdit = -1;
   g_nKeyCapture = g_nKeyNoteRow = -1;
   g_keyNote.clear();
   g_bSettings = true;
@@ -1201,6 +1304,9 @@ void SettingsClose(void)
   g_bSettings = false;
   g_bSettingsGame = g_bAcceptAsked = false;
   ThemeApply();
+  g_krakenToken.clear();
+  g_krakenTokenOpened.clear();
+  g_krakenEdit = -1;
   g_nKeyCapture = -1;
   g_nDrag = g_nDropOpen = g_nTip = -1;
 }
@@ -1725,6 +1831,22 @@ void SettingGroup(int i)
       v.f = static_cast<float>(n);
       break;
     }
+    case CTL_EDIT: {
+      LabelLine(i, bDim, NULL);
+      Decl row = Box("setedit", i);
+      row.d.layout.sizing.width = Grow();
+      row.d.layout.sizing.height = Fixed(Sc(44));
+      const bool bFocus = bLive && g_krakenEdit == i;
+      if (bLive && Clicked(row.d.id))
+        g_krakenEdit = i;
+      else if (g_bPressed && !Over(row.d.id))
+        g_krakenEdit = -1;
+      if (s.bind == BIND_KRAKEN_SERVER)
+        ScEdit(row, &g_krakenServer, 2048, PortText("https://replays.example.org"), bFocus);
+      else
+        ScEditMasked(row, &g_krakenToken, 4096, PortText("Type a replacement bearer token"), bFocus);
+      break;
+    }
     case CTL_HEAD:
       // a section's heading, as the benchmark's and the lobby's are
       Text(Keep(Upper(PortText(s.pszLabel))), UI_FACE_WIDE, Fs(15), 0.04f, kScInkHead);
@@ -2130,6 +2252,11 @@ void SettingsKeys(void)
   if (g_nDropOpen >= 0) {
     if (Key(VK_ESCAPE))
       g_nDropOpen = -1;
+    return;
+  }
+  if (g_krakenEdit >= 0) {
+    if (Key(VK_ESCAPE) || Key(VK_RETURN))
+      g_krakenEdit = -1;
     return;
   }
   if (Key(VK_ESCAPE) || Key('C')) {

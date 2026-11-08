@@ -732,7 +732,7 @@ void DrawScEdit(float x, float y, float w, float h, void *pCtx)
   UiRing(x, y, w, h, bFocus ? kScTabHi.rim : kScDdRim, Sc(4), Sc(2));
 }
 
-void ScEdit(Decl b, std::string *pText, size_t nMax, const char *pszPlaceholder, bool bFocus)
+void Edit(Decl b, std::string *pText, size_t nMax, const char *pszPlaceholder, bool bFocus, bool bMask)
 {
   if (bFocus) {
     // the typing is this box's: taken, so no other box drawn after it has it too; a character
@@ -760,7 +760,7 @@ void ScEdit(Decl b, std::string *pText, size_t nMax, const char *pszPlaceholder,
   if (pText->empty()) {
     Text(pszPlaceholder != NULL ? pszPlaceholder : "", UI_FACE_TEXT, Fs(18), 0.0f, kScInkOff);
   } else {
-    Text(Keep(*pText), UI_FACE_TEXT, Fs(18), 0.0f, kScInkHi);
+    Text(Keep(bMask ? std::string(pText->size(), '*') : *pText), UI_FACE_TEXT, Fs(18), 0.0f, kScInkHi);
   }
   // the caret, blinking every half second
   if (bFocus && (SDL_GetTicks() / 530) % 2 == 0) {
@@ -772,6 +772,16 @@ void ScEdit(Decl b, std::string *pText, size_t nMax, const char *pszPlaceholder,
     Close();
   }
   Close();
+}
+
+void ScEdit(Decl b, std::string *pText, size_t nMax, const char *pszPlaceholder, bool bFocus)
+{
+  Edit(b, pText, nMax, pszPlaceholder, bFocus, false);
+}
+
+void ScEditMasked(Decl b, std::string *pText, size_t nMax, const char *pszPlaceholder, bool bFocus)
+{
+  Edit(b, pText, nMax, pszPlaceholder, bFocus, true);
 }
 
 // The mini button (StandardButtonMini).

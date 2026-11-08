@@ -1,58 +1,125 @@
-# pluto-bridge: Pluto's brain as a server for Hyperion
+# pluto-bridge: official Pluto as a server for Hyperion
 
-The bridge runs the real pluto.dll (patched) + pluto_infer.exe under Wine against
-the game state Hyperion sends it, and answers with the commands the bot issued.
-Hyperion's Pluto level is a thin client: one HxFrame a game frame in, one HxReply
-out.
+The bridge runs the **official unmodified** `pluto.dll` and
+`pluto/pluto_infer.exe` under 32-bit Wine. Hyperion supplies native game state;
+the bridge returns the classic StarCraft commands emitted by that DLL. Policy,
+build-order selection, inference, and model weights are not replaced.
 
-## The protocol (stdin/stdout, binary, little-endian)
+The accepted v2.0 binaries are pinned by SHA-256:
 
-- HxFrame: `u32 'HXPF'` | `u32 frame` | `u32 nUnits` | `u32 mapW` | `u32 mapH` |
-  `u32 nPlayers` | nUnits x HxUnit | nPlayers x HxPlayer
-  - HxUnit: `u32 id, type, player, x, y, hp, shields, energy, order` |
-    `u8 visible, completed, pad[2]` (40 bytes)
-  - HxPlayer: `u32 race, minerals, gas, supplyTotal, supplyUsed, startX, startY`
-- HxReply: `u32 'HXRP'` | `u32 frame` | `u32 nCmd` | `u8 cmd[nCmd]` | `u32 win`
-  - cmd = the classic net commands (0x09 Select, 0x14 RightClick, 0x15 Action),
-    exactly what Hyperion's net_cmds.cpp parses.
+- `pluto.dll`:
+  `603fea2f77a4b652f29b832c2977cf5bc9d83bbcb927febd04499220020ce3bc`
+- `pluto_infer.exe`:
+  `3f2814a51034b9817b396e52b38d30341ede506a2baedc7cbc11cb6ebcece2cc`
+- `pluto_weights.bin`:
+  `c53a559b4910777dc0e1c561c0d89d243091f465d8e9fc0f5f72e56597067d86`
 
-## Building and running
+The bridge opens the explicit `pluto.dll` path with read-only sharing (write and
+delete sharing denied), hashes bytes from that open handle, rejects a mismatch,
+and holds the handle through `LoadLibraryA`. Under Win32 sharing rules this
+prevents write/rename/delete replacement between verification and execution;
+it depends on Wine/the filesystem enforcing those rules and on the loader using
+the same file object. It is not an in-memory hash or a signature measurement.
+The post-load pathname hash is ordinary consistency evidence, not a race-safe
+pre-execution check. Acceptance therefore retains recurring file-integrity
+checks. Binaries and weights are local validation inputs, not source artifacts.
 
-- `./build.sh` (llvm-mingw i686; see the script's paths) makes pluto-bridge.exe.
-- Beside it: pluto.patched.dll (patch_pluto.py from the release), pluto/ with
-  pluto_infer.exe + pluto_weights.bin (tscmoo's v2.0 release).
-- `wine pluto-bridge.exe` serves stdin/stdout; `bridge-test.py` drives it with
-  scripted frames.
+## Genuine StarCraft addresses
 
-## Status 2026-11-03 (the sincos trace)
+The official DLL accesses StarCraft 1.16.1 memory directly. It cannot be renamed
+and run over the old relocated stand-ins.
 
-The embedding formulas are solved (docs/pluto-protocol.md, "the embedding
-formula"): the 32 floats at entry +0x134..+0x1B0 are 8 blocks of
-`[sin θk, cos θk, sin φk, cos φk]` with θk = x·π/(16·2^k), φk = y·π/(16·2^k)
--- multi-scale positional encodings of the raw x/y, period 32·2^k px. The
-proof came from a runtime trace of the fork's sincos helpers (their callers
-are materialized at runtime and invisible statically): with HX_DEBUG the
-bridge patches the helpers' prologues to stubs in its own exe that log
-`(return address, angle)` into `dump/sincos.log` (rings in the LOW stand-in,
-pointer slots 0x2103FFF0/0x2103FFF4). `HX_PROBE` additionally probes the
-preferred-base constant region after the first frame.
+`build.sh` therefore produces a fixed PE image with:
 
-## Status 2026-11-01 (session 4, evening)
+- image base `0x400000`;
+- `.game` at `0x401000..0x800000`, an uninitialized RWX section for the SC image;
+- actual bridge code/data at or above `0x801000`;
+- `LARGE_ADDRESS_AWARE`, no dynamic base, and no relocation directory;
+- a checked RW allocation covering the worker stack at `0xF0B5D710`.
 
-The rig's whole pipeline (docs/pluto-ai.md) runs in the bridge: the bot starts,
-launches the engine ("inference server up"), and plays in free-build mode against
-the fed state. One 90-frame test produced 919 bytes of replies (the commands flow
-end to end). Two instabilities remain, both in the harness, not the protocol:
+`Sc(addr)` is the identity mapping. Unit nodes and links use genuine addresses
+such as `0x59CCA8 + slot * 0x150`; `0x485A40` holds the host's `sendTurn` return
+stub. No existing Wine allocation is freed or repurposed. Startup queries the
+image header, first/last `.game` pages, sendTurn, `0x5124D8`, and `0x6D1260` for
+committed `MEM_IMAGE`, allocation base, complete region coverage, and actual
+writable/executable protection (`0x40` or Wine's `0x80`). The last `.game` page
+is `0x7FF000` because the range ends at `0x800000`; literal `0x7FFFF000` is far
+outside this 4 MiB reservation and is not misrepresented as a valid SC page.
 
-- The bot's engine-poll probe calls through a garbage pointer (an exec fault at a
-  stack address); the rig absorbed it as a null call, the bridge answers "ready"
-  (eax=1) via a stub, and the poll loop then settles — but the obs does not ship
-  in every run yet (the record walk limps after the absorbed faults).
-- The bot's own_race read gives -1 under the per-frame GameData replacement
-  (free build, no bandit — the bot still plays); the rig read 0 with its one-time
-  fill. Next: keep the GameData's unit slots stable by Hyperion id across frames
-  instead of re-memsetting them in frame order.
+The pinned official PE declares `.bss` at RVA `0x72000`, virtual size `0x2678`,
+ending at RVA `0x74678`. The bridge protects the complete page-rounded RVA
+`0x72000..0x75000` range and queries the first/last pages plus stores at
+`0x745E0`, `0x74608`, and `0x7466C..0x74674`.
 
-The protocol and the emulation are the proven parts; the remaining work is the
-frame-replacement policy and the fault stubs, then the Hyperion-side client
-(the obs and action halves are already captured in docs/pluto-protocol.md).
+`pluto_pe.py` performs the validated post-link transformation and
+`verify_pe.py` rejects an incorrect layout using explicit checks, including
+section ends/nonoverlap, raw bounds, `SizeOfImage`, executable entrypoint, and
+TLS internal VAs/first-callback null. Debug data is separated first to keep the
+PE header bounded.
+
+## Build and run
+
+Place the official files locally:
+
+- `pluto.dll` beside `pluto-bridge.exe`;
+- `pluto/pluto_infer.exe` and `pluto/pluto_weights.bin` beside it as well.
+
+Then, with llvm-mingw i686 and the BWAPI checkout described in `build.sh`:
+
+**Host-provenance limitation:** the host build also uses the external
+`PLUTO_SHIM` include overlay and a BWAPI checkout with the local header edits
+listed in `build.sh`. Those dependencies affect the host ABI and are not covered
+by the official DLL digest or vendored here. Pin/review them separately when
+reproducing the host binary; they are not modifications to `pluto.dll`.
+
+```sh
+./build.sh
+./lifecycle/run-tests.sh
+./metadata/run-tests.sh
+./host/run-tests.sh
+wine pluto-bridge.exe < frames.bin > replies.bin
+```
+
+The build checks the PE layout and official DLL hash. HXP2/HXP3/HXP4/HXPF frames,
+optional HXPM static map metadata, and HXRP replies are binary formats, not text.
+See `docs/pluto-protocol.md` for their current contract and known limitations.
+Lobby-only opcodes are not valid in-game replies.
+
+## Current evidence
+
+The reviewed official-DLL integration has passed:
+
+- the two-frame HXP3 smoke with empty HXRP replies 0/1/2 and clean EOF;
+- the 54-frame HXP3 replay with replies 0..54, 231 classic command bytes,
+  and 36 strictly validated commands;
+- the two-frame HXP4 replay with empty replies 0/1/2, including native queue,
+  research, player-tech, rotated UnitData, masked PlayerData, and
+  pre-publication evidence;
+- the 54-frame HXP4 replay with replies 0..54, five nonempty replies, 168
+  classic command bytes, and 24 strictly validated commands;
+- all malformed HXP4 cases (wrong sizes, queue/research violations, truncation,
+  and trailing bytes), rejected without a failure flush;
+- inference readiness, `onStart`, correct opponent identity/race, and clean EOF;
+- real synchronous and asynchronous `Client::connect` ownership replacement;
+- ordered live-pipe publication, finalization, and HXPM startup;
+- rejection of malformed/truncated input, invalid frame sequences, early
+  disconnects, and finalization-boundary failures;
+- six native host-logic tests, 14 `PYTHONOPTIMIZE`-safe PE verifier groups, ten
+  lifecycle tests, HXPM codec tests, and six normal plus six sanitizer late-state
+  groups.
+
+The HXP4 bridge SHA-256 is
+`eb6bc9f8d5fb6433a697c5ac839d48e5e4e1418a2c971b53dacf150d31ac3fdc`.
+Matching artifacts are in `/tmp/opencode/pluto-hxp4-official`. The two-frame
+HXP4 input is `dfaa3147371d320ce406ae309885ed1d823f5992302f85c6998696d004306d34`;
+its reply stream is `5a20f4eb9aa5e95b86842ad7cc6e436c70815b235659e463a17d1326d1b4bcf2`.
+The 54-frame HXP4 input is
+`e1c3fba8209a68bcdc7ddd9dec17bc20638cca9faee5ab57c9283cdf18e0cb35`, and its
+reply stream is `54c9b1159d3018961512d18d1da44e7ed0ae62ef642ac6ab72d2b2c12396a348`.
+Command selection/timing is not byte-deterministic across runs, so these are not
+model-response determinism claims.
+
+These are startup, replay, and transport results only. They do not prove exact
+command/model fidelity, a complete natural match, genuine BWAPI equivalence, or
+competitive performance. Those require the genuine baseline and natural-series
+stages.
