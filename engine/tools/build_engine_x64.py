@@ -190,6 +190,28 @@ def run(cmd, env, what):
         sys.exit("[build_engine_x64] %s FAILED" % what)
 
 
+def build_sb(skip, env):
+    """Build the rallypoint C ABI with the same static CRT as Hyperion (/MT)."""
+    if skip:
+        return None
+    manifest = os.path.join(ENGINE, "tools", "rallypoint2", "Cargo.toml")
+    if not os.path.exists(manifest):
+        sys.exit("[build_engine_x64] no %s (the vendored rallypoint2 workspace)" % manifest)
+    if shutil.which("cargo", path=env["PATH"]) is None:
+        sys.exit("[build_engine_x64] cargo is needed for the SB netcode provider; "
+                 "install Rust 1.95 or pass --no-sb")
+    dest = os.path.join(OUT, "rallypoint")
+    lib = os.path.join(dest, "release", "rally_point_bridge.lib")
+    cargo_env = dict(env)
+    cargo_env["RUSTFLAGS"] = (cargo_env.get("RUSTFLAGS", "") + " -Ctarget-feature=+crt-static").strip()
+    run(["cargo", "build", "--release", "-p", "rally-point-bridge", "--lib",
+         "--manifest-path", manifest, "--target-dir", dest], cargo_env, "cargo build (rallypoint bridge)")
+    if not os.path.exists(lib):
+        sys.exit("[build_engine_x64] cargo did not produce %s" % lib)
+    print("[build_engine_x64] SB netcode: %s" % lib, flush=True)
+    return lib
+
+
 TUS = os.path.join(SRC, "tus.txt")
 
 
@@ -391,6 +413,7 @@ def main():
                     help="build libvpx, libwebm's parser and stb_vorbis again, and libwebp's decoder and stb_image")
     ap.add_argument("--dav1d", action="store_true", help="build dav1d again")
     ap.add_argument("--no-install", action="store_true", help="leave the folders install_to.txt names as they are")
+    ap.add_argument("--no-sb", action="store_true", help="build without the ShieldBattery relay provider")
     a = ap.parse_args()
     os.makedirs(OUT, exist_ok=True)
     for f in glob.glob(os.path.join(OUT, "*.obj")):
@@ -455,6 +478,9 @@ def main():
     # before the port TUs, whose Opus decoder includes its headers
     if not all(os.path.exists(os.path.join(WEBRTC, "lib", l)) for l in WEBRTC_LIBS):
         run([sys.executable, os.path.join(ENGINE, "tools", "build_webrtc.py")], env, "build_webrtc.py")
+    sb_lib = build_sb(a.no_sb, env)
+    if sb_lib is None:
+        PORT.append("/DSB_NETCODE_OFF")
     ports = tus("port")
     write_build_id()
     # the snapshots' ranges follow the global blocks' layout (tools/snapranges.py); a tree without
@@ -508,6 +534,7 @@ def main():
     # are Windows' task dialogs, whose buttons fit their text (the first start, port_install.cpp).
     # SDL3.dll is loaded on its first call, so a start without it can say so in a box of its own
     # (port_startup.cpp) instead of Windows' loader.
+    sb_libs = [] if sb_lib is None else [sb_lib, "userenv.lib", "ntdll.lib", "secur32.lib", "dbghelp.lib"]
     run(["link", "/nologo", "/MACHINE:X64", "/SUBSYSTEM:WINDOWS", "/ENTRY:wWinMainCRTStartup", "/DEBUG",
          "/MANIFEST:EMBED", "/MANIFESTDEPENDENCY:type='win32' name='Microsoft.Windows.Common-Controls' "
          "version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'",
@@ -516,7 +543,7 @@ def main():
          "@" + lrsp, os.path.join(OUT, "hyperion.res"), os.path.join(OUT, "fonts.res"),
          os.path.join(OUT, "stormlib", "stormlib.lib"), casclib, webm, image, dav1d,
          os.path.join(SDL3, "lib", "x64", "SDL3.lib"), "/DELAYLOAD:SDL3.dll", "delayimp.lib",
-         "bcrypt.lib"] + [os.path.join(WEBRTC, "lib", l) for l in WEBRTC_LIBS] + ["iphlpapi.lib"] + LIBS,
+         "bcrypt.lib"] + sb_libs + [os.path.join(WEBRTC, "lib", l) for l in WEBRTC_LIBS] + ["iphlpapi.lib"] + LIBS,
         env, "link Hyperion.exe")
     # The replay observer (docs/replay-test.md), which the harness loads into the game.
     rt = os.path.join(ENGINE, "tools", "replaytest")
