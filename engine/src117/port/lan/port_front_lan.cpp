@@ -1888,6 +1888,12 @@ void LobbyEnter(bool bHost)
   g_chat.clear();
   g_sent = Sent();
   SkirmishOpen(6, bHost ? &g_hostLobby : &g_guestLobby);
+  // The room made this match with its configured transport. In particular, do
+  // not let the host's default-false local toggle turn a new sb match into LAN
+  // on the first HostSync before the player ever sees ONLINE (RELAY).
+  if (bHost)
+    if (const PortJson *m = MatchOf(g_nLobbyMatch))
+      SkirmishRoomTransport((*m)["transport"].Str() == "sb");
   g_bLobbyOpened = true;
 }
 
