@@ -6,7 +6,7 @@
 
 use std::net::SocketAddr;
 
-use base64::prelude::{BASE64_STANDARD, Engine as _};
+use base64::prelude::{Engine as _, BASE64_STANDARD};
 use rally_point_client::proto::token::SignedToken;
 use rally_point_client::transport::rustls::pki_types::CertificateDer;
 use rally_point_client::transport::rustls::RootCertStore;

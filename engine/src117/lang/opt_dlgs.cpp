@@ -31,6 +31,7 @@
 #include "../h/rect32.h"      // rect32_t
 #include "../h/statdata.h"    // grhsize_t (grh_get_header's out-parameter)
 #include "../port/gameplay/port_score.h"  // Hyperion: PortScoreLeft
+#include "../port/sb/port_stormsb.h"      // Hyperion: SbInMatch
 #include "../port/front/port_front.h"     // Hyperion: PortFrontScoreAfterLeave
 #include "../port/front/port_gamemenu.h"  // Hyperion: Hyperion's game menu
 #include "../port/tools/port_bench.h"      // Hyperion: PortBenchPlaying
@@ -41,6 +42,10 @@
 
 // Callees in other TUs, declared here rather than in a header; where another TU
 // already spells one, the spelling is copied.
+
+// each nation's victory state (victory.cpp), 3 a victory, 2 a defeat, 5 a draw, 1 dropped
+extern PlayerVictoryStateTable gbVictoryState;
+extern DWORD sgbVictQuitGame_g;
 
 // Storm's ordinal 145, linked by its undecorated name through
 // storm_imports.def, hence the extern "C"; __stdcall with one stack word.
@@ -353,6 +358,10 @@ static void PortLeaveForMenu(void)
 // of Hyperion's menus, left, goes to it as a defeat, which 1.17 passes in single player.
 static void PortQuitMission(void)
 {
+  if (SbInMatch() && sgbVictQuitGame_g == 0 && gbVictoryState[g_LocalNationID] == 0) {
+    // A canonical surrender is this seat's defeat, not a win for both reporters.
+    gbVictoryState[g_LocalNationID] = 2;
+  }
   victdlg_quit();
   PortScoreLeft();
   if (!gbMultiPlayerMode && PortFrontScoreAfterLeave())

@@ -25,10 +25,18 @@
 #include "../../h/CUnit.h"
 #include "../../h/count.h"        // count_get_supplies_used/available
 #include "../../h/net_cmds.h"      // the net command structs and receivers
+#include "../../h/net_mgr.h"       // net_process_game_turn, the native classic dispatcher
+#include "../../h/net_rand.h"      // set_rand_enabled around a replay-style turn
 #include "../../h/playerlimits.h"  // PLAYER_SLOTS_MAX, PlayerLobbySlots
 #include "../../h/playervision.h"  // SpriteSeenBy, VisionHxTileSeen, VisionHxTileExplored
 #include "../../h/playertables.h"  // sgbAlliances_g
 #include "../../h/gametype.h"      // gGameHeader
+#include "../../h/map_load.h"      // GetCurrentMap, the actual map identity
+#include "../../h/sai_PathCreate.h"  // ep_glob_t, the actual static region graph
+#include "../../h/saveload.h"       // get_tech_researched, get_upgrade_level
+#include "../../h/statbtn.h"        // is_tech_in_progress, is_upgrade_in_progress
+#include "../../../tools/pluto-bridge/hxpm.h"  // optional HXPM static record
+#include "../../../tools/pluto-bridge/hxp_late.h"  // HXP4 late-state producer
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -38,6 +46,8 @@
 #include "../tools/port_bench.h"     // PortBenchPlaying
 
 extern GameHeader gGameHeader;
+extern char gszMapTitle_g[0x20];
+extern BYTE gbInPacketProcess;  // net_mgr.cpp, set while a classic turn is dispatched
 
 namespace {
 
@@ -54,15 +64,34 @@ bool s_bUp = false;
 bool s_bFailed = false;       // tried and could not start; do not try again
 
 // The frame's units, in the order sent (the bot's ids are kPlutoIdBase + i).
-CUnit *s_aFrame[kFrameUnitsMax];
+WORD s_aFrameIds[8][kFrameUnitsMax];  // packed native ids at the reply's emission frame
 int s_nFrame = 0;
 DWORD s_dwFrame = 0;
 
 struct PendingCommand {
   DWORD dwApplyAt;
+  DWORD dwEmitted;
+  DWORD dwReceived;
   std::vector<unsigned char> bytes;
 };
 std::vector<PendingCommand> s_pendingCommands;
+
+// PlutoSendFrame has sent E and advanced the clock to E+1 before the reply is
+// read. Capture that actual receipt, holding the commands until E+3 while their
+// unit ids remain anchored to emission frame E.
+void QueuePlutoReply(DWORD dwEmitted, std::vector<unsigned char> &&bytes) {
+  if (bytes.empty())
+    return;
+  const DWORD dwReceived = s_dwFrame;
+  s_pendingCommands.push_back(
+      PendingCommand{dwReceived + 2, dwEmitted, dwReceived, std::move(bytes)});
+}
+
+void LogPlutoDispatch(const PendingCommand &pending, unsigned nReceivedBytes,
+                      unsigned nAcceptedBytes) {
+  Log("Pluto: emitted %u received %u dispatched %u received_bytes %u accepted_bytes %u",
+      pending.dwEmitted, pending.dwReceived, pending.dwApplyAt, nReceivedBytes, nAcceptedBytes);
+}
 
 // The Pluto slot this game plays (one for v1).
 int s_nPlutoSlot = -1;
@@ -79,6 +108,94 @@ int FindPlutoSlot() {
     if (IsPlutoSlot(s) && gPlayerData[s].nType == 1)
       return s;
   return -1;
+}
+
+// Resolve a classic owner exactly as replay turns do: find the player record by
+// Storm id, then take that record's native player id. Unlike the replay loop,
+// reject an alias instead of silently giving the first matching seat the turn.
+bool ResolveClassicPlayer(int nSlot, DWORD *pStorm, DWORD *pNation, DWORD *pHuman) {
+  if (nSlot < 0 || nSlot >= PlayerLobbySlots() || nSlot == PLAYER_NEUTRAL)
+    return false;
+  const DWORD dwStorm = gPlayerData[nSlot].dwStormID;
+  if (dwStorm >= 8)
+    return false;
+  int nFound = -1;
+  for (int j = 0; j < PlayerLobbySlots(); ++j) {
+    if (gPlayerData[j].dwStormID != dwStorm)
+      continue;
+    if (nFound >= 0)
+      return false;
+    nFound = j;
+  }
+  if (nFound != nSlot || gPlayerData[nFound].dwPlayerID >= static_cast<DWORD>(PlayerSlots()))
+    return false;
+  *pStorm = dwStorm;
+  *pNation = gPlayerData[nFound].dwPlayerID;
+  *pHuman = gPlayerData[nFound].dwPlayerID;
+  return true;
+}
+
+// Once a seat leaves an old Storm id, its old native entries must not continue
+// to name that seat. Adopt only a unique remaining human/computer participant
+// with a valid native id, or native's invalid player id (8). The range guard is
+// required for computer seats' 0xFF/0xFFFFFFFF ids.
+void RepairClassicStormMapping(DWORD dwOldStorm) {
+  if (dwOldStorm >= 8)
+    return;
+  int nOwner = -1;
+  for (int j = 0; j < PlayerLobbySlots(); ++j) {
+    if (gPlayerData[j].dwStormID != dwOldStorm)
+      continue;
+    if (nOwner >= 0) {
+      nOwner = -1;
+      break;
+    }
+    nOwner = j;
+  }
+  DWORD dwPlayer = 8;
+  if (nOwner >= 0 &&
+      (gPlayerData[nOwner].nType == 1 || gPlayerData[nOwner].nType == 2) &&
+      gPlayerData[nOwner].dwPlayerID < static_cast<DWORD>(PlayerSlots()))
+    dwPlayer = gPlayerData[nOwner].dwPlayerID;
+  g_StormToNationID[dwOldStorm] = dwPlayer;
+  g_StormToHumanID[dwOldStorm] = dwPlayer;
+}
+
+// Computer seats commonly have no Storm owner. Give one a unique classic id,
+// preserving an already valid unique id, and keep both native mapping tables in
+// agreement before any replay-style dispatch uses it.
+bool PrepareClassicPlayer(int nSlot, DWORD *pStorm, DWORD *pNation, DWORD *pHuman) {
+  if (nSlot < 0 || nSlot >= PlayerLobbySlots() || nSlot == PLAYER_NEUTRAL ||
+      gPlayerData[nSlot].dwPlayerID >= static_cast<DWORD>(PlayerSlots()))
+    return false;
+  auto ownerFree = [&](DWORD dwCandidate) {
+    if (dwCandidate >= 8)
+      return false;
+    for (int s = 0; s < PlayerLobbySlots(); ++s)
+      if (s != nSlot && gPlayerData[s].dwStormID == dwCandidate)
+        return false;
+    return true;
+  };
+  const DWORD dwOldStorm = gPlayerData[nSlot].dwStormID;
+  DWORD dwStorm = dwOldStorm;
+  if (!ownerFree(dwStorm)) {
+    for (DWORD candidate = 0; candidate < 8; ++candidate) {
+      if (ownerFree(candidate)) {
+        dwStorm = candidate;
+        break;
+      }
+    }
+  }
+  if (!ownerFree(dwStorm))
+    return false;
+  gPlayerData[nSlot].dwStormID = dwStorm;
+  if (dwOldStorm != dwStorm)
+    RepairClassicStormMapping(dwOldStorm);
+  if (!ResolveClassicPlayer(nSlot, pStorm, pNation, pHuman))
+    return false;
+  g_StormToNationID[dwStorm] = *pNation;
+  g_StormToHumanID[dwStorm] = *pHuman;
+  return true;
 }
 
 // The bridge's folder: HYPERION_PLUTO_FOLDER, else Data/pluto beside the exe.
@@ -105,6 +222,8 @@ static std::string UnixPath(const std::string &s) {
     r.erase(0, 2);
   return r;
 }
+
+bool WriteAll(HANDLE h, const void *pv, size_t cb);
 
 // The bridge's process, once the game starts.
 bool PlutoStart() {
@@ -162,6 +281,41 @@ bool PlutoStart() {
   PROCESS_INFORMATION pi;
   memset(&pi, 0, sizeof pi);
   const std::string cmd = "\"" + wine + "\" \"" + exe + "\"";
+  // Static map identity is configuration, not per-frame HXP state. The bridge
+  // reads the user's local map to compute BWAPI's SHA-1; no game asset is shipped.
+  SetEnvironmentVariableA("HYPERION_PLUTO_MAP_FILE", static_cast<const char *>(GetCurrentMap(1)));
+  SetEnvironmentVariableA("HYPERION_PLUTO_MAP_NAME", gszMapTitle_g);
+  std::string starts;
+  std::vector<pluto_hxpm::Start> mapStarts;
+  for (int s = 0; s < PlayerSlots(); ++s) {
+    if (gStartLocations[s].x == 0 && gStartLocations[s].y == 0)
+      continue;
+    const int startX = (gStartLocations[s].x - 64) / 32;
+    const int startY = (gStartLocations[s].y - 48) / 32;
+    char sz[40];
+    snprintf(sz, sizeof sz, "%s%d,%d", starts.empty() ? "" : ";", startX, startY);
+    starts += sz;
+    mapStarts.push_back({static_cast<uint16_t>(startX), static_cast<uint16_t>(startY)});
+  }
+  SetEnvironmentVariableA("HYPERION_PLUTO_STARTS", starts.c_str());
+
+  // HXP3 has no region graph. Send the real pathing glob once, before frame 0;
+  // absent or invalid metadata deliberately leaves the bridge in its marked
+  // legacy-incomplete mode. Serialization only reads epGlob and never changes
+  // the running simulation.
+  std::vector<unsigned char> mapMetadata;
+  if (epGlob != NULL && gwMapWidth > 0 && gwMapHeight > 0 &&
+      gwMapWidth <= pluto_hxpm::kMaxMapSide && gwMapHeight <= pluto_hxpm::kMaxMapSide) {
+    std::string metadataError;
+    if (!pluto_hxpm::Serialize(*static_cast<const ep_glob_t *>(epGlob), gwMapWidth,
+                               gwMapHeight, mapStarts.data(), mapStarts.size(), EP_STRIDE,
+                               EP_MAP_CELLS, EP_SPLIT_RECS, EP_POOL_WORDS, mapMetadata,
+                               &metadataError))
+      Log("Pluto: HXPM omitted (%s); legacy region metadata is incomplete",
+          metadataError.c_str());
+  } else {
+    Log("Pluto: HXPM unavailable; legacy region metadata is incomplete");
+  }
   std::vector<char> buf(cmd.begin(), cmd.end());
   buf.push_back('\0');
   if (!CreateProcessA(NULL, buf.data(), NULL, NULL, TRUE, 0, NULL, folder.c_str(),
@@ -181,6 +335,15 @@ bool PlutoStart() {
   CloseHandle(pi.hThread);
   s_bUp = true;
   Log("Pluto: the bridge runs (%s)", cmd.c_str());
+  if (!mapMetadata.empty()) {
+    if (!WriteAll(s_hToBridge, mapMetadata.data(), mapMetadata.size())) {
+      Log("Pluto: HXPM did not send");
+      PlutoGameEnd();
+      s_bFailed = true;
+      return false;
+    }
+    Log("Pluto: HXPM sent (%u bytes)", static_cast<unsigned>(mapMetadata.size()));
+  }
   return true;
 }
 
@@ -244,17 +407,9 @@ bool PlutoSendFrame() {
     unsigned id, type, player, x, y, hp, shields, energy, order;
     unsigned char visible, completed, direction, pad;
   };
-  struct UnitExtra {
-    unsigned statusFlags, orderTargetId, moveTargetId, connectedId, currentBuildUnitId;
-    int speedX, speedY;
-    unsigned buildType, previousType, resourceCount, orderUnitType;
-    unsigned short moveTargetX, moveTargetY, orderTargetX, orderTargetY;
-    unsigned short remainingBuildTime;
-    unsigned char buildQueueSlot, orderState, groundCooldown, airCooldown;
-    unsigned char spellCooldown, movementFlags, currentDirection, orderFlags;
-    unsigned char detected, mainOrderTimer;
-  };
-  static_assert(sizeof(UnitExtra) == 64, "HXP3 unit extension size");
+  using UnitExtra = pluto_late::UnitExtra;
+  static_assert(sizeof(UnitExtra) == pluto_late::kHxp4ExtraBytes,
+                "HXP4 unit extension: HXP3's 64 bytes plus 14 late-state bytes");
   struct Player {
     unsigned race, minerals, gas, supplyTotal, supplyUsed;
     unsigned startX, startY;
@@ -289,7 +444,8 @@ bool PlutoSendFrame() {
   // frame, so position-based ids churned -- the bot's model saw its units
   // vanish each step and its orders targeted stale positions.
   s_nFrame = 0;
-  memset(s_aFrame, 0, sizeof s_aFrame);
+  WORD *frameIds = s_aFrameIds[s_dwFrame % 8];
+  memset(frameIds, 0, sizeof s_aFrameIds[0]);
   std::vector<Unit> units;
   std::vector<UnitExtra> extras;
   units.reserve(256);
@@ -299,7 +455,7 @@ bool PlutoSendFrame() {
     const unsigned slot = static_cast<unsigned>((u->GetUnitID() & 0x7FF) - 1);
     if (slot >= kFrameUnitsMax)
       continue;
-    s_aFrame[slot] = u;
+    frameIds[slot] = u->GetUnitID();
     ++s_nFrame;
     Unit x;
     memset(&x, 0, sizeof x);
@@ -318,6 +474,10 @@ bool PlutoSendFrame() {
                  (u->pSprite != NULL && SpriteSeenBy(u->pSprite, s_nPlutoSlot))) ? 1 : 0;
     x.completed = (u->dwFlags & 1) != 0 ? 1 : 0;
     x.direction = u->bDirection;
+    // HXP's former pad byte carries the native packed-id generation.  The
+    // bridge uses slot + generation to keep a reused slot's identities apart;
+    // old captures legitimately carry zero here and remain readable.
+    x.pad = static_cast<unsigned char>(static_cast<unsigned>(u->GetUnitID()) >> 11);
     units.push_back(x);
     UnitExtra e;
     memset(&e, 0, sizeof e);
@@ -348,6 +508,21 @@ bool PlutoSendFrame() {
     e.detected = (u->bPlayer == s_nPlutoSlot || (u->dwFlags & 0x100) == 0 ||
                   UnitDetectedBy(u, s_nPlutoSlot)) ? 1 : 0;
     e.mainOrderTimer = u->bUnion54;
+    // HXP4 appends all five raw wBuildQueue entries and only the active
+    // research union arm. Other orders use neutral values, never pointer or
+    // hangar bytes mislabeled as research. Wide mod ids fail explicitly.
+    pluto_late::NativeUnitProduction production;
+    production.buildQueue = u->wBuildQueue;
+    production.buildQueueSlot = u->bBuildQueueSlot;
+    production.order = x.order;
+    production.techType = static_cast<unsigned>(u->bTechType);
+    production.upgradeType = static_cast<unsigned>(u->bUpgradeType);
+    production.remainingResearchTime = u->wRemainingResearchTime;
+    std::string productionError;
+    if (!pluto_late::PopulateUnitProduction(production, &e, &productionError)) {
+      Log("Pluto: HXP4 unit production rejected (%s)", productionError.c_str());
+      return false;
+    }
     extras.push_back(e);
   }
   // The players: the lobby slots, the Pluto slot first as the bridge's player 0.
@@ -373,12 +548,40 @@ bool PlutoSendFrame() {
   // players at 0 and 1 and the unused seats empty.
   players.resize(12);
 
+  // Dynamic tech follows exactly the same reordering and neutral/zero slots as
+  // the HXP player records above. Accessors are required for classic slots;
+  // PlayerTech() alone covers only Hyperion's extra-slot records.
+  std::vector<pluto_late::PlayerTech> nativeTech(PlayerLobbySlots());
+  for (int s = 0; s < PlayerLobbySlots(); ++s) {
+    pluto_late::PlayerTech &tech = nativeTech[s];
+    for (unsigned t = 0; t < tech.hasResearched.size(); ++t)
+      tech.hasResearched[t] = get_tech_researched(s, static_cast<WORD>(t));
+    for (unsigned u = 0; u < tech.upgradeLevel.size(); ++u)
+      tech.upgradeLevel[u] = get_upgrade_level(s, static_cast<WORD>(u));
+    for (unsigned t = 0; t < 44; ++t)
+      if (is_tech_in_progress(static_cast<tech_id_t>(t), s))
+        tech.techInProgress[t / 8] |= static_cast<unsigned char>(1u << (t % 8));
+    for (unsigned u = 0; u < 61; ++u)
+      if (is_upgrade_in_progress(static_cast<upgrade_id_t>(u), s))
+        tech.upgradeInProgress[u / 8] |= static_cast<unsigned char>(1u << (u % 8));
+  }
+  std::vector<pluto_late::PlayerTech> playerTech;
+  std::string playerTechError;
+  if (!pluto_late::ReorderPlayerTech(nativeTech, orderedPlayers, players.size(),
+                                     &playerTech, &playerTechError)) {
+    Log("Pluto: HXP4 player-tech production rejected (%s)", playerTechError.c_str());
+    return false;
+  }
+
   const unsigned nUnits = static_cast<unsigned>(units.size());
   const unsigned nPlayers = static_cast<unsigned>(players.size());
-  unsigned hdr[3] = {0x33505848, s_dwFrame, nUnits};  // 'HXP3'
-  unsigned mapWH[2] = {gwMapWidth, gwMapHeight};
-  // HXP3 carries real four-byte tile flags and per-unit production/combat
-  // state. HXP2 remains readable for older captures.
+  // Exact 32-byte HXP4 header. The final two words are mandatory layout
+  // selectors, not optional extension lengths: 78 and 119 respectively.
+  unsigned hdr[8] = {pluto_late::kHxp4, s_dwFrame, nUnits, gwMapWidth, gwMapHeight,
+                     nPlayers, pluto_late::kHxp4ExtraBytes, pluto_late::kPlayerTechBytes};
+  static_assert(sizeof(hdr) == 32, "HXP4 header size");
+  // HXP4 carries real four-byte tile flags, all five queue entries, current
+  // research state and player tech. HXP2/HXPF/HXP3 remain readable for old captures.
   const unsigned nTiles = static_cast<unsigned>(gwMapWidth) * gwMapHeight;
   // The classic tile masks use engine slot numbers, but BWAPI sees Pluto as
   // player 0 and its opponent as player 1. Remap visibility/explored bits into
@@ -409,11 +612,10 @@ bool PlutoSendFrame() {
       s_dump = fopen((PlutoFolder() + "/frames.bin").c_str(), "wb");
     if (s_dump != NULL) {
       fwrite(hdr, sizeof hdr, 1, s_dump);
-      fwrite(mapWH, sizeof mapWH, 1, s_dump);
-      fwrite(&nPlayers, sizeof nPlayers, 1, s_dump);
       fwrite(units.data(), nUnits * sizeof(Unit), 1, s_dump);
       fwrite(extras.data(), nUnits * sizeof(UnitExtra), 1, s_dump);
       fwrite(players.data(), nPlayers * sizeof(Player), 1, s_dump);
+      fwrite(playerTech.data(), nPlayers * sizeof(pluto_late::PlayerTech), 1, s_dump);
       fwrite(tiles.data(), nTiles * sizeof(DWORD), 1, s_dump);
       ++s_dumpCount;
       if (s_dumpCount == 60) {  // enough for the offline replay
@@ -423,13 +625,83 @@ bool PlutoSendFrame() {
     }
   }
   if (!WriteAll(s_hToBridge, hdr, sizeof hdr) ||
-      !WriteAll(s_hToBridge, mapWH, sizeof mapWH) ||
-      !WriteAll(s_hToBridge, &nPlayers, sizeof nPlayers) ||
       !WriteAll(s_hToBridge, units.data(), nUnits * sizeof(Unit)) ||
       !WriteAll(s_hToBridge, extras.data(), nUnits * sizeof(UnitExtra)) ||
       !WriteAll(s_hToBridge, players.data(), nPlayers * sizeof(Player)) ||
+      !WriteAll(s_hToBridge, playerTech.data(), nPlayers * sizeof(pluto_late::PlayerTech)) ||
       !WriteAll(s_hToBridge, tiles.data(), nTiles * sizeof(DWORD)))
     return false;
+  return true;
+}
+
+// Translate observation ids against the ids captured when the reply was emitted,
+// and remove targeted commands whose observed target no longer resolves to its
+// live unit at apply time. Zero is the genuine native/BWAPI no-target value for
+// a position order; never synthesize it from a failed lookup. A nonzero emission
+// generation is not sufficient: the native receivers turn a dead target's null
+// FromIdAlive result into a location order, so they must never see that command.
+bool TranslatePlutoCommands(DWORD dwEmitted, std::vector<unsigned char> *pCommands) {
+  if (pCommands == NULL)
+    return false;
+  std::vector<unsigned char> &commands = *pCommands;
+  if (commands.empty())
+    return true;
+  std::vector<unsigned char> translated;
+  translated.reserve(commands.size());
+  auto liveId = [&](unsigned id) -> WORD {
+    if (id < kPlutoIdBase)
+      return static_cast<WORD>(id);  // genuine no-unit target / native id
+    const int idx = static_cast<int>(id) - kPlutoIdBase;
+    return idx >= 0 && idx < kFrameUnitsMax ? s_aFrameIds[dwEmitted % 8][idx] : 0;
+  };
+  auto targetMissing = [](unsigned id, WORD emissionId) {
+    return id >= kPlutoIdBase &&
+           (emissionId == 0 || CUnit::FromIdAlive(emissionId) == NULL);
+  };
+  unsigned char *p = commands.data();
+  const unsigned char *pEnd = p + commands.size();
+  while (p < pEnd) {
+    const unsigned char op = p[0];
+    if (pEnd - p < 2 && (op == 0x09 || op == 0x0A || op == 0x0B)) {
+      Log("Pluto: truncated selection command %02x at frame %u", op, dwEmitted);
+      return false;
+    }
+    const int size = GetCommandByteSize(reinterpret_cast<const net_cmd_select_t *>(p));
+    if (size <= 0 || pEnd - p < size) {
+      Log("Pluto: malformed classic command %02x at frame %u", op, dwEmitted);
+      return false;
+    }
+    bool bDropTarget = false;
+    if (op == 0x09 || op == 0x0A || op == 0x0B) {
+      for (int i = 0; i < p[1]; ++i) {
+        const unsigned id = static_cast<unsigned>(p[2 + i * 2]) |
+                            (static_cast<unsigned>(p[3 + i * 2]) << 8);
+        const WORD live = liveId(id);
+        p[2 + i * 2] = static_cast<unsigned char>(live);
+        p[3 + i * 2] = static_cast<unsigned char>(live >> 8);
+      }
+    } else if (op == 0x14 || op == 0x15) {
+      const unsigned id = static_cast<unsigned>(p[5]) | (static_cast<unsigned>(p[6]) << 8);
+      const WORD live = liveId(id);
+      bDropTarget = targetMissing(id, live);
+      if (!bDropTarget) {
+        p[5] = static_cast<unsigned char>(live);
+        p[6] = static_cast<unsigned char>(live >> 8);
+      }
+    } else if (op == 0x29) {  // targeted unload also carries a classic unit id
+      const unsigned id = static_cast<unsigned>(p[1]) | (static_cast<unsigned>(p[2]) << 8);
+      const WORD live = liveId(id);
+      bDropTarget = targetMissing(id, live);
+      if (!bDropTarget) {
+        p[1] = static_cast<unsigned char>(live);
+        p[2] = static_cast<unsigned char>(live >> 8);
+      }
+    }
+    if (!bDropTarget)
+      translated.insert(translated.end(), p, p + size);
+    p += size;
+  }
+  commands.swap(translated);
   return true;
 }
 
@@ -477,160 +749,50 @@ bool PlutoReadAndApply() {
   if (!ReadAll(s_hFromBridge, cmd.data(), nCmd) || !ReadAll(s_hFromBridge, &win, 4))
     return false;
 
-  // Pluto trains with a four-frame action latency. Hyperion's immediate path
-  // measured one, so hold each reply for three more game frames.
+  // Genuine BWAPI applies Pluto's commands three frames after emission.
+  // Replies arrive at E+1, so hold them for two more game frames.
   if (nCmd != 0)
-    s_pendingCommands.push_back(PendingCommand{s_dwFrame + 3, std::move(cmd)});
+    QueuePlutoReply(expected, std::move(cmd));
   if (s_pendingCommands.empty() || s_pendingCommands.front().dwApplyAt > s_dwFrame)
     return true;
-  cmd = std::move(s_pendingCommands.front().bytes);
+  PendingCommand pending = std::move(s_pendingCommands.front());
   s_pendingCommands.erase(s_pendingCommands.begin());
+  cmd = std::move(pending.bytes);
+  const unsigned nReceivedBytes = static_cast<unsigned>(cmd.size());
+  nCmd = nReceivedBytes;
+
+  if (!TranslatePlutoCommands(pending.dwEmitted, &cmd))
+    return false;
   nCmd = static_cast<unsigned>(cmd.size());
-  // The command receivers read the active nation/human for selection and
-  // orders. Set those directly: sub_477E00 is the player-leave handler, not an
-  // active-player setter, and calling it here declares the current player quit.
+  if (nCmd == 0) {
+    LogPlutoDispatch(pending, nReceivedBytes, nCmd);
+    return true;
+  }
+  DWORD dwStorm = 0, dwNation = 0, dwHuman = 0;
+  if (!ResolveClassicPlayer(s_nPlutoSlot, &dwStorm, &dwNation, &dwHuman)) {
+    Log("Pluto: slot %d has no unique classic player mapping", s_nPlutoSlot);
+    return false;
+  }
+
+  // Use the engine's one native dispatcher, as replay and Trainer turns do.
+  // The previous handwritten subset dropped valid cancellation/lift commands
+  // and could diverge from native selection and order-interruption semantics.
   const DWORD dwSavedNation = g_ActiveNationID;
   const DWORD dwSavedHuman = g_ActiveHumanID;
-  g_ActiveNationID = static_cast<DWORD>(s_nPlutoSlot);
-  g_ActiveHumanID = static_cast<DWORD>(s_nPlutoSlot);
-  const unsigned char *p = cmd.data();
-  const unsigned char *pEnd = p + nCmd;
-  auto liveId = [](unsigned id) -> WORD {
-    const int idx = static_cast<int>(id) - kPlutoIdBase;
-    if (idx >= 0 && idx < kFrameUnitsMax && s_aFrame[idx] != NULL)
-      return static_cast<WORD>(s_aFrame[idx]->GetUnitID());
-    return static_cast<WORD>(id);
-  };
-  while (pEnd - p >= 2) {
-    const unsigned char op = p[0];
-    if (op == 0x09 || op == 0x0A || op == 0x0B) {  // Select and its deltas
-      if (pEnd - p < 2 + p[1] * 2)
-        break;
-      const int count = p[1];
-      std::vector<unsigned char> translated(p, p + 2 + count * 2);
-      for (int i = 0; i < count; ++i) {
-        const unsigned id = static_cast<unsigned>(p[2 + i * 2]) |
-                            (static_cast<unsigned>(p[3 + i * 2]) << 8);
-        const WORD live = liveId(id);
-        translated[2 + i * 2] = static_cast<unsigned char>(live);
-        translated[3 + i * 2] = static_cast<unsigned char>(live >> 8);
-      }
-      if (op == 0x09)
-        recv_net_cmd_Select(reinterpret_cast<const net_cmd_select_t *>(translated.data()));
-      else if (op == 0x0A)
-        recv_net_cmd_SelectDeltaAdd(reinterpret_cast<const net_cmd_selectdelta_t *>(translated.data()));
-      else
-        recv_net_cmd_SelectDeltaDel(reinterpret_cast<const net_cmd_selectdelta_t *>(translated.data()));
-      p += 2 + count * 2;
-    } else if (op == 0x0C) {  // Placebox
-      if (pEnd - p < 8)
-        break;
-      recv_net_cmd_Placebox(reinterpret_cast<const net_cmd_placebox_t *>(p));
-      p += 8;
-    } else if (op == 0x1A) {  // Stop
-      if (pEnd - p < 2)
-        break;
-      recv_net_cmd_Stop(reinterpret_cast<const net_cmd_byte_t *>(p));
-      p += 2;
-    } else if (op == 0x2B) {  // HoldPosition
-      if (pEnd - p < 2)
-        break;
-      recv_net_cmd_HoldPosition(reinterpret_cast<const net_cmd_byte_t *>(p));
-      p += 2;
-    } else if (op == 0x1F || op == 0x23 || op == 0x35) {  // Build / Morph / UpgradeBldg
-      if (pEnd - p < 3)
-        break;
-      if (op == 0x1F)
-        recv_net_cmd_Build(reinterpret_cast<const net_cmd_word_t *>(p));
-      else if (op == 0x23)
-        recv_net_cmd_Morph(reinterpret_cast<const net_cmd_word_t *>(p));
-      else
-        recv_net_cmd_UpgradeBldg(reinterpret_cast<const net_cmd_word_t *>(p));
-      p += 3;
-    } else if (op == 0x30 || op == 0x32 || op == 0x25 || op == 0x26 ||
-               op == 0x2C || op == 0x2D || op == 0x21 || op == 0x22 ||
-               op == 0x1E || op == 0x28) {
-      if (pEnd - p < 2)
-        break;
-      if (op == 0x30)
-        recv_net_cmd_Research(reinterpret_cast<const net_cmd_byte_t *>(p));
-      else if (op == 0x32)
-        recv_net_cmd_Upgrade(reinterpret_cast<const net_cmd_byte_t *>(p));
-      else if (op == 0x25)
-        recv_net_cmd_SwitchTankMode(reinterpret_cast<const net_cmd_byte_t *>(p));
-      else if (op == 0x26)
-        recv_net_cmd_SiegeMode(reinterpret_cast<const net_cmd_byte_t *>(p));
-      else if (op == 0x2C)
-        recv_net_cmd_Burrow(reinterpret_cast<const net_cmd_byte_t *>(p));
-      else if (op == 0x2D)
-        recv_net_cmd_Deburrow(reinterpret_cast<const net_cmd_t *>(p));
-      else if (op == 0x21)
-        recv_net_cmd_Cloak(reinterpret_cast<const net_cmd_t *>(p));
-      else if (op == 0x22)
-        recv_net_cmd_Decloak(reinterpret_cast<const net_cmd_t *>(p));
-      else if (op == 0x1E)
-        recv_net_cmd_Return(reinterpret_cast<const net_cmd_byte_t *>(p));
-      else
-        recv_net_cmd_UnloadAll(reinterpret_cast<const net_cmd_byte_t *>(p));
-      p += 2;
-    } else if (op == 0x20 || op == 0x29) {  // StopBuild / ExitTransport
-      if (pEnd - p < 3)
-        break;
-      if (op == 0x20)
-        recv_net_cmd_StopBuild(reinterpret_cast<const net_cmd_word_t *>(p));
-      else
-        recv_net_cmd_ExitTransport(reinterpret_cast<const net_cmd_word_t *>(p));
-      p += 3;
-    } else if (op == 0x27 || op == 0x2A || op == 0x5A || op == 0x31 ||
-               op == 0x33 || op == 0x34 || op == 0x36) {
-      if (op == 0x27)
-        recv_net_cmd_BuildFighter();
-      else if (op == 0x2A)
-        recv_net_cmd_SummonArchon();
-      else if (op == 0x5A)
-        recv_net_cmd_SummonDArchon();
-      else if (op == 0x31)
-        recv_net_cmd_StopResearch(reinterpret_cast<const net_cmd_t *>(p));
-      else if (op == 0x33)
-        recv_net_cmd_StopUpgrade(reinterpret_cast<const net_cmd_t *>(p));
-      else if (op == 0x34)
-        recv_net_cmd_StopAddon(reinterpret_cast<const net_cmd_t *>(p));
-      else
-        recv_net_cmd_Stim();
-      ++p;
-    } else if (op == 0x14) {  // RightClick
-      if (pEnd - p < 10)
-        break;
-      net_cmd_rclick_t c;
-      memset(&c, 0, sizeof c);
-      c.bOpcode = p[0];
-      c.wX = static_cast<WORD>(p[1] | (p[2] << 8));
-      c.wY = static_cast<WORD>(p[3] | (p[4] << 8));
-      c.wTargetID = liveId(static_cast<unsigned>(p[5] | (p[6] << 8)));
-      c.wTargetType = static_cast<WORD>(p[7] | (p[8] << 8));
-      c.bQueued = p[9];
-      recv_net_cmd_RightClick(&c);
-      p += 10;
-    } else if (op == 0x15) {  // Action: 11 bytes through the queued flag
-      if (pEnd - p < 11)
-        break;
-      net_cmd_action_t c;
-      memset(&c, 0, sizeof c);
-      c.bOpcode = p[0];
-      c.wX = static_cast<WORD>(p[1] | (p[2] << 8));
-      c.wY = static_cast<WORD>(p[3] | (p[4] << 8));
-      c.wTargetID = liveId(static_cast<unsigned>(p[5] | (p[6] << 8)));
-      c.wTargetType = static_cast<WORD>(p[7] | (p[8] << 8));
-      c.bOrderID = p[9];
-      c.bQueued = p[10];
-      recv_net_cmd_Action(&c);
-      p += 11;
-    } else {
-      break;  // unknown; stop rather than desync
-    }
-  }
+  const DWORD dwSavedStorm = g_ActiveStormID;
+  const BYTE bSavedPacket = gbInPacketProcess;
+  const int nSavedRand = set_rand_enabled(1);
+  gbInPacketProcess = 1;
+  g_ActiveNationID = dwNation;
+  g_ActiveHumanID = dwHuman;
+  g_ActiveStormID = dwStorm;
+  net_process_game_turn(reinterpret_cast<char *>(cmd.data()), nCmd, 1);
   g_ActiveNationID = dwSavedNation;
   g_ActiveHumanID = dwSavedHuman;
+  g_ActiveStormID = dwSavedStorm;
+  gbInPacketProcess = bSavedPacket;
+  set_rand_enabled(nSavedRand);
+  LogPlutoDispatch(pending, nReceivedBytes, nCmd);
   return true;
 }
 
@@ -654,6 +816,20 @@ void PlutoGameStart() {
   s_fifoFrames = -1;
   if (s_nPlutoSlot < 0)
     return;
+  // Computer slots can carry 0xFF or alias another seat's Storm id. Choose an
+  // actually unique classic owner (0..7); extended slots with no free owner are
+  // rejected rather than silently misattributing replay commands.
+  if (s_nPlutoSlot >= 8) {
+    Log("Pluto: extended slot %d has no classic replay owner", s_nPlutoSlot);
+    s_bFailed = true;
+    return;
+  }
+  DWORD dwStorm = 0, dwNation = 0, dwHuman = 0;
+  if (!PrepareClassicPlayer(s_nPlutoSlot, &dwStorm, &dwNation, &dwHuman)) {
+    Log("Pluto: no unique classic player mapping for slot %d", s_nPlutoSlot);
+    s_bFailed = true;
+    return;
+  }
   // Keep the AI identifiable in the lobby, players panel, replay header, and
   // benchmark summary rather than only by its AI-level label.
   snprintf(gPlayerData[s_nPlutoSlot].szName, sizeof gPlayerData[s_nPlutoSlot].szName,
@@ -702,6 +878,17 @@ void PlutoFrame() {
   if (flow)
     Log("Pluto: send done %u", s_dwFrame);
   ++s_dwFrame;
+  if (s_dwFrame == 1 && s_fifoFrames < 0) {
+    // Open the writer before waiting for frame 0's reply. The bridge switches
+    // its input to the FIFO in that reply path; an O_RDONLY open with no writer
+    // would otherwise return EOF and shut down before frame 1 can be sent.
+    const std::string ff = UnixPath(PlutoFolder()) + "/frames.fifo";
+    s_fifoFrames = open(ff.c_str(), O_RDWR | O_CLOEXEC);
+    if (s_fifoFrames < 0) {
+      Log("Pluto: the frame FIFO did not open before reply 0 (%s)", ff.c_str());
+      return;
+    }
+  }
   if (flow)
     Log("Pluto: read begin %u", s_dwFrame - 1);
   if (!PlutoReadAndApply()) {

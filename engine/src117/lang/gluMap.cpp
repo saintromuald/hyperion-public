@@ -36,6 +36,7 @@
 #include "../gen/globals117.h"
 #include "../port/platform/port_paths.h"  // Hyperion
 #include "../port/platform/port_winmsg.h"  // Hyperion: SetTimer and KillTimer, the window's
+#include "../port/sb/port_sbmanifest.h"  // Hyperion: canonical network game descriptions
 #if !defined(_MSC_VER)
 #include "../h/rtti.h"  // Hyperion: the global type_info MSVC declares itself
 #endif
@@ -1936,10 +1937,16 @@ int CreateGame_MultiPlayer(intptr_t nArg0, intptr_t nArg1)
   }
 
   *reinterpret_cast<TGAMEPARAMS *>(&pHdr->bGameType) = *pParams;
+  if (SbManifestActive() && SbManifestGet().disableAllianceChanges)
+    pHdr->bAlliesAllowed = 0;
   HEADER_DATA(pHdr).bActivePlayers = 1;
   if (strlen(gLocalPlayerName) >= 0x19)
     return 0;
-  SStrCopy(HEADER_DATA(pHdr).szGameName, gLocalPlayerName, 0x19);
+  // The creator field and the serialized description are identical on every
+  // seat. In particular, do not leak this machine's CD-key hash into the stat
+  // string or let a guest substitute its own name for the host's.
+  const char *pszCreator = SbManifestActive() ? SbManifestGet().slots[0].name.c_str() : gLocalPlayerName;
+  SStrCopy(HEADER_DATA(pHdr).szGameName, pszCreator, 0x19);
 
   if (pHdr->bNumTeams != 0 && HEADER_DATA(pHdr).dwGameId == 0)
     HEADER_DATA(pHdr).bMaxPlayers = 8;
@@ -1968,7 +1975,7 @@ int CreateGame_MultiPlayer(intptr_t nArg0, intptr_t nArg1)
   if (IsScenarioGame(pHdr) && HEADER_DATA(pHdr).dwGameId == 0)
     HEADER_DATA(pHdr).bMaxPlayers = CountHumanSlots();
 
-  HEADER_DATA(pHdr).dwField10 = sub_4634E0();
+  HEADER_DATA(pHdr).dwField10 = SbManifestActive() ? 0 : sub_4634E0();
   GameData2Txt(&HEADER_DATA(pHdr), szTxt, 0x80);
   dw1 = sub_4476D0(&pHdr->bGameType);
   dw2 = sub_4476F0(&pHdr->bGameType);

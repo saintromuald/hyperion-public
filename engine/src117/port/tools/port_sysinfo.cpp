@@ -447,7 +447,7 @@ std::string Locale(void)
 // The variables and options that carry a key, a password or a token, which a report leaves out:
 // it is text a player pastes where others read it.
 const char *const kSecretVars[] = {"HYPERION_LAN_KEY", "HYPERION_ROOM_KEY", "HYPERION_ROOM_PASSWORD",
-                                   "HYPERION_CHILD_TOKEN", "HYPERION_CONTROL_KEY"};
+                                   "HYPERION_CHILD_TOKEN", "HYPERION_CONTROL_KEY", "HYPERION_SB_RESULT_CODE"};
 const char *const kSecretOptions[] = {"--room-key", "--room-password", "--lan-copy", "--lan-stream", "--lan-tab",
                                       "--lab-worker"};
 

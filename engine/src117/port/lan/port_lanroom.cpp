@@ -22,6 +22,8 @@
 #ifndef SB_NETCODE_OFF
 #include "../../../tools/rallypoint2/bridge/ctest/rp_bridge.h"  // rp_dev_mint
 #endif
+#include <stdlib.h>  // getenv
+#include <string.h>  // strcmp
 
 namespace LanRoom {
 
@@ -251,6 +253,20 @@ void Back(Match &m)
 // bridge does the POST (blocking; the room's match launch can wait for it).
 bool MintSession(Match &m, std::string *pszWhy)
 {
+#ifdef SB_NETCODE_OFF
+  (void)m;
+  if (pszWhy)
+    *pszWhy = "This build carries no SB netcode (--no-sb).";
+  return false;
+#else
+  // Development-only session minting is opt-in. Production matches must come
+  // from an authenticated ShieldBattery formation and canonical manifest.
+  const char *pszDevMint = getenv("HYPERION_SB_DEV_MINT");
+  if (pszDevMint == NULL || strcmp(pszDevMint, "1") != 0) {
+    if (pszWhy)
+      *pszWhy = "Development session minting is disabled; use an authenticated ShieldBattery formation.";
+    return false;
+  }
   const std::string coordinator = Setting("sbCoordinator", "");
   if (coordinator.empty()) {
     if (pszWhy)
@@ -307,6 +323,7 @@ bool MintSession(Match &m, std::string *pszWhy)
     m.sbSetups.push_back(arr.At(i).Str());
   Log("match %d: the coordinator minted a %d-slot session", m.nId, static_cast<int>(m.sbSetups.size()));
   return true;
+#endif
 }
 
 // The launch a seat is sent: where the relay is, its token and game, what the game is, and
@@ -358,6 +375,10 @@ std::string Launch(Match &m, bool bForce)
 {
   if (m.state != "lobby")
     return "The match is not in its lobby.";
+#ifdef SB_NETCODE_OFF
+  if (m.bSb)
+    return "This build carries no SB netcode (--no-sb).";
+#endif
   int nPeople = 0, nAll = 0, nCreator = 0;
   std::vector<Device *> seating;  // browsers whose seats on this machine are not in yet
   for (int i = 0; i < kPlayers; ++i) {

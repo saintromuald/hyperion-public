@@ -38,6 +38,7 @@ typedef struct rp_session rp_session;
 #define RP_EV_LOBBY 4  /* u8, u32 slot, u32 len, len bytes */
 #define RP_EV_CHAT 5   /* u8, u32 slot, u32 len, len bytes */
 #define RP_EV_CONNECT 6 /* u8, u32 slot, u8 connected (1 up, 0 down) */
+#define RP_EV_SESSION_START 7 /* u8, u32 initial buffer turns (0 = keep seeded depth) */
 
 /* Starts a session from the launch JSON; writes *out. Returns 0 on success. */
 int32_t rp_start(const char *setup_json, rp_session **out);
@@ -80,8 +81,8 @@ int32_t rp_request_drop(rp_session *session, uint32_t slot);
  * the bridge compares a synced leave's final_turn_count against these. */
 void rp_turn_consumed(rp_session *session, uint32_t slot, uint64_t count);
 
-/* Teardown (idempotent). */
-void rp_end(rp_session *session);
+/* Teardown. Clears *session before joining, so repeated calls are safe. */
+void rp_end(rp_session **session);
 
 uint32_t rp_bridge_version(void);
 

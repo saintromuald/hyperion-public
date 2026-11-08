@@ -36,6 +36,7 @@
 #include "../port/replays/port_replayseek.h"  // Hyperion: PortReplaySeekAfterGame
 #include "../port/lan/port_instance.h"  // Hyperion: PortCheckForOtherInstances
 #include "../port/lan/port_lanlobby.h"  // Hyperion: PortLanAfterGame
+#include "../port/sb/port_sbmanifest.h"  // Hyperion: SbManifestCompatibilityJson
 #include "../port/platform/port_paths.h"  // Hyperion: PortDataFolder, PortOptions, PortCommandOptions
 #include "../port/replays/port_record.h"  // Hyperion: PortRecordAfterGame
 #include "../port/lab/port_labworker.h"  // Hyperion: PortLabWorker
@@ -763,6 +764,16 @@ void RunGame()
   gwGameMode = 4;
   init_program();
   PortStartupStep("game data", "fonts, images, dialogs and the map data read");  // Hyperion
+  // Hyperion: --sb-identity reports the loaded installation's compatibility,
+  // then exits without creating a game or changing its install.
+  if (PortCommandOptions()->bSbIdentity) {
+    LoadGraphics();
+    const std::string identity = SbManifestCompatibilityJson();
+    fprintf(stdout, "%s\n", identity.c_str());
+    fflush(stdout);
+    PortStartupEnded(0);
+    _Exit(0);
+  }
   // Hyperion: --mod-check checks a mod once the game's files are open, with no window, and
   // ends the process (port_modcheck.cpp)
   if (PortCommandOptions()->szModCheck[0] != '\0')

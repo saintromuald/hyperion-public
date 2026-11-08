@@ -334,6 +334,11 @@ fn each_fingerprint_field_change_alone_is_refused_as_a_create_mismatch() {
                 }],
             });
         }),
+        // Rollback and lockstep validate and execute different turn streams;
+        // reusing the response for the other mode would change the simulation.
+        ("rollback", |r| {
+            r.rollback = true;
+        }),
     ];
 
     for (label, mutate) in cases {
