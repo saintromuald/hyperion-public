@@ -56,6 +56,9 @@ uint32_t SbManifestSeed();
 // The active installation's compatibility record as JSON, after the game's
 // data and active mod have loaded. Used by local install/acceptance tooling.
 std::string SbManifestCompatibilityJson();
+// stdout form for main.cpp, whose legacy CRT declarations cannot include this
+// header's C++ standard-library types under MSVC.
+void SbManifestCompatibilityPrint();
 // Fills the native lobby tables from the validated roster after their normal
 // initialization. Every seat runs this locally; no creator setup blob is read.
 bool SbManifestApplyLobby();

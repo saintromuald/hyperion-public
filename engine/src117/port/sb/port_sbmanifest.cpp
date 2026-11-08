@@ -14,6 +14,7 @@
 #include "../../h/net_slot.h"
 #include "../../h/playerlimits.h"
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 extern PlayerTable<PlayerData, PlayerTagNetData> gNetPlayerData_g;
@@ -410,6 +411,12 @@ std::string SbManifestCompatibilityJson() {
          ",\"modFingerprint\":" + PortJsonQuote(ModFingerprint()) +
          ",\"dataFingerprint\":" + PortJsonQuote(LanFingerprint()) +
          ",\"rollback\":false}";
+}
+
+void SbManifestCompatibilityPrint() {
+  const std::string identity = SbManifestCompatibilityJson();
+  fprintf(stdout, "%s\n", identity.c_str());
+  fflush(stdout);
 }
 
 bool SbManifestApplyLobby() {
