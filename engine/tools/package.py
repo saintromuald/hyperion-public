@@ -992,7 +992,7 @@ def main() -> int:
     out.mkdir(parents=True)
     listing = []
 
-    build_zip = out / f"{edition_prefix(args)}-{ver}.zip"
+    build_zip = out / f"{edition_prefix(args)}-{ver}-windows-x64.zip"
     files = windows_files(ver, args)
     with zipfile.ZipFile(build_zip, "w", zipfile.ZIP_DEFLATED) as z:
         for name, src in files:
