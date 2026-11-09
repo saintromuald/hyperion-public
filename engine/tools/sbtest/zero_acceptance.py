@@ -24,9 +24,7 @@ import time
 import uuid
 
 ENGINE = Path(__file__).resolve().parents[2]
-HX = ENGINE / "src117/build/linux-x64/Hyperion.x86_64"
 R2 = ENGINE / "tools/rallypoint2"
-TARGET = ENGINE / "src117/build/linux-x64/rallypoint"
 DEFAULT_GAME = ENGINE / "testrun/share/variants/zero-smoke/Game"
 DEFAULT_MAPS = {
     1: DEFAULT_GAME / "Maps/(2)Volcanis.scm",
@@ -387,6 +385,9 @@ def main():
     parser.add_argument("--game", type=Path, default=DEFAULT_GAME)
     parser.add_argument("--map", dest="map_file", type=Path)
     parser.add_argument("--out", type=Path, help="keep the acceptance directory here")
+    parser.add_argument("--target", choices=("linux-x64", "windows-x64"),
+                        default="windows-x64" if os.name == "nt" else "linux-x64",
+                        help="native engine and Rally Point binaries to test")
     parser.add_argument("--steps", type=int, default=600)
     parser.add_argument("--timeout", type=int, default=75)
     parser.add_argument("--result", action="store_true",
@@ -408,10 +409,16 @@ def main():
         args.map_file = DEFAULT_MAPS[args.team_size]
     if args.steps < 1 or args.timeout < 1:
         parser.error("--steps and --timeout must be positive")
-    for path in [HX, args.game, args.map_file]:
+    windows = args.target == "windows-x64"
+    hx = ENGINE / ("src117/build/x64/Hyperion.exe" if windows else "src117/build/linux-x64/Hyperion.x86_64")
+    target = ENGINE / ("src117/build/x64/rallypoint" if windows else "src117/build/linux-x64/rallypoint")
+    executable_suffix = ".exe" if windows else ""
+    for path in [hx, args.game, args.map_file]:
         if not path.exists():
             parser.error(f"missing {path}")
 
+    if args.out is None:
+        (ENGINE / "testrun/share").mkdir(parents=True, exist_ok=True)
     work = args.out or Path(tempfile.mkdtemp(prefix="zero-acceptance-", dir=ENGINE / "testrun/share"))
     work.mkdir(parents=True, exist_ok=True)
     children = {}
@@ -427,11 +434,12 @@ def main():
     try:
         run(["cargo", "build", "-q", "--release", "-p", "rp-dev-setup", "-p", "rally-point-relay",
              "-p", "rally-point-coordinator", "--manifest-path", str(R2 / "Cargo.toml"),
-             "--target-dir", str(TARGET)], env={**os.environ, "CARGO_NET_OFFLINE": "true"})
-        bin_dir = TARGET / "release"
-        run([str(bin_dir / "rp_dev_setup"), "gen-cert", "--cert", work / "cert.pem", "--key", work / "key.pem"])
+             "--target-dir", str(target)], env={**os.environ, "CARGO_NET_OFFLINE": "true"})
+        bin_dir = target / "release"
+        run([str(bin_dir / f"rp_dev_setup{executable_suffix}"), "gen-cert", "--cert", work / "cert.pem",
+             "--key", work / "key.pem"])
         tenant = (work / "tenant.txt")
-        run([str(bin_dir / "rp_dev_setup"), "gen-tenant"], stdout=tenant.open("w"))
+        run([str(bin_dir / f"rp_dev_setup{executable_suffix}"), "gen-tenant"], stdout=tenant.open("w"))
         tenant_pkcs8 = tenant.read_text().splitlines()[0].strip()
         client_seed = os.urandom(32).hex()
         seed = random.SystemRandom().randrange(2**32)
@@ -439,7 +447,8 @@ def main():
         coordinator_port, relay_port = free_port(), free_port()
         coordinator_url = f"http://127.0.0.1:{coordinator_port}"
         coordinator_args = [
-            str(bin_dir / "rally-point-coordinator"), "--listen", f"127.0.0.1:{coordinator_port}",
+            str(bin_dir / f"rally-point-coordinator{executable_suffix}"), "--listen",
+            f"127.0.0.1:{coordinator_port}",
             "--dev-tenant", "--tenant", "hyperion-dev", "--kid", "dev-key-1",
             "--allow-insecure-control", "--tenant-key", tenant_pkcs8,
             "--dev-tenant-client-key", client_seed,
@@ -450,12 +459,13 @@ def main():
         children["coordinator"] = subprocess.Popen(
             coordinator_args, stdout=(work / "coordinator.log").open("w"), stderr=subprocess.STDOUT)
         children["relay"] = subprocess.Popen([
-            str(bin_dir / "rally-point-relay"), "--listen", f"127.0.0.1:{relay_port}", "--relay-id", "1",
+            str(bin_dir / f"rally-point-relay{executable_suffix}"), "--listen", f"127.0.0.1:{relay_port}",
+            "--relay-id", "1",
             "--coordinator-url", coordinator_url, "--cert", work / "cert.pem", "--key", work / "key.pem",
         ], stdout=(work / "relay.log").open("w"), stderr=subprocess.STDOUT)
         for attempt in range(30):
             result = subprocess.run([
-                str(bin_dir / "rp_dev_setup"), "coord-create", "--coordinator", coordinator_url,
+                str(bin_dir / f"rp_dev_setup{executable_suffix}"), "coord-create", "--coordinator", coordinator_url,
                 "--tenant", "hyperion-dev", "--kid", "dev-key-1", "--client-seed", client_seed,
                 "--slots", str(args.team_size * 2), "--name", "Hyperion Zero acceptance",
                 "--formation-id", game_id,
@@ -468,7 +478,7 @@ def main():
             raise RuntimeError("the development session could not be created")
 
         identity = json.loads(subprocess.check_output([
-            str(HX), "--sb-identity", "--install-folder", args.game,
+            str(hx), "--sb-identity", "--install-folder", args.game,
         ], env={**os.environ, "HYPERION_WINDOW": "hidden", "SDL_AUDIO_DRIVER": "dummy"}, text=True))
         seats = []
         for seat in range(args.team_size * 2):
@@ -489,7 +499,7 @@ def main():
         for seat, seat_dir in enumerate(seats):
             role = "create" if seat == 0 else "join"
             seat_args = [
-                str(HX), "--data", seat_dir, "--sb-setup", work / f"s{seat}.json",
+                str(hx), "--data", seat_dir, "--sb-setup", work / f"s{seat}.json",
                 "--sb-role", role, "--sb-map", seat_dir / "maps" / args.map_file.name,
                 "--sb-name", NAMES[seat], "--sb-speed", "6",
                 "--sb-type", "oneVOne" if args.team_size == 1 else "topVBottom",
