@@ -98,6 +98,7 @@
 #include "maphdr.h"          // get_map_chk, map_push's from
 #include "glues.h"           // mem_free
 #include "../front/port_frontlobby.h"  // MinimapRgba, map_info's picture
+#include "../front/port_gamemenu.h"    // PortGameMenuDo, GM_DO_QUIT
 #include <array>
 #include <set>
 #include "../data/port_stormapi.h"  // SFileGetUserDataPath, SFileGetInstallPath
@@ -1907,6 +1908,21 @@ void CmdTrainer(const Call &r) {
   r.Ok(std::string("\"tape\":") + (PortTrainerViewTape() ? "true" : "false") + "," + PortTrainerJson());
 }
 
+void CmdQuit(const Call &r) {
+  // The same action as End Mission's confirmation, including native result
+  // reporting and the clean network leave. Available only with the live channel.
+  PortGameMenuDo(GM_DO_QUIT);
+  r.Ok("\"quitting\":true");
+}
+
+void CmdEnd(const Call &r) {
+  // The result dialog's OK, with the same choice and close as its visible buttons.
+  const bool bVictory = r.j["victory"].kind == PortJson::BOOL && r.j["victory"].b;
+  PortGameEndChoose(bVictory, false);
+  PortGameMenuDo(GM_DO_CLOSE);
+  r.Ok("\"ending\":true");
+}
+
 void CmdOverlay(const Call &r) {
   const std::string mode = r.j["mode"].Str();
   static const char *const kModes[] = {"off", "window", "full", "counter"};
@@ -2187,6 +2203,8 @@ const Command kCommands[] = {
     {"mod_submissions", NEED_NOTHING, CmdModSubmissions},
     {"trainer", NEED_NOTHING, CmdTrainer},           // {key?, ctrl?, shift?}
     {"overlay", NEED_NOTHING, CmdOverlay},           // {mode?}: off, window, full or counter
+    {"quit", NEED_GAME, CmdQuit},                    // End Mission's confirmation, with result and clean leave
+    {"end", NEED_GAME, CmdEnd},                      // {victory}: the result dialog's OK and close
     {"press", NEED_NOTHING, CmdPress},               // {key | vk, char?}, posted as Windows posts it
     {"click", NEED_NOTHING, CmdClick},               // {x, y, right?, move?, double?, wheel?, phase?}, at a client position
     {"clock", NEED_NOTHING, CmdClock},               // {on?}

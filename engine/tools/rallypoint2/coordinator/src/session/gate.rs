@@ -50,6 +50,8 @@ use super::DEFAULT_WARM_TTL;
 ///   descriptor, where it decides which lobby commands are admitted and which
 ///   evict their sender, so replaying a cached response for a request naming a
 ///   different policy would enforce the wrong allow-list.
+/// - the request's `rollback` — selects the simulation protocol, so a lockstep
+///   response and a rollback response are never interchangeable.
 ///
 /// Equality is plain struct equality ([`PartialEq`]), never a hash: a hash
 /// collision must not be able to bind two genuinely different rosters to one
@@ -71,6 +73,10 @@ pub(super) struct CreateFingerprint {
     latency_estimate_ms: Option<u32>,
     /// The request's lobby command allow-list.
     lobby_policy: Option<LobbyPolicy>,
+    /// Whether the session runs rollback instead of lockstep. Older persisted
+    /// fingerprints predate this field and decode as lockstep.
+    #[serde(default)]
+    rollback: bool,
 }
 
 /// One player's contribution to a [`CreateFingerprint`]: the fields of a
@@ -114,6 +120,7 @@ impl CreateFingerprint {
             periodic_evidence: request.periodic_evidence,
             latency_estimate_ms: request.latency_estimate_ms,
             lobby_policy: request.lobby_policy.clone(),
+            rollback: request.rollback,
         }
     }
 }

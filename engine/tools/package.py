@@ -1,5 +1,10 @@
-"""Package a Hyperion build to hand out: one zip a player unpacks into a folder of its own,
-anywhere, test maps included.
+"""Package Hyperion Shield (public, no game files) or Hyperion Zero (private, full
+Remastered install): one archive a player unpacks into a folder of its own, anywhere,
+test maps included.
+
+    python tools/package.py                packages the last build as Hyperion Shield
+    python tools/package.py --edition zero --game-files "D:\\Games\\StarCraft"
+                                           packages a private Hyperion Zero with that install
 
     python tools/package.py                packages the last build
     python tools/package.py --build        build Hyperion.exe first
@@ -75,7 +80,8 @@ UNSHIPPED_MODS = ("hybrid-test", "lab")
 UNSHIPPED_MAPS = ("Hybrid Test.hxm", "Trigger Test 32.hxm", "Wide Selection Test.hxm",
                   "Big Game Hunters 2x rgb test.hxm")
 DOCS = [REPO / "docs" / "hxm-for-editors.md", REPO / "docs" / "hxm-format.md",
-        REPO / "docs" / "live-channel-for-editors.md", REPO / "docs" / "release-notes.md"]
+        REPO / "docs" / "live-channel-for-editors.md", REPO / "docs" / "release-notes.md",
+        REPO / "docs" / "release-variants.md"]
 # the release notes' pictures, beside Hyperion.exe in notes\ (the notes themselves are in the exe)
 NOTES = ENGINE / "notes"
 # the page a LAN room serves, beside the program in web\lan, and Hyperion for the
@@ -540,6 +546,92 @@ def version() -> str:
     return m.group(1)
 
 
+def edition_prefix(args) -> str:
+    return "Hyperion-Zero" if args.edition == "zero" else "Hyperion-Shield"
+
+
+def edition_metadata(args, ver: str, platform: str) -> bytes:
+    """The machine-readable identity of a release variant, with no source paths."""
+    zero = args.edition == "zero"
+    return lf(json.dumps({
+        "product": "Hyperion Zero" if zero else "Hyperion Shield",
+        "version": ver,
+        "channel": args.channel,
+        "visibility": "private" if zero else "public",
+        "platform": platform,
+        "gameFilesBundled": zero,
+    }, indent=2) + "\n")
+
+
+def edition_text(args) -> bytes:
+    if args.edition == "zero":
+        return crlf("""Hyperion Zero — private full test bundle
+
+This package includes a maintainer-supplied StarCraft: Remastered install under Game/.
+Use the included Play Hyperion Zero launcher: it starts Hyperion with those bundled files,
+without depending on another StarCraft installation or changing that installation.
+
+PRIVATE TEST MATERIAL. Do not publish this package or upload it to a public release.
+""")
+    return crlf("""Hyperion Shield — public package without game files
+
+This package includes Hyperion and its own maps, tools and documentation. It includes none
+of StarCraft's proprietary game data. Supply your own StarCraft: Remastered or classic Brood
+War installation when Hyperion asks for it. See README.txt for the supported layouts.
+""")
+
+
+def zero_launcher(args, platform: str, program: str = "") -> tuple[str, bytes, int]:
+    """A launcher that uses Zero's bundled install, never a Battle.net or system one."""
+    if platform == "windows":
+        return "Play Hyperion Zero.cmd", crlf(
+            "@echo off\r\nstart \"\" \"%~dp0Hyperion.exe\" --install-folder \"%~dp0Game\" %*\r\n"), 0o644
+    if platform == "mac":
+        return "Play Hyperion Zero.command", lf(
+            "#!/bin/sh\nset -eu\nDIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n"
+            "exec \"$DIR/Hyperion.app/Contents/MacOS/Hyperion\" --install-folder \"$DIR/Game\" \"$@\"\n"), 0o755
+    return "play-hyperion-zero.sh", lf(
+        "#!/bin/sh\nset -eu\nDIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n"
+        f"exec \"$DIR/{program}\" --install-folder \"$DIR/Game\" \"$@\"\n"), 0o755
+
+
+def validate_variant(args) -> None:
+    if args.edition == "shield" and args.game_files is not None:
+        sys.exit("--game-files is only valid for Hyperion Zero; Shield never bundles game data")
+    if args.edition != "zero":
+        return
+    if args.game_files is None:
+        sys.exit("Hyperion Zero needs --game-files <the maintainer's Remastered install>")
+    source = args.game_files
+    if not source.is_dir():
+        sys.exit(f"Hyperion Zero's game install is not a directory: {source}")
+    if not (source / "Data").is_dir():
+        sys.exit(f"Hyperion Zero needs a Remastered install with a Data directory: {source}")
+    if not any(p.is_file() for p in source.rglob("*")):
+        sys.exit(f"Hyperion Zero's game install is empty: {source}")
+
+
+def game_file_entries(args) -> list:
+    """The private Remastered install, as archive-relative paths only."""
+    if args.edition != "zero":
+        return []
+    source = args.game_files
+    return [("Game/" + p.relative_to(source).as_posix(), p)
+            for p in sorted(source.rglob("*")) if p.is_file()]
+
+
+def variant_entries(args, ver: str, platform: str, program: str = "") -> list:
+    """Metadata and, for Zero, its launcher, in the packagers' (name, source) shape."""
+    entries = [
+        ("release.json", edition_metadata(args, ver, platform), 0o644),
+        ("EDITION.txt", edition_text(args), 0o644),
+    ]
+    if args.edition == "zero":
+        name, data, mode = zero_launcher(args, platform, program)
+        entries.append((name, data, mode))
+    return entries
+
+
 def sha1(path: Path) -> str:
     return hashlib.sha1(path.read_bytes()).hexdigest()
 
@@ -568,10 +660,10 @@ def package_linux(args, ver: str) -> int:
     for p in [program, sdl, *DOCS]:
         if not p.exists():
             sys.exit(f"missing {p} (python tools/build_engine_linux.py --arch {args.linux})")
-    out = args.out / f"hyperion_{ver}_linux-{args.linux}_{time.strftime('%Y%m%d_%H%M%S')}"
+    out = args.out / f"{edition_prefix(args).lower()}_{ver}_linux-{args.linux}_{time.strftime('%Y%m%d_%H%M%S')}"
     out.mkdir(parents=True)
     listing = []
-    archive = out / f"Hyperion-{ver}-linux-{args.linux}.tar.gz"
+    archive = out / f"{edition_prefix(args)}-{ver}-linux-{args.linux}.tar.gz"
     now = int(time.time())
     with tarfile.open(archive, "w:gz") as t:
         def put(name: str, data: bytes, mode: int = 0o644):
@@ -607,6 +699,10 @@ def package_linux(args, ver: str) -> int:
         maps = shipped_maps()
         for m in maps:
             put("Data/maps/Hyperion/" + ("Experimental/" if experimental(m) else "") + m.name, m.read_bytes())
+        for name, data, mode in variant_entries(args, ver, f"linux-{args.linux}", name):
+            put(name, data, mode)
+        for name, source in game_file_entries(args):
+            put(name, source.read_bytes())
     (out / "contents.txt").write_bytes(lf("\n".join(listing) + "\n"))
     keep_symbols(ver, release=True, program=program)
     print(f"{archive}  ({archive.stat().st_size:,} bytes)")
@@ -625,8 +721,8 @@ def package_mac(args, ver: str) -> int:
     for p in [program, sdl, *DOCS]:
         if not p.exists():
             sys.exit(f"missing {p} (python3 tools/build_engine_linux.py)")
-    out = args.out / f"hyperion_{ver}_mac-arm64_{time.strftime('%Y%m%d_%H%M%S')}"
-    stage = out / f"Hyperion-{ver}-mac"
+    out = args.out / f"{edition_prefix(args).lower()}_{ver}_mac-arm64_{time.strftime('%Y%m%d_%H%M%S')}"
+    stage = out / f"{edition_prefix(args)}-{ver}-mac"
     app = stage / "Hyperion.app" / "Contents"
     (app / "MacOS").mkdir(parents=True)
     (app / "Resources").mkdir()
@@ -687,13 +783,17 @@ def package_mac(args, ver: str) -> int:
     maps = shipped_maps()
     for m in maps:
         put("Data/maps/Hyperion/" + ("Experimental/" if experimental(m) else "") + m.name, m.read_bytes())
+    for name, data, mode in variant_entries(args, ver, "mac-arm64"):
+        put(name, data, mode)
+    for name, source in game_file_entries(args):
+        put(name, source.read_bytes())
 
     # signed ad hoc, the library first, then the app around it; checked as macOS will
     subprocess.run(["codesign", "--force", "-s", "-", str(app / "MacOS" / "libSDL3.0.dylib")], check=True)
     subprocess.run(["codesign", "--force", "-s", "-", "--identifier", "io.github.mad-man-dan.hyperion",
                     str(stage / "Hyperion.app")], check=True)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(stage / "Hyperion.app")], check=True)
-    archive = out / f"Hyperion-{ver}-mac-arm64.zip"
+    archive = out / f"{edition_prefix(args)}-{ver}-mac-arm64.zip"
     subprocess.run(["ditto", "-c", "-k", "--keepParent", str(stage), str(archive)], check=True)
     (out / "contents.txt").write_bytes(lf("\n".join(listing) + "\n"))
     keep_symbols(ver, release=True, program=program)
@@ -702,7 +802,7 @@ def package_mac(args, ver: str) -> int:
     return 0
 
 
-def windows_files(ver: str) -> list:
+def windows_files(ver: str, args) -> list:
     """The Windows zip's files: each its name in the zip and its source, a file or the bytes."""
     files = [("Hyperion.exe", BUILT), ("SDL3.dll", SDL3)]
     for f in shipped_mod_files():
@@ -731,6 +831,9 @@ def windows_files(ver: str) -> list:
     files.append(("README.txt", crlf(README.format(version=ver))))
     for m in shipped_maps():
         files.append(("Data/maps/Hyperion/" + ("Experimental/" if experimental(m) else "") + m.name, m))
+    for name, data, _ in variant_entries(args, ver, "windows"):
+        files.append((name, data))
+    files.extend(game_file_entries(args))
     return files
 
 
@@ -797,13 +900,13 @@ def install_write(path: Path, data: bytes) -> str:
     return state
 
 
-def install(folders: list, ver: str) -> int:
+def install(folders: list, ver: str, args) -> int:
     """The Windows zip's files put in each folder as unzipping it there would: only what differs
     is written, and nothing else in the folder is touched."""
     for p in [BUILT, SDL3, *DOCS]:
         if not p.exists():
             sys.exit(f"missing {p}")
-    files = windows_files(ver)
+    files = windows_files(ver, args)
     failed = 0
     for folder in folders:
         if not folder.is_dir():
@@ -849,9 +952,16 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=ENGINE / "testrun" / "share", help="where the zips go")
     ap.add_argument("--linux", choices=["x64", "arm64"], help="package the Linux build for this machine")
     ap.add_argument("--mac", action="store_true", help="on a Mac: package the Mac build as Hyperion.app")
+    ap.add_argument("--edition", choices=["shield", "zero"], default="shield",
+                    help="public Shield without game files, or private Zero with a full Remastered install")
+    ap.add_argument("--channel", choices=["prerelease", "release"], default="prerelease",
+                    help="the release channel recorded in release.json")
+    ap.add_argument("--game-files", type=Path, metavar="FOLDER",
+                    help="for Zero only: the maintainer's legally supplied Remastered install")
     ap.add_argument("--install", nargs="?", const="", metavar="FOLDER",
                     help="put the Windows zip's files in FOLDER, or in each folder engine/install_to.txt names")
     args = ap.parse_args()
+    validate_variant(args)
 
     if args.build and args.linux:
         if subprocess.run([sys.executable, str(ENGINE / "tools" / "build_engine_linux.py"), "--arch",
@@ -872,18 +982,18 @@ def main() -> int:
         folders = [Path(args.install)] if args.install else install_folders()
         if not folders:
             sys.exit(f"--install: no folder given and none in {INSTALL_TO}")
-        return install(folders, version())
+        return install(folders, version(), args)
     for p in [BUILT, SDL3, *DOCS]:
         if not p.exists():
             sys.exit(f"missing {p}")
 
     ver = version()
-    out = args.out / f"hyperion_{ver}_{time.strftime('%Y%m%d_%H%M%S')}"
+    out = args.out / f"{edition_prefix(args).lower()}_{ver}_{time.strftime('%Y%m%d_%H%M%S')}"
     out.mkdir(parents=True)
     listing = []
 
-    build_zip = out / f"Hyperion-{ver}.zip"
-    files = windows_files(ver)
+    build_zip = out / f"{edition_prefix(args)}-{ver}.zip"
+    files = windows_files(ver, args)
     with zipfile.ZipFile(build_zip, "w", zipfile.ZIP_DEFLATED) as z:
         for name, src in files:
             if isinstance(src, Path):

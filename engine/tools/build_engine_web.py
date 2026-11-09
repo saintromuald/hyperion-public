@@ -46,7 +46,7 @@ WASM = ["-sMEMORY64=1", "-msimd128", "-msse2"]
 COMMON = bel.COMMON + WASM
 LANG = ["-std=c++17"] + COMMON + ["-DOC_PAYLOAD", "-DOC_WITH_HELD"]
 GEN = ["-std=c++17"] + COMMON + ["-DOC_DLL_MODE"]
-PORT = ["-std=c++20"] + COMMON + ["-DOC_WITH_HELD", "-I" + OUT, "-I" + os.path.join(bel.SDL_SRC, "include"),
+PORT = ["-std=c++20"] + COMMON + ["-DOC_WITH_HELD", "-DSB_NETCODE_OFF", "-I" + OUT, "-I" + os.path.join(bel.SDL_SRC, "include"),
                                   "-I" + bel.SHADERS, "-I" + bel.CLAY, "-I" + bel.STB,
                                   "-I" + os.path.join(bel.CASCLIB, "src"), "-DCASCLIB_NO_AUTO_LINK_LIBRARY",
                                   "-I" + bel.DRLIBS, "-I" + os.path.join(bel.LIBWEBP, "src")]

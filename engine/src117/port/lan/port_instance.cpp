@@ -63,7 +63,7 @@ void PortCheckForOtherInstances(const char *pszTitle)
   s_bChecked = true;
   // a mod's check plays no game and writes only its own report and logs, beside a Hyperion
   // that is running
-  if (PortCommandOptions()->szModCheck[0] != '\0')
+  if (PortCommandOptions()->szModCheck[0] != '\0' || PortCommandOptions()->bSbIdentity)
     return;
   char szName[64];
   sprintf(szName, "Hyperion Instance %08lX", PortHashInstallFolder());

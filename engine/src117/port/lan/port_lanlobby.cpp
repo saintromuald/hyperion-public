@@ -23,9 +23,11 @@
 #include "port_lanstream.h"
 #include "port_stormlan.h"
 #include "../sb/port_stormsb.h"  // SbRosterCount
+#include "../sb/port_sbmanifest.h"  // the server-owned launch record
 #include "Storm.h"            // SStrCopy
 #include "fd_sessn.h"         // IsSessionComplete
 #include "gametype.h"         // IsMeleeTemplate
+#include "gluBNCreate.h"      // gametype_find_template
 #include "gluChatSlot.h"      // CountSides
 #include "gluMap.h"           // PortCreateNetGame
 #include "../h/game.h"           // PreloadMap
@@ -59,7 +61,9 @@ extern TFD_SESSION *dword_672960;  // the map download's session, while one runs
 
 namespace {
 
-enum { TYPE_HUMAN = 2, TYPE_COMPUTER = 5, TYPE_OPEN = 6, SLOT_COMPUTER = 0, MELEE_KEY = 2 | 1 << 16, FFA_KEY = 3 | 1 << 16 };
+enum { TYPE_HUMAN = 2, TYPE_COMPUTER = 5, TYPE_OPEN = 6, SLOT_COMPUTER = 0,
+       MELEE_KEY = 2 | 1 << 16, FFA_KEY = 3 | 1 << 16, ONE_VS_ONE_KEY = 4 | 1 << 16,
+       TOP_VS_BOTTOM_KEY = 0x0F | 1 << 16 };
 enum { RACE_ZERG = 0, RACE_TERRAN = 1, RACE_PROTOSS = 2, RACE_RANDOM = 6, RACE_TRIES = 12 };
 
 // The match being made: the launch, and how far the lobby has got.
@@ -253,26 +257,48 @@ struct SbLaunchArgs {
 
 // The shared launch: the room's and the command line's differ only in where
 // the values come from.
-bool PortSbLaunchNetGame(const SbLaunchArgs &a)
+bool PortSbLaunchNetGameInner(const SbLaunchArgs &a)
 {
   g_plan = Plan();
   g_plan.bSb = true;
-  g_plan.bCreator = a.bCreate;
+  if (a.pszSetup != NULL)
+    SbSetLaunchJson(a.pszSetup, a.pszMapPath);
+  if (!SbManifestError().empty())
+    return false;
+  const bool bCanonical = SbManifestActive();
+  const SbManifestSlot *local = SbManifestLocalSlot();
+  if (bCanonical && local == NULL)
+    return false;
+  g_plan.bCreator = bCanonical ? local->host : a.bCreate;
   const int nRoster = SbRosterCount();
   g_plan.nHumans = nRoster > 0 && nRoster <= 8 ? nRoster : 2;
   g_plan.nRace = a.nRace >= 0 && a.nRace <= 6 ? a.nRace : 6;
-  const char *pszName = a.pszName && a.pszName[0] ? a.pszName : "Relay";
-  g_plan.mapName = pszName;
+  if (bCanonical) {
+    g_plan.nRace = local->race == "z" ? RACE_ZERG : local->race == "t" ? RACE_TERRAN
+                   : local->race == "p" ? RACE_PROTOSS : RACE_RANDOM;
+    for (const SbManifestSlot &slot : SbManifestGet().slots) {
+      const int race = slot.race == "z" ? RACE_ZERG : slot.race == "t" ? RACE_TERRAN
+                       : slot.race == "p" ? RACE_PROTOSS : RACE_RANDOM;
+      g_plan.people.push_back(std::make_pair(slot.name, race));
+    }
+  }
+  const char *pszName = bCanonical ? local->name.c_str()
+                                   : (a.pszName && a.pszName[0] ? a.pszName : "Relay");
+  g_plan.mapName = bCanonical ? SbManifestGet().name : pszName;
+  g_plan.who = Who();
   SStrCopy(gLocalPlayerName, pszName, 25);
   gPlayback = 0;
   gbIsExpansion = static_cast<BYTE>(IsBroodwar() != 0);
-  // the rules the players chose, the same on every seat: the game plays by
-  // Hyperion's (--rules hyperion) or 1.17's (--rules classic, the default), and
-  // a mismatch between seats desyncs, as it must (the sims differ)
-  RulesChooseNext(lstrcmpiA(a.pszRules, "hyperion") == 0 ? 1 : 0);
-  // and the mutators (port_mutators.h), the same on every seat: a seat with
-  // another set plays another game, which desyncs, as it must
-  if (a.bMutators)
+  // Canonical Rule 1 is Hyperion's ordinary QoL start without mutators. Rule 2
+  // adds exactly the seeded anti-meta start; a legacy launch keeps the command
+  // line's or room's choices.
+  RulesChooseNext(bCanonical ? (SbManifestGet().rules == "hyperion" ? 1 : 0)
+                             : (lstrcmpiA(a.pszRules, "hyperion") == 0 ? 1 : 0));
+  if (bCanonical) {
+    MutatorSet mut;
+    mut.nAntiMeta = SbManifestGet().antiMeta;
+    MutatorsChooseNet(mut);
+  } else if (a.bMutators)
     MutatorsChooseNet(a.mut);
   // as the main menu's Multiplayer leaves it (do_main_dlg)
   gbMultiPlayerMode = 1;
@@ -283,17 +309,23 @@ bool PortSbLaunchNetGame(const SbLaunchArgs &a)
   }
   *reinterpret_cast<TGAMEPARAMS *>(&gGameHeader.bGameType) = *pParams;
   SMemFree(pParams, "port_lanlobby.cpp", __LINE__, 0);
-  if (a.pszSetup != NULL)
-    SbSetLaunchJson(a.pszSetup);
   if (!NetInit(SB_PROVIDER)) {
     Log("the network did not start");
     return false;
   }
-  if (g_plan.bCreator) {
+  // Both canonical seats build the same local session from the manifest. The
+  // provider corrects its local slot and roster; only a legacy launch uses the
+  // creator/guest join handshake below.
+  if (g_plan.bCreator || bCanonical) {
     const bool bFfa = lstrcmpiA(a.pszType, "ffa") == 0;
-    const int nKey = bFfa ? FFA_KEY : MELEE_KEY;
-    if (!IsMeleeTemplate(static_cast<BYTE>(nKey), static_cast<BYTE>(nKey >> 8), static_cast<WORD>(nKey >> 16))) {
-      Log("no melee template for the key 0x%X", nKey);
+    const int nKey = bCanonical
+        ? (SbManifestGet().gameType == "topVBottom" ? TOP_VS_BOTTOM_KEY : ONE_VS_ONE_KEY)
+        : (bFfa ? FFA_KEY : MELEE_KEY);
+    const TGAMEPARAMS *pTemplate = gametype_find_template(static_cast<BYTE>(nKey), static_cast<BYTE>(nKey >> 8),
+                                                          static_cast<WORD>(nKey >> 16));
+    if (pTemplate == NULL || (!bCanonical &&
+        !IsMeleeTemplate(static_cast<BYTE>(nKey), static_cast<BYTE>(nKey >> 8), static_cast<WORD>(nKey >> 16)))) {
+      Log("no game template for the key 0x%X", nKey);
       return false;
     }
     char szPath[MAX_PATH];
@@ -310,8 +342,8 @@ bool PortSbLaunchNetGame(const SbLaunchArgs &a)
       szPath[1] = ':';
     }
     char szName[0x20];
-    SStrCopy(szName, pszName, sizeof szName);
-    int nSpeed = a.nSpeed;
+    SStrCopy(szName, bCanonical ? SbManifestGet().name.c_str() : pszName, sizeof szName);
+    int nSpeed = bCanonical ? SbManifestGet().speed : a.nSpeed;
     if (nSpeed < 0 || nSpeed > 6)
       nSpeed = 6;
     const int nRes = PortCreateNetGame(szPath, szName, nKey, static_cast<BYTE>(nSpeed));
@@ -319,6 +351,10 @@ bool PortSbLaunchNetGame(const SbLaunchArgs &a)
       Log("the game was not made from %s (0x%X)", szPath, nRes);
       return false;
     }
+    if (bCanonical && SbManifestGet().gameType == "topVBottom")
+      gGameHeader.dwSubTypeValue = static_cast<DWORD>(SbManifestGet().gameSubType);
+    if (bCanonical)
+      gbIsGameCreator_g = local->host ? 1 : 0;
     Log("made the relay match %s", szName);
   } else {
     // the joiner starts the session first: the creator's stat string must be
@@ -383,10 +419,11 @@ bool PortSbLaunchNetGame(const SbLaunchArgs &a)
       szMapPath[1] = ':';
     }
     BYTE abProbe[0x20];
-    if (!PreloadMap(szMapPath, abProbe, 0))
+    if (!PreloadMap(szMapPath, abProbe, 0)) {
       Log("the launch's map could not be preloaded from %s", szMapPath);
-    else
-      Log("the launch's map is preloaded from %s", szMapPath);
+      return false;
+    }
+    Log("the launch's map is preloaded from %s", szMapPath);
   }
   g_plan.bOn = true;
   g_why.clear();
@@ -394,6 +431,14 @@ bool PortSbLaunchNetGame(const SbLaunchArgs &a)
   if (PortPresentGpu())
     PortMotionCover();
   return true;
+}
+
+bool PortSbLaunchNetGame(const SbLaunchArgs &a)
+{
+  const bool launched = PortSbLaunchNetGameInner(a);
+  if (!launched)
+    SbSetLaunch(NULL);
+  return launched;
 }
 
 // The command line's launch (--sb-setup, --sb-role, --sb-map, ...): the values
@@ -469,6 +514,19 @@ void SbLobbyTick()
 {
   if (g_plan.bStarted)
     return;
+  if (SbManifestActive()) {
+    // The relay's coverage barrier, not a host-created StartGame record, opens
+    // the countdown. Each seat applies the same local transition; native lobby
+    // turns stay local except for the host's subsequent seed record.
+    if (!SbSessionStarted() || get_lobby_state() != 8 || g_LocalNationID >= 8)
+      return;
+    g_plan.bStarted = true;
+    const BYTE command = 0x3C;
+    sub_470910(4);
+    recv_net_cmd_StartGame(&command, 0);
+    Log("the canonical lobby countdown started");
+    return;
+  }
   const uint64_t qwNow = PortNowMs();
   if (qwNow - g_plan.qwLastAct < 250)
     return;
@@ -515,6 +573,7 @@ void PortLanAfterGame(void)
   const char *pszHow = bState == 3 ? "won" : bState == 2 ? "lost" : bState == 5 ? "drew" : bState == 1 ? "left" : "ended";
   Log("the game ended: %s", pszHow);
   if (g_plan.bSb) {
+    SbEmitLifecycleEvent("finished");
     PortLanLobbyEnd();
     g_bBackToFront = true;
     return;
@@ -555,6 +614,7 @@ void PortLanLobbyEnd(void)
 {
   g_plan.bOn = false;
   LanSetLaunch(NULL, 0, NULL, 0, NULL, NULL);
+  SbSetLaunch(NULL);
 }
 
 // From the chat room's poll (gluChat.cpp), every pass of its loop.

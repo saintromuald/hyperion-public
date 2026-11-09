@@ -16,6 +16,7 @@
 #include "../h/net_rand.h"     // set_rand_enabled
 #include "../port/render/port_overlay.h"  // Hyperion: PortOverlayAction
 #include "../port/replays/port_replay.h"  // Hyperion: PortReplayTurnsUse, PortReplayTurnsKeep
+#include "../port/sb/port_stormsb.h"  // Hyperion: SbTurnsInTransitTarget
 #include "../h/game_evt.h"    // game_event_reset
 #include "../h/Storm.h"        // SStrCopy, SStrPack
 #include "../h/victory.h"       // psnprintf
@@ -1026,9 +1027,14 @@ void SendTurns()
     return;
   }
 
-  dwMax = gdwDefTurnsInTransit;
-  if (sgbSyncTurnEnable)
-    dwMax += gdwNetLatency_g;
+  const DWORD dwSbMax = SbTurnsInTransitTarget();
+  if (dwSbMax != 0) {
+    dwMax = dwSbMax;
+  } else {
+    dwMax = gdwDefTurnsInTransit;
+    if (sgbSyncTurnEnable)
+      dwMax += gdwNetLatency_g;
+  }
 
   while (dwTurns < dwMax) {
     dwTurns++;

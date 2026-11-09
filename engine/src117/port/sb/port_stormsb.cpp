@@ -23,11 +23,16 @@
 // The creator is slot 0 (SB's convention, which 1.17's lobby needs for slots, forces
 // and kicks); the local slot comes from the signed token, never from the game.
 #include "port_stormsb.h"
+#include "port_sbmanifest.h"
 #include "../platform/port_log.h"  // PortLogger
+#include "../platform/port_json.h"  // PortJsonQuote
 #include "../data/port_stormerr.h"  // NET_*
 #include "../data/port_stormapi.h"  // SStrCopy
 #include "../platform/port_paths.h"  // PortCommandOptions
 #include "../platform/port_util.h"  // PortNowMs
+#include "../../h/net_cmds.h"  // PlayerData
+#include "../platform/port_globals117.h"  // oc_dwReplayFrame
+#include "../../gen/globals117.h"  // sgbSyncTurnEnable
 #include "../../h/Storm.h"  // SErrGetLastError
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,16 +66,29 @@ BOOL Fail(DWORD dwErr)
 
 void SbSetLaunch(const char *pszSetupFile)
 {
+  SbManifestClear();
   Log("this build carries no SB netcode (--no-sb); the session \"%s\" is ignored",
       pszSetupFile ? pszSetupFile : "");
 }
-void SbSetLaunchJson(const char *pszSetupJson)
+void SbSetLaunchJson(const char *pszSetupJson, const char *pszMapPath)
 {
-  Log("this build carries no SB netcode (--no-sb); the launch JSON is ignored");
+  (void)pszSetupJson;
+  (void)pszMapPath;
+  SbManifestClear();
+  Log("this build carries no SB netcode (--no-sb); a launch is ignored");
+}
 }
 bool SbLaunchOn(void)
 {
   return false;
+}
+bool SbSessionStarted(void)
+{
+  return false;
+}
+void SbEmitLifecycleEvent(const char *pszType)
+{
+  (void)pszType;
 }
 int SbRosterCount(void)
 {
@@ -96,10 +114,15 @@ bool SbMapFromLaunch(void)
 }
 bool SbLaunchHeader(BYTE *pbSubCategory, BYTE *pbScenarioFlag, BYTE *pbLadderGame)
 {
+  (void)pbSubCategory;
+  (void)pbScenarioFlag;
+  (void)pbLadderGame;
   return false;
 }
 bool SbLaunchParams(void *pvParams, size_t cbParams)
 {
+  (void)pvParams;
+  (void)cbParams;
   return false;
 }
 
@@ -152,6 +175,8 @@ BOOL SbLeaveGame(DWORD dwReason)
 BOOL SbDropPlayer(DWORD dwPlayer, DWORD dwFlags)
 {
   // The stub build carries no relay: nothing to ask.
+  (void)dwPlayer;
+  (void)dwFlags;
   return Fail(NET_BAD_PROVIDER);
 }
 BOOL SbDisconnectAll(DWORD dwFlags)
@@ -170,10 +195,11 @@ BOOL SbGetNumPlayers(int *pnFirst, int *pnLast, int *pnActive)
 }
 BOOL SbGetPlayerName(DWORD dwPlayer, char *pszBuffer, DWORD cchBuffer)
 {
+  (void)dwPlayer;
   if (!pszBuffer || !cchBuffer)
     return Fail(NET_INVALID);
   pszBuffer[0] = '\0';
-  return FALSE;
+  return Fail(NET_BAD_PROVIDER);
 }
 BOOL SbGetPlayerNames(char **ppszNames)
 {
@@ -186,6 +212,10 @@ BOOL SbGetGameInfo(DWORD dwInfo, void *pvBuffer, DWORD cbBuffer, DWORD *pcbRead)
 BOOL SbSetGameMode(DWORD dwMode, DWORD dwMakePublic)
 {
   return FALSE;
+}
+DWORD SbTurnsInTransitTarget(void)
+{
+  return 0;
 }
 BOOL SbGetTurnsInTransit(DWORD *pdwTurns)
 {
@@ -206,6 +236,10 @@ BOOL SbSendMessage(DWORD dwPlayer, const void *pvData, DWORD cbData)
 BOOL SbReceiveMessage(int *pnPlayer, const void **ppvData, DWORD *pcbData)
 {
   return FALSE;
+}
+BOOL SbReportGameResult(void)
+{
+  return Fail(NET_BAD_PROVIDER);
 }
 
 #else
@@ -293,6 +327,9 @@ struct Launch {
   bool bFailed = false;
   int nRoster = 0;  // the session's slots, from "rosterSize" in the JSON
   std::string setup;
+  // Sidecar-only credential handoff: never serialized into the native manifest
+  // or command line, and never logged. Empty for observers and untracked games.
+  std::string resultCode;
 } g_launch;
 
 const PortLogger Log("hyperion_sb.log", PortLogger::SHARED);
@@ -313,6 +350,11 @@ std::deque<Event> g_events;
 // a step, once every slot has one (the local turn is queued at SendTurn, the
 // relay never echoes it back).
 std::deque<std::vector<uint8_t>> g_slotTurns[kPlayers];
+// Canonical lobby commands have their own phase and channel ordering. Keeping
+// their local echoes and the host's seed apart from real turns lets a seat that
+// enters the game early queue turns without the other seat dispatching them in
+// its lobby. Legacy launches keep their original single in-game queue.
+std::deque<std::vector<uint8_t>> g_lobbyTurns[kPlayers];
 // The players a step waits on: the local player from the start, and each peer
 // the moment its first turn arrives — the LAN relay's semantics, where the
 // creator's early steps form alone and a joiner joins the steps from its
@@ -329,7 +371,26 @@ std::deque<std::pair<BYTE, std::vector<uint8_t>>> g_messages;  // chat, in arriv
 std::vector<uint8_t> g_turnsOut[kPlayers];                     // stable pointers handed to the game
 std::vector<uint8_t> g_messageOut;
 std::vector<uint8_t> g_pollBuf;  // rp_poll's scratch
-DWORD g_dwSent, g_dwRead;        // this player's turns sent, and steps read
+DWORD g_dwSent, g_dwRead;        // this player's in-game turns queued, and steps read
+DWORD g_dwLobbySent, g_dwLobbyRead;  // the canonical lobby's independent pacing
+struct PendingTurn {
+  enum Route { TURN, LOBBY, LOCAL } route;
+  std::vector<uint8_t> bytes;
+};
+std::deque<PendingTurn> g_pendingTurns;
+std::deque<std::vector<uint8_t>> g_pendingLobby;
+bool g_bGameStartedAnnounced;
+bool g_bSessionStarted;
+bool g_bSeedReceived;
+bool g_bResultReported;
+const size_t kPendingMost = 64;
+const size_t kTurnMost = 16 * 1024;
+const DWORD kBufferMost = 14;
+
+DWORD ClampBufferDepth(DWORD dwDepth)
+{
+  return dwDepth < 1 ? 1 : dwDepth > kBufferMost ? kBufferMost : dwDepth;
+}
 
 // The LAN provider's per-step checksum trace (HYPERION_SB_TRACE), for lockstep
 // forensics: a step's line shows each in-step player's turn as
@@ -342,6 +403,21 @@ static uint32_t StepChecksum(const std::vector<uint8_t> &v)
     h = (h ^ b) * 0x01000193u;
   return h;
 }
+
+bool CanonicalSeedRecord(const uint8_t *p, size_t cb)
+{
+  if (!SbManifestActive() || p == NULL || cb != 13 || p[0] != 0x48)
+    return false;
+  const uint32_t seed = SbManifestSeed();
+  for (int i = 0; i < 4; ++i)
+    if (p[1 + i] != static_cast<uint8_t>(seed >> (8 * i)))
+      return false;
+  for (int i = 5; i < 13; ++i)
+    if (p[i] != 8)
+      return false;
+  return true;
+}
+
 DWORD g_dwLatency = 2;           // the relay's current buffer depth (BufferDirective events)
 // When each peer's link last went down (0 while up), and when this seat last
 // asked the relay for its synced drop. The relay stamps every member's link
@@ -423,24 +499,29 @@ void SessionGone()
 {
   if (g_session == NULL)
     return;
-  rp_end(g_session);
-  g_session = NULL;
-  Log("the relay session has ended; playing on alone");
+  rp_end(&g_session);
+  g_pendingTurns.clear();
+  g_pendingLobby.clear();
+  Log("the relay session has ended; no more turns can be sent");
 }
 
 // Every player's flags from the launch: none are answering until turns flow.
 void Reset()
 {
+  if (g_session != NULL)
+    rp_end(&g_session);
   g_session = NULL;
   g_bCreator = false;
   g_bLocal = NO_PLAYER;
   g_dwMode = g_dwMaxPlayers = 0;
   g_dwSent = g_dwRead = 0;
+  g_dwLobbySent = g_dwLobbyRead = 0;
   g_dwLatency = 2;
   g_nNames = 0;
   for (DWORD i = 0; i < kPlayers; ++i) {
     g_players[i] = Player();
     g_slotTurns[i].clear();
+    g_lobbyTurns[i].clear();
   }
   g_events.clear();
   g_messages.clear();
@@ -450,6 +531,59 @@ void Reset()
   for (DWORD i = 0; i < kPlayers; ++i)
     g_bInStep[i] = false;
   g_pendingJoins.clear();
+  g_pendingTurns.clear();
+  g_pendingLobby.clear();
+  g_bGameStartedAnnounced = false;
+  g_bSessionStarted = false;
+  g_bSeedReceived = false;
+  g_bResultReported = false;
+}
+
+// Retry accepted-but-unsent turns in their original order. A full driver queue
+// leaves the front pending; every other error fails the whole session instead
+// of allowing a gap in lockstep. Canonical pregame traffic is local except for
+// the host's authorized seed record, which uses the reliable lobby channel.
+void FlushPendingTurns()
+{
+  while (g_session != NULL && !g_pendingTurns.empty()) {
+    PendingTurn &pending = g_pendingTurns.front();
+    int rc = RP_OK;
+    if (pending.route == PendingTurn::TURN)
+      rc = rp_submit_turn(g_session, oc_dwReplayFrame, pending.bytes.data(), pending.bytes.size());
+    else if (pending.route == PendingTurn::LOBBY)
+      rc = rp_lobby_send(g_session, pending.bytes.data(), pending.bytes.size());
+    if (rc == RP_ERR_TURN_FULL)
+      return;
+    if (rc != RP_OK) {
+      Log("submitting a queued turn failed (rc %d)", rc);
+      SessionGone();
+      return;
+    }
+    if (pending.route == PendingTurn::TURN) {
+      ++g_dwSent;
+      g_slotTurns[g_bLocal].push_back(std::move(pending.bytes));
+    } else {
+      ++g_dwLobbySent;
+      g_lobbyTurns[g_bLocal].push_back(std::move(pending.bytes));
+    }
+    g_pendingTurns.pop_front();
+  }
+}
+
+void FlushPendingLobby()
+{
+  while (g_session != NULL && !g_pendingLobby.empty()) {
+    const std::vector<uint8_t> &message = g_pendingLobby.front();
+    const int rc = rp_lobby_send(g_session, message.data(), message.size());
+    if (rc == RP_ERR_TURN_FULL)
+      return;
+    if (rc != RP_OK) {
+      Log("submitting a queued lobby message failed (rc %d)", rc);
+      SessionGone();
+      return;
+    }
+    g_pendingLobby.pop_front();
+  }
 }
 
 void Fire(Event e)
@@ -487,9 +621,21 @@ bool Pump()
     return false;
   if (g_pollBuf.size() < 256 * 1024)
     g_pollBuf.resize(256 * 1024);
-  const int32_t n = rp_poll(g_session, g_dwRead + 1, g_pollBuf.data(), g_pollBuf.size());
+  int32_t n = 0;
+  for (;;) {
+    n = rp_poll(g_session, oc_dwReplayFrame, g_pollBuf.data(), g_pollBuf.size());
+    if (n != RP_ERR_TURN_FULL)
+      break;
+    // An event larger than the current buffer stays queued in the bridge. Grow
+    // only until the bridge's maximum turn plus framing fits, then drain it.
+    if (g_pollBuf.size() >= 1024 * 1024 + 64) {
+      Log("a poll event exceeds the maximum supported size");
+      SessionGone();
+      return false;
+    }
+    g_pollBuf.resize((std::min)(g_pollBuf.size() * 2, static_cast<size_t>(1024 * 1024 + 64)));
+  }
   if (n < 0) {
-    // RP_ERR_TURN_ENDED (the driver's channels closed) or a poll buffer overflow.
     const int32_t st = rp_status(g_session);
     if (st != RP_STAT_RUNNING)
       SessionGone();
@@ -512,8 +658,10 @@ bool Pump()
         else if (slot < kPlayers && g_players[slot].bIn) {
           if (slot != g_bLocal && !g_bInStep[slot]) {
             g_bInStep[slot] = true;
-            Log("player %u is in the game; its join event waits for the step", slot);
-            g_pendingJoins.push_back(static_cast<BYTE>(slot));
+            if (!SbManifestActive()) {
+              Log("player %u is in the game; its join event waits for the step", slot);
+              g_pendingJoins.push_back(static_cast<BYTE>(slot));
+            }
           }
           g_slotTurns[slot].push_back(std::vector<uint8_t>(p, p + len));
           p += len;
@@ -536,6 +684,7 @@ bool Pump()
           // steps from here on, and a join event still pending for it is moot.
           g_bInStep[slot] = false;
           g_slotTurns[slot].clear();
+          g_lobbyTurns[slot].clear();
           g_pendingJoins.erase(std::remove(g_pendingJoins.begin(), g_pendingJoins.end(),
                                            static_cast<BYTE>(slot)),
                                g_pendingJoins.end());
@@ -575,10 +724,30 @@ bool Pump()
         }
         break;
       }
+      case RP_EV_SESSION_START:
+        ReadU32(p, end, depth);
+        if (depth != 0)
+          g_dwLatency = ClampBufferDepth(depth);
+        if (!g_bSessionStarted)
+          Log("every expected relay member is connected; the match may start");
+        g_bSessionStarted = true;
+        break;
       case RP_EV_LOBBY:
         ReadU32(p, end, slot);
         ReadU32(p, end, len);
         if (p + len <= end) {
+          if (SbManifestActive()) {
+            // The reliable lobby policy admits one record, from the host, for
+            // this exact manifest seed. Everything else is dropped before the
+            // native lobby handlers can see it. Replays after reconnect are
+            // idempotent, just as they are in ShieldBattery's SC:R seam.
+            if (slot == 0 && slot != g_bLocal && !g_bSeedReceived && CanonicalSeedRecord(p, len)) {
+              g_bSeedReceived = true;
+              g_lobbyTurns[0].push_back(std::vector<uint8_t>(p, p + len));
+            }
+            p += len;
+            break;
+          }
           // The creator's framed launch blobs (kind byte + LE length + bytes):
           // 1 the init data (GetGameInfo(5), which 1.17's join reads), 2 the
           // stat string (the game list's entry, which its parser requires).
@@ -619,6 +788,10 @@ bool Pump()
     }
   }
   FireEvents();
+  FlushPendingTurns();
+  FlushPendingLobby();
+  if (g_session == NULL)
+    return false;
   // A peer whose link stays down past the grace period gets a drop request:
   // the relay's authority confirms it as a synced leave (EV_LEAVE) and the
   // game carries on with the remaining players. The grace tolerates a relay
@@ -641,16 +814,119 @@ bool Pump()
   return rp_status(g_session) == RP_STAT_RUNNING;
 }
 
-// A step is ready once every in-step player has a turn queued: the local
-// player from the start, a peer from its first turn. The creator's early steps
-// form alone, as the LAN relay's do; a joiner joins the steps from its
-// arrival.
-bool StepReady()
+// In-game steps wait for every active slot. A canonical pregame step is paced
+// only by the local echo: quiet remote slots receive a keep-alive at dispatch,
+// and the host's reliable seed record replaces it when one has arrived.
+bool StepReady(bool bCanonicalLobby = false)
 {
-  for (DWORD i = 0; i < kPlayers; ++i)
-    if (g_bInStep[i] && g_slotTurns[i].empty())
+  for (DWORD i = 0; i < kPlayers; ++i) {
+    const auto &queue = bCanonicalLobby ? g_lobbyTurns[i] : g_slotTurns[i];
+    if (g_bInStep[i] && queue.empty() && (!bCanonicalLobby || i == g_bLocal))
       return false;
+  }
   return true;
+}
+
+bool ResultReportPossible()
+{
+  return InGame() && SbManifestActive() && SbManifestLocalSlot() != NULL &&
+         !g_launch.resultCode.empty() && !g_bResultReported;
+}
+
+void ExpectResultReport()
+{
+  // No-code seats must not arm the driver's leave hold: they have no report to
+  // release it. Canonical players are armed before their first leave can race
+  // the end-of-game report.
+  if (ResultReportPossible())
+    rp_result_expected(g_session);
+}
+
+const char *AssignedRaceJson(BYTE bRace)
+{
+  switch (bRace) {
+    case 0: return "z";
+    case 1: return "t";
+    case 2: return "p";
+    default: return NULL;
+  }
+}
+
+// RawGameResultsReport, version 2. The relay authenticates the reporting slot;
+// this document carries only the native evidence and the sidecar-issued code.
+std::string RawResultJson()
+{
+  if (!ResultReportPossible())
+    return std::string();
+  const SbManifest &manifest = SbManifestGet();
+  std::string players;
+  for (DWORD i = 0; i < kPlayers; ++i) {
+    const SbManifestSlot *slot = NULL;
+    for (const SbManifestSlot &candidate : manifest.slots)
+      if (candidate.bwPlayerId == i) {
+        slot = &candidate;
+        break;
+      }
+    // Humans come from the authenticated roster. Unmapped computer slots are
+    // read directly, as ShieldBattery's raw reporter does.
+    if (slot == NULL && gPlayerData[i].nType != 1)
+      continue;
+    const char *race = AssignedRaceJson(slot != NULL ? byte_526494[i + 12] : gPlayerData[i].nRace);
+    if (race == NULL) {
+      Log("the result report has no valid assigned race for BW slot %u", i);
+      return std::string();
+    }
+    const DWORD nation = g_StormToNationID[i];
+    BYTE victory = nation < 8 ? gbVictoryState[nation] : 0;
+    if (victory == 5)  // BW's draw has no raw-v2 verdict; the server reconciles it.
+      victory = 0;
+    if (victory > 3)
+      victory = 0;
+    if (!players.empty())
+      players += ",";
+    players += "{\"userId\":";
+    players += slot != NULL ? std::to_string(slot->userId) : "null";
+    players += ",\"bwPlayerId\":" + std::to_string(i);
+    players += ",\"stormId\":";
+    players += slot != NULL ? std::to_string(slot->stormId) : "null";
+    players += ",\"race\":\"" + std::string(race) + "\"";
+    players += ",\"victoryState\":" + std::to_string(victory);
+    players += ",\"alliances\":[";
+    for (DWORD other = 0; other < kPlayers; ++other) {
+      const DWORD otherNation = g_StormToNationID[other];
+      const BYTE alliance = nation < 12 && otherNation < 12 ? sgbAlliances_g[nation][otherNation] : 0;
+      players += (other != 0 ? "," : "") + std::to_string(alliance <= 2 ? alliance : 0);
+    }
+    players += "]}";
+  }
+
+  std::string netPlayers;
+  for (DWORD i = 0; i < kPlayers; ++i) {
+    if (!netPlayers.empty())
+      netPlayers += ",";
+    netPlayers += "{\"stormId\":" + std::to_string(i);
+    netPlayers += ",\"wasDropped\":";
+    netPlayers += byte_529042[i] != 0 ? "true" : "false";
+    netPlayers += ",\"hasQuit\":";
+    netPlayers += sgdwPlayerStatus_g[i] == 0 ? "true" : "false";
+    netPlayers += "}";
+  }
+
+  const char *loseType = byte_529041 == 1 ? "targetedDisconnect"
+                         : byte_529041 == 2 ? "massDisconnect" : NULL;
+  const uint64_t timeMs = static_cast<uint64_t>(oc_dwReplayFrame) * 42;
+  std::string json = "{\"version\":2,\"userId\":" + std::to_string(manifest.localUserId) +
+                     ",\"resultCode\":" + PortJsonQuote(g_launch.resultCode) +
+                     ",\"time\":" + std::to_string(timeMs) + ",\"players\":[" + players +
+                     "],\"netPlayers\":[" + netPlayers + "],\"localPlayerLoseType\":";
+  json += loseType != NULL ? PortJsonQuote(loseType) : "null";
+  json += "}";
+  // The relay's result control frame is deliberately small and bounded.
+  if (json.empty() || json.size() > 4096) {
+    Log("the raw result report is outside the relay's size limit");
+    return std::string();
+  }
+  return json;
 }
 
 }  // namespace
@@ -661,6 +937,9 @@ bool StepReady()
 void SbSetLaunch(const char *pszSetupFile)
 {
   g_launch = Launch();
+  const char *pszResultCode = getenv("HYPERION_SB_RESULT_CODE");
+  g_launch.resultCode = pszResultCode != NULL ? pszResultCode : "";
+  SbManifestClear();
   if (pszSetupFile == NULL)
     return;
   FILE *f = fopen(pszSetupFile, "rb");
@@ -686,9 +965,12 @@ void SbSetLaunch(const char *pszSetupFile)
 
 // The room's launch: the setup JSON arrives in the launch itself, not a file
 // (SbSetLaunch's file form serves the command line's --sb-setup).
-void SbSetLaunchJson(const char *pszSetupJson)
+void SbSetLaunchJson(const char *pszSetupJson, const char *pszMapPath)
 {
   g_launch = Launch();
+  const char *pszResultCode = getenv("HYPERION_SB_RESULT_CODE");
+  g_launch.resultCode = pszResultCode != NULL ? pszResultCode : "";
+  SbManifestClear();
   if (pszSetupJson == NULL || pszSetupJson[0] == '\0') {
     Log("the launch's setup JSON is empty");
     g_launch.bFailed = true;
@@ -696,15 +978,38 @@ void SbSetLaunchJson(const char *pszSetupJson)
   }
   g_launch.setup = pszSetupJson;
   g_launch.bOn = true;
-  g_launch.bStarted = false;
-  g_launch.bFailed = false;
-  g_launch.nRoster = JsonInt(g_launch.setup, "rosterSize", 0);
-  Log("a relay session is set (the launch's JSON, %d slots)", g_launch.nRoster);
+  std::string why;
+  const bool manifest = SbManifestLoad(g_launch.setup, pszMapPath ? pszMapPath : "", &why);
+  if (!why.empty()) {
+    Log("the launch manifest was rejected: %s", why.c_str());
+    g_launch.bFailed = true;
+    return;
+  }
+  g_launch.nRoster = manifest ? static_cast<int>(SbManifestGet().slots.size())
+                              : JsonInt(g_launch.setup, "rosterSize", 0);
+  Log("a relay session is set (the launch's JSON, %d slots%s)", g_launch.nRoster,
+      manifest ? ", canonical manifest" : "");
 }
 
 bool SbLaunchOn(void)
 {
   return g_launch.bOn;
+}
+
+bool SbSessionStarted(void)
+{
+  return g_bSessionStarted;
+}
+
+void SbEmitLifecycleEvent(const char *pszType)
+{
+  static const bool bEvents = getenv("HYPERION_SB_EVENTS") != NULL;
+  if (!bEvents || pszType == NULL)
+    return;
+  if (strcmp(pszType, "start") != 0 && strcmp(pszType, "finished") != 0)
+    return;
+  fprintf(stdout, "{\"type\":\"%s\"}\n", pszType);
+  fflush(stdout);
 }
 
 int SbRosterCount(void)
@@ -766,7 +1071,7 @@ BOOL SbInitialize(void)
   Reset();
   g_bUp = true;
   const char *pszSetup = PortCommandOptions()->szSbSetup;
-  if (pszSetup[0])
+  if (pszSetup[0] && !g_launch.bOn)
     SbSetLaunch(pszSetup);
   return TRUE;
 }
@@ -776,10 +1081,8 @@ void SbDestroy(void)
   Log("SbDestroy");
   if (g_bLocal != NO_PLAYER && g_session != NULL)
     rp_leave_intent(g_session);  // a clean leave where there is one
-  if (g_session != NULL) {
-    rp_end(g_session);
-    g_session = NULL;
-  }
+  if (g_session != NULL)
+    rp_end(&g_session);
   Reset();
   g_nNames = 0;
   for (auto &pfn : g_apfnEvent)
@@ -835,15 +1138,23 @@ BOOL SbCreateGame(const char *pszGameName, const char *pszPassword, const char *
     Log("creator: the relay session could not start");
     return Fail(NET_CANNOT_JOIN);
   }
+  g_dwLatency = ClampBufferDepth(rp_initial_buffer(g_session));
   const uint32_t dwSlot = rp_local_slot(g_session);
+  const SbManifestSlot *local = SbManifestLocalSlot();
+  if (dwSlot >= kPlayers || (SbManifestActive() &&
+      (local == NULL || local->rpSlot != dwSlot || local->stormId != dwSlot))) {
+    Log("creator: the relay slot %u does not match the launch identity", dwSlot);
+    rp_end(&g_session);
+    Reset();
+    return Fail(NET_CANNOT_JOIN);
+  }
   g_bLocal = static_cast<BYTE>(dwSlot);
-  g_bCreator = g_bLocal == 0;
-  if (!g_bCreator) {
-    // The room always names the creator seat first; a setup that is not slot 0
-    // cannot host 1.17's lobby (its slots, forces and kicks are player 0's).
+  g_bCreator = SbManifestActive() ? local->host : g_bLocal == 0;
+  if (!SbManifestActive() && !g_bCreator) {
+    // A legacy room always names the creator seat first; a setup that is not
+    // slot 0 cannot host 1.17's lobby (its slots, forces and kicks are player 0's).
     Log("creator: this seat is slot %u, not the creator's; make the game on slot 0", dwSlot);
-    rp_end(g_session);
-    g_session = NULL;
+    rp_end(&g_session);
     Reset();
     return Fail(NET_CANNOT_JOIN);
   }
@@ -859,8 +1170,17 @@ BOOL SbCreateGame(const char *pszGameName, const char *pszPassword, const char *
     g_dwMaxPlayers = kPlayers;
   for (DWORD i = 0; i < g_dwMaxPlayers; ++i) {
     g_players[i].bIn = true;
-    snprintf(g_players[i].szName, TEXT_MAX, "Player %u", static_cast<unsigned>(i + 1));
-    snprintf(g_players[i].szDesc, TEXT_MAX, "player %u", static_cast<unsigned>(i));
+    if (SbManifestActive()) {
+      const SbManifestSlot &slot = SbManifestGet().slots[i];
+      SStrCopy(g_players[i].szName, slot.name.c_str(), TEXT_MAX);
+      snprintf(g_players[i].szDesc, TEXT_MAX, "player %u", static_cast<unsigned>(i));
+      // The authenticated roster is complete before play: every participant
+      // must supply a turn from the first in-game step on every seat.
+      g_bInStep[i] = true;
+    } else {
+      snprintf(g_players[i].szName, TEXT_MAX, "Player %u", static_cast<unsigned>(i + 1));
+      snprintf(g_players[i].szDesc, TEXT_MAX, "player %u", static_cast<unsigned>(i));
+    }
   }
   DWORD dwFullMode = dwMode | MODE_STARTED;
   if (pszPassword && pszPassword[0])
@@ -868,7 +1188,8 @@ BOOL SbCreateGame(const char *pszGameName, const char *pszPassword, const char *
   if (dwMaxPlayers <= 1)
     dwFullMode |= MODE_ONE_PLAYER;
   g_dwMode = dwFullMode;
-  const std::string szGameName = JsonString(g_launch.setup, "gameName", pszGameName);
+  const std::string szGameName = SbManifestActive() ? SbManifestGet().name
+                                                     : JsonString(g_launch.setup, "gameName", pszGameName);
   SStrCopy(g_szGameName, szGameName.c_str(), TEXT_MAX);
   SStrCopy(g_szPassword, pszPassword ? pszPassword : "", TEXT_MAX);
   SStrCopy(g_szStats, pszStats ? pszStats : "", TEXT_MAX);
@@ -876,7 +1197,6 @@ BOOL SbCreateGame(const char *pszGameName, const char *pszPassword, const char *
   g_nNames = 0;
   *pdwPlayerId = g_bLocal;
   g_bInStep[g_bLocal] = true;
-  rp_game_started(g_session);
   // The init data and the stat string ride lobby commands: the relay replays
   // them to every member, including a joiner that was not connected when the
   // game was made. Framing: one kind byte, a little-endian length, the bytes.
@@ -899,9 +1219,11 @@ BOOL SbCreateGame(const char *pszGameName, const char *pszPassword, const char *
     Log("the %s went to the relay (%u bytes, rc %d)", kind == 1 ? "init data" : "stat string",
         static_cast<unsigned>(framed.size()), rc);
   };
-  SendBlob(1, g_gameData.data(), g_gameData.size());
-  if (pszStats && pszStats[0])
-    SendBlob(2, reinterpret_cast<const uint8_t *>(pszStats), strlen(pszStats));
+  if (!SbManifestActive()) {
+    SendBlob(1, g_gameData.data(), g_gameData.size());
+    if (pszStats && pszStats[0])
+      SendBlob(2, reinterpret_cast<const uint8_t *>(pszStats), strlen(pszStats));
+  }
   Log("creator: game \"%s\" for %u players, as %s, slot %u; the relay's buffer starts at %u turns", g_szGameName,
       g_dwMaxPlayers, pszPlayerName, static_cast<unsigned>(g_bLocal), rp_initial_buffer(g_session));
   return TRUE;
@@ -941,6 +1263,18 @@ bool SbSessionStart(const char *pszWho)
     Log("%s: the relay session could not start", pszWho);
     return false;
   }
+  g_dwLatency = ClampBufferDepth(rp_initial_buffer(g_session));
+  if (SbManifestActive()) {
+    const SbManifestSlot *local = SbManifestLocalSlot();
+    const uint32_t slot = rp_local_slot(g_session);
+    if (local == NULL || local->rpSlot != slot || local->stormId != slot) {
+      Log("%s: the relay slot does not match the launch identity", pszWho);
+      rp_end(&g_session);
+      return false;
+    }
+    Log("%s: the canonical session is running as slot %u", pszWho, slot);
+    return true;
+  }
   const uint64_t qwStart = PortNowMs();
   while ((g_gameData.empty() || g_szStats[0] == '\0') && PortNowMs() - qwStart < 5000) {
     Pump();
@@ -950,8 +1284,7 @@ bool SbSessionStart(const char *pszWho)
   }
   if (g_gameData.empty() || g_szStats[0] == '\0') {
     Log("%s: the launch blobs did not arrive in time", pszWho);
-    rp_end(g_session);
-    g_session = NULL;
+    rp_end(&g_session);
     return false;
   }
   Log("%s: the session is running as slot %u", pszWho, rp_local_slot(g_session));
@@ -986,7 +1319,6 @@ BOOL SbJoinGame(DWORD dwGameId, const char *pszPassword, const char *pszPlayerNa
   g_nNames = 0;
   *pdwPlayerId = g_bLocal;
   g_bInStep[g_bLocal] = true;
-  rp_game_started(g_session);
   Log("joiner: slot %u, in a game of %u players, as %s", static_cast<unsigned>(g_bLocal), g_dwMaxPlayers, pszPlayerName);
   return TRUE;
 }
@@ -996,8 +1328,10 @@ BOOL SbLeaveGame(DWORD dwReason)
   Log("SbLeaveGame(reason 0x%X)", static_cast<unsigned>(dwReason));
   if (!g_bUp)
     return Fail(NET_BAD_PROVIDER);
-  if (g_session != NULL)
+  if (g_session != NULL) {
     rp_leave_intent(g_session);
+    rp_end(&g_session);
+  }
   Reset();
   return TRUE;
 }
@@ -1008,11 +1342,11 @@ BOOL SbDropPlayer(DWORD dwPlayer, DWORD dwFlags)
     return FALSE;
   if (!IsPlayer(dwPlayer))
     return Fail(NET_NO_PLAYER);
-  // The relay's LeaveDirective for the slot is the only truth of a drop; there is
-  // no provider-side drop to send (a survivor's drop request is a platform UI
-  // concern, wired with the room). Until then the step stalls on the slot.
-  Log("drop asked for player %u; waiting on the relay's leave directive", static_cast<unsigned>(dwPlayer));
-  return TRUE;
+  // The relay's LeaveDirective is the only truth of a drop; a request only asks
+  // its authority. Until that answer arrives, the step continues to stall.
+  const int rc = rp_request_drop(g_session, static_cast<uint32_t>(dwPlayer));
+  Log("drop asked for player %u (rc %d); waiting on the relay's leave directive", static_cast<unsigned>(dwPlayer), rc);
+  return rc == RP_OK ? TRUE : FALSE;
 }
 
 BOOL SbDisconnectAll(DWORD dwFlags)
@@ -1122,6 +1456,10 @@ BOOL SbSetGameMode(DWORD dwMode, DWORD dwMakePublic)
   return TRUE;
 }
 
+DWORD SbTurnsInTransitTarget(void)
+{
+  return InGame() ? g_dwLatency : 0;
+}
 BOOL SbGetTurnsInTransit(DWORD *pdwTurns)
 {
   if (!pdwTurns)
@@ -1129,13 +1467,16 @@ BOOL SbGetTurnsInTransit(DWORD *pdwTurns)
   *pdwTurns = 0;
   if (!InGame())
     return FALSE;
-  *pdwTurns = g_dwSent - g_dwRead;
+  const bool bCanonicalLobby = SbManifestActive() && sgbSyncTurnEnable == 0;
+  const DWORD dwSent = bCanonicalLobby ? g_dwLobbySent : g_dwSent;
+  const DWORD dwRead = bCanonicalLobby ? g_dwLobbyRead : g_dwRead;
+  *pdwTurns = dwSent - dwRead;
   return TRUE;
 }
 
 BOOL SbSendTurn(const void *pvData, DWORD cbData)
 {
-  if (!pvData || !cbData) {
+  if (!pvData || !cbData || cbData > kTurnMost) {
     TraceCall("SendTurn", FALSE, true);
     return Fail(NET_INVALID);
   }
@@ -1144,24 +1485,22 @@ BOOL SbSendTurn(const void *pvData, DWORD cbData)
     return FALSE;
   }
   Pump();
-  std::vector<uint8_t> t(static_cast<const uint8_t *>(pvData), static_cast<const uint8_t *>(pvData) + cbData);
-  const int rc = rp_submit_turn(g_session, g_dwSent + 1, t.data(), t.size());
-  if (rc == RP_ERR_TURN_FULL) {
-    TraceCall("SendTurn(full)", TRUE, false);
-    // The driver's queue is full: the step stalls and the game retries, as
-    // Storm's backpressure stalls it.
-    return TRUE;
-  }
-  if (rc != RP_OK) {
-    TraceCall("SendTurn", FALSE, true);
+  if (g_pendingTurns.size() >= kPendingMost) {
+    Log("the outbound turn queue is full; ending the session rather than dropping a turn");
     SessionGone();
-    return FALSE;
+    return Fail(NET_INVALID);
   }
-  Trace("send %u: %u:%08X", g_dwSent, static_cast<unsigned>(t.size()), StepChecksum(t));
-  ++g_dwSent;
-  g_slotTurns[g_bLocal].push_back(std::move(t));  // the relay never echoes our own turn
-  TraceCall("SendTurn", TRUE, false);
-  return TRUE;
+  PendingTurn::Route route = PendingTurn::TURN;
+  if (SbManifestActive() && sgbSyncTurnEnable == 0) {
+    route = g_bLocal == 0 && CanonicalSeedRecord(static_cast<const uint8_t *>(pvData), cbData)
+                ? PendingTurn::LOBBY
+                : PendingTurn::LOCAL;
+  }
+  g_pendingTurns.push_back({route, std::vector<uint8_t>(static_cast<const uint8_t *>(pvData),
+                                                        static_cast<const uint8_t *>(pvData) + cbData)});
+  FlushPendingTurns();
+  TraceCall("SendTurn", g_session != NULL, g_session == NULL);
+  return g_session != NULL ? TRUE : FALSE;
 }
 
 BOOL SbReceiveTurns(DWORD nFirst, DWORD nPlayers, const void **ppvData, DWORD *pcbData, DWORD *pdwFlags)
@@ -1183,12 +1522,14 @@ BOOL SbReceiveTurns(DWORD nFirst, DWORD nPlayers, const void **ppvData, DWORD *p
     return FALSE;
   }
   Pump();
-  if (!StepReady()) {
+  const bool bCanonicalLobby = SbManifestActive() && sgbSyncTurnEnable == 0;
+  if (!StepReady(bCanonicalLobby)) {
     // who the step waits for: present, and answering once a turn of theirs is in
     for (DWORD i = nFirst; i < nFirst + nPlayers && i < kPlayers; ++i)
       if (g_bInStep[i]) {
         DWORD dwFlags = TURN_PRESENT;
-        if (i == g_bLocal || !g_slotTurns[i].empty())
+        const auto &queue = bCanonicalLobby ? g_lobbyTurns[i] : g_slotTurns[i];
+        if (i == g_bLocal || !queue.empty())
           dwFlags |= TURN_ANSWERING;
         pdwFlags[i - nFirst] = dwFlags;
       }
@@ -1198,24 +1539,37 @@ BOOL SbReceiveTurns(DWORD nFirst, DWORD nPlayers, const void **ppvData, DWORD *p
   }
   for (DWORD i = 0; i < kPlayers; ++i)
     if (g_bInStep[i]) {
-      g_turnsOut[i] = std::move(g_slotTurns[i].front());
-      g_slotTurns[i].pop_front();
-      ++g_dwSlotConsumed[i];
-      rp_turn_consumed(g_session, static_cast<uint32_t>(i),
-                       static_cast<uint64_t>(g_dwSlotConsumed[i]));
+      auto &queue = bCanonicalLobby ? g_lobbyTurns[i] : g_slotTurns[i];
+      const bool bKeepAlive = bCanonicalLobby && i != g_bLocal && queue.empty();
+      if (bKeepAlive) {
+        g_turnsOut[i].assign(1, 0x05);
+      } else {
+        g_turnsOut[i] = std::move(queue.front());
+        queue.pop_front();
+      }
+      if (!bCanonicalLobby) {
+        ++g_dwSlotConsumed[i];
+        rp_turn_consumed(g_session, static_cast<uint32_t>(i),
+                         static_cast<uint64_t>(g_dwSlotConsumed[i]));
+      }
       if (i == g_bLocal) {
-        if (g_dwRead == 0)
-          Log("the game's first step was read (lockstep is under way)");
-        else if (g_dwRead % 600 == 0)
-          Log("the game has read %u steps", g_dwRead);
-        ++g_dwRead;
+        if (bCanonicalLobby) {
+          ++g_dwLobbyRead;
+        } else {
+          if (g_dwRead == 0)
+            Log("the game's first step was read (lockstep is under way)");
+          else if (g_dwRead % 600 == 0)
+            Log("the game has read %u steps", g_dwRead);
+          ++g_dwRead;
+        }
       }
       // zeros after the turn: the classic walker reads a cut-off last command whole
       // before it finds it cut off, and every seat reads the same
       g_turnsOut[i].resize(g_turnsOut[i].size() + kTurnSlack, 0);
     }
   {
-    std::string line = "step " + std::to_string(g_dwRead) + ":";
+    std::string line = std::string(bCanonicalLobby ? "lobby step " : "step ") +
+                       std::to_string(bCanonicalLobby ? g_dwLobbyRead : g_dwRead) + ":";
     for (DWORD i = 0; i < kPlayers; ++i)
       if (g_bInStep[i]) {
         char sz[48];
@@ -1237,6 +1591,13 @@ BOOL SbReceiveTurns(DWORD nFirst, DWORD nPlayers, const void **ppvData, DWORD *p
   for (const BYTE slot : g_pendingJoins)
     g_events.push_back({EVENT_JOIN, slot, {}});
   g_pendingJoins.clear();
+  if (!g_bGameStartedAnnounced && sgbSyncTurnEnable != 0) {
+    g_bGameStartedAnnounced = true;
+    ExpectResultReport();
+    rp_game_started(g_session);
+    SbEmitLifecycleEvent("start");
+    Log("the running game loop was reported to the relay");
+  }
   return TRUE;
 }
 
@@ -1257,6 +1618,11 @@ BOOL SbSendMessage(DWORD dwPlayer, const void *pvData, DWORD cbData)
   }
   if (g_session == NULL)
     return TRUE;
+  // A canonical roster is already installed locally. Native setup messages are
+  // acknowledged but never sent: the reliable lobby channel carries only the
+  // host's exact seed record through SbSendTurn.
+  if (SbManifestActive())
+    return TRUE;
   // The LAN's map transfer (opcode 0x4F) has no place in the SB flow: the map
   // is the launch's, and a partial transfer would leave a partial file that
   // the game might load. The chunks are dropped; every other message — 1.17's
@@ -1265,9 +1631,16 @@ BOOL SbSendMessage(DWORD dwPlayer, const void *pvData, DWORD cbData)
   // chat channel; the relay fans each to every member.
   if (cbData > 0 && static_cast<const uint8_t *>(pvData)[0] == 0x4F)
     return TRUE;
-  const int rc = rp_lobby_send(g_session, static_cast<const uint8_t *>(pvData), cbData);
-  TraceCall("SendMessage", rc == RP_OK || rc == RP_ERR_TURN_FULL, rc != RP_OK && rc != RP_ERR_TURN_FULL);
-  return rc == RP_ERR_TURN_ENDED ? FALSE : TRUE;
+  if (g_pendingLobby.size() >= kPendingMost) {
+    Log("the outbound lobby queue is full; ending the session rather than dropping a message");
+    SessionGone();
+    return Fail(NET_INVALID);
+  }
+  g_pendingLobby.emplace_back(static_cast<const uint8_t *>(pvData),
+                              static_cast<const uint8_t *>(pvData) + cbData);
+  FlushPendingLobby();
+  TraceCall("SendMessage", g_session != NULL, g_session == NULL);
+  return g_session != NULL ? TRUE : FALSE;
 }
 
 BOOL SbReceiveMessage(int *pnPlayer, const void **ppvData, DWORD *pcbData)
@@ -1298,6 +1671,27 @@ BOOL SbReceiveMessage(int *pnPlayer, const void **ppvData, DWORD *pcbData)
   g_messages.pop_front();
   *ppvData = g_messageOut.data();
   *pcbData = static_cast<DWORD>(g_messageOut.size());
+  return TRUE;
+}
+
+BOOL SbReportGameResult(void)
+{
+  if (!g_bUp)
+    return Fail(NET_BAD_PROVIDER);
+  if (!InGame() || !SbManifestActive() || g_bResultReported)
+    return TRUE;
+  if (g_launch.resultCode.empty()) {
+    // Observers and untracked games have no report to send and no leave hold.
+    g_bResultReported = true;
+    return TRUE;
+  }
+  ExpectResultReport();
+  const std::string json = RawResultJson();
+  if (json.empty())
+    return Fail(NET_INVALID);
+  rp_send_result(g_session, reinterpret_cast<const uint8_t *>(json.data()), json.size());
+  g_bResultReported = true;
+  Log("the raw v2 result report was queued (%u bytes)", static_cast<unsigned>(json.size()));
   return TRUE;
 }
 

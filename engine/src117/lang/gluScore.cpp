@@ -462,6 +462,7 @@ void do_score_dlg(int nArg0)
   int nIdx;
   char szPath[0x104];
 
+  dword_66C954 = NULL;
   sub_477270(dword_66CA70, &dword_66CA90);
   dword_66C950 = dword_66CA90 == 1;
   if (gbWasDemoMode_g)
@@ -471,12 +472,6 @@ void do_score_dlg(int nArg0)
   glGluesMode = dword_50846C[nIdx];
   strcpy(byte_66C958, off_508454[nIdx]);
   snd_play_music(dword_508484[nIdx]);
-  strcpy(szPath, byte_66C958);
-  strcat(szPath, "iScore.grp");
-  dword_66C954 = ReadGroupFile(szPath, 0, "gluScore.cpp", 0x560);
-  strcpy(szPath, byte_66C958);
-  strcat(szPath, "tminimap.pcx");
-  GameLoadImage(reinterpret_cast<intptr_t>(szPath), 0, reinterpret_cast<intptr_t>(byte_66CA5C), 0xC, 0, 0, 0);
   strcpy(byte_66C958, off_508454[nIdx]);
   sub_49E350(0xA8);
   // Hyperion: Hyperion's score screen in the dialog's place, every player of the game
@@ -488,6 +483,14 @@ void do_score_dlg(int nArg0)
   end.nSeconds = gbWasDemoMode_g != 0 ? replay_dlg_elapsed_seconds() : sub_47A780();
   int nResult = PortFrontScore(end);
   if (nResult < 0) {
+    // Hyperion's score screen does not use this legacy artwork, so a native match does not need to
+    // open it merely to reach the replacement screen.
+    strcpy(szPath, byte_66C958);
+    strcat(szPath, "iScore.grp");
+    dword_66C954 = ReadGroupFile(szPath, 0, "gluScore.cpp", 0x560);
+    strcpy(szPath, byte_66C958);
+    strcat(szPath, "tminimap.pcx");
+    GameLoadImage(reinterpret_cast<intptr_t>(szPath), 0, reinterpret_cast<intptr_t>(byte_66CA5C), 0xC, 0, 0, 0);
     sgpScoreDlg_g = dlg_load("rez\\gluScore.bin",
                              reinterpret_cast<PFN_DLGLOADER>(load_game_data),
                              reinterpret_cast<PFN_DLGMEASURE>(alloc_load_bmp),

@@ -34,9 +34,9 @@
 mod setup;
 
 use std::ffi::{c_char, CStr};
-use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 use rally_point_client::proto::ids::SlotId;
@@ -93,29 +93,24 @@ pub const EV_LEAVE: u8 = 3; //  u8, u32 slot, u32 reason
 pub const EV_LOBBY: u8 = 4; //  u8, u32 slot, u32 len, len bytes
 pub const EV_CHAT: u8 = 5; //  u8, u32 slot, u32 len, len bytes
 pub const EV_CONNECT: u8 = 6; // u8, u32 slot, u8 connected
+pub const EV_SESSION_START: u8 = 7; // u8: every expected session member connected
 
 struct EvWriter<'a> {
     buf: &'a mut [u8],
     pos: usize,
-    overflow: bool,
 }
 
 impl<'a> EvWriter<'a> {
     fn new(buf: &'a mut [u8]) -> Self {
-        Self {
-            buf,
-            pos: 0,
-            overflow: false,
-        }
+        Self { buf, pos: 0 }
+    }
+
+    fn fits(&self, n: usize) -> bool {
+        self.pos + n <= self.buf.len()
     }
 
     fn need(&mut self, n: usize) -> bool {
-        if self.pos + n > self.buf.len() {
-            self.overflow = true;
-            false
-        } else {
-            true
-        }
+        self.fits(n)
     }
 
     fn u8(&mut self, v: u8) {
@@ -147,6 +142,49 @@ impl<'a> EvWriter<'a> {
     }
 }
 
+fn event_bytes(len: usize, build: impl FnOnce(&mut EvWriter)) -> Vec<u8> {
+    let mut bytes = vec![0; len];
+    let mut writer = EvWriter::new(&mut bytes);
+    build(&mut writer);
+    bytes
+}
+
+fn session_start_event(depth: Option<u32>) -> Vec<u8> {
+    event_bytes(5, |w| {
+        w.u8(EV_SESSION_START);
+        w.u32(depth.unwrap_or(0));
+    })
+}
+
+fn push_event(
+    writer: &mut EvWriter,
+    pending: &mut std::collections::VecDeque<Vec<u8>>,
+    event: Vec<u8>,
+) -> bool {
+    if pending.is_empty() && writer.fits(event.len()) {
+        writer.bytes(&event);
+        return true;
+    }
+    pending.push_back(event);
+    false
+}
+
+fn flush_pending_events(
+    writer: &mut EvWriter,
+    pending: &mut std::collections::VecDeque<Vec<u8>>,
+) -> bool {
+    loop {
+        let Some(event) = pending.pop_front() else {
+            return true;
+        };
+        if !writer.fits(event.len()) {
+            pending.push_front(event);
+            return false;
+        }
+        writer.bytes(&event);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Session
 // ---------------------------------------------------------------------------
@@ -162,6 +200,8 @@ struct GameState {
     /// Per-slot turns the game has consumed (reported by rp_turn_consumed):
     /// a synced leave's final_turn_count is compared against these.
     consumed: [u64; 256],
+    /// Complete events held back, in order, when the caller's buffer is too small.
+    pending_events: std::collections::VecDeque<Vec<u8>>,
 }
 
 /// A started session: the shared game state, the driver's health, the shutdown
@@ -213,6 +253,7 @@ pub unsafe extern "C" fn rp_start(setup_json: *const c_char, out: *mut *mut RpSe
             local_slot: creds.local_slot,
             initial_buffer: creds.initial_buffer,
             consumed: [0; 256],
+            pending_events: std::collections::VecDeque::new(),
         }));
         let status = Arc::new(AtomicI32::new(RP_STAT_STARTING));
         let shutdown = Arc::new(AtomicBool::new(false));
@@ -253,7 +294,10 @@ pub unsafe extern "C" fn rp_start(setup_json: *const c_char, out: *mut *mut RpSe
                     let mut link = None;
                     let mut relay_addr = None;
                     for addr in &creds.addrs {
-                        match endpoint.connect(*addr, &creds.server_name, &creds.identity).await {
+                        match endpoint
+                            .connect(*addr, &creds.server_name, &creds.identity)
+                            .await
+                        {
                             Ok(l) => {
                                 link = Some(l);
                                 relay_addr = Some(*addr);
@@ -361,44 +405,47 @@ pub unsafe extern "C" fn rp_start(setup_json: *const c_char, out: *mut *mut RpSe
 
 /// The driver's health: 0 starting, 1 running, 2 ended cleanly, or the negated
 /// `DriverError` code.
+///
+/// # Safety
+/// `session` must be null or point to a live `RpSession` owned by the caller.
 #[no_mangle]
-pub extern "C" fn rp_status(session: *mut RpSession) -> i32 {
-    catch_unwind(AssertUnwindSafe(|| {
-        match unsafe { session.as_ref() } {
-            Some(s) => s.status.load(Ordering::SeqCst),
-            None => RP_ERR_SETUP,
-        }
+pub unsafe extern "C" fn rp_status(session: *mut RpSession) -> i32 {
+    catch_unwind(AssertUnwindSafe(|| match unsafe { session.as_ref() } {
+        Some(s) => s.status.load(Ordering::SeqCst),
+        None => RP_ERR_SETUP,
     }))
     .unwrap_or(RP_ERR_PANIC)
 }
 
 /// The turn-pipe depth to seed at start (the session's initial latency
 /// buffer). The game applies buffer events from [`rp_poll`] on top of this.
+///
+/// # Safety
+/// `session` must be null or point to a live `RpSession` owned by the caller.
 #[no_mangle]
-pub extern "C" fn rp_initial_buffer(session: *mut RpSession) -> u32 {
-    catch_unwind(AssertUnwindSafe(|| {
-        match unsafe { session.as_ref() } {
-            Some(s) => match s.state.lock() {
-                Ok(guard) => guard.initial_buffer,
-                Err(_) => 0,
-            },
-            None => 0,
-        }
+pub unsafe extern "C" fn rp_initial_buffer(session: *mut RpSession) -> u32 {
+    catch_unwind(AssertUnwindSafe(|| match unsafe { session.as_ref() } {
+        Some(s) => match s.state.lock() {
+            Ok(guard) => guard.initial_buffer,
+            Err(_) => 0,
+        },
+        None => 0,
     }))
     .unwrap_or(0)
 }
 
 /// This client's slot in the session, from the signed token.
+///
+/// # Safety
+/// `session` must be null or point to a live `RpSession` owned by the caller.
 #[no_mangle]
-pub extern "C" fn rp_local_slot(session: *mut RpSession) -> u32 {
-    catch_unwind(AssertUnwindSafe(|| {
-        match unsafe { session.as_ref() } {
-            Some(s) => match s.state.lock() {
-                Ok(guard) => guard.local_slot,
-                Err(_) => u32::MAX,
-            },
-            None => u32::MAX,
-        }
+pub unsafe extern "C" fn rp_local_slot(session: *mut RpSession) -> u32 {
+    catch_unwind(AssertUnwindSafe(|| match unsafe { session.as_ref() } {
+        Some(s) => match s.state.lock() {
+            Ok(guard) => guard.local_slot,
+            Err(_) => u32::MAX,
+        },
+        None => u32::MAX,
     }))
     .unwrap_or(u32::MAX)
 }
@@ -430,7 +477,7 @@ pub unsafe extern "C" fn rp_submit_turn(
         }
         let commands = std::slice::from_raw_parts(data, len).to_vec();
         let payload = Payload {
-            seq: 0, // the driver assigns it
+            seq: 0,  // the driver assigns it
             slot: 0, // the relay rebinds it
             commands: commands.into(),
             game_frame_count: (frame > 0).then_some(frame),
@@ -487,6 +534,10 @@ pub unsafe extern "C" fn rp_poll(
             return RP_ERR_TURN_ENDED;
         }
 
+        if !flush_pending_events(&mut w, &mut guard.pending_events) {
+            return RP_ERR_TURN_FULL;
+        }
+
         // Turns first: a directive observed off a turn applies to the step
         // that drains it, so events of this poll precede the game's dispatch.
         loop {
@@ -498,14 +549,19 @@ pub unsafe extern "C" fn rp_poll(
                 .try_recv();
             match received {
                 Ok(payload) => {
+                    let event = event_bytes(17 + payload.commands.len(), |w| {
+                        w.u8(EV_TURN);
+                        w.u32(payload.slot);
+                        w.u64(payload.seq);
+                        w.u32(payload.commands.len() as u32);
+                        w.bytes(&payload.commands);
+                    });
+                    if !push_event(&mut w, &mut guard.pending_events, event) {
+                        break;
+                    }
                     if let Some(d) = &payload.buffer_directive {
                         guard.directive.observe(d, frame);
                     }
-                    w.u8(EV_TURN);
-                    w.u32(payload.slot);
-                    w.u64(payload.seq);
-                    w.u32(payload.commands.len() as u32);
-                    w.bytes(&payload.commands);
                 }
                 Err(tmpsc::error::TryRecvError::Empty) => break,
                 Err(tmpsc::error::TryRecvError::Disconnected) => {
@@ -533,9 +589,14 @@ pub unsafe extern "C" fn rp_poll(
         }
         let consumed = guard.consumed;
         for (slot, reason) in guard.leave.take_due(frame, |s| consumed[s.0 as usize]) {
-            w.u8(EV_LEAVE);
-            w.u32(u32::from(slot.0));
-            w.u32(reason);
+            let event = event_bytes(9, |w| {
+                w.u8(EV_LEAVE);
+                w.u32(u32::from(slot.0));
+                w.u32(reason);
+            });
+            if !push_event(&mut w, &mut guard.pending_events, event) {
+                break;
+            }
         }
 
         // The authority's session-start depth overrides the seeded one (a
@@ -548,16 +609,26 @@ pub unsafe extern "C" fn rp_poll(
                 .session_start
                 .try_recv();
             match received {
-                Ok(Some(depth)) => guard.initial_buffer = depth,
-                Ok(None) => {}
+                Ok(depth) => {
+                    if let Some(depth) = depth {
+                        guard.initial_buffer = depth;
+                    }
+                    let event = session_start_event(depth);
+                    if !push_event(&mut w, &mut guard.pending_events, event) {
+                        break;
+                    }
+                }
                 Err(_) => break,
             }
         }
 
         // Buffer directive due at this frame (at most one per step).
         if let Some(d) = guard.directive.take_due(frame) {
-            w.u8(EV_BUFFER);
-            w.u32(d.buffer_turns);
+            let event = event_bytes(5, |w| {
+                w.u8(EV_BUFFER);
+                w.u32(d.buffer_turns);
+            });
+            push_event(&mut w, &mut guard.pending_events, event);
         }
 
         // Consume the side channels so their queues never fill; lobby
@@ -571,43 +642,54 @@ pub unsafe extern "C" fn rp_poll(
                 .try_recv();
             match received {
                 Ok((slot, bytes)) => {
-                    w.u8(EV_LOBBY);
-                    w.u32(u32::from(slot.0));
-                    w.u32(bytes.len() as u32);
-                    w.bytes(&bytes);
+                    let event = event_bytes(9 + bytes.len(), |w| {
+                        w.u8(EV_LOBBY);
+                        w.u32(u32::from(slot.0));
+                        w.u32(bytes.len() as u32);
+                        w.bytes(&bytes);
+                    });
+                    if !push_event(&mut w, &mut guard.pending_events, event) {
+                        break;
+                    }
                 }
                 Err(_) => break,
             }
         }
-        if let Some(channels) = guard.channels.as_mut() {
-            loop {
-                match channels.chat_in.try_recv() {
-                    Ok((slot, chat)) => {
-                        w.u8(EV_CHAT);
-                        w.u32(u32::from(slot.0));
-                        w.u32(chat.text.len() as u32);
-                        w.bytes(chat.text.as_bytes());
-                    }
-                    Err(_) => break,
+        let GameState {
+            channels,
+            pending_events,
+            ..
+        } = &mut *guard;
+        if let Some(channels) = channels.as_mut() {
+            while let Ok((slot, chat)) = channels.chat_in.try_recv() {
+                let event = event_bytes(9 + chat.text.len(), |w| {
+                    w.u8(EV_CHAT);
+                    w.u32(u32::from(slot.0));
+                    w.u32(chat.text.len() as u32);
+                    w.bytes(chat.text.as_bytes());
+                });
+                if !push_event(&mut w, pending_events, event) {
+                    break;
                 }
             }
-            loop {
-                match channels.connectivity.try_recv() {
-                    Ok((slot, up)) => {
-                        w.u8(EV_CONNECT);
-                        w.u32(u32::from(slot.0));
-                        w.u8(if up { 1 } else { 0 });
-                    }
-                    Err(_) => break,
+            while let Ok((slot, up)) = channels.connectivity.try_recv() {
+                let event = event_bytes(6, |w| {
+                    w.u8(EV_CONNECT);
+                    w.u32(u32::from(slot.0));
+                    w.u8(if up { 1 } else { 0 });
+                });
+                if !push_event(&mut w, pending_events, event) {
+                    break;
                 }
             }
             let _ = channels.skin_in.try_recv();
             let _ = channels.region_labels.try_recv();
         }
 
+        let has_pending = !guard.pending_events.is_empty();
         drop(guard);
-        if w.overflow {
-            RP_ERR_SETUP
+        if w.pos == 0 && has_pending {
+            RP_ERR_TURN_FULL
         } else {
             w.pos as i32
         }
@@ -621,8 +703,11 @@ pub unsafe extern "C" fn rp_poll(
 
 /// The game will produce a result report before leaving; the driver holds a
 /// pending leave intent until the result is sent.
+///
+/// # Safety
+/// `session` must be null or point to a live `RpSession` owned by the caller.
 #[no_mangle]
-pub extern "C" fn rp_result_expected(session: *mut RpSession) {
+pub unsafe extern "C" fn rp_result_expected(session: *mut RpSession) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         if let Some(s) = unsafe { session.as_ref() } {
             if let Ok(guard) = s.state.lock() {
@@ -659,8 +744,11 @@ pub unsafe extern "C" fn rp_send_result(session: *mut RpSession, data: *const u8
 
 /// The game is departing intentionally (quit, game over); the driver drains
 /// the outbound queue and unacked window, then announces the clean leave.
+///
+/// # Safety
+/// `session` must be null or point to a live `RpSession` owned by the caller.
 #[no_mangle]
-pub extern "C" fn rp_leave_intent(session: *mut RpSession) {
+pub unsafe extern "C" fn rp_leave_intent(session: *mut RpSession) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         if let Some(s) = unsafe { session.as_ref() } {
             if let Ok(guard) = s.state.lock() {
@@ -673,8 +761,11 @@ pub extern "C" fn rp_leave_intent(session: *mut RpSession) {
 }
 
 /// The game's loop has begun stepping; reported once per session to the relay.
+///
+/// # Safety
+/// `session` must be null or point to a live `RpSession` owned by the caller.
 #[no_mangle]
-pub extern "C" fn rp_game_started(session: *mut RpSession) {
+pub unsafe extern "C" fn rp_game_started(session: *mut RpSession) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         if let Some(s) = unsafe { session.as_ref() } {
             if let Ok(guard) = s.state.lock() {
@@ -728,7 +819,11 @@ pub unsafe extern "C" fn rp_chat_send(session: *mut RpSession, data: *const u8, 
 /// # Safety
 /// `data` must be readable for `len` bytes for the call's duration.
 #[no_mangle]
-pub unsafe extern "C" fn rp_lobby_send(session: *mut RpSession, data: *const u8, len: usize) -> i32 {
+pub unsafe extern "C" fn rp_lobby_send(
+    session: *mut RpSession,
+    data: *const u8,
+    len: usize,
+) -> i32 {
     catch_unwind(AssertUnwindSafe(|| {
         let Some(s) = (unsafe { session.as_ref() }) else {
             return RP_ERR_TURN_ENDED;
@@ -757,14 +852,25 @@ pub unsafe extern "C" fn rp_lobby_send(session: *mut RpSession, data: *const u8,
 // ---------------------------------------------------------------------------
 
 /// Ends the session: signals the Tokio thread to drop the channels (which
-/// stops the driver cleanly) and joins it. Idempotent; safe to call twice.
+/// stops the driver cleanly) and joins it. The caller's pointer is cleared
+/// before the join, making repeated calls and null pointers safe.
+///
+/// # Safety
+/// `session` must be null or point to a writable `RpSession*` (which may itself
+/// be null). The pointed-to session must be owned by the caller and not used
+/// again after this call.
 #[no_mangle]
-pub extern "C" fn rp_end(session: *mut RpSession) {
+pub unsafe extern "C" fn rp_end(session: *mut *mut RpSession) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         if session.is_null() {
             return;
         }
-        let boxed = unsafe { Box::from_raw(session) };
+        let raw = unsafe { *session };
+        if raw.is_null() {
+            return;
+        }
+        unsafe { *session = std::ptr::null_mut() };
+        let boxed = unsafe { Box::from_raw(raw) };
         boxed.shutdown.store(true, Ordering::SeqCst);
         if let Some(thread) = boxed.thread {
             let _ = thread.join();
@@ -776,8 +882,11 @@ pub extern "C" fn rp_end(session: *mut RpSession) {
 /// The bridge holds these per-slot counts so a synced leave's final_turn_count
 /// is compared against true consumption: the game stalls on the departed
 /// slot's last owed turn, and the leave surfaces exactly then.
+///
+/// # Safety
+/// `session` must be null or point to a live `RpSession` owned by the caller.
 #[no_mangle]
-pub extern "C" fn rp_turn_consumed(session: *mut RpSession, slot: u32, count: u64) {
+pub unsafe extern "C" fn rp_turn_consumed(session: *mut RpSession, slot: u32, count: u64) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         if let Some(s) = unsafe { session.as_ref() } {
             if let Ok(mut guard) = s.state.lock() {
@@ -796,8 +905,11 @@ pub extern "C" fn rp_turn_consumed(session: *mut RpSession, slot: u32, count: u6
 /// synced leave for a disconnected slot. The relay may refuse while the drop's
 /// unlock floor has not passed; the confirmation is the `EV_LEAVE` event for
 /// the slot. Returns 0 when queued, -1 when the session has ended.
+///
+/// # Safety
+/// `session` must be null or point to a live `RpSession` owned by the caller.
 #[no_mangle]
-pub extern "C" fn rp_request_drop(session: *mut RpSession, slot: u32) -> i32 {
+pub unsafe extern "C" fn rp_request_drop(session: *mut RpSession, slot: u32) -> i32 {
     catch_unwind(AssertUnwindSafe(|| {
         let Some(s) = (unsafe { session.as_ref() }) else {
             return RP_ERR_TURN_ENDED;
@@ -1008,4 +1120,76 @@ pub unsafe extern "C" fn rp_dev_mint(
 #[no_mangle]
 pub extern "C" fn rp_bridge_version() -> u32 {
     1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_oversize_event_waits_for_a_larger_buffer() {
+        let mut pending = std::collections::VecDeque::new();
+        let mut small = [0u8; 4];
+        let mut writer = EvWriter::new(&mut small);
+        let event = event_bytes(5, |w| {
+            w.u8(EV_BUFFER);
+            w.u32(7);
+        });
+
+        assert!(!push_event(&mut writer, &mut pending, event.clone()));
+        assert_eq!(pending.len(), 1);
+        assert_eq!(writer.pos, 0);
+
+        let mut large = [0u8; 5];
+        let mut writer = EvWriter::new(&mut large);
+        assert!(flush_pending_events(&mut writer, &mut pending));
+        assert!(pending.is_empty());
+        assert_eq!(writer.pos, event.len());
+        assert_eq!(large, event.as_slice());
+    }
+
+    #[test]
+    fn pending_events_keep_their_order() {
+        let mut pending = std::collections::VecDeque::from([vec![1, 2], vec![3, 4]]);
+        let mut first = [0u8; 2];
+        let mut writer = EvWriter::new(&mut first);
+        assert!(!flush_pending_events(&mut writer, &mut pending));
+        assert_eq!(first, [1, 2]);
+        assert_eq!(pending.len(), 1);
+
+        let mut second = [0u8; 2];
+        let mut writer = EvWriter::new(&mut second);
+        assert!(flush_pending_events(&mut writer, &mut pending));
+        assert_eq!(second, [3, 4]);
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn session_start_events_carry_an_optional_initial_depth() {
+        assert_eq!(session_start_event(Some(6)), [7, 6, 0, 0, 0]);
+        assert_eq!(session_start_event(None), [7, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn end_is_idempotent_and_clears_the_caller_pointer() {
+        let session = Box::into_raw(Box::new(RpSession {
+            state: Arc::new(Mutex::new(GameState {
+                channels: None,
+                directive: DirectiveTracker::default(),
+                leave: LeaveTracker::new(),
+                local_slot: 0,
+                initial_buffer: 1,
+                consumed: [0; 256],
+                pending_events: std::collections::VecDeque::new(),
+            })),
+            status: Arc::new(AtomicI32::new(RP_STAT_ENDED)),
+            shutdown: Arc::new(AtomicBool::new(false)),
+            thread: None,
+        }));
+        let mut session = session;
+        unsafe { rp_end(&mut session) };
+        assert!(session.is_null());
+        unsafe { rp_end(&mut session) };
+        unsafe { rp_end(std::ptr::null_mut()) };
+    }
 }

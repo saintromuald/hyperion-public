@@ -5,9 +5,10 @@
  *   ctest <setup.json> <turns>
  *
  * Sends <turns> lockstep turns (a 0x05 keep-alive plus a fake 0x0C build
- * command), polling after each submit. Exits 0 when it has received <turns>
- * turns from peers; nonzero on a session error. Run two instances (slot 0 and
- * slot 1) against the same relay.
+ * command), polling after each submit. The poll buffer starts at one byte and
+ * grows only on RP_ERR_TURN_FULL, proving that small buffers lose no events.
+ * Exits 0 when it has received <turns> turns from peers; nonzero on a session
+ * error. Run two instances (slot 0 and slot 1) against the same relay.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -91,7 +92,14 @@ int main(int argc, char **argv) {
         0x8C, 2, 0x09, 0x01, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
         0x94, 0, 0, 1, 0, 0, 0, 0, 2, 0, 0, 0,
     };
-    uint8_t events[4096];
+    size_t events_cap = 1;
+    uint8_t *events = malloc(events_cap);
+    if (!events) {
+        fprintf(stderr, "ctest: out of memory\n");
+        rp_end(&session);
+        free(json);
+        return 1;
+    }
     uint32_t received = 0;
 
     for (long i = 0; i < turns; i++) {
@@ -111,8 +119,21 @@ int main(int argc, char **argv) {
         /* Lockstep pacing: hold this step until the peer's turn arrives
          * (the game would stall waiting for the step exactly the same way). */
         for (int spin = 0; received <= (uint32_t)i && spin < 5000; spin++) {
-            int32_t nbytes =
-                rp_poll(session, (uint32_t)(i + 1), events, sizeof(events));
+            int32_t nbytes = rp_poll(session, (uint32_t)(i + 1), events, events_cap);
+            if (nbytes == RP_ERR_TURN_FULL) {
+                if (events_cap >= 1024 * 1024 + 64) {
+                    fprintf(stderr, "ctest: poll event too large\n");
+                    goto done;
+                }
+                events_cap *= 2;
+                uint8_t *larger = realloc(events, events_cap);
+                if (!larger) {
+                    fprintf(stderr, "ctest: out of memory\n");
+                    goto done;
+                }
+                events = larger;
+                continue;
+            }
             if (nbytes < 0) {
                 fprintf(stderr, "ctest: rp_poll: %d\n", nbytes);
                 break;
@@ -148,6 +169,10 @@ int main(int argc, char **argv) {
                     p += len;
                     printf("ctest: lobby command from slot %u (%u bytes)\n",
                            slot, len);
+                } else if (kind == RP_EV_SESSION_START) {
+                    uint32_t depth;
+                    read_u32(&p, end, &depth);
+                    printf("ctest: session start (initial buffer %u turns)\n", depth);
                 } else if (kind == RP_EV_CONNECT) {
                     uint32_t slot;
                     uint8_t up;
@@ -179,7 +204,8 @@ int main(int argc, char **argv) {
 done:
     rp_leave_intent(session);
     printf("ctest: received %u of %ld turns\n", received, turns);
-    rp_end(session);
+    rp_end(&session);
+    free(events);
     free(json);
     return received >= (uint32_t)turns ? 0 : 1;
 }

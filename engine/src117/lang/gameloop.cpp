@@ -4,9 +4,11 @@
 
 #include "oc_data.h"  // Hyperion: OC_VA
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "../port/platform/port_log.h"  // Hyperion: PortLogger
 #include "../h/gameloop.h"
 #include "../h/status.h"
 #include "../h/placebox.h"
@@ -260,6 +262,11 @@ static __forceinline void rebuild_turn_rate_table()
 int DoNetworkTurn(int *pbRedrew)
 {
     *pbRedrew = 0;
+    static unsigned s_netTurnTrace = 0;
+    if (getenv("HX_NET_TRACE") != NULL && (s_netTurnTrace < 32 || s_netTurnTrace % 1000 == 0))
+        fprintf(stderr, "NET DNT timer=%u stalled=%u last=%u now=%u\n",
+                sgbNetworkTurnTimer, byte_666400, sgdwLastGameUpdateTime_g, PortGameTicks());
+    ++s_netTurnTrace;
     if (--sgbNetworkTurnTimer != 0)
         return 1;
 
@@ -307,6 +314,8 @@ void update_circle_flashes()
 // writer is told the final frame count only when this is not a playback.
 void gameloop_init(int nMode)
 {
+    static const PortLogger TraceLog("gameover_pluto.log");
+    TraceLog("gameloop_init mode %d frame %u", nMode, dword_52651C);
     if (gPlayback == 0) {
         sgbGameRunning_g = 0;
         sgwReturnMode_g = (WORD)nMode;
@@ -464,6 +473,11 @@ void gameloop_update_ui()
 #pragma optimize("g", off)
 void gameloop_update_game()
 {
+    static int s_plutoLoopTrace = 0;
+    if (s_plutoLoopTrace < 24) {
+        static const PortLogger TraceLog("gameloop_pluto.log");
+        TraceLog("update begin %d", s_plutoLoopTrace);
+    }
     set_rand_enabled(1);
     CosmoPerFrame();  // Hyperion: the mod's once-at-start mode init (its first frame)
     // Hyperion: HYPERION_PERF's parts (port_perf.cpp)
@@ -473,6 +487,10 @@ void gameloop_update_game()
     PortPerfBegin(PERF_AI);
     AiFrame();  // Hyperion: sai_update, through the AI's boundary
     PortPerfEnd(PERF_AI);
+    if (s_plutoLoopTrace < 24) {
+        static const PortLogger TraceLog("gameloop_pluto.log");
+        TraceLog("update ai done %d", s_plutoLoopTrace);
+    }
     if (dword_6663E4 == 0)
         dword_6663E4 = 100;
     BYTE bTick;
@@ -497,6 +515,11 @@ void gameloop_update_game()
     CFlingy::UpdateFlingies();
     CThingy::UpdateThingies();
     PortPerfEnd(PERF_MOVERS);
+    if (s_plutoLoopTrace < 24) {
+        static const PortLogger TraceLog("gameloop_pluto.log");
+        TraceLog("update end %d", s_plutoLoopTrace);
+    }
+    ++s_plutoLoopTrace;
     set_rand_enabled(0);
 }
 #pragma optimize("", on)

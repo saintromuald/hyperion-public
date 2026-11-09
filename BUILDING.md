@@ -29,7 +29,8 @@ build writes `engine/src117/build/x64/Hyperion.exe` with `SDL3.dll` beside it.
 folders a file `engine/install_to.txt` names, one a line, if you make one.
 
 To make the zip a player unpacks: `python tools/package.py`. It goes into
-`engine/testrun/share/`.
+`engine/testrun/share/`. For the public Hyperion Shield and private Hyperion Zero variants, see
+`docs/release-variants.md`.
 
 ## Linux
 
@@ -145,10 +146,18 @@ For development and a LAN party's server, the dev-tenant shape (see
    app-server seed), and `sbServerName` (the relay cert's name). A match with
    `"transport":"sb"` in its JSON plays online.
 
+The room's legacy development minter is disabled by default. Only local development harnesses
+should set `HYPERION_SB_DEV_MINT=1`; production matches use authenticated ShieldBattery
+formations and canonical manifests, never `rp_dev_mint`.
+
 Headless two-seat gates, all `--coordinated` (see `docs/sb-netcode-port.md` §10):
 `engine/tools/sbtest/{run_game,desync,reconnect,drop,sb_room}.sh`, plus the bridge's C ABI
 test `engine/tools/rallypoint2/bridge/ctest/run.sh` and the command-table conformance check
-`cmdtable.sh`.
+`cmdtable.sh`. The canonical Zero gate is
+`python3 tools/sbtest/zero_acceptance.py --steps 600 --timeout 90`; add `--result` for raw v2
+reports and clean departures, or `--drop` for hard-kill eviction and survivor evidence. Use
+`--rule 2` for the anti-meta start and `--team-size 2` or `--team-size 3` for 2v2/3v3. These
+use only loopback development services and dummy result credentials.
 
 ## Tests
 

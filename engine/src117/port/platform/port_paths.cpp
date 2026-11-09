@@ -189,6 +189,9 @@ void PortPathsSplitCommandLine(const char *pszLine, char *pszGame, size_t cchGam
     } else if (PathsHasPrefix(szWord, "--canvas=")) {
       lstrcpynA(pOptions->szCanvas, szWord + 9, MAX_PATH);
       pszLine = pEnd;
+    } else if (lstrcmpiA(szWord, "--sb-identity") == 0) {
+      pOptions->bSbIdentity = true;
+      pszLine = pEnd;
     } else if (lstrcmpiA(szWord, "--bench") == 0) {
       pOptions->bBench = true;
       pszLine = pEnd;
