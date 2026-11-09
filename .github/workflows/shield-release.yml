@@ -38,6 +38,11 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install 1.95 --profile minimal
+          rustup default 1.95
+
       - name: Python bits
         run: python -m pip install fonttools
 
