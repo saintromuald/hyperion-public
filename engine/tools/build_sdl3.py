@@ -53,7 +53,8 @@ def patches() -> list:
 def stamp_text() -> str:
     lines = []
     for p in patches():
-        lines.append(f"{p.name} {hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest()}")
+        contents = p.read_bytes().replace(b"\r\n", b"\n")
+        lines.append(f"{p.name} {hashlib.sha256(contents).hexdigest()}")
     return "\n".join(lines) + "\n"
 
 
