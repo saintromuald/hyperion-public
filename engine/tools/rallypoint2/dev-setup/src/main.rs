@@ -26,7 +26,7 @@ use std::fs;
 use std::process::ExitCode;
 
 use base64::prelude::{BASE64_STANDARD, Engine as _};
-use rally_point_client::proto::control::TenantId;
+use rally_point_client::proto::control::{AllowedLobbyCommand, LobbyPolicy, TenantId};
 use rally_point_client::proto::ids::{SessionId, SlotId};
 use rally_point_client::proto::token::{
     ClientPublicKey, ExpiresAt, KeyId, PUBLIC_KEY_LEN, SIGNATURE_LEN, Signature, SignedToken,
@@ -161,9 +161,10 @@ fn main() -> ExitCode {
             //       --slots <n> [--server-name localhost] --out-dir <dir>
             let mut coordinator: Option<String> = None;
             let mut tenant = "sb-dev".to_string();
-            let mut kid = "dev-key-1".to_string();
             let mut client_seed: Option<String> = None;
             let mut slots: u32 = 2;
+            let mut lobby_seed: Option<u32> = None;
+            let mut formation_id: Option<String> = None;
             let mut server_name = "localhost".to_string();
             let mut out_dir: Option<String> = None;
             let mut game_name = "Relay".to_string();
@@ -173,15 +174,25 @@ fn main() -> ExitCode {
                         coordinator = Some(next_arg(&mut args, "--coordinator").unwrap())
                     }
                     "--tenant" => tenant = next_arg(&mut args, "--tenant").unwrap(),
-                    "--kid" => kid = next_arg(&mut args, "--kid").unwrap(),
+                    "--kid" => {
+                        // The development coordinator has one signing key; accept the
+                        // same flag as the standalone token generator for harness symmetry.
+                        let _ = next_arg(&mut args, "--kid").unwrap();
+                    }
                     "--client-seed" => {
                         client_seed = Some(next_arg(&mut args, "--client-seed").unwrap())
                     }
                     "--slots" => slots = next_arg(&mut args, "--slots").unwrap().parse().unwrap(),
+                    "--lobby-seed" => {
+                        lobby_seed = Some(next_arg(&mut args, "--lobby-seed").unwrap().parse().unwrap())
+                    }
                     "--server-name" => {
                         server_name = next_arg(&mut args, "--server-name").unwrap()
                     }
                     "--name" => game_name = next_arg(&mut args, "--name").unwrap(),
+                    "--formation-id" => {
+                        formation_id = Some(next_arg(&mut args, "--formation-id").unwrap())
+                    }
                     "--out-dir" => out_dir = Some(next_arg(&mut args, "--out-dir").unwrap()),
                     other => {
                         eprintln!("unknown flag {other}");
@@ -241,7 +252,7 @@ fn main() -> ExitCode {
                         require_evidence: false,
                         slot: SlotId(i as u8),
                         client_pubkey: ClientPublicKey(pubkey),
-                        external_ref: None,
+                        external_ref: Some((1001 + i).to_string()),
                         observer: false,
                         region: None,
                     }
@@ -252,10 +263,20 @@ fn main() -> ExitCode {
                 evidence_keys: vec![],
                 tenant: TenantId(tenant.clone()),
                 players,
-                external_id: Some(format!("dev-{}", std::process::id())),
+                external_id: formation_id.or_else(|| Some(format!("dev-{}", std::process::id()))),
                 latency_estimate_ms: None,
                 rollback: false,
-                lobby_policy: None,
+                lobby_policy: lobby_seed.map(|seed| {
+                    let mut payload = vec![0x48];
+                    payload.extend_from_slice(&seed.to_le_bytes());
+                    payload.extend_from_slice(&[8; 8]);
+                    LobbyPolicy {
+                        allowed: vec![AllowedLobbyCommand {
+                            slot: SlotId(0),
+                            payload,
+                        }],
+                    }
+                }),
             };
             let body = serde_json::to_vec(&request).expect("request json");
             let ts = std::time::SystemTime::now()
@@ -315,6 +336,12 @@ fn main() -> ExitCode {
                         "cert": cert_b64,
                     },
                     "initialBufferTurns": response.bounds.min,
+                    "roster": response.tokens.iter().enumerate().map(|(slot, _)| json!({
+                        "slot": slot,
+                        "userId": 1001 + slot,
+                        "homeRelayId": response.home_relay.relay_id.0,
+                    })).collect::<Vec<_>>(),
+                    "rollback": false,
                     "rosterSize": slots,
                     "gameName": game_name,
                 });

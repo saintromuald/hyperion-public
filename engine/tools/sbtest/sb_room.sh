@@ -13,6 +13,7 @@ cd "$(dirname "$0")/../.."            # engine/
 MAP="${1:?usage: sb_room.sh <map.scm> [seconds]}"
 LIMIT="${2:-90}"
 HX="$(pwd)/src117/build/linux-x64/Hyperion.x86_64"
+GAME="${HYPERION_GAME:?set HYPERION_GAME to a StarCraft install}"
 WORK="$(mktemp -d)"
 R2="$(pwd)/tools/rallypoint2"
 TARGET="$(pwd)/src117/build/linux-x64/rallypoint"
@@ -58,21 +59,21 @@ cat > "$WORK/room/lanroom.json" <<EOF
 }
 EOF
 
-ENV=(HYPERION_WINDOW=hidden SDL_AUDIO_DRIVER=dummy HYPERION_LAN_BIND=127.0.0.1
+ENV=(HYPERION_WINDOW=hidden SDL_AUDIO_DRIVER=dummy HYPERION_LAN_BIND=127.0.0.1 HYPERION_SB_DEV_MINT=1
      HYPERION_REMASTERED="${HYPERION_REMASTERED:-}")
 trap 'kill -9 ${ROOM_PID:-} ${S0_PID:-} ${S1_PID:-} ${RELAY_PID:-} ${COORD_PID:-} 2>/dev/null || true' EXIT
 
 echo "[sb_room] the room hosts the match"
-env "${ENV[@]}" "$HX" --data "$WORK/room" --room --room-key testkey --room-name online --room-password refpw \
+env "${ENV[@]}" "$HX" --data "$WORK/room" --install-folder "$GAME" --room --room-key testkey --room-name online --room-password refpw \
     > "$WORK/room.log" 2>&1 &
 ROOM_PID=$!
 sleep 1
 
 echo "[sb_room] two seats join the room"
-env "${ENV[@]}" "$HX" --data "$WORK/seat0" --join 127.0.0.1 --room-password refpw --lan-name Alpha --lan-ready --race 1 \
+env "${ENV[@]}" "$HX" --data "$WORK/seat0" --install-folder "$GAME" --join 127.0.0.1 --room-password refpw --lan-name Alpha --lan-ready --race 1 \
     > "$WORK/s0.log" 2>&1 &
 S0_PID=$!
-env "${ENV[@]}" "$HX" --data "$WORK/seat1" --join 127.0.0.1 --room-password refpw --lan-name Bravo --lan-ready --race 2 \
+env "${ENV[@]}" "$HX" --data "$WORK/seat1" --install-folder "$GAME" --join 127.0.0.1 --room-password refpw --lan-name Bravo --lan-ready --race 2 \
     > "$WORK/s1.log" 2>&1 &
 S1_PID=$!
 sleep 3

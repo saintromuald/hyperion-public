@@ -93,6 +93,7 @@ static inline DWORD ScriptDword(const BYTE *p)
   return d;
 }
 #include "../gen/globals117.h"
+#include "../gen/wide117.h"   // Hyperion: kWideGlobals, to pin the GROUP/CImage pools' reservations
 #include "../h/gamedata.h"  // Hyperion: array_data_t
 #include "../h/WeaponGndEx.h"   // CUnit::GetWeaponGndEx's inline body, for RunScript
 #include "../h/typelimits.h"  // Hyperion: a mod's types
@@ -1465,6 +1466,35 @@ extern BYTE  sprite_selCircleImg[387] OC_UNALIGNED;
 extern BYTE  sprite_selCircleOffset[387] OC_UNALIGNED;
 extern GROUP sgHpbarGroups_g[SELECTION_MAX];
 extern const lo_file_t *sgpShieldOverlayGroups_g[999] OC_UNALIGNED;
+#endif
+
+// Hyperion: the wide storage (g_wide117) reserves each 1.17 global's bytes, laid out by
+// tools/wide_globals.py, which this checkout no longer has, so nothing re-derives the stride
+// when a struct grows. GROUP (grp.h) outgrew its 22-byte stride at 64 bits when FRAME gained
+// dwData/pData/pLines: 12 groups then wrote past the 264 bytes reserved for sgHpbarGroups_g and
+// left the GROUP's leading WORD (its frame count, 1) on sgCircleImages_g[0].pPrev -- the selection
+// crash (CLink::Unlink, pPrev = 0x1). Pin every pool this TU names to its reservation: a future growth
+// is a compile error that names the pool, not a buffer overrun into the next global. The CImage
+// pools (0x68 bytes) are checked too, so any of the six that grows past its stride fails here.
+#if defined(_WIN64) || defined(__LP64__)
+static constexpr unsigned WidePoolBytes(unsigned va) {
+  for (unsigned i = 0; i < sizeof kWideGlobals / sizeof kWideGlobals[0]; i++)
+    if (kWideGlobals[i].va == va)
+      return kWideGlobals[i].size;
+  return 0;  // a missing entry then fails each assert below (sizeof > 0)
+}
+static_assert(WidePoolBytes(0x592BA8) >= sizeof(GROUP) * SELECTION_MAX,
+              "sgHpbarGroups_g: the wide storage holds fewer bytes than SELECTION_MAX GROUP's");
+static_assert(WidePoolBytes(0x596080) >= sizeof(GROUP) * 64,
+              "sgPlacemaskGroups_g: the wide storage holds fewer bytes than 64 GROUP's");
+static_assert(WidePoolBytes(0x5928A0) >= sizeof(CImage) * SELECTION_MAX,
+              "sgHpbarImages: the wide storage holds fewer bytes than SELECTION_MAX CImage's");
+static_assert(WidePoolBytes(0x592C50) >= sizeof(CImage) * 80,
+              "sgCircleImages_g: the wide storage holds fewer bytes than 80 CImage's");
+static_assert(WidePoolBytes(0x594070) >= sizeof(CImage) * 64,
+              "sgPlaceboxImages_g: the wide storage holds fewer bytes than 64 CImage's");
+static_assert(WidePoolBytes(0x595078) >= sizeof(CImage) * 64,
+              "sgPlacemaskImages_g: the wide storage holds fewer bytes than 64 CImage's");
 #endif
 
 // Hyperion: the health bars, their groups and the circles of a game of Hyperion's

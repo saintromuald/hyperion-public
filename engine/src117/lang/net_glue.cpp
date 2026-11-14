@@ -39,6 +39,7 @@
 #include "../h/gluChat.h"       // on_chrm_kicked
 #include "../h/game.h"          // sub_499C50
 #include "../gen/globals117.h"
+#include "../port/sb/port_sbmanifest.h"  // Hyperion: roster-driven canonical lobbies
 
 // Callees no header of ours declares.
 
@@ -342,6 +343,20 @@ int sub_474C60()
     sub_474E60();
     err_popup(0x64, 0, 0, 0, 0);
     return 0;
+  }
+
+  if (SbManifestActive()) {
+    mark_local_download_completed();
+    if (!SbManifestApplyLobby()) {
+      sub_474E60();
+      err_popup(0x64, 0, 0, 0, 0);
+      return 0;
+    }
+    gGameHeader.bActivePlayers = static_cast<BYTE>(SbManifestGet().slots.size());
+    // No creator version, slot, or stat exchange follows: the roster and game
+    // description came from the validated manifest on every seat.
+    sub_46F460();
+    return 1;
   }
 
   mark_local_download_completed();

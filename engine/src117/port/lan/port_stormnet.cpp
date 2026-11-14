@@ -13,6 +13,8 @@
 // as they did, and no event is raised. Errors go through SErrSetLastError (port_stormerr.cpp).
 #include <windows.h>
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <deque>
 #include <vector>
 #include "port_stormlan.h"
@@ -527,6 +529,10 @@ BOOL __stdcall SNetSendTurn(const void *pvData, DWORD cbData)
     return Fail(NET_INVALID);
   if (!InGame())
     return FALSE;
+  static unsigned s_sendTrace = 0;
+  if (getenv("HX_NET_TRACE") != NULL && s_sendTrace++ < 24)
+    fprintf(stderr, "NET send seq=%u bytes=%lu\n", g_player.wTurnsSent,
+            static_cast<unsigned long>(cbData));
   Enqueue(g_player.turns, g_player.wTurnsSent, pvData, cbData);
   return TRUE;
 }
@@ -575,6 +581,15 @@ BOOL __stdcall SNetReceiveTurns(DWORD nFirst, DWORD nPlayers, const void **ppvDa
     }
     pdwFlags[i - nFirst] = dwFlags;
   }
+  static unsigned s_recvTrace = 0;
+  if (getenv("HX_NET_TRACE") != NULL && (s_recvTrace < 36 || s_recvTrace % 250 == 0)) {
+    const int front = g_player.turns.empty() ? -1 : g_player.turns.front().wSeq;
+    fprintf(stderr,
+            "NET recv ready=%d local=%u sent=%u read=%u queued=%zu front=%d flags0=%08x\n",
+            bAllReady ? 1 : 0, g_bLocal, g_player.wTurnsSent, g_player.wTurnsRead,
+            g_player.turns.size(), front, nPlayers != 0 ? pdwFlags[0] : 0);
+  }
+  ++s_recvTrace;
   if (!bAllReady)
     return Fail(NET_NOTHING_WAITING);
   const WORD wRead = g_player.wTurnsRead;
@@ -652,6 +667,8 @@ BOOL __stdcall SNetReportGameResult(DWORD nFirst, DWORD nPlayers, const int *pnR
     return Fail(NET_INVALID);
   if (!g_bNetUp)
     return Fail(NET_BAD_PROVIDER);
+  if (g_bSb)
+    return SbReportGameResult();
   return TRUE;
 }
 

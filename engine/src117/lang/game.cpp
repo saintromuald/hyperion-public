@@ -71,6 +71,7 @@
 #include "../port/gameplay/port_ai.h"      // Hyperion: AiSeat
 #include "../port/data/port_moddata.h"  // Hyperion: ModRacesForGame
 #include "../port/gameplay/port_score.h"  // Hyperion: PortScoreGameStart
+#include "../port/sb/port_stormsb.h"  // Hyperion: SbInMatch
 #include "../port/tools/port_crashnotes.h"  // Hyperion: PortCrashNotesGameStart
 #include "../port/tools/port_crash.h"  // Hyperion: PortCrashTest
 #include "../h/img.h"  // Hyperion: _img_list
@@ -714,7 +715,7 @@ void free_game(int nWriteReplay)
     char szReplay[0x104];
 
     sub_47A7F0();
-    if (IsBNetGame())
+    if (IsBNetGame() || SbInMatch())
         net_end_game();
     leave_game(0x40000001);
     if (gwGameMode == 4 && glGluesMode == 0)

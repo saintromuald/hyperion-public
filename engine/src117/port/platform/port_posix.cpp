@@ -51,7 +51,9 @@
 #endif
 #include <atomic>
 #include <condition_variable>
+#include <cstdio>
 #include <map>
+#include "../gameplay/port_pluto.h"  // explicit child shutdown before _exit
 #include <memory>
 #include <mutex>
 #include <string>
@@ -1260,7 +1262,14 @@ void __stdcall ExitProcess(UINT uExitCode)
 #if defined(__EMSCRIPTEN__)
   PortWebExit(static_cast<int>(uExitCode));
 #endif
-  exit(static_cast<int>(uExitCode));
+  // Win32 ExitProcess terminates the other threads and does not run C++ static
+  // destructors. POSIX exit() instead runs them and can deadlock in a condition
+  // variable destructor with waiters still present. Give the Pluto child its
+  // explicit result/shutdown handshake first (a no-op for every other AI), then
+  // flush C streams and use the matching process-boundary behavior.
+  PlutoGameEnd();
+  fflush(NULL);
+  _exit(static_cast<int>(uExitCode));
 }
 
 #if defined(__EMSCRIPTEN__)

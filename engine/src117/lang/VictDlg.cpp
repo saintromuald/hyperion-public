@@ -21,6 +21,7 @@
 #include "../gen/globals117.h"
 #include "../port/front/port_gamemenu.h"  // Hyperion: PortGameEndKind and the rest
 #include "../port/gameplay/port_watchgame.h"  // Hyperion: PortWatchLive
+#include "../port/sb/port_stormsb.h"  // Hyperion: SbInMatch
 
 // Callees no header of ours declares.
 
@@ -128,9 +129,9 @@ void victdlg_init() {
   sgbVictQuitGame_g = 0;
 }
 
-// Leave a Battle.net game once, whatever brings the player out of it.
+// Leave a Battle.net or relay game once, whatever brings the player out of it.
 void victdlg_quit() {
-  if (IsBNetGame() && sgbVictQuitGame_g == 0) {
+  if ((IsBNetGame() || SbInMatch()) && sgbVictQuitGame_g == 0) {
     sgbVictQuitGame_g = 1;
     net_end_game();
   }

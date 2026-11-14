@@ -8,6 +8,7 @@
     python engine/tools/control/hyperion_ctl.py set gamma 120
     python engine/tools/control/hyperion_ctl.py snapshot [name]     a PNG in the data folder's snapshots
     python engine/tools/control/hyperion_ctl.py pause | resume | step [frames]
+    python engine/tools/control/hyperion_ctl.py quit         End Mission's confirmation, with result and clean leave
     python engine/tools/control/hyperion_ctl.py hash [dump-path]    the state's hash a domain at a time
     python engine/tools/control/hyperion_ctl.py camera <x> <y>      the view's centre, in map pixels
     python engine/tools/control/hyperion_ctl.py canvas [tileset]    from the home screen
@@ -121,7 +122,7 @@ def main():
         if c == "send":
             request = json.loads(rest[0])
             answer = client.call(request.pop("cmd"), **request)
-        elif c in ("status", "players", "reveal", "list", "pause", "resume"):
+        elif c in ("status", "players", "reveal", "list", "pause", "resume", "quit"):
             answer = client.call(c)
         elif c == "get":
             answer = client.call("get", name=rest[0])

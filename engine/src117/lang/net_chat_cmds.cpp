@@ -39,6 +39,7 @@
 #include "fd_sessn.h"         // sub_4409B0, sub_440BD0 -- recv_net_cmd_version_verify
 #include "saveload.h"        // sub_499860 -- recv_net_cmd_version_verify
 #include "../gen/globals117.h"
+#include "../port/sb/port_sbmanifest.h"  // Hyperion: the server-owned launch seed
 
 // 0x4EF014 -- "net_chat_cmds.cpp", this TU's allocator owner tag; every
 // create_net_cmd_* body passes it to SMemAlloc and recv_net_cmd_version passes
@@ -635,6 +636,8 @@ void recv_net_cmd_seed_init(const void *pCmd, int nPlayer)
 
     sub_471A40(static_cast<BYTE>(i), bTeam, 1);
   }
+  if (SbManifestActive())
+    sgbChatState_g = 9;
 }
 
 // The 432-byte copy moves twelve PlayerData records from gPlayerData into
@@ -742,6 +745,16 @@ void sub_470930()
     }
   }
 
+  if (SbManifestActive()) {
+    // The timer alone never starts a canonical game. A delayed or unauthorized
+    // seed leaves the lobby waiting in the state its receiver accepts.
+    if (sgbChatState_g == 9)
+      return;
+    if (sgdwCountdown_g == 0) {
+      sgbChatState_g = 8;
+      return;
+    }
+  }
   sgbChatState_g = (sgdwCountdown_g == 0) ? 9 : bState;
 }
 
@@ -904,7 +917,7 @@ void create_net_cmd_seed_init()
   __time64_t nNow = _time64(NULL);
   net_chat_cmd_seed_t *pCmd =
       reinterpret_cast<net_chat_cmd_seed_t *>(sgpNetCmdSeedInit_g);
-  pCmd->dwSeed = static_cast<DWORD>(nNow);
+  pCmd->dwSeed = SbManifestActive() ? SbManifestSeed() : static_cast<DWORD>(nNow);
 
   if (gPlayback != 0)
     sub_480540(pCmd);
@@ -912,8 +925,9 @@ void create_net_cmd_seed_init()
   int i = 8;
   do {
     --i;
-    reinterpret_cast<net_chat_cmd_seed_t *>(sgpNetCmdSeedInit_g)->bSlots[i] =
-        GetSaveSlot(static_cast<BYTE>(i));
+    // A fresh canonical game has no save-slot remapping. The eight sentinel
+    // bytes are part of the exact record ShieldBattery's lobby policy admits.
+    pCmd->bSlots[i] = SbManifestActive() ? 8 : GetSaveSlot(static_cast<BYTE>(i));
   } while (i != 0);
 }
 
@@ -999,6 +1013,15 @@ void sub_470460()
     sgbChatState_g = 8;
   else if (bState > 6)
     return;
+
+  if (SbManifestActive() && sgpNetCmdSeedInit_g != 0) {
+    // The authorized reliable record is exactly thirteen bytes, not a turn
+    // containing a seed beside any other native setup command.
+    netmgr_queue_cmd(sgpNetCmdSeedInit_g, 0x0D);
+    SMemFree(sgpNetCmdSeedInit_g, sgszNetChatCmdsCpp, 0xB9, 0);
+    sgpNetCmdSeedInit_g = 0;
+    return;
+  }
 
   if (sgpNetCmdStartGame_g != 0) {
     netmgr_queue_cmd(sgpNetCmdStartGame_g, 1);

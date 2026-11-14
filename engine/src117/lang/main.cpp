@@ -91,9 +91,12 @@ int    __cdecl fputc(int ch, void *pFile);
 #endif
 
 // Hyperion: port_front.h's and port_modcheck.h's, which bring <stdio.h> against the
-// declarations above
+// declarations above. The SB printer is declared here too: including its C++
+// manifest header would bring <string>, and therefore the real MSVC stdio
+// declarations, into this TU before the legacy declarations above.
 bool PortFrontCinematicWatched(void);
 void PortModCheckRun(void);
+void SbManifestCompatibilityPrint(void);
 
 // The Storm import RunGame installs the Authenticode check through. The ledger
 // has its decorated name, which this declaration mangles to.
@@ -763,6 +766,14 @@ void RunGame()
   gwGameMode = 4;
   init_program();
   PortStartupStep("game data", "fonts, images, dialogs and the map data read");  // Hyperion
+  // Hyperion: --sb-identity reports the loaded installation's compatibility,
+  // then exits without creating a game or changing its install.
+  if (PortCommandOptions()->bSbIdentity) {
+    LoadGraphics();
+    SbManifestCompatibilityPrint();
+    PortStartupEnded(0);
+    _Exit(0);
+  }
   // Hyperion: --mod-check checks a mod once the game's files are open, with no window, and
   // ends the process (port_modcheck.cpp)
   if (PortCommandOptions()->szModCheck[0] != '\0')

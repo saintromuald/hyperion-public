@@ -19,9 +19,16 @@ void SbListProvider(void *pfnCallback);
 // session is running or fails (bounded by the bridge), so call it during the
 // launch cover, never from the game loop.
 void SbSetLaunch(const char *pszSetupFile);
-// The room's launch: the setup JSON as the launch carries it.
-void SbSetLaunchJson(const char *pszSetupJson);
+// The room's launch: the setup JSON as the launch carries it, and this seat's
+// local map file for a server manifest's hash check.
+void SbSetLaunchJson(const char *pszSetupJson, const char *pszMapPath);
 bool SbLaunchOn(void);
+// The relay reports that every expected member has connected. A canonical
+// manifest launch waits for this before starting its countdown.
+bool SbSessionStarted(void);
+// A secret-free lifecycle record for a direct sidecar's stdout, enabled only
+// when that sidecar sets HYPERION_SB_EVENTS=1 in its child's environment.
+void SbEmitLifecycleEvent(const char *pszType);
 // The launch's rosterSize (the session's slots), 0 when none was written.
 int SbRosterCount(void);
 // Starts the session and waits for the creator's launch blobs (init data and
@@ -64,10 +71,14 @@ BOOL SbGetPlayerName(DWORD dwPlayer, char *pszBuffer, DWORD cchBuffer);
 BOOL SbGetPlayerNames(char **ppszNames);
 BOOL SbGetGameInfo(DWORD dwInfo, void *pvBuffer, DWORD cbBuffer, DWORD *pcbRead);
 BOOL SbSetGameMode(DWORD dwMode, DWORD dwMakePublic);
+// The relay-selected depth the native flush loop targets, 0 outside an SB game.
+DWORD SbTurnsInTransitTarget(void);
 BOOL SbGetTurnsInTransit(DWORD *pdwTurns);
 BOOL SbSendTurn(const void *pvData, DWORD cbData);
 BOOL SbReceiveTurns(DWORD nFirst, DWORD nPlayers, const void **ppvData, DWORD *pcbData, DWORD *pdwFlags);
 BOOL SbSendMessage(DWORD dwPlayer, const void *pvData, DWORD cbData);
 BOOL SbReceiveMessage(int *pnPlayer, const void **ppvData, DWORD *pcbData);
+// Builds and queues this seat's raw v2 evidence before its clean leave.
+BOOL SbReportGameResult(void);
 
 #endif

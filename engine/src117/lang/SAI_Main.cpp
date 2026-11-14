@@ -2,6 +2,7 @@
 // VA order.
 
 #include "oc_data.h"  // Hyperion: OC_VA
+#include "../port/platform/port_log.h"  // Hyperion: PortLogger
 #include "../h/SAI_Main.h"
 #include "../h/sai.h"
 #include "../h/SAI_Banker.h"
@@ -933,10 +934,23 @@ void sai_main_init()
 // __declspec(noinline) on the declaration, not here.
 void sai_update()
 {
+  static int s_plutoSaiTrace = 0;
+  const bool trace = s_plutoSaiTrace++ < 24;
+  static const PortLogger TraceLog("sai_pluto.log");
+  if (trace)
+    TraceLog("sai_update begin");
   sai_scripts_update();
+  if (trace)
+    TraceLog("sai_scripts done");
   tai_captain_service_round_robin();
+  if (trace)
+    TraceLog("captain done");
   sai_recount_town_resources();
+  if (trace)
+    TraceLog("recount done");
   ai_periodic_timer_tick();
+  if (trace)
+    TraceLog("sai_update end");
 }
 
 // sai_write_save_data -- oracle 0x48DDB0 (78 B). read_save_ai_data's mirror.

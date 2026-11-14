@@ -37,6 +37,7 @@ struct PortOptions {
   char szModCheck[260];     // --mod-check <id> [<report.txt>]: that mod's check, and no game (port_modcheck.cpp)
   char szModCheckReport[260];
   char szComputerRace[260]; // --computer-race <race>, the computers' race, a mod's too
+  bool bSbIdentity;         // --sb-identity: print this install's compatibility record and exit
   bool bBench;              // --bench: --map's game as a benchmark run (port_bench.cpp)
   bool bTrainer;            // --trainer: the game a trainer session (port_trainer.cpp)
   char szPlayers[260];      // --players <n>, a benchmark's players, every one a computer
