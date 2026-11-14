@@ -96,14 +96,14 @@ jobs:
             apt-get install -y -qq --no-install-recommends wine curl ca-certificates python3-pip
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.95
             . "$HOME/.cargo/env"
-            python3 -m pip install --break-system-packages fonttools
-            python tools/get_libraries.py
-            python -c "import sys; sys.path.insert(0, \"tools\"); import build_sdl3; build_sdl3.fetch_source(); build_sdl3.apply_patches()"
-            python tools/build_shaders_linux.py
-            python tools/build_engine_linux.py
-            python tools/package.py --linux x64 --edition shield --channel "${{ inputs.channel }}" --out testrun/share/variants
-            python tools/test_package_variants.py
-            python tools/run_tests.py
+            python3 -m pip install fonttools
+            python3 tools/get_libraries.py
+            python3 -c "import sys; sys.path.insert(0, \"tools\"); import build_sdl3; build_sdl3.fetch_source(); build_sdl3.apply_patches()"
+            python3 tools/build_shaders_linux.py
+            python3 tools/build_engine_linux.py
+            python3 tools/package.py --linux x64 --edition shield --channel "${{ inputs.channel }}" --out testrun/share/variants
+            python3 tools/test_package_variants.py
+            python3 tools/run_tests.py
           '
 
       - name: Upload the Linux package
@@ -135,11 +135,10 @@ jobs:
           path: ${{ runner.temp }}/mac-inputs
 
       - name: Extract the Windows build inputs
-        working-directory: ${{ runner.temp }}/mac-inputs
-        run: tar xzf engine/mac-inputs.tar.gz
+        run: tar xzf "$RUNNER_TEMP/mac-inputs/mac-inputs.tar.gz"
 
       - name: Build and package Shield
-        working-directory: ${{ runner.temp }}/mac-inputs/engine
+        working-directory: engine
         run: |
           set -euo pipefail
           python3 tools/build_engine_linux.py
@@ -151,7 +150,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: hyperion-shield-mac
-          path: ${{ runner.temp }}/mac-inputs/engine/testrun/share/variants/**/Hyperion-Shield-*-mac-arm64.zip
+          path: engine/testrun/share/variants/**/Hyperion-Shield-*-mac-arm64.zip
           if-no-files-found: error
 
   publish:
@@ -161,6 +160,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
       TAG: ${{ inputs.tag }}
       CHANNEL: ${{ inputs.channel }}
     steps:
