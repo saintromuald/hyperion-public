@@ -156,8 +156,12 @@ test `engine/tools/rallypoint2/bridge/ctest/run.sh` and the command-table confor
 `cmdtable.sh`. The canonical Zero gate is
 `python3 tools/sbtest/zero_acceptance.py --steps 600 --timeout 90`; add `--result` for raw v2
 reports and clean departures, or `--drop` for hard-kill eviction and survivor evidence. Use
-`--rule 2` for the anti-meta start and `--team-size 2` or `--team-size 3` for 2v2/3v3. These
-use only loopback development services and dummy result credentials.
+`--rule 2` for the anti-meta start, `--classic` for ordinary Classic rules, and `--team-size 2` or
+`--team-size 3` for 2v2/3v3. `--engine` selects an exact packaged executable, while
+`--rallypoint-target` and `--no-build` reuse prebuilt services. Every seat must agree on 600
+meaningful-input turns and write a replay. `--negative` runs the native fail-closed parser against
+rollback, roster/profile mismatches, and bad map hashes/bytes. These use only loopback development
+services and dummy result credentials.
 
 ## Tests
 

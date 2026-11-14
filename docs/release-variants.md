@@ -93,10 +93,11 @@ native sidecar.
 
 ## ShieldBattery results and replays
 
-For a server-tracked canonical match, the sidecar passes the local seat's result
-code to its child through `HYPERION_SB_RESULT_CODE`. This value is not written
-into the native manifest, command line, lifecycle events, or logs. `serverUrl`
-stays in the sidecar's result context.
+For a server-tracked canonical match, an eligible tracked human seat receives
+both `HYPERION_SB_RESULT_CODE` and `HYPERION_SB_SERVER_URL`. The result code is
+not written into the native manifest, command line, lifecycle events, or logs.
+The server URL is supplied only to enable authenticated rehome. Observers,
+replays, legacy launches, and untracked seats receive neither value.
 
 At the end of play, Hyperion sends a raw v2 result report through the relay's
 reliable control stream before announcing a clean leave. The report contains the
@@ -106,8 +107,26 @@ and ShieldBattery apply their existing result, departure, and reconciliation
 rules. Observers, replays, legacy launches, and seats without a result code do
 not arm or send a report.
 
-Replays remain local. There is no Hyperion replay-upload workflow yet; BroodRep
-format and seed compatibility must be proven before one is enabled.
+Replays remain local. Classic native games use classic `reRS` recordings with
+Hyperion playback; Hyperion QoL and anti-meta games use `hxRS`. There is no
+Hyperion replay-upload workflow yet; BroodRep format and seed compatibility,
+map/roster/rules/simulation identity, and server-confirmed game linkage must be
+proven before one is enabled.
+
+Canonical tracked participants can use ShieldBattery-mediated rehome through the
+existing rehome endpoint. Requests use the game client's `shieldbattery://game`
+origin and require HTTPS except for literal loopback development servers. The
+bridge keeps result credentials out of launch files and logs, pins each
+replacement relay's certificate, and gives each bounded request margin beyond
+the server's coordinator deadline. Observers, legacy rooms, replay processes,
+and untracked seats do not receive rehome credentials. Same-relay reconnect and
+replacement-relay rehome are separate acceptance cases.
+
+The acceptance harness supports `--engine` for an exact executable and
+`--rallypoint-target`/`--no-build` for prebuilt services. Every seat must agree
+on 600 meaningful-input turns and produce a replay. `--classic` checks ordinary
+Classic rules; `--negative` exercises rollback, roster/profile mismatch, and bad
+map hashes/bytes through the native fail-closed parser.
 
 ## Prerelease, then release
 

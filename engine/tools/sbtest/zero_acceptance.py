@@ -120,11 +120,11 @@ def quit_seat(ports, seat):
         raise RuntimeError(f"seat {seat} could not quit: {answer.get('error', 'unknown error')}")
 
 
-def surrender_both(ports, seats):
+def surrender_both(ports, seats, timeout):
     for seat in reversed(range(len(ports))):
         quit_seat(ports, seat)
         if len(ports) == 2 and seat == 1:
-            deadline = time.monotonic() + 10
+            deadline = time.monotonic() + timeout
             while "game menu: victory" not in read(seats[0] / "hyperion_front.log"):
                 if time.monotonic() >= deadline:
                     raise RuntimeError("the remaining seat did not record the surrender victory")
@@ -272,10 +272,10 @@ def validate_drop_notice(server, game_id):
         raise RuntimeError("the dropped departure has wrong identity or unexpected result evidence")
 
 
-def manifest(setup, seat, game_id, seed, map_path, compatibility, rule, team_size, random_race=False):
+def manifest(setup, seat, game_id, seed, map_path, compatibility, rule, team_size, random_race=False, classic=False):
     user_ids = [1001 + i for i in range(team_size * 2)]
     selected = dict(compatibility)
-    selected["rules"] = "hyperion" if rule == 2 else "classic"
+    selected["rules"] = "classic" if classic else "hyperion"
     setup["hyperion"] = {
         "protocol": 1,
         "gameId": game_id,
@@ -300,8 +300,8 @@ def manifest(setup, seat, game_id, seed, map_path, compatibility, rule, team_siz
             for i in range(team_size * 2)
         ],
         "map": {
-            "format": "scm",
-            "hash": hashlib.sha256(b"scm" + map_path.read_bytes()).hexdigest(),
+            "format": map_path.suffix.lower().lstrip("."),
+            "hash": hashlib.sha256(map_path.suffix.lower().lstrip(".").encode("ascii") + map_path.read_bytes()).hexdigest(),
             "path": str(map_path),
         },
         "compatibility": selected,
@@ -313,6 +313,10 @@ def manifest(setup, seat, game_id, seed, map_path, compatibility, rule, team_siz
 
 def validate_rule_logs(seats, rule):
     logs = [read(seat / "hyperion_mutators.log") for seat in seats]
+    if rule == 0:
+        if any("anti-meta:" in log for log in logs):
+            raise RuntimeError("Classic rules enabled an anti-meta start")
+        return None
     if rule == 1:
         if any("MutatorsForGame: on 0" not in log or "anti-meta:" in log for log in logs):
             raise RuntimeError("Rule 1 did not remain classic on both seats")
@@ -342,12 +346,22 @@ def wait_for_game_end(seats, expected, timeout):
 
 def validate_replays(seats, rule, expected_roll):
     paths = [seat / "maps/replays/LastReplay.rep" for seat in seats]
-    paths = [path for path in paths if path.exists()]
-    if not paths:
-        raise RuntimeError("no local replay was written after the match")
+    missing = [str(path) for path in paths if not path.exists()]
+    if missing:
+        raise RuntimeError(f"expected every seat to write a local replay; missing: {missing}")
     replay_mutators = []
     for path in paths:
         data = path.read_bytes()
+        native_magic = data.startswith(b"hxRS") or (data.startswith(b"\x7f\xf9") and data[12:16] == b"hxRS")
+        classic_magic = data.startswith(b"reRS") or (len(data) >= 16 and data[12:16] == b"reRS")
+        if rule == 0 and not classic_magic:
+            raise RuntimeError(f"{path} is not a classic reRS replay")
+        if rule != 0 and not native_magic:
+            raise RuntimeError(f"{path} does not have Hyperion hxRS replay magic")
+        if rule == 0:
+            if b"MUTS" in data or b"HX_OPT_SELECTION" in data or b"HX_OPT_MUTATORS" in data:
+                raise RuntimeError("the Classic replay contains Hyperion QoL or mutator evidence")
+            continue
         marker = data.rfind(b"HYPERION")
         if rule == 1:
             if marker >= 0:
@@ -366,9 +380,22 @@ def validate_replays(seats, rule, expected_roll):
             raise RuntimeError("the Hyperion replay has a truncated section")
         rule_record = sections.get("RULE", b"")
         mutators = sections.get("MUTS", b"")
-        if not rule_record.startswith(b"hyperion\0") or len(rule_record) < 76:
-            raise RuntimeError("the Rule 2 replay has the wrong RULE record")
-        if struct.unpack_from("<I", rule_record, 72)[0] & 0x100 == 0 or len(mutators) != 64:
+        if rule != 0 and not rule_record.startswith(b"hyperion\0"):
+            raise RuntimeError(f"the Rule {rule} replay has the wrong RULE record")
+        if len(rule_record) < 76:
+            raise RuntimeError(f"the Rule {rule} replay has the wrong RULE record")
+        options = struct.unpack_from("<I", rule_record, 72)[0]
+        if rule == 0:
+            if options & 0x40 or options & 0x100 or mutators:
+                raise RuntimeError("the Classic replay enabled Hyperion selection QoL or mutators")
+            continue
+        if options & 0x40 == 0:  # HX_OPT_SELECTION
+            raise RuntimeError(f"the Rule {rule} replay does not contain Hyperion selection QoL")
+        if rule == 1:
+            if options & 0x100 or mutators:  # HX_OPT_MUTATORS and its MUTS section
+                raise RuntimeError("the Rule 1 replay unexpectedly contains mutators")
+            continue
+        if options & 0x100 == 0 or len(mutators) != 104:
             raise RuntimeError("the Rule 2 replay does not contain its exact MUTS record")
         values = struct.unpack("<16i", mutators)
         replay_mutators.append(values)
@@ -379,11 +406,132 @@ def validate_replays(seats, rule, expected_roll):
         raise RuntimeError("the seats' Rule 2 replay mutators differ")
 
 
+def validate_lifecycle_events(seats):
+    for seat in range(len(seats)):
+        events = []
+        for line in read(seats[seat].parent / f"c{seat}.log").splitlines():
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if event.get("type") in ("start", "finished"):
+                events.append(event["type"])
+        if "start" not in events or "finished" not in events:
+            raise RuntimeError(f"seat {seat} did not emit both native start and finished events: {events}")
+
+
+def validate_classic_selection(hx, work, seats, args):
+    port = free_port()
+    data = work / "selection-playback"
+    data.mkdir()
+    process = subprocess.Popen([
+        str(hx), "--data", data, "--map", args.map_file, "--rules", "classic",
+        f"--control={port}", "--install-folder", args.game,
+    ], env={**os.environ, "HYPERION_WINDOW": "hidden", "SDL_AUDIO_DRIVER": "dummy"},
+       stdout=(work / "selection-playback.log").open("w"), stderr=subprocess.STDOUT)
+    try:
+        deadline = time.monotonic() + args.timeout
+        selected_player = 0
+        while True:
+            if process.poll() is not None:
+                raise RuntimeError("Classic selection game exited before the selection check")
+            for player in range(2):
+                try:
+                    answer = ws_call(port, {
+                        "id": 1, "cmd": "select", "x": 1536, "y": 1536,
+                        "radius": 4096, "player": player,
+                    }, timeout=2)
+                    if answer.get("ok") and answer.get("selected", 0) > 0:
+                        selected_player = player
+                        break
+                except (ConnectionError, OSError):
+                    pass
+            else:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("timed out opening the Classic selection game")
+                time.sleep(0.1)
+                continue
+            break
+        time.sleep(0.2)
+        answer = ws_call(port, {
+            "id": 2, "cmd": "select", "x": 1536, "y": 1536,
+            "radius": 4096, "player": selected_player,
+        }, timeout=10)
+        if not answer.get("ok") or answer.get("selected", 0) < 1 or process.poll() is not None:
+            raise RuntimeError(f"Classic selection-pool reuse failed: {answer}")
+    finally:
+        stop(process)
+
+
+def run_negative_case(hx, work, setup_path, args):
+    setup = json.loads(setup_path.read_text())
+    kind = args.negative
+    if kind == "rollback":
+        setup["rollback"] = True
+    elif kind == "roster":
+        setup["hyperion"]["slots"][1]["userId"] += 1000
+    elif kind == "profile":
+        setup["hyperion"]["compatibility"]["simRevision"] += 1
+    elif kind == "map-hash":
+        setup["hyperion"]["map"]["hash"] = "0" * 64
+    elif kind == "map-bytes":
+        with open(setup["hyperion"]["map"]["path"], "ab") as altered:
+            altered.write(b"altered after authentication")
+    expected_reason = {
+        "rollback": "rollback is not supported",
+        "roster": "the authenticated roster does not match the manifest slots",
+        "profile": "simulation revision does not match this Hyperion",
+        "map-hash": "map hash does not match the downloaded map",
+        "map-bytes": "map hash does not match the downloaded map",
+    }[kind]
+    negative_seat = work / "negative-seat"
+    negative_seat.mkdir(exist_ok=True)
+    negative_setup = work / "negative.json"
+    negative_setup.write_text(json.dumps(setup))
+    negative_setup.chmod(0o600)
+    process = subprocess.Popen([
+        str(hx), "--data", negative_seat, "--sb-setup", negative_setup,
+        "--sb-role", "create", "--sb-map", setup["hyperion"]["map"]["path"],
+        "--sb-name", "Negative", "--sb-speed", "6", "--sb-type", "oneVOne",
+        "--install-folder", args.game,
+    ], env={**os.environ, "HYPERION_WINDOW": "hidden", "SDL_AUDIO_DRIVER": "dummy"},
+       stdout=(work / "negative.log").open("w"), stderr=subprocess.STDOUT)
+    rejected = False
+    try:
+        deadline = time.monotonic() + max(20, args.timeout)
+        while time.monotonic() < deadline:
+            evidence = read(negative_seat / "hyperion_sb.log") + read(work / "negative.log")
+            if "the launch manifest was rejected" in evidence:
+                if expected_reason not in evidence:
+                    raise RuntimeError(f"the {kind} manifest was rejected for an unrelated reason: {evidence}")
+                rejected = True
+                break
+            if process.poll() is not None:
+                break
+            time.sleep(0.1)
+    finally:
+        stop(process)
+    if not rejected:
+        raise RuntimeError(f"the {kind} manifest was not rejected by the native parser")
+    if game_steps(negative_seat):
+        raise RuntimeError(f"the {kind} manifest reached gameplay instead of failing closed")
+    print(f"PASS: the native parser rejected the {kind} manifest before gameplay")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--game", type=Path, default=DEFAULT_GAME)
+    parser.add_argument("--engine", type=Path,
+                        help="exact Hyperion executable to test (defaults to the selected target's build output)")
     parser.add_argument("--map", dest="map_file", type=Path)
     parser.add_argument("--out", type=Path, help="keep the acceptance directory here")
+    parser.add_argument("--target", choices=("linux-x64", "windows-x64"),
+                        default="windows-x64" if os.name == "nt" else "linux-x64",
+                        help="native engine and Rally Point binaries to test")
+    parser.add_argument("--rallypoint-target", type=Path,
+                        help="prebuilt Rally Point target directory to use instead of the default build output")
+    parser.add_argument("--no-build", action="store_true",
+                        help="use the selected prebuilt Rally Point binaries without invoking Cargo")
     parser.add_argument("--steps", type=int, default=600)
     parser.add_argument("--timeout", type=int, default=75)
     parser.add_argument("--result", action="store_true",
@@ -391,21 +539,35 @@ def main():
     parser.add_argument("--drop", action="store_true",
                         help="hard-kill one seat and validate drop recovery and survivor evidence")
     parser.add_argument("--rule", type=int, choices=(1, 2), default=1,
-                        help="canonical ruleset: classic BW or Hyperion anti-meta")
+                        help="canonical ruleset: Hyperion QoL or Hyperion anti-meta")
+    parser.add_argument("--classic", action="store_true",
+                        help="use ordinary Classic rules and reject Hyperion QoL/mutator leakage")
     parser.add_argument("--team-size", type=int, choices=(1, 2, 3), default=1,
                         help="players per team: 1v1, 2v2, or 3v3")
     parser.add_argument("--random-race", action="store_true",
                         help="request random races and validate their resolved raw-result evidence")
+    parser.add_argument("--negative", choices=("rollback", "roster", "profile", "map-hash", "map-bytes"),
+                        help="require the native parser to reject one invalid manifest before gameplay")
     args = parser.parse_args()
+    if args.classic and args.rule == 2:
+        parser.error("--classic and --rule 2 select different gameplay semantics")
     if args.result and args.drop:
         parser.error("--result and --drop are separate acceptance cases")
+    if args.negative and (args.result or args.drop):
+        parser.error("--negative is a separate parser acceptance case")
     if args.drop:
+        if args.team_size != 1:
+            parser.error("--drop currently supports only 1v1")
         args.result = True
     if args.map_file is None:
         args.map_file = DEFAULT_MAPS[args.team_size]
     if args.steps < 1 or args.timeout < 1:
         parser.error("--steps and --timeout must be positive")
-    for path in [HX, args.game, args.map_file]:
+    windows = args.target == "windows-x64"
+    hx = args.engine or ENGINE / ("src117/build/x64/Hyperion.exe" if windows else "src117/build/linux-x64/Hyperion.x86_64")
+    target = args.rallypoint_target or ENGINE / ("src117/build/x64/rallypoint" if windows else "src117/build/linux-x64/rallypoint")
+    executable_suffix = ".exe" if windows else ""
+    for path in [hx, args.game, args.map_file]:
         if not path.exists():
             parser.error(f"missing {path}")
 
@@ -420,13 +582,18 @@ def main():
         notice_server.notices_lock = threading.Lock()
         notice_thread = threading.Thread(target=notice_server.serve_forever, daemon=True)
         notice_thread.start()
-        os.environ["HYPERION_CONTROL_KEY"] = "0123456789abcdef0123456789abcdef"
+    os.environ["HYPERION_CONTROL_KEY"] = "0123456789abcdef0123456789abcdef"
     try:
-        run(["cargo", "build", "-q", "--release", "-p", "rp-dev-setup", "-p", "rally-point-relay",
-             "-p", "rally-point-coordinator", "--manifest-path", str(R2 / "Cargo.toml"),
-             "--target-dir", str(TARGET)], env={**os.environ, "CARGO_NET_OFFLINE": "true"})
-        bin_dir = TARGET / "release"
-        run([str(bin_dir / "rp_dev_setup"), "gen-cert", "--cert", work / "cert.pem", "--key", work / "key.pem"])
+        if not args.no_build:
+            run(["cargo", "build", "-q", "--release", "-p", "rp-dev-setup", "-p", "rally-point-relay",
+                 "-p", "rally-point-coordinator", "--manifest-path", str(R2 / "Cargo.toml"),
+                 "--target-dir", str(target)], env={**os.environ, "CARGO_NET_OFFLINE": "true"})
+        bin_dir = target / "release"
+        for binary in ("rp_dev_setup", "rally-point-coordinator", "rally-point-relay"):
+            if not (bin_dir / f"{binary}{executable_suffix}").exists():
+                parser.error(f"missing prebuilt Rally Point binary: {bin_dir / f'{binary}{executable_suffix}'}")
+        run([str(bin_dir / f"rp_dev_setup{executable_suffix}"), "gen-cert", "--cert", work / "cert.pem",
+             "--key", work / "key.pem"])
         tenant = (work / "tenant.txt")
         run([str(bin_dir / "rp_dev_setup"), "gen-tenant"], stdout=tenant.open("w"))
         tenant_pkcs8 = tenant.read_text().splitlines()[0].strip()
@@ -477,12 +644,16 @@ def main():
             setup_path = work / f"s{seat}.json"
             setup = json.loads(setup_path.read_text())
             setup = manifest(setup, seat, game_id, seed, map_path, identity, args.rule, args.team_size,
-                             args.random_race)
+                             args.random_race, args.classic)
             setup_path.write_text(json.dumps(setup))
             setup_path.chmod(0o600)
             seats.append(seat_dir)
 
-        control_ports = tuple(free_port() for _ in range(args.team_size * 2)) if args.result else None
+        if args.negative:
+            run_negative_case(hx, work, work / "s0.json", args)
+            return 0
+
+        control_ports = tuple(free_port() for _ in range(args.team_size * 2))
         for seat, seat_dir in enumerate(seats):
             role = "create" if seat == 0 else "join"
             seat_args = [
@@ -490,12 +661,13 @@ def main():
                 "--sb-role", role, "--sb-map", seat_dir / "maps" / args.map_file.name,
                 "--sb-name", NAMES[seat], "--sb-speed", "6",
                 "--sb-type", "oneVOne" if args.team_size == 1 else "topVBottom",
+                "--record-orders=24",
                 "--install-folder", args.game,
             ]
             seat_env = {**os.environ, "HYPERION_WINDOW": "hidden", "SDL_AUDIO_DRIVER": "dummy",
                         "HYPERION_SB_EVENTS": "1"}
+            seat_args.append(f"--control={control_ports[seat]}")
             if args.result:
-                seat_args.append(f"--control={control_ports[seat]}")
                 seat_env["HYPERION_SB_RESULT_CODE"] = RESULT_CODES[seat]
             children[f"seat{seat}"] = subprocess.Popen(
                 seat_args, env=seat_env, stdout=(work / f"c{seat}.log").open("w"), stderr=subprocess.STDOUT)
@@ -504,17 +676,20 @@ def main():
         wait_for_steps(children, seats, args.steps, args.timeout)
         step_traces = [game_steps(seat) for seat in seats]
         for step in range(1, args.steps + 1):
-            if step not in step_traces[0] or step_traces[0][step] != step_traces[1].get(step):
-                raise RuntimeError(
-                    f"the seats diverged at step {step}: {step_traces[0].get(step)!r} != "
-                    f"{step_traces[1].get(step)!r}")
+            expected = step_traces[0].get(step)
+            if expected is None:
+                raise RuntimeError(f"seat 0 has no deterministic trace for step {step}")
+            for seat, trace in enumerate(step_traces[1:], start=1):
+                if trace.get(step) != expected:
+                    raise RuntimeError(
+                        f"seats 0 and {seat} diverged at step {step}: {expected!r} != {trace.get(step)!r}")
         logs = [read(seat / "hyperion_sb.log") for seat in seats]
         relay_log = read(work / "relay.log")
         if any("desync" in log.lower() or "left (reason" in log for log in logs) or "desync" in relay_log.lower():
             raise RuntimeError("a desync or unexpected departure was reported")
         if any("init data went" in log or "stat string went" in log for log in logs):
             raise RuntimeError("creator init/stat blobs were sent on the canonical lobby channel")
-        expected_roll = validate_rule_logs(seats, args.rule)
+        expected_roll = validate_rule_logs(seats, 0 if args.classic else args.rule)
         if args.drop:
             children["seat1"].kill()
             children["seat1"].wait(timeout=10)
@@ -525,24 +700,35 @@ def main():
             wait_for_notices(notice_server, args.timeout, args.team_size * 2, drop=True)
             validate_drop_notice(notice_server, game_id)
             validate_secret_free_logs(seats)
-            wait_for_game_end(seats, 1, args.timeout)
-            validate_replays(seats, args.rule, expected_roll)
+            wait_for_game_end(seats[:1], 1, args.timeout)
+            validate_lifecycle_events(seats[:1])
+            validate_replays(seats[:1], 0 if args.classic else args.rule, expected_roll)
             if "desync" in read(work / "relay.log").lower():
                 raise RuntimeError("a desync was reported during drop recovery")
             print(f"PASS: the dropped seat was evicted, the survivor passed {args.steps + 10} steps, "
                   "reported raw v2 evidence, and departed cleanly")
         elif args.result:
-            surrender_both(control_ports, seats)
+            surrender_both(control_ports, seats, args.timeout)
             wait_for_notices(notice_server, args.timeout, args.team_size * 2)
             validate_result_notices(notice_server, game_id, args.team_size, args.random_race,
                                     decisive=args.team_size == 1)
             validate_secret_free_logs(seats)
             wait_for_game_end(seats, args.team_size * 2, args.timeout)
-            validate_replays(seats, args.rule, expected_roll)
+            validate_lifecycle_events(seats)
+            validate_replays(seats, 0 if args.classic else args.rule, expected_roll)
             print(f"PASS: all {len(seats)} Zero clients read {args.steps} identical steps, reported raw v2 results, "
                   "and made clean departures")
         else:
-            print(f"PASS: all {len(seats)} Zero clients read {args.steps} steps without a desync or departure")
+            surrender_both(control_ports, seats, args.timeout)
+            wait_for_game_end(seats, len(seats), args.timeout)
+            validate_secret_free_logs(seats)
+            validate_lifecycle_events(seats)
+            validate_replays(seats, 0 if args.classic else args.rule, expected_roll)
+            print(f"PASS: all {len(seats)} Zero clients read {args.steps} identical steps, wrote valid replays, "
+                  "and departed cleanly")
+        if args.classic:
+            validate_classic_selection(hx, work, seats, args)
+            print("PASS: Classic selection allocated, removed, and reused its native pools")
         print(f"acceptance directory: {work}")
         return 0
     except Exception as error:

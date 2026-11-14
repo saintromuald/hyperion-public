@@ -31,6 +31,7 @@
 
 #![allow(non_snake_case)]
 
+mod rehome;
 mod setup;
 
 use std::ffi::{c_char, CStr};
@@ -327,7 +328,7 @@ pub unsafe extern "C" fn rp_start(setup_json: *const c_char, out: *mut *mut RpSe
                         server_name: creds.server_name,
                         relay_id: creds.relay_id,
                         identity: creds.identity,
-                        rehome: None, // v1: same-relay reconnect only, no re-home
+                        rehome: creds.rehome.map(|config| config.into_provider(relay_addr)),
                         escalate_after: None,
                         escalate_retry: None,
                         fresh_port_redials: true,

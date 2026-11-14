@@ -1610,6 +1610,18 @@ void CImage::InheritDrawInfo(CImage *pSrc)
   this->coloringData.rle.bRleWait  = pSrc->coloringData.rle.bRleWait;
 }
 
+// The generated fixed pools use the file group's 6-byte header and one 16-byte native
+// frame. Loaded GRPs use GROUP's richer native frame metadata instead; indexing these
+// fixed pools with that larger type walks into the following globals.
+static GROUP *FixedGroupAt(GROUP *pGroups, DWORD nIndex)
+{
+#if defined(_WIN64) || defined(__LP64__)
+  return reinterpret_cast<GROUP *>(reinterpret_cast<BYTE *>(pGroups) + nIndex * 0x16);
+#else
+  return &pGroups[nIndex];
+#endif
+}
+
 // Seat this image as one of the hp-bar pool's images: fixed image id, one GROUP slot per
 // bar type, palette type 0x0B, and a restarted script. SetRLE is inlined and
 // constant-folded.
@@ -1619,7 +1631,7 @@ void CImage::InitHPBar(int nBarType)
 
   // Hyperion: or the group of the same bar in the pool of Hyperion's selection (stage S)
   const bool bWide = this >= g_hxHpbarImages && this < g_hxHpbarImages + SELECTION_HPBARS_WIDE;
-  GROUP *pGroup = bWide ? &g_hxHpbarGroups[nBarType] : &sgHpbarGroups_g[nBarType];
+  GROUP *pGroup = bWide ? &g_hxHpbarGroups[nBarType] : FixedGroupAt(sgHpbarGroups_g, nBarType);
   this->pGroup  = pGroup;
   *reinterpret_cast<WORD *>(pGroup) = 1;
 
@@ -3049,13 +3061,13 @@ void CImage::InitImages()
 
   placemask_images_sgpFreeTail_g = &sgPlacemaskImages_g[0];
   placemask_images_sgpFreeHead_g = &sgPlacemaskImages_g[0];
-  init_placemask_image(&sgPlacemaskImages_g[0], &sgPlacemaskGroups_g[0]);
+  init_placemask_image(&sgPlacemaskImages_g[0], FixedGroupAt(sgPlacemaskGroups_g, 0));
     // A WORD index; a DWORD one becomes an end-pointer loop.
   for (WORD i = 1; i < 64; i++) {
     reinterpret_cast<CLink *>(&sgPlacemaskImages_g[0])->AppendLink(
         reinterpret_cast<CLink *>(&sgPlacemaskImages_g[i]),
         reinterpret_cast<CLink **>(&placemask_images_sgpFreeTail_g));
-    init_placemask_image(&sgPlacemaskImages_g[i], &sgPlacemaskGroups_g[i]);
+    init_placemask_image(&sgPlacemaskImages_g[i], FixedGroupAt(sgPlacemaskGroups_g, i));
   }
 
   images_sgpFreeTail = &sgImages[0];

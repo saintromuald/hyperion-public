@@ -188,6 +188,9 @@ mod tests {
             (0x14, 10), // Right Click
             (0x15, 11), // Targeted Order
             (0x37, 7),  // Sync (diverges from the replay-skip table, which says 1)
+            (0x38, 1),
+            (0x54, 1),
+            (0x40, 18),
             // SC:R extended-unit-id variants.
             (0x60, 12), // Right Click (extended)
             (0x61, 13), // Targeted Order (extended)
@@ -227,9 +230,7 @@ mod tests {
         // Holes inside the table, opcodes the live dispatcher rejects (0x24) or
         // that we reject (0x06/0x07 save/load), the gap above 0x66, and
         // out-of-array opcodes.
-        for op in [
-            0x00, 0x04, 0x06, 0x07, 0x16, 0x17, 0x24, 0x38, 0x40, 0x54, 0x59, 0x67, 0xFF,
-        ] {
+        for op in [0x00, 0x04, 0x06, 0x07, 0x16, 0x17, 0x24, 0x59, 0x67, 0xFF] {
             assert_eq!(command_length(&[op]), None, "opcode {op:#04x}");
             assert_eq!(classify(CommandId(op)), None, "opcode {op:#04x}");
         }
@@ -272,6 +273,13 @@ mod tests {
                     );
                 }
                 Some(CommandLength::Variable { .. }) => {
+                    assert!(
+                        command_length(&[op]).is_none(),
+                        "opcode {op:#04x} needs a count byte"
+                    );
+                    assert!(command_length(&[op, 0]).is_some(), "opcode {op:#04x}");
+                }
+                Some(CommandLength::Variable3 { .. }) => {
                     assert!(
                         command_length(&[op]).is_none(),
                         "opcode {op:#04x} needs a count byte"

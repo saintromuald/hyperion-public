@@ -31,6 +31,7 @@
 #include "../platform/port_paths.h"  // PortCommandOptions
 #include "../platform/port_util.h"  // PortNowMs
 #include "../../h/net_cmds.h"  // PlayerData
+#include "../../h/pause.h"  // get_lobby_state
 #include "../platform/port_globals117.h"  // oc_dwReplayFrame
 #include "../../gen/globals117.h"  // sgbSyncTurnEnable
 #include "../../h/Storm.h"  // SErrGetLastError
@@ -1540,7 +1541,12 @@ BOOL SbReceiveTurns(DWORD nFirst, DWORD nPlayers, const void **ppvData, DWORD *p
   for (DWORD i = 0; i < kPlayers; ++i)
     if (g_bInStep[i]) {
       auto &queue = bCanonicalLobby ? g_lobbyTurns[i] : g_slotTurns[i];
-      const bool bKeepAlive = bCanonicalLobby && i != g_bLocal && queue.empty();
+      // Native accepts the host's seed record only in lobby state 8. Keep it queued and
+      // send keepalives until then; consuming it earlier loses the only copy the provider
+      // delivers and leaves the guest waiting forever.
+      const bool bHoldSeed = bCanonicalLobby && i == 0 && i != g_bLocal && !queue.empty() &&
+                             get_lobby_state() != 8;
+      const bool bKeepAlive = bCanonicalLobby && i != g_bLocal && (queue.empty() || bHoldSeed);
       if (bKeepAlive) {
         g_turnsOut[i].assign(1, 0x05);
       } else {

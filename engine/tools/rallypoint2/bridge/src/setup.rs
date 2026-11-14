@@ -13,6 +13,8 @@ use rally_point_client::transport::rustls::RootCertStore;
 use rally_point_client::Identity;
 use serde::Deserialize;
 
+use crate::rehome::RehomeConfig;
+
 /// The JSON shape `rp_start` consumes. Field names follow ShieldBattery's
 /// `NetcodeV2ServerSetup` (app-side) so one launcher format serves both.
 #[derive(Deserialize)]
@@ -25,9 +27,18 @@ pub struct Setup {
     pub home_relay: HomeRelay,
     /// The turn-pipe depth to seed at session start (the relay's minimum).
     pub initial_buffer_turns: u32,
+    /// Public canonical game identity, absent for legacy rooms where rehome is unavailable.
+    pub hyperion: Option<HyperionIdentity>,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HyperionIdentity {
+    pub game_id: String,
+    pub local_user_id: u32,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HomeRelay {
     #[serde(default)]
@@ -50,6 +61,8 @@ pub struct Credentials {
     pub initial_buffer: u32,
     /// This client's slot, decoded from the signed token (never from the JSON).
     pub local_slot: u32,
+    /// Authenticated rehome inputs for a canonical tracked participant.
+    pub rehome: Option<RehomeConfig>,
 }
 
 impl Setup {
@@ -89,6 +102,7 @@ impl Setup {
             roots,
             initial_buffer: self.initial_buffer_turns,
             local_slot,
+            rehome: RehomeConfig::from_environment(self.hyperion.as_ref()),
         })
     }
 }
