@@ -29,6 +29,7 @@
 #endif
 #if defined(_WIN32)
 #include <intrin.h>
+#include <dxgi.h>
 #else
 #include <sys/utsname.h>
 #include <unistd.h>
@@ -288,7 +289,45 @@ std::string Symbols(void)
   }
   return "";
 }
+
+// The graphics adapters as DXGI lists them, with their driver's version, read without starting
+// a GPU driver, so a start that hangs or crashes in one still names them. Windows' own software
+// adapter is left out.
+std::string Gpus(void)
+{
+  typedef HRESULT(WINAPI * CreateFactoryFn)(REFIID, void **);
+  HMODULE hDxgi = LoadLibraryA("dxgi.dll");
+  CreateFactoryFn pfn = hDxgi != NULL ? reinterpret_cast<CreateFactoryFn>(GetProcAddress(hDxgi, "CreateDXGIFactory1")) : NULL;
+  IDXGIFactory1 *pFactory = NULL;
+  if (pfn == NULL || FAILED(pfn(__uuidof(IDXGIFactory1), reinterpret_cast<void **>(&pFactory))))
+    return "";
+  std::string s;
+  IDXGIAdapter1 *pAdapter = NULL;
+  for (UINT i = 0; pFactory->EnumAdapters1(i, &pAdapter) != DXGI_ERROR_NOT_FOUND; i++) {
+    DXGI_ADAPTER_DESC1 d;
+    if (SUCCEEDED(pAdapter->GetDesc1(&d)) && !(d.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) {
+      char szName[160] = "";
+      WideCharToMultiByte(CP_UTF8, 0, d.Description, -1, szName, sizeof szName, NULL, NULL);
+      char szDriver[48] = "";
+      LARGE_INTEGER v;
+      if (SUCCEEDED(pAdapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &v)))
+        snprintf(szDriver, sizeof szDriver, ", driver %u.%u.%u.%u", HIWORD(v.HighPart), LOWORD(v.HighPart),
+                 HIWORD(v.LowPart), LOWORD(v.LowPart));
+      char sz[320];
+      snprintf(sz, sizeof sz, "%s (%04X:%04X), %s%s", Trim(szName).c_str(), d.VendorId, d.DeviceId,
+               Gb(d.DedicatedVideoMemory).c_str(), szDriver);
+      // an adapter is listed again for each display it drives on some systems
+      if (("; " + s + "; ").find("; " + std::string(sz) + "; ") == std::string::npos)
+        s += (s.empty() ? "" : "; ") + std::string(sz);
+    }
+    pAdapter->Release();
+  }
+  pFactory->Release();
+  return s;
+}
 #else
+std::string Gpus(void) { return ""; }
+
 std::string OsName(void)
 {
   struct utsname u;
@@ -632,6 +671,9 @@ void PortSysInfoGather(bool bSdl)
   snprintf(sz, sizeof sz, "%s%s%u threads", cpu.c_str(), cpu.empty() ? "" : ", ", std::thread::hardware_concurrency());
   Set("system", "cpu", sz);
   Set("system", "memory", Memory());
+  const std::string gpus = Gpus();
+  if (!gpus.empty())
+    Set("system", "gpu", gpus);
   Set("system", "locale", Locale());
   if (bSdl) {
     const int nSdl = SDL_GetVersion();
@@ -650,6 +692,15 @@ void PortSysInfoGather(bool bSdl)
   Set("run", "working folder", PortSysInfoMask(szWork));
   Set("run", "environment", Environment());
   Set("run", "settings", Settings());
+}
+
+std::string PortSysInfoGet(const char *pszPart, const char *pszName)
+{
+  std::lock_guard<std::mutex> hold(g_lock);
+  for (const Fact &f : g_facts)
+    if (f.part == pszPart && f.name == pszName)
+      return f.value;
+  return "";
 }
 
 void PortSysInfoSet(const char *pszPart, const char *pszName, const char *pszFormat, ...)

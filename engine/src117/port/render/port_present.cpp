@@ -29,6 +29,9 @@
 #include "../platform/port_posix.h"  // PortNativePath, PortWebTurn
 #include "port_present.h"
 #include "port_hwcursor.h"
+#include <atomic>
+#include <thread>
+#include "../lan/port_instance.h"  // PortInstanceRestart
 #include "../data/port_chatfilter.h"  // PortChatFilterSet
 #include "port_view.h"
 #include "img.h"  // img_invalid
@@ -713,14 +716,123 @@ static void PresentFitView(void)
 // covering a display, where Vulkan showed them a refresh after. The GPU
 // presenter starts the GPU scene too (PortSceneDefault), which the front end's art, HD and the
 // lights draw from.
+//
+// A way of drawing whose start never comes back, a driver that hangs or crashes, is remembered in
+// presenter.txt in the data folder: each start notes the one it tries there and clears it once it
+// returns, so the next start finds a note it never cleared and leaves that one out. Each start
+// after it goes on down the list: Vulkan, Direct3D 12 (SDL_GPU's own choice off Windows), SDL's
+// renderer, its software renderer. A start that waits PRESENT_START_SECONDS on one starts Hyperion again, which then
+// leaves it out. What is left out is forgotten when the graphics adapters or their drivers
+// change, or Settings' Renderer does. A presenter named by --renderer or HYPERION_RENDERER is
+// always tried, and never restarted.
+static const int PRESENT_START_SECONDS = 20;
+
+struct PresentStartState {
+  std::string gpus, setting, trying, hung;  // hung: names, each followed by a comma
+};
+static PresentStartState g_startState;
+static std::atomic<int> g_nStartWatch;  // the try being watched, 0 none
+
+static std::string PresentStatePath(void) { return PortNativePath(PortLogFile("presenter.txt")); }
+
+static PresentStartState PresentStateRead(void)
+{
+  PresentStartState st;
+  size_t cb = 0;
+  char *p = static_cast<char *>(SDL_LoadFile(PresentStatePath().c_str(), &cb));
+  if (p == NULL)
+    return st;
+  const std::string text(p, cb);
+  SDL_free(p);
+  for (size_t at = 0; at < text.size();) {
+    size_t end = text.find('\n', at);
+    if (end == std::string::npos)
+      end = text.size();
+    std::string line = text.substr(at, end - at);
+    while (!line.empty() && line.back() == '\r')
+      line.pop_back();
+    const size_t eq = line.find('=');
+    if (eq != std::string::npos) {
+      const std::string key = line.substr(0, eq), value = line.substr(eq + 1);
+      if (key == "gpus")
+        st.gpus = value;
+      else if (key == "renderer")
+        st.setting = value;
+      else if (key == "trying")
+        st.trying = value;
+      else if (key == "hung")
+        st.hung = value;
+    }
+    at = end + 1;
+  }
+  return st;
+}
+
+static void PresentStateWrite(const PresentStartState &st)
+{
+  if (SDL_IOStream *f = SDL_IOFromFile(PresentStatePath().c_str(), "wb")) {
+    SDL_IOprintf(f, "gpus=%s\r\nrenderer=%s\r\ntrying=%s\r\nhung=%s\r\n", st.gpus.c_str(), st.setting.c_str(),
+                 st.trying.c_str(), st.hung.c_str());
+    SDL_FlushIO(f);
+    SDL_CloseIO(f);
+  }
+}
+
+static bool PresentHung(const char *pszName) { return g_startState.hung.find(std::string(pszName) + ",") != std::string::npos; }
+
+// Notes pszName as tried and, when bRestart, watches it: a try that has not come back in
+// PRESENT_START_SECONDS starts Hyperion again, which leaves it out, and ends this copy, whose
+// main thread is held in the driver.
+static void PresentTryBegin(const char *pszName, bool bNote, bool bRestart)
+{
+  if (bNote) {
+    g_startState.trying = pszName;
+    PresentStateWrite(g_startState);
+  }
+#if !defined(__EMSCRIPTEN__)
+  if (bNote && bRestart) {
+    static int s_nWatch;
+    const int nWatch = ++s_nWatch;
+    g_nStartWatch = nWatch;
+    std::string name = pszName;
+    std::thread([nWatch, name] {
+      for (int i = 0; i < PRESENT_START_SECONDS * 10; i++) {
+        SDL_Delay(100);
+        if (g_nStartWatch != nWatch)
+          return;
+      }
+      PortStartupStep("presenter", "%s has not come back in %d s; Hyperion starts again without it", name.c_str(),
+                      PRESENT_START_SECONDS);
+      if (!PortInstanceRestart())
+        return;  // left to the player, and the next start leaves it out
+      PortStartupEnded(1);
+      TerminateProcess(GetCurrentProcess(), 1);
+    }).detach();
+  }
+#endif
+  // after the watch starts, so HYPERION_TEST_STARTUP=presenter:stall stands for a driver that hangs
+  PortStartupStep("presenter", "trying %s", pszName);
+}
+
+static void PresentTryEnd(bool bNote)
+{
+  g_nStartWatch = 0;
+  if (!bNote)
+    return;
+  g_startState.trying.clear();
+  PresentStateWrite(g_startState);
+}
+
 static void PresentCreate(void)
 {
-  const char *pszRenderer = SDL_getenv("HYPERION_RENDERER");
+  const char *pszOption = PortCommandOptions()->szRenderer;
+  const char *pszRenderer = pszOption[0] != '\0' ? pszOption : SDL_getenv("HYPERION_RENDERER");
   const char *pszCheck = SDL_getenv("HYPERION_GPU_CHECK");
   const char *pszDriver = "vulkan";
   const bool bAsked = pszRenderer != NULL && pszRenderer[0] != '\0';
   bool bGpu = !bAsked;
-  char szChosen[16];
+  bool bSoftware = false;
+  char szChosen[16] = "";
   if (!bAsked && PortSettingString("hyperion", "renderer", szChosen, sizeof szChosen) &&
       SDL_strcasecmp(szChosen, "direct3d12") == 0)
     pszDriver = "direct3d12";
@@ -734,7 +846,37 @@ static void PresentCreate(void)
     } else if (SDL_strcasecmp(pszRenderer, "gpu") == 0) {
       bGpu = true;
       pszDriver = NULL;
+    } else if (SDL_strcasecmp(pszRenderer, "software") == 0) {
+      bSoftware = true;
     }
+  }
+  // what earlier starts left out, unless the presenter was named; forgotten when the adapters,
+  // their drivers or Settings' Renderer have changed since
+  const bool bNote = !bAsked;
+#if defined(__EMSCRIPTEN__) || defined(HX_DESIGN)
+  const bool bRestart = false;
+#else
+  const bool bRestart = bNote && !g_hidden;
+#endif
+  if (bNote) {
+    g_startState = PresentStateRead();
+    const std::string gpus = PortSysInfoGet("system", "gpu");
+    if (g_startState.gpus != gpus || g_startState.setting != szChosen) {
+      g_startState.hung.clear();
+      g_startState.gpus = gpus;
+      g_startState.setting = szChosen;
+    }
+    if (!g_startState.trying.empty()) {
+      PortStartupStep("presenter", "an earlier start did not come back from %s, which is left out until the graphics "
+                      "driver or Settings' Renderer changes", g_startState.trying.c_str());
+      if (!PresentHung(g_startState.trying.c_str()))
+        g_startState.hung += g_startState.trying + ",";
+      g_startState.trying.clear();
+    }
+    PresentStateWrite(g_startState);
+    if (!g_startState.hung.empty())
+      PortSysInfoSet("presenter", "left out", "%s, as an earlier start did not come back from it",
+                     g_startState.hung.substr(0, g_startState.hung.size() - 1).c_str());
   }
 #if !defined(_WIN32)
   // There is no Direct3D 12 off Windows: asked for, it means the GPU presenter on the driver
@@ -747,19 +889,60 @@ static void PresentCreate(void)
   // start-up log, with why it did not start.
   std::string tried;
   auto attempt = [&](const char *pszTry) {
-    if (PortGpuInit(g_window, pszTry, !g_hidden))
+    const char *pszName = pszTry != NULL ? pszTry : "gpu";
+    const std::string what = pszTry != NULL ? pszTry : "SDL's choice of GPU driver";
+    if (bNote && PresentHung(pszName)) {
+      PortStartupStep("presenter", "%s left out", what.c_str());
+      tried += (tried.empty() ? "" : "; ") + what + ": left out, an earlier start did not come back from it";
+      return false;
+    }
+    PresentTryBegin(pszName, bNote, bRestart);
+    const bool bOk = PortGpuInit(g_window, pszTry, !g_hidden);
+    PresentTryEnd(bNote);
+    if (bOk)
       return true;
-    const std::string line = std::string(pszTry != NULL ? pszTry : "SDL's choice of GPU driver") + ": " + PortGpuWhy();
+    const std::string line = what + ": " + PortGpuWhy();
     PortStartupStep("presenter", "%s", line.c_str());
     tried += (tried.empty() ? "" : "; ") + line;
     return false;
   };
-  if (bGpu && (attempt(pszDriver) || (!bAsked && pszDriver != NULL && attempt(NULL)))) {
+  // The second try names the other driver on Windows: SDL_GPU's own choice falls back from
+  // Direct3D 12 to Vulkan, back into a driver that just hung.
+#if defined(_WIN32)
+  const char *pszOther = pszDriver != NULL && SDL_strcasecmp(pszDriver, "vulkan") == 0 ? "direct3d12" : "vulkan";
+#else
+  const char *pszOther = NULL;
+#endif
+  if (bGpu && (attempt(pszDriver) || (!bAsked && pszDriver != NULL && attempt(pszOther)))) {
     g_gpu = true;
     PortSceneDefault();
     return;
   }
-  g_renderer = SDL_CreateRenderer(g_window, NULL);
+  // SDL's renderer on the drivers named here, as SDL's own order goes on to its Direct3D 12,
+  // Vulkan and GPU renderers, the drivers that just failed; then its software one, which needs
+  // no graphics driver. SDL_RENDER_DRIVER, when set, chooses instead.
+#if defined(_WIN32)
+  const char *pszSdl = "direct3d11,direct3d,opengl";
+#elif defined(__APPLE__)
+  const char *pszSdl = "metal,opengl";
+#else
+  const char *pszSdl = "opengl,opengles2";
+#endif
+  if (SDL_GetHint(SDL_HINT_RENDER_DRIVER) != NULL) {
+    pszSdl = NULL;
+  }
+  if (!bSoftware && !(bNote && PresentHung("sdl"))) {
+    PresentTryBegin("sdl", bNote, bRestart);
+    g_renderer = SDL_CreateRenderer(g_window, pszSdl);
+    PresentTryEnd(bNote);
+  } else if (!bSoftware) {
+    PortStartupStep("presenter", "SDL's renderer left out");
+  }
+  if (g_renderer == NULL) {
+    PresentTryBegin("software", bNote, false);
+    g_renderer = SDL_CreateRenderer(g_window, SDL_SOFTWARE_RENDERER);
+    PresentTryEnd(bNote);
+  }
   if (g_renderer == NULL)
     PresentFatal("SDL_CreateRenderer");
   PortStartupStep("presenter", "SDL's renderer, %s%s", SDL_GetRendererName(g_renderer),

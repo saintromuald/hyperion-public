@@ -89,6 +89,7 @@ struct PortOptions {
   char szLabGame[260];
   char szLabOut[260];
   char szAfter[260];  // --after <process id>: started by that copy's Restart now, it waits for it to end (port_instance.cpp)
+  char szRenderer[260];  // --renderer vulkan|direct3d12|gpu|sdl|software, as HYPERION_RENDERER (port_present.cpp)
 };
 
 // The player's data folder (port_paths.cpp): Hyperion's own, Data\ in the folder the
