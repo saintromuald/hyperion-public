@@ -71,6 +71,8 @@
 #include "../../../hyperion/version.h"  // HYPERION_VERSION_TEXT, in the AI context
 #include "../render/port_motion.h"     // map_push's way out and in
 #include "net_cmds.h"        // gameloop_init
+#include "net_mgr.h"         // net_process_game_turn, the sandbox turn's receiver
+#include "net_rand.h"        // set_rand_enabled, saved and restored around that turn
 #include "oc_data.h"
 #include "gamemap.h"        // gamemap_center_on_mtx
 #include "gds_palette.h"    // vid_palette_to_monitor
@@ -108,6 +110,7 @@
 // 0x66FD4C ghScenArchive, spelled as src117/lang/maphdr.cpp spells it: the scenario archive,
 // which a running game keeps open as its map's.
 extern HANDLE ghScenArchive;
+extern BYTE gbInPacketProcess;  // 0x672984 (net_mgr.cpp), Trainer::GiveCommands' packet gate
 #include "sai_TownBuilder.h" // GetAreaIndex
 #include "../gameplay/port_trainer.h"    // the trainer's session and keys
 #include "../data/port_moddata_push.h"  // ModDataPush, ModDataSubmissionsJson
@@ -1204,8 +1207,35 @@ void Spawn(int nClient, const std::string &id, const PortJson &j) {
                                (said.empty() ? "" : ",\"said\":[" + said + "]")));
 }
 
-// Units by their index in the table, for pathbench: where each is, its order
-// and its move target, or that it is gone.
+// A stable table index for a unit link, or -1 when the link is null or does not point into
+// the game's unit table. Unlike GetUnitID's packed id, this is the same id Units takes.
+int UnitTableId(const CUnit *pUnit) {
+  if (pUnit == NULL)
+    return -1;
+  const uintptr_t at = reinterpret_cast<uintptr_t>(pUnit);
+  const uintptr_t head = reinterpret_cast<uintptr_t>(CUnit::Head());
+  if (at < head || (at - head) % sizeof(CUnit) != 0)
+    return -1;
+  const uintptr_t id = (at - head) / sizeof(CUnit);
+  return id < static_cast<uintptr_t>(g_pools.units) ? static_cast<int>(id) : -1;
+}
+
+// The classic per-player masks, one bit for each of slots 0 to 31. Keep the two reads
+// separate: a cloaked unit can be in a player's sight without that player detecting it.
+void UnitMasks(const CUnit *pUnit, DWORD *pVisible, DWORD *pDetected) {
+  DWORD dwVisible = 0, dwDetected = 0;
+  for (int i = 0; i < PlayerSlots() && i < 32; ++i) {
+    if (pUnit->pSprite != NULL && SpriteSeenBy(pUnit->pSprite, i))
+      dwVisible |= 1u << i;
+    if (UnitDetectedBy(pUnit, i))
+      dwDetected |= 1u << i;
+  }
+  *pVisible = dwVisible;
+  *pDetected = dwDetected;
+}
+
+// Units by their index in the table, for pathbench and deterministic native tests: where
+// each is, its orders, production/combat state and per-player vision, or that it is gone.
 std::string ModUnitJson(const CUnit *pUnit);
 
 std::string Units(const PortJson &j) {
@@ -1223,12 +1253,47 @@ std::string Units(const PortJson &j) {
       s += "{\"id\":" + std::to_string(n) + ",\"alive\":false}";
       continue;
     }
-    s += "{\"id\":" + std::to_string(n) + ",\"alive\":true,\"type\":" + std::to_string(pUnit->wType) +
-         ",\"player\":" + std::to_string(pUnit->bPlayer) + ",\"x\":" + std::to_string(pUnit->wPositionX) +
+    DWORD dwVisible = 0, dwDetected = 0;
+    UnitMasks(pUnit, &dwVisible, &dwDetected);
+    std::string queue;
+    for (int q = 0; q < 5; ++q)
+      queue += (q ? "," : "") + std::to_string(pUnit->wBuildQueue[q]);
+    const WORD wBuildType = pUnit->bBuildQueueSlot < 5 ? pUnit->wBuildQueue[pUnit->bBuildQueueSlot] : 0xE4;
+    const short nSpeedX = static_cast<short>(pUnit->_unmapped_38[8] | (pUnit->_unmapped_38[9] << 8));
+    const short nSpeedY = static_cast<short>(pUnit->_unmapped_38[10] | (pUnit->_unmapped_38[11] << 8));
+    s += "{\"id\":" + std::to_string(n) + ",\"unitId\":" + std::to_string(pUnit->GetUnitID()) +
+         ",\"alive\":true,\"type\":" + std::to_string(pUnit->wType) + ",\"player\":" + std::to_string(pUnit->bPlayer) + ",\"x\":" + std::to_string(pUnit->wPositionX) +
          ",\"y\":" + std::to_string(pUnit->wPositionY) + ",\"order\":" + std::to_string(pUnit->bOrderId) +
+         ",\"orderState\":" + std::to_string(pUnit->bOrderState) +
+         ",\"orderTargetId\":" + std::to_string(UnitTableId(pUnit->pOrderTarget)) +
+         ",\"orderTarget\":[" + std::to_string(pUnit->wOrderTargetX) + "," + std::to_string(pUnit->wOrderTargetY) + "]" +
          ",\"to\":[" + std::to_string(pUnit->wMoveTargetX) + "," + std::to_string(pUnit->wMoveTargetY) + "]" +
+         ",\"moveTargetId\":" + std::to_string(UnitTableId(pUnit->_unmapped_14_width)) +
+         ",\"nextWaypoint\":[" + std::to_string(pUnit->wNextWaypointX) + "," + std::to_string(pUnit->wNextWaypointY) + "]" +
+         ",\"destination\":[" + std::to_string(pUnit->wDestinationX) + "," + std::to_string(pUnit->wDestinationY) + "]" +
          ",\"hp\":" + std::to_string(pUnit->lHitPoints >> 8) + ",\"shields\":" + std::to_string(pUnit->lShields >> 8) +
          ",\"energy\":" + std::to_string(pUnit->wEnergy >> 8) + ",\"paralyzed\":" + std::to_string(pUnit->bParalyzeTimer) +
+         ",\"groundCooldown\":" + std::to_string(pUnit->_unmapped_55[0]) +
+         ",\"airCooldown\":" + std::to_string(pUnit->_unmapped_55[1]) +
+         ",\"spellCooldown\":" + std::to_string(pUnit->bUnion57) +
+         ",\"direction\":" + std::to_string(pUnit->bDirection) +
+         ",\"currentDirection\":" + std::to_string(pUnit->bUnion21) +
+         ",\"speedX\":" + std::to_string(nSpeedX) + ",\"speedY\":" + std::to_string(nSpeedY) +
+         ",\"statusFlags\":" + std::to_string(pUnit->dwFlags) +
+         ",\"completed\":" + ((pUnit->dwFlags & 1) ? "true" : "false") +
+         ",\"previousType\":" + std::to_string(pUnit->wPrevUnitType) +
+         ",\"connectedId\":" + std::to_string(UnitTableId(pUnit->pUnion80)) +
+         ",\"currentBuildUnitId\":" +
+             std::to_string(UnitTableId(reinterpret_cast<CUnit *>(pUnit->dwUnionEC))) +
+         ",\"buildType\":" + std::to_string(wBuildType) + ",\"buildQueue\":[" + queue + "]" +
+         ",\"buildQueueSlot\":" + std::to_string(pUnit->bBuildQueueSlot) +
+         ",\"remainingBuildTime\":" + std::to_string(pUnit->wRemainingBuildTime) +
+         ",\"larvaTimer\":" + std::to_string(pUnit->_unmapped_CA[0]) +
+         ",\"creepTimer\":" + std::to_string(pUnit->_unmapped_CC[0]) +
+         ",\"carriedResource\":" + std::to_string(pUnit->bCarryResource) +
+         ",\"carriedAmount\":" + std::to_string(pUnit->_unmapped_CF) +
+         ",\"resourceAmount\":" + std::to_string(pUnit->wResourceAmount) +
+         ",\"visibleMask\":" + std::to_string(dwVisible) + ",\"detectedMask\":" + std::to_string(dwDetected) +
          ModUnitJson(pUnit) + "}";
   }
   return s + "]";
@@ -1454,8 +1519,13 @@ std::string Players() {
                                std::to_string(count_get_supplies_available(bRace, static_cast<BYTE>(i))) + "," +
                                std::to_string(glGameCounts_g[18 + 3 * bRace][i]) + "," +
                                std::to_string(glGameCounts_g[20 + 3 * bRace][i]) + "]";
+    DWORD dwAllied = 0;
+    for (int j = 0; j < PlayerSlots() && j < 32; ++j)
+      if (sgbAlliances_g[i][j] != 0)
+        dwAllied |= 1u << j;
     s += std::string(bFirst ? "" : ",") + "{\"slot\":" + std::to_string(i) + ",\"type\":" +
          std::to_string(p.nType) + ",\"race\":" + std::to_string(p.nRace) + ",\"name\":" + PortJsonQuote(szName) +
+         ",\"team\":" + std::to_string(p.nTeam) + ",\"alliedMask\":" + std::to_string(dwAllied) +
          ",\"minerals\":" + std::to_string(gPlayerMinerals[i]) + ",\"gas\":" + std::to_string(gPlayerGas[i]) +
          ",\"supply\":" + supply + ",\"tech\":[" + std::to_string(nResearched) + "," + std::to_string(nLevels) +
          "],\"start\":[" + std::to_string(pStart ? pStart[0] : 0) + "," + std::to_string(pStart ? pStart[1] : 0) +
@@ -1748,6 +1818,184 @@ void CmdClear(const Call &r) {
   // every unit of the player removed, as Remove Unit does, for pathbench: a Use
   // Map Settings game's local player then has none but the next ones made
   r.Ok("\"removed\":" + std::to_string(PortTrigRemoveAll(nPlayer)));
+}
+
+// Replay turns resolve a Storm owner through the player records, rather than
+// assuming its lobby seat is the native player id. Keep the sandbox on that same
+// mapping, but reject ambiguous aliases instead of choosing the first seat.
+bool ResolveClassicPlayer(int nSlot, DWORD *pStorm, DWORD *pNation, DWORD *pHuman) {
+  if (nSlot < 0 || nSlot >= PlayerLobbySlots() || nSlot == PLAYER_NEUTRAL)
+    return false;
+  const DWORD dwStorm = gPlayerData[nSlot].dwStormID;
+  if (dwStorm >= 8)
+    return false;
+  int nFound = -1;
+  for (int j = 0; j < PlayerLobbySlots(); ++j) {
+    if (gPlayerData[j].dwStormID != dwStorm)
+      continue;
+    if (nFound >= 0)
+      return false;
+    nFound = j;
+  }
+  if (nFound != nSlot || gPlayerData[nFound].dwPlayerID >= static_cast<DWORD>(PlayerSlots()))
+    return false;
+  *pStorm = dwStorm;
+  *pNation = gPlayerData[nFound].dwPlayerID;
+  *pHuman = gPlayerData[nFound].dwPlayerID;
+  return true;
+}
+
+// Recompute an abandoned Storm id's native entries so they cannot keep naming
+// the seat that just left it. Invalid computer ids never index these 8-entry tables.
+void RepairClassicStormMapping(DWORD dwOldStorm) {
+  if (dwOldStorm >= 8)
+    return;
+  int nOwner = -1;
+  for (int j = 0; j < PlayerLobbySlots(); ++j) {
+    if (gPlayerData[j].dwStormID != dwOldStorm)
+      continue;
+    if (nOwner >= 0) {
+      nOwner = -1;
+      break;
+    }
+    nOwner = j;
+  }
+  DWORD dwPlayer = 8;
+  if (nOwner >= 0 &&
+      (gPlayerData[nOwner].nType == 1 || gPlayerData[nOwner].nType == 2) &&
+      gPlayerData[nOwner].dwPlayerID < static_cast<DWORD>(PlayerSlots()))
+    dwPlayer = gPlayerData[nOwner].dwPlayerID;
+  g_StormToNationID[dwOldStorm] = dwPlayer;
+  g_StormToHumanID[dwOldStorm] = dwPlayer;
+}
+
+bool PrepareClassicPlayer(int nSlot, DWORD *pStorm, DWORD *pNation, DWORD *pHuman) {
+  if (nSlot < 0 || nSlot >= PlayerLobbySlots() || nSlot == PLAYER_NEUTRAL ||
+      gPlayerData[nSlot].dwPlayerID >= static_cast<DWORD>(PlayerSlots()))
+    return false;
+  auto ownerFree = [&](DWORD dwCandidate) {
+    if (dwCandidate >= 8)
+      return false;
+    for (int s = 0; s < PlayerLobbySlots(); ++s)
+      if (s != nSlot && gPlayerData[s].dwStormID == dwCandidate)
+        return false;
+    return true;
+  };
+  const DWORD dwOldStorm = gPlayerData[nSlot].dwStormID;
+  DWORD dwStorm = dwOldStorm;
+  if (!ownerFree(dwStorm)) {
+    for (DWORD candidate = 0; candidate < 8; ++candidate) {
+      if (ownerFree(candidate)) {
+        dwStorm = candidate;
+        break;
+      }
+    }
+  }
+  if (!ownerFree(dwStorm))
+    return false;
+  gPlayerData[nSlot].dwStormID = dwStorm;
+  if (dwOldStorm != dwStorm)
+    RepairClassicStormMapping(dwOldStorm);
+  if (!ResolveClassicPlayer(nSlot, pStorm, pNation, pHuman))
+    return false;
+  g_StormToNationID[dwStorm] = *pNation;
+  g_StormToHumanID[dwStorm] = *pHuman;
+  return true;
+}
+
+// Validate the whole buffer before dispatching any prefix. In particular, a
+// sandbox call is not a network turn: sync reports and session-control packets
+// have no safe context here (0x37 indexes player status by g_ActiveStormID).
+bool SandboxTurnBytes(const std::vector<unsigned char> &ab) {
+  size_t nAt = 0;
+  while (nAt < ab.size()) {
+    const unsigned char *p = ab.data() + nAt;
+    const size_t nLeft = ab.size() - nAt;
+    const unsigned char op = p[0];
+    if (op == 0x05 || op == 0x06 || op == 0x07 || op == 0x08 || op == 0x37 ||
+        op == 0x48 || op == 0x54 || op == 0x57 || op == 0x5B ||
+        (op >= 0x3C && op <= 0x44))
+      return false;
+    if (nLeft < 2 && ((op >= 0x09 && op <= 0x0B) ||
+                      (op >= 0x89 && op <= 0x8B) || op == NET_CMD_SELECT_CHUNK))
+      return false;
+    const int size = GetCommandByteSize(reinterpret_cast<const net_cmd_select_t *>(p));
+    if (size <= 0 || static_cast<size_t>(size) > nLeft)
+      return false;
+    nAt += static_cast<size_t>(size);
+  }
+  return true;
+}
+
+void CmdTurn(const Call &r) {
+  // One classic turn for deterministic native tests. The dispatcher may write its input, so
+  // give it the same mutable copy as Trainer::GiveCommands does. No frame is advanced here.
+  const PortJson &player = r.j["player"];
+  const PortJson &bytes = r.j["bytes"];
+  const int nPlayer = player.kind == PortJson::NUMBER && player.d == floor(player.d) &&
+                              player.d >= 0 && player.d < PlayerLobbySlots()
+                          ? static_cast<int>(player.d) : -1;
+  if (nPlayer < 0 || nPlayer >= PlayerLobbySlots() || nPlayer == PLAYER_NEUTRAL ||
+      (gPlayerData[nPlayer].nType != 1 && gPlayerData[nPlayer].nType != 2) ||
+      gPlayerData[nPlayer].dwPlayerID >= static_cast<DWORD>(PlayerSlots())) {
+    r.Fail("turn needs player, an occupied lobby slot of this game");
+    return;
+  }
+  if (bytes.kind != PortJson::ARRAY || bytes.items.size() > 65535) {
+    r.Fail("turn needs bytes, an array of at most 65535 integers 0-255");
+    return;
+  }
+  std::vector<unsigned char> ab;
+  ab.reserve(bytes.items.size());
+  for (const PortJson &v : bytes.items) {
+    if (v.kind != PortJson::NUMBER || v.d != floor(v.d) || v.d < 0 || v.d > 255) {
+      r.Fail("turn needs bytes, an array of at most 65535 integers 0-255");
+      return;
+    }
+    ab.push_back(static_cast<unsigned char>(v.d));
+  }
+  if (!SandboxTurnBytes(ab)) {
+    r.Fail("turn bytes must be complete in-game commands; sync and session-control packets are not accepted");
+    return;
+  }
+  DWORD dwStorm = 0, dwNation = 0, dwHuman = 0;
+  if (!PrepareClassicPlayer(nPlayer, &dwStorm, &dwNation, &dwHuman)) {
+    r.Fail("turn needs a valid player id and a unique classic Storm owner");
+    return;
+  }
+
+  const DWORD dwSavedNation = g_ActiveNationID;
+  const DWORD dwSavedHuman = g_ActiveHumanID;
+  const DWORD dwSavedStorm = g_ActiveStormID;
+  const BYTE bSavedPacket = gbInPacketProcess;
+  const int nSavedRand = set_rand_enabled(1);
+  gbInPacketProcess = 1;
+  g_ActiveNationID = dwNation;
+  g_ActiveHumanID = dwHuman;
+  g_ActiveStormID = dwStorm;
+  net_process_game_turn(reinterpret_cast<char *>(ab.data()), static_cast<unsigned>(ab.size()), 1);
+  g_ActiveNationID = dwSavedNation;
+  g_ActiveHumanID = dwSavedHuman;
+  g_ActiveStormID = dwSavedStorm;
+  gbInPacketProcess = bSavedPacket;
+  set_rand_enabled(nSavedRand);
+  g_bChanged = true;
+  r.Ok("\"frame\":" + std::to_string(oc_dwReplayFrame) + ",\"player\":" + std::to_string(nPlayer) +
+       ",\"bytes\":" + std::to_string(ab.size()));
+}
+
+void CmdPassive(const Call &r) {
+  // A deterministic test's opponent: keep the occupied seat and its units, but
+  // stop the native computer script from overwriting the orders being tested.
+  const int nPlayer = static_cast<int>(r.j["player"].Num(-1));
+  if (gwGameMode != 3 || nPlayer < 0 || nPlayer >= PlayerLobbySlots() || nPlayer == PLAYER_NEUTRAL ||
+      (gPlayerData[nPlayer].nType != 1 && gPlayerData[nPlayer].nType != 2)) {
+    r.Fail("passive needs player, an occupied lobby slot of this game");
+    return;
+  }
+  gPlayerData[nPlayer].nType = 2;
+  g_bChanged = true;
+  r.Ok("\"frame\":" + std::to_string(oc_dwReplayFrame) + ",\"player\":" + std::to_string(nPlayer));
 }
 
 void CmdUnits(const Call &r) {
@@ -2161,6 +2409,8 @@ const Command kCommands[] = {
     {"pause", NEED_SINGLE, CmdPauseStep},            // 1.17's own pause
     {"resume", NEED_SINGLE, CmdPauseStep},
     {"step", NEED_SINGLE, CmdPauseStep},             // {frames?, fast?}
+    {"turn", NEED_SINGLE, CmdTurn},                  // sandbox: {player, bytes: [...]}, one classic turn, no frame advance
+    {"passive", NEED_SINGLE, CmdPassive},            // sandbox: {player}, stop the test opponent's native AI
     {"reveal", NEED_SINGLE, CmdReveal},              // sandbox
     {"colour", NEED_GAME, CmdColour},                // {slot, rgb?}
     {"camera", NEED_GAME, CmdCamera},                // {x, y, zoom?}, in map pixels
