@@ -1,4 +1,4 @@
-"""Hyperion Shield/Zero packaging policy tests; no StarCraft data is needed."""
+"""Hyperion Shield Zero/Hyperion Zero Private packaging policy tests; no StarCraft data is needed."""
 import json
 import sys
 import tempfile
@@ -17,7 +17,7 @@ def args(edition="shield", game_files=None, channel="prerelease"):
 class PackageVariantTests(unittest.TestCase):
     def test_shield_metadata_is_public_and_carries_no_game_files(self):
         metadata = json.loads(package.edition_metadata(args(), "v1.2.3-beta", "linux-x64"))
-        self.assertEqual(metadata["product"], "Hyperion Shield")
+        self.assertEqual(metadata["product"], "Hyperion Shield Zero")
         self.assertEqual(metadata["visibility"], "public")
         self.assertEqual(metadata["channel"], "prerelease")
         self.assertFalse(metadata["gameFilesBundled"])
@@ -46,7 +46,7 @@ class PackageVariantTests(unittest.TestCase):
             package.validate_variant(zero)
 
             metadata = json.loads(package.edition_metadata(zero, "v1.2.3-beta", "windows"))
-            self.assertEqual(metadata["product"], "Hyperion Zero")
+            self.assertEqual(metadata["product"], "Hyperion Zero Private")
             self.assertEqual(metadata["visibility"], "private")
             self.assertEqual(metadata["channel"], "release")
             self.assertTrue(metadata["gameFilesBundled"])
@@ -56,16 +56,16 @@ class PackageVariantTests(unittest.TestCase):
             self.assertNotIn(str(install), {name for name, _ in entries})
 
             windows = package.zero_launcher(zero, "windows")
-            self.assertEqual(windows[0], "Play Hyperion Zero.cmd")
+            self.assertEqual(windows[0], "Play Hyperion Zero Private.cmd")
             self.assertIn(b"--install-folder", windows[1])
             self.assertIn(b"%*", windows[1])
             linux = package.zero_launcher(zero, "linux-x64", "Hyperion.x86_64")
-            self.assertEqual(linux[0], "play-hyperion-zero.sh")
+            self.assertEqual(linux[0], "play-hyperion-zero-private.sh")
             self.assertEqual(linux[2], 0o755)
             self.assertIn(b"Hyperion.x86_64", linux[1])
             self.assertIn(b'"$@"', linux[1])
             mac = package.zero_launcher(zero, "mac")
-            self.assertEqual(mac[0], "Play Hyperion Zero.command")
+            self.assertEqual(mac[0], "Play Hyperion Zero Private.command")
             self.assertIn(b"Hyperion.app/Contents/MacOS/Hyperion", mac[1])
 
 

@@ -4,6 +4,14 @@ What changed in each version of Hyperion, newest first. The game shows the same 
 Patch Notes. Versions are numbered as `docs/versioning.md` says; this page is written from
 `engine/notes/release-notes.json` by `engine/tools/release_notes.py md`.
 
+## v0.7.2-beta, 2026-11-14
+
+**Hyperion Shield Zero.** The public ShieldBattery engine package is now Hyperion Shield Zero, and the private full-install test bundle is Hyperion Zero Private.
+
+### Changed
+
+- **Package names.** Hyperion Shield is now Hyperion Shield Zero: Zero identifies where the engine runs. Hyperion Zero is now Hyperion Zero Private, making its private testing role explicit. HyperShield and the release center continue to recognize earlier public Hyperion Shield packages.
+
 ## v0.7.1-beta, 2026-10-30
 
 **Language support, mod system updates and security fixes.** Hyperion and the game in 13 languages, groundwork for mods to bring their own sounds, art and video, better help when Hyperion can't start or crashes, and security fixes.
