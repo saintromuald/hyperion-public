@@ -1,6 +1,6 @@
-# Manual public Hyperion Shield packages. Hyperion Zero has no upload workflow:
+# Manual public Hyperion Shield Zero packages. Hyperion Zero Private has no upload workflow:
 # its private full bundle is built locally with the maintainer's own game install.
-name: Hyperion Shield release
+name: Hyperion Shield Zero release
 
 on:
   workflow_dispatch:
@@ -8,11 +8,11 @@ on:
       ref:
         description: "branch, tag or commit to package"
         required: true
-        default: "release-v0.7.1"
+        default: "release-v0.7.2"
       tag:
         description: "release tag to create or update"
         required: true
-        default: "hyperion-shield-v0.7.1-beta"
+        default: "hyperion-shield-zero-v0.7.2-beta"
       channel:
         description: "publish as a prerelease for testing or a final release"
         required: true
@@ -66,8 +66,8 @@ jobs:
       - name: Upload the Windows package
         uses: actions/upload-artifact@v4
         with:
-          name: hyperion-shield-windows
-          path: engine/testrun/share/variants/**/Hyperion-Shield-*.zip
+          name: hyperion-shield-zero-windows
+          path: engine/testrun/share/variants/**/Hyperion-Shield-Zero-*.zip
           if-no-files-found: error
 
       - name: Upload the Mac build inputs
@@ -109,8 +109,8 @@ jobs:
       - name: Upload the Linux package
         uses: actions/upload-artifact@v4
         with:
-          name: hyperion-shield-linux
-          path: engine/testrun/share/variants/**/Hyperion-Shield-*.tar.gz
+          name: hyperion-shield-zero-linux
+          path: engine/testrun/share/variants/**/Hyperion-Shield-Zero-*.tar.gz
           if-no-files-found: error
 
   mac:
@@ -149,8 +149,8 @@ jobs:
       - name: Upload the Mac package
         uses: actions/upload-artifact@v4
         with:
-          name: hyperion-shield-mac
-          path: engine/testrun/share/variants/**/Hyperion-Shield-*-mac-arm64.zip
+          name: hyperion-shield-zero-mac
+          path: engine/testrun/share/variants/**/Hyperion-Shield-Zero-*-mac-arm64.zip
           if-no-files-found: error
 
   publish:
@@ -177,14 +177,14 @@ jobs:
             echo "Release $TAG already exists; choose a new version instead of replacing its assets." >&2
             exit 1
           fi
-          gh release create "$TAG" --target "${{ inputs.ref }}" --title "Hyperion Shield $TAG" \
-            --notes "Hyperion Shield, without StarCraft game files. Supply your own StarCraft: Remastered or classic Brood War install." \
+          gh release create "$TAG" --target "${{ inputs.ref }}" --title "Hyperion Shield Zero $TAG" \
+            --notes "Hyperion Shield Zero, without StarCraft game files. Supply your own StarCraft: Remastered or classic Brood War install." \
             "${prerelease[@]}"
           (
             cd packages
-            find . -type f \( -name 'Hyperion-Shield-*.zip' -o -name 'Hyperion-Shield-*.tar.gz' \) \
-              -print0 | sort -z | xargs -0 sha256sum > hyperion-shield-checksums.txt
+            find . -type f \( -name 'Hyperion-Shield-Zero-*.zip' -o -name 'Hyperion-Shield-Zero-*.tar.gz' \) \
+              -print0 | sort -z | xargs -0 sha256sum > hyperion-shield-zero-checksums.txt
           )
-          find packages -type f \( -name 'Hyperion-Shield-*.zip' -o -name 'Hyperion-Shield-*.tar.gz' \) \
+          find packages -type f \( -name 'Hyperion-Shield-Zero-*.zip' -o -name 'Hyperion-Shield-Zero-*.tar.gz' \) \
             -exec gh release upload "$TAG" {} \;
-          gh release upload "$TAG" packages/hyperion-shield-checksums.txt
+          gh release upload "$TAG" packages/hyperion-shield-zero-checksums.txt
