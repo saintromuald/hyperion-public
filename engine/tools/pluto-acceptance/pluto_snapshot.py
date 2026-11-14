@@ -589,7 +589,7 @@ def _read_manifest(snapshot: Path) -> tuple[dict, bytes]:
     return document, data
 
 
-def _content_address_error(snapshot: Path, document: dict, manifest_bytes: bytes) -> str | None:
+def _content_address_error(snapshot: Path, document: dict, manifest_bytes: bytes, allow_arbitrary_name: bool = False) -> str | None:
     # Recognize the directory shape independently of the potentially tampered manifest.
     # A restored directory may have an arbitrary new name, but a content-shaped name
     # must prove every part of that address rather than opting out on an ID mismatch.
@@ -598,6 +598,8 @@ def _content_address_error(snapshot: Path, document: dict, manifest_bytes: bytes
         snapshot.name,
     )
     if match is None:
+        if allow_arbitrary_name:
+            return None
         if snapshot.name.startswith(("candidate-", "og-")):
             return "malformed content-addressed snapshot directory name"
         return None
@@ -744,6 +746,7 @@ def verify_snapshot(
     source: Path | None = None,
     *,
     check_source: bool = True,
+    allow_arbitrary_name: bool = False,
 ) -> dict:
     snapshot = _absolute(snapshot)
     result = {
@@ -766,7 +769,7 @@ def verify_snapshot(
     result["errors"].extend(schema_errors)
     if schema_errors:
         return result
-    address_error = _content_address_error(snapshot, document, manifest_bytes)
+    address_error = _content_address_error(snapshot, document, manifest_bytes, allow_arbitrary_name)
     if address_error:
         result["errors"].append(address_error)
     result["checks"]["content_address_checked"] = address_error is None and re.fullmatch(
@@ -1114,7 +1117,7 @@ def restore_snapshot(snapshot: Path, destination: Path) -> dict:
         _materialize_entry(entry, destination, source=snapshot / entry["path"])
     _copy_regular(snapshot / "manifest.json", destination / "manifest.json", manifest_digest, 0o600)
     write_bytes_atomic_new(destination / "RECOVERY.md", _recovery_notes(document, snapshot, manifest_digest))
-    verification = verify_snapshot(destination, allow_missing_source=True, check_source=False)
+    verification = verify_snapshot(destination, allow_missing_source=True, check_source=False, allow_arbitrary_name=True)
     if not verification["valid"]:
         raise SnapshotError("restored payload failed verification: " + "; ".join(verification["errors"]))
     return {
@@ -1272,6 +1275,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--snapshot", type=_path, required=True)
     verify.add_argument("--source", type=_path, help="optional source worktree override for commit/tree verification")
     verify.add_argument("--allow-missing-source", action="store_true", help="allow an existing source directory without Git metadata")
+    verify.add_argument("--allow-arbitrary-name", action="store_true", help="allow an arbitrary restored directory name; original snapshot names remain fully checked")
     verify.add_argument("--json", action="store_true")
     verify.set_defaults(handler=_verify_command)
 
@@ -1312,7 +1316,7 @@ def _snapshot_command(args) -> int:
 
 
 def _verify_command(args) -> int:
-    result = verify_snapshot(args.snapshot, args.allow_missing_source, args.source)
+    result = verify_snapshot(args.snapshot, args.allow_missing_source, args.source, allow_arbitrary_name=args.allow_arbitrary_name)
     lines = ["snapshot: %s" % result["snapshot"], "valid: %s" % str(result["valid"]).lower()]
     lines += ["error: " + item for item in result["errors"]]
     lines += ["warning: " + item for item in result["warnings"]]

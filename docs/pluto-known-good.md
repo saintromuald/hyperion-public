@@ -117,6 +117,8 @@ python3 pluto_snapshot.py verify \
   --json
 ```
 
+Use `--allow-arbitrary-name` when verifying a restored directory with a custom name (including a name beginning with `og-` or `candidate-`). This does not waive content-address checks on an original snapshot: its ID, designation, and actual manifest hash must still match its content-addressed name. Arbitrary restored names are the only exception.
+
 Use `--source /path/to/another/worktree` to check the recorded commit/tree at another local checkout. For an intentionally non-Git source directory, add:
 
 ```bash

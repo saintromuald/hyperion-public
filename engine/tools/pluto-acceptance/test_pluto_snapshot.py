@@ -234,6 +234,20 @@ class SnapshotTests(unittest.TestCase):
         with self.assertRaises(ps.SnapshotError):
             ps.forward_port(snapshot, snapshot, "0" * 40)
 
+    def test_restore_allows_og_prefixed_destination_without_weakening_content_address(self):
+        snapshot, _ = self.make_snapshot(confirmed=True, confirmation=ps.OG_CONFIRMATION)
+        destination = self.root / "og-recovery"
+        restored = ps.restore_snapshot(snapshot, destination)
+        self.assertTrue(restored["verified"])
+        self.assertFalse(ps.verify_snapshot(destination, allow_missing_source=True)["valid"])
+        self.assertTrue(ps.verify_snapshot(destination, allow_missing_source=True, allow_arbitrary_name=True)["valid"])
+
+        manifest_path = snapshot / "manifest.json"
+        document = ps.read_json(manifest_path)
+        document["snapshot_id"] = "20990101T000000Z-000000000000"
+        manifest_path.write_bytes(ps.json_bytes(document))
+        self.assertFalse(ps.verify_snapshot(snapshot, allow_missing_source=True)["valid"])
+
     def test_symlinks_roundtrip_as_links_and_target_tamper_is_detected(self):
         (self.source / "real.cpp").write_bytes(b"real synthetic bytes")
         os.symlink("real.cpp", self.source / "link.cpp")
