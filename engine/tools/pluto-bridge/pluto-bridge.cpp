@@ -1385,6 +1385,16 @@ static DWORD WINAPI ServePipe(LPVOID p) {
   HANDLE hPipe = static_cast<HANDLE>(p);
   const bool debug = getenv("HX_DEBUG") != NULL;
   s_pipe = hPipe;
+  if (getenv("HX_TEST_FINALIZE_DELAY_MS") != NULL) {
+    // Deterministic finalization regression: delay this worker's exit past the
+    // first 3s join, but let the 1s cancellation retry finish. Deployment never
+    // sets this hook, so normal pipe behavior is unchanged.
+    const DWORD delayMs = static_cast<DWORD>(atoi(getenv("HX_TEST_FINALIZE_DELAY_MS")));
+    StateGuard guard;
+    while (!s_finalizing && !s_shutdown)
+      SleepConditionVariableCS(&g_stateChanged, &g_stateLock, INFINITE);
+    Sleep(delayMs);
+  }
   {
     StateGuard guard;
     // The initial raw GameImpl must remain alive through onMatchStart and
@@ -1524,7 +1534,10 @@ static void FinalizePipe(bool &runtimeFailed) {
 
   DWORD joined = s_pipeThread != NULL ? WaitForSingleObject(s_pipeThread, 3000) : WAIT_OBJECT_0;
   if (joined != WAIT_OBJECT_0) {
-    runtimeFailed = true;
+    // The pre-I/O check and the blocking call are not atomic. Cancellation can
+    // land between them, so the first timeout may precede the operation that
+    // needs cancelling. Retry once, but do not call the run failed unless the
+    // final join or another committed final status also fails.
     if (s_pipe != NULL)
       CancelIoEx(s_pipe, NULL);
     joined = s_pipeThread != NULL ? WaitForSingleObject(s_pipeThread, 1000) : WAIT_OBJECT_0;

@@ -184,6 +184,7 @@ class EngineSession:
         })
         command = [
             str(self.engine),
+            "--mod=bw",
             f"--data={self.data}",
             f"--map={map_path}",
             "--ums",

@@ -295,6 +295,7 @@ BWRL: own_race=0 opp_idx=1 opp="Bravo" -> BO 9PoolSpeed (mask=0x20000, 22 arms)
             "Pluto: emitted 0 received 1 dispatched 3 received_bytes 2 accepted_bytes 2\n"
         )
         self.infer_log = "[pluto_infer] ready: model v2.0 md09b_1331000, frames_per_step 6\n"
+        self.bridge_log = "[bridge] done (clean EOF)\n"
         self.replies = (
             b"foreign bytes before the current run\n"
             + make_reply(0, b"\x1a\x00")
@@ -314,10 +315,13 @@ BWRL: own_race=0 opp_idx=1 opp="Bravo" -> BO 9PoolSpeed (mask=0x20000, 22 arms)
         (self.game_dir / "hyperion_pluto.log").write_text(self.hyperion_log, encoding="utf-8")
         (self.game_dir / "pluto_infer.log").write_text(self.infer_log, encoding="utf-8")
         (self.game_dir / "engine.log").write_text("synthetic engine log\n", encoding="utf-8")
+        (self.game_dir / "bridge.log").write_text(self.bridge_log, encoding="utf-8")
 
     def artifacts(self):
         names = pa.REQUIRED_RUN_ARTIFACTS + pa.REQUIRED_GLOBAL_ARTIFACTS + ("engine.log",)
-        return {name: {"required": True, "exists": True, "fresh": True, "sha256": "0" * 64} for name in names}
+        records = {name: {"required": True, "exists": True, "fresh": True, "sha256": "0" * 64} for name in names}
+        records["bridge.log"] = {"required": False, "exists": True, "fresh": True, "sha256": "0" * 64}
+        return records
 
     def validate(self):
         self.write()
@@ -406,6 +410,49 @@ class AcceptanceClassificationTests(unittest.TestCase):
             with self.subTest(execution=execution):
                 outcome, _, _ = pa.classify_outcome(self.game.spec, execution, validation)
                 self.assertEqual(outcome, "incomplete")
+
+    def test_bridge_failed_finalization_is_incomplete_even_with_win_summary(self):
+        self.game.bridge_log = "[bridge] done (failed)\n"
+        outcome, reasons, evidence = self.game.classify()
+        self.assertEqual(outcome, "incomplete", reasons)
+        self.assertTrue(any("finalize" in reason for reason in reasons))
+        self.assertTrue(evidence["bridge_finalization"]["failed"])
+
+        self.game.bridge_log = "[bridge] done (clean EOF)\n"
+        outcome, reasons, _ = self.game.classify()
+        self.assertEqual(outcome, "win", reasons)
+
+    def test_stale_bridge_finalization_is_not_current_run_evidence(self):
+        artifacts = self.game.artifacts()
+        artifacts["bridge.log"]["fresh"] = False
+        self.game.write()
+        validation = pa.validate_actual_game(self.game.spec, self.game.game_dir, artifacts)
+        outcome, reasons, evidence = pa.classify_outcome(
+            self.game.spec,
+            {"return_code": 0, "timed_out": False, "launch_error": None},
+            validation,
+        )
+        self.assertEqual(outcome, "incomplete", reasons)
+        self.assertFalse(evidence["bridge_finalization"]["fresh"])
+
+    def test_missing_bridge_finalization_status_is_incomplete(self):
+        self.game.bridge_log = "[bridge] stdin closed after 10 frames\n"
+        outcome, reasons, evidence = self.game.classify()
+        self.assertEqual(outcome, "incomplete", reasons)
+        self.assertFalse(evidence["bridge_finalization"]["recorded"])
+
+        (self.game.game_dir / "bridge.log").unlink()
+        artifacts = self.game.artifacts()
+        artifacts["bridge.log"]["exists"] = False
+        self.game.write()
+        validation = pa.validate_actual_game(self.game.spec, self.game.game_dir, artifacts)
+        outcome, reasons, evidence = pa.classify_outcome(
+            self.game.spec,
+            {"return_code": 0, "timed_out": False, "launch_error": None},
+            validation,
+        )
+        self.assertEqual(outcome, "incomplete", reasons)
+        self.assertFalse(evidence["bridge_finalization"]["present"])
 
     def test_summary_race_mismatch_is_misconfigured(self):
         self.game.summary["players"][1]["race"] = 2

@@ -90,3 +90,10 @@ pointer/hangar/cargo union arms, minitiles, or unit-search arrays. Existing
 ordinary-melee availability/max defaults remain in force. Generic BWAPI
 minitile/unit-search APIs remain incomplete for other clients even though the
 official policy does not consume them.
+
+## Delayed finalization regression
+
+`./delayed-finalization.sh` runs the official HXP4 replay with a 3.5-second
+pipe-worker delay. The first 3-second join times out, but the cancellation retry
+must finish with `[bridge] done (clean EOF)`. This covers the finalization race
+without changing deployment behavior or accepting a missing terminal status.

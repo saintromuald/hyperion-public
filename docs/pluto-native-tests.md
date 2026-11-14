@@ -2,8 +2,9 @@
 
 `engine/tools/pluto-native-tests` tests Hyperion directly. It does **not** start Pluto,
 `pluto-bridge`, an inference process, or a match. The only process an engine scenario
-starts is the explicitly named Hyperion executable, with `--ums`, a fixed seed, a generated
-HXM map, a hidden window, and a fresh local control port.
+starts is the explicitly named Hyperion executable, with `--mod=bw`, `--ums`, a fixed seed,
+a generated HXM map, a hidden window, and a fresh local control port. The explicit mod keeps
+the caller's default mod/rules from changing these classic deterministic contracts.
 
 ## Run
 

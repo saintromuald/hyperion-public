@@ -1,5 +1,16 @@
 # Pluto/Hyperion fidelity status — 2026-11-07
 
+## 2026-11-14 recovery candidate
+
+- Reproduced the release regression: the HXP4-producing client was paired with the old patched-DLL bridge. HXPM did not start, the bridge faulted before `onStart`, and PLuto produced zero units in the 120-frame baseline.
+- Restored the complete official-DLL/HXP4 bridge and test stack into the isolated release worktree while preserving release-specific control commands and the Windows compile compatibility path. Prerelease retained its strong implementation and received the targeted finalization/recovery fixes rather than a rollback.
+- Fixed shutdown ordering: Hyperion now closes input, allows the final reply and inference finalization, then closes the reply pipe. The pipe finalization retry no longer fails solely on its first timeout. Both branches pass a delayed-finalization regression with `[bridge] done (clean EOF)`.
+- Fresh acceptance now requires a fresh clean bridge-finalization record; stale, missing, truncated, and failed statuses are incomplete. Snapshot verification also rejects manifest ID/designation edits that attempt to bypass its content address.
+- Current verification: all general tests, 33/33 native scenarios, 106 differential tests, 60 acceptance tests, and 19 snapshot tests pass. Host, lifecycle, metadata, late-state, and delayed-finalization checks pass.
+- Exact final release natural match: PLuto Zerg defeated Cheater: insane Terran on Bottleneck, 11,736 frames, 70 survivors, 85 produced, 46 kills, opponent zero. The strict acceptance verdict is `win` with no validation errors; bridge and inference shut down cleanly. Evidence is preserved under `/home/saintbellarmine/Games/pluto-recovery/final-natural-release`.
+- Prerelease's independent natural match also won: 19,320 frames, 108 survivors, 147 produced, 89 kills, opponent zero, with clean bridge and inference shutdown. Evidence is under `/home/saintbellarmine/Games/pluto-recovery/natural-prerelease`.
+- These are recovery-candidate results, not a completed 30-game acceptance series, not native Windows runtime support, and not a user-confirmed OG designation. OG tagging still requires the user's explicit confirmation that Pluto AI is properly working.
+
 This page separates evidence from unresolved acceptance work. It is not a claim
 that Pluto is fully replicated or that Phase 5 is complete.
 

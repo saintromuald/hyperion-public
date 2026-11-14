@@ -159,6 +159,8 @@ Every performance-accepted win/loss/draw requires `application_established`: at 
 
 **Coverage limitation:** `frames.bin` is a bounded prefix capture. Contiguous replies, summary/log evidence, and prefix cross-checks are retained, but the runner does not claim byte-level proof of a reply for every later match frame. `reply_evidence.coverage.full_match_terminal_coverage_proven` is therefore explicitly false.
 
+Current-run acceptance requires a **fresh** `[bridge] done (clean EOF)` record. A recorded `[bridge] done (failed)`, a stale clean or failed record, a missing log, an empty/truncated log, or a log with no recognized terminal status makes the game **incomplete**, even when the engine exits cleanly and the summary otherwise supports a win. Text from an older run is never treated as current-run finalization evidence.
+
 A **win** requires all of the following:
 
 - clean engine exit and valid actual configuration;
@@ -188,11 +190,76 @@ Each `game-NN/` retains, when produced:
 
 Process status distinguishes observation from acceptance. A complete targetless observation exits 0 with `acceptance_passed: null`; this is not a numeric pass claim. An explicitly set target exits 0 only when it evaluates true, and exits 1 when it evaluates false. Aborted, incomplete, misconfigured, not-run, or otherwise not-evaluable series exit 2. `observation_complete`, `acceptance_passed`, and `target_evaluation.status` preserve those distinctions in JSON and the report.
 
+## Known-good snapshot tooling
+
+`pluto_snapshot.py` is a separate standard-library tool for preserving, verifying, restoring, and planning the forward-port of an explicitly scoped Pluto known-good state. It does not run the acceptance series, build anything, launch games/Wine/inference, create Git tags, or alter Git refs. See [`docs/pluto-known-good.md`](../../../docs/pluto-known-good.md) for the schema, trust boundary, complete options, and limitations.
+
+**OG status warning:** this tool does not mark the current Pluto installation as OG. Repository/Git OG tags and the human user-confirmation decision are a later, separate step. A candidate is never promoted or edited in place. Only after that separate review may a **new** snapshot use `--user-confirmed` together with `--confirmation` text containing the exact phrase `Pluto AI is properly working`.
+
+Create a candidate on a durable, private local root (all paths and metadata below are placeholders, not a request to snapshot the current installation):
+
+```bash
+cd engine/tools/pluto-acceptance
+python3 pluto_snapshot.py snapshot \
+  --root /durable/private/pluto-snapshots \
+  --source /path/to/reviewed-source-worktree \
+  --source-file engine/src/Pluto/pluto.cpp \
+  --source-file engine/src/Pluto/pluto.h \
+  --engine /path/to/runtime/Hyperion.x86_64 \
+  --sdl /path/to/runtime/libSDL2-2.0.so.0 \
+  --bridge /path/to/runtime/pluto-bridge.exe \
+  --official-dll /path/to/official/pluto.dll \
+  --inference /path/to/runtime/pluto_infer.exe \
+  --weights /path/to/runtime/pluto_weights.bin \
+  --bandit-before /path/to/evidence/bandit-before.txt \
+  --bandit-after /path/to/evidence/bandit-after.txt \
+  --evidence /path/to/reviewed-acceptance-output \
+  --protocol 'HXP4/HXRP; native in-game command dispatch' \
+  --timing '{"receipt_frames_after_emit":1,"dispatch_frames_after_emit":3}' \
+  --map '(2)ReviewedMap.scx' \
+  --settings '{"players":2,"game_type":"melee","frame_cap":30000}' \
+  --seed 730000 \
+  --limitation 'Compatibility is limited to the retained evidence.' \
+  --json
+```
+
+Repeat source files, maps, seeds, evidence, and limitations as needed. Optional build/toolchain/Wine/BWAPI/shim provenance can be supplied but is not invented. A non-Git source directory requires the explicit `--allow-missing-source` option. Source/runtime inputs inside the destination are rejected. Originals are never moved or deleted; links remain links. Proprietary files stay local and must never be uploaded. A temporary directory is never considered the only durable copy.
+
+Verify (exit 1 reports integrity/schema/source mismatches; exit 2 reports operational/usage failures):
+
+```bash
+python3 pluto_snapshot.py verify \
+  --snapshot /durable/private/pluto-snapshots/candidate-YYYYMMDDTHHMMSSZ-UNIQUE_ID-FULL_MANIFEST_SHA256 \
+  --json
+```
+
+Restore only to an entirely new path (even an existing empty destination is refused):
+
+```bash
+python3 pluto_snapshot.py restore \
+  --snapshot /durable/private/pluto-snapshots/candidate-YYYYMMDDTHHMMSSZ-UNIQUE_ID-FULL_MANIFEST_SHA256 \
+  --destination /durable/private/recoveries/pluto-NEW-UNIQUE \
+  --json
+```
+
+After the separate OG review/confirmation step, a read-only forward-port plan is available. It reports changed/missing/conflicting scoped paths and only **prints** commands containing new-worktree placeholders; it performs no cherry-pick, merge, checkout, worktree creation, source edit, build, or test. Compatibility remains unproven even when all hashes match.
+
+```bash
+python3 pluto_snapshot.py forward-port \
+  --snapshot /durable/private/pluto-snapshots/og-YYYYMMDDTHHMMSSZ-UNIQUE_ID-FULL_MANIFEST_SHA256 \
+  --repo /path/to/current-hyperion-worktree \
+  --base-commit FULL_REVIEWED_BASE_COMMIT \
+  --json
+```
+
 ## Tests
 
 ```bash
 cd engine/tools/pluto-acceptance
+python3 -m unittest -v test_pluto_snapshot.py
 python3 -m unittest -v test_pluto_acceptance.py
 ```
 
-The suite uses an explicit reviewed synthetic map manifest, strict binary HXP/HXRP fixtures, summaries, logs, bandits, and mocked game execution. It tests valid win/loss/draw acceptance, false-win and garbage-reply rejection, expected-frame/current-run coverage, command-application corroboration, actual PLuto slot identity, race/config rejection, immutable targets, all critical binary/map rechecks, exit-code honesty, clean bandit validation and continuity, timeout cleanup, environment sanitization, aggregate honesty, and dry-run's no-game-`Popen` guarantee. A separate short-lived Python child performs real `fcntl` lock contention/release in a temporary directory. The suite does not launch matches or inference.
+The snapshot suite uses only temporary directories, tiny synthetic files, and synthetic temporary Git repositories. It covers snapshot/verify/restore round trips, tamper detection, path traversal and symlink handling, destination/snapshot refusal, OG confirmation gating, source commit/tree changes, dirty/missing/conflicting forward-port comparisons, and non-mutation of originals. It never uses real Pluto assets or launches a build, game, Wine, or inference.
+
+The acceptance suite uses an explicit reviewed synthetic map manifest, strict binary HXP/HXRP fixtures, summaries, logs, bandits, and mocked game execution. It tests valid win/loss/draw acceptance, false-win and garbage-reply rejection, expected-frame/current-run coverage, command-application corroboration, actual PLuto slot identity, race/config rejection, immutable targets, all critical binary/map rechecks, exit-code honesty, clean bandit validation and continuity, timeout cleanup, environment sanitization, aggregate honesty, and dry-run's no-game-`Popen` guarantee. A separate short-lived Python child performs real `fcntl` lock contention/release in a temporary directory. The suite does not launch matches or inference.

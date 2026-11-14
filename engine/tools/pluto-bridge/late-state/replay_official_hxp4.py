@@ -24,7 +24,7 @@ if any(frame.protocol != "HXP4" for frame in frames):
     raise RuntimeError("mixed/non-HXP4 long replay")
 
 env = os.environ.copy()
-env["WINEPREFIX"] = str(ROOT / "prefix")
+env["WINEPREFIX"] = os.environ.get("WINEPREFIX", str(ROOT / "prefix"))
 env["WINEDEBUG"] = "-all"
 env["HX_DEBUG"] = "1"
 process = subprocess.Popen(

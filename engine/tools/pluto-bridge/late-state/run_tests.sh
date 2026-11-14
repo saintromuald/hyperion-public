@@ -1,9 +1,10 @@
 #!/bin/sh
 # Host-only HXP4 tests. No official DLL, Wine process, game, or inference is launched.
 set -eu
-cd "$(dirname "$0")"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$SCRIPT_DIR"
 
-REPO=$(CDPATH= cd -- "$(dirname "$0")/../../../.." && pwd)
+REPO=$(CDPATH= cd -- "$SCRIPT_DIR/../../../.." && pwd)
 OUT=${OUT:-/tmp/opencode/pluto-late-state-tests}
 PLUTO_DLL=${PLUTO_DLL:-$REPO/engine/tools/pluto-bridge/pluto.dll}
 VERIFY_PE=${VERIFY_PE:-$REPO/engine/tools/pluto-bridge/verify_pe.py}

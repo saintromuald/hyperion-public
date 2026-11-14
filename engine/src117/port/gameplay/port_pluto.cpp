@@ -973,17 +973,23 @@ void PlutoGameEnd() {
     CloseHandle(s_hToBridge);
     s_hToBridge = NULL;
   }
-  if (s_hFromBridge != NULL) {
-    CloseHandle(s_hFromBridge);
-    s_hFromBridge = NULL;
-  }
   if (s_hProc != NULL) {
-    if (WaitForSingleObject(s_hProc, 3000) == WAIT_TIMEOUT) {
+    // FinalizePipe alone may wait 3s plus a 1s retry, and the DLL/inference
+    // still needs its result and shutdown grace after that. Do not hard-kill at
+    // the bridge's own first finalization boundary.
+    if (WaitForSingleObject(s_hProc, 10000) == WAIT_TIMEOUT) {
       TerminateProcess(s_hProc, 0);  // only when the clean exit does not come
       Log("Pluto: the bridge was forced closed");
     }
     CloseHandle(s_hProc);
     s_hProc = NULL;
+  }
+  // Keep the reply side open until the bridge has flushed its final HXRP and
+  // exited. Closing it with the input made every otherwise-clean shutdown fail
+  // its final reply write.
+  if (s_hFromBridge != NULL) {
+    CloseHandle(s_hFromBridge);
+    s_hFromBridge = NULL;
   }
   s_bUp = false;
   Log("Pluto: the bridge closed");

@@ -1771,6 +1771,15 @@ def validate_actual_game(spec: GameSpec, game_dir: Path, artifacts: dict) -> dic
             errors.append("HXRP current run extends beyond summary end_frame")
     reply_evidence["coverage"] = coverage
     application = command_application_evidence(reply_records, hyperion_text, summary)
+    bridge_artifact = artifacts.get("bridge.log", {})
+    bridge_text = _read_artifact_text(game_dir, "bridge.log")
+    bridge_finalization = {
+        "present": bool(bridge_artifact.get("exists")),
+        "fresh": bool(bridge_artifact.get("fresh")),
+        "recorded": "[bridge] done (" in bridge_text,
+        "failed": "[bridge] done (failed)" in bridge_text,
+        "clean": "[bridge] done (clean EOF)" in bridge_text,
+    }
 
     return {
         "valid": not errors,
@@ -1787,6 +1796,7 @@ def validate_actual_game(spec: GameSpec, game_dir: Path, artifacts: dict) -> dic
         "reply_evidence": reply_evidence,
         "frame_evidence": frame_evidence,
         "command_application": application,
+        "bridge_finalization": bridge_finalization,
     }
 
 
@@ -1827,6 +1837,11 @@ def classify_outcome(spec: GameSpec, execution: dict, validation: dict) -> tuple
         return "incomplete", ["Hyperion did not exit cleanly: %s" % execution.get("return_code")], {}
     if not isinstance(validation.get("summary"), dict):
         return "incomplete", ["missing or invalid summary.json"], {}
+    finalization = validation.get("bridge_finalization") or {}
+    if finalization.get("failed"):
+        return "incomplete", ["Pluto bridge did not finalize cleanly"], {"bridge_finalization": finalization}
+    if not finalization.get("fresh") or not finalization.get("clean"):
+        return "incomplete", ["Pluto bridge has no fresh clean finalization record"], {"bridge_finalization": finalization}
     if not validation.get("valid"):
         return "misconfigured", list(validation.get("errors", [])), {}
     application = validation.get("command_application") or {}
