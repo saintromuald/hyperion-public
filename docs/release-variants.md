@@ -1,12 +1,15 @@
-# Hyperion Zero and Hyperion Shield releases
+# Hyperion Zero Private and Hyperion Shield Zero releases
 
 Hyperion has two package variants. They use the same engine build and the same
 `engine/tools/package.py`; the difference is what may be distributed with it.
 
 | Variant | Audience | Game data | Publishing |
 | --- | --- | --- | --- |
-| **Hyperion Zero** | Private testing | A complete, maintainer-supplied StarCraft: Remastered install under `Game/` | Never upload publicly. Build and share only through an authorized private channel. |
-| **Hyperion Shield** | Public | None. The player supplies Remastered or classic Brood War files. | The manual `Hyperion Shield release` workflow creates a prerelease or final release. |
+| **Hyperion Zero Private** | Private testing | A complete, maintainer-supplied StarCraft: Remastered install under `Game/` | Never upload publicly. Build and share only through an authorized private channel. |
+| **Hyperion Shield Zero** | Public | None. The player supplies Remastered or classic Brood War files. | The manual `Hyperion Shield Zero release` workflow creates a prerelease or final release. |
+
+Hyperion Shield Zero is the engine package HyperShield bundles and launches; Zero identifies
+where the engine runs. Hyperion Zero Private is the separate maintainer-only test bundle.
 
 Both packages contain `release.json` and `EDITION.txt`, recording the product,
 version, `prerelease` or `release` channel, visibility, platform, and whether game
@@ -56,18 +59,18 @@ The source install needs a `Data` directory and at least one file. Its contents
 are copied recursively under `Game/`; local source paths are not written into the
 archive or metadata. Use the platform's launcher after extraction:
 
-- Windows: `Play Hyperion Zero.cmd`
-- Linux: `./play-hyperion-zero.sh`
-- Mac: `./Play Hyperion Zero.command`
+- Windows: `Play Hyperion Zero Private.cmd`
+- Linux: `./play-hyperion-zero-private.sh`
+- Mac: `./Play Hyperion Zero Private.command`
 
 For a non-GUI check on Linux:
 
 ```sh
-./play-hyperion-zero.sh --mod-check bw
+./play-hyperion-zero-private.sh --mod-check bw
 ```
 
-Do not attach Zero to a GitHub release, an issue, a public artifact, or a shared
-scratch directory. There is deliberately no Zero upload workflow.
+Do not attach Hyperion Zero Private to a GitHub release, an issue, a public artifact, or a shared
+scratch directory. There is deliberately no Hyperion Zero Private upload workflow.
 
 ## Canonical ladder rules and team sizes
 
@@ -130,7 +133,7 @@ map hashes/bytes through the native fail-closed parser.
 
 ## Prerelease, then release
 
-Run **Hyperion Shield release** manually with the ref, tag, and `prerelease`
+Run **Hyperion Shield Zero release** manually with the ref, tag, and `prerelease`
 channel. It packages Windows, Linux, and macOS, then creates or updates a public
 prerelease. Test those exact packages before promoting them. The Mac build-input
 archive is only a workflow artifact; it is not attached to the release.
@@ -138,7 +141,7 @@ archive is only a workflow artifact; it is not attached to the release.
 To promote the same release after testing:
 
 ```sh
-gh release edit hyperion-shield-vX.Y.Z-beta --prerelease=false
+gh release edit hyperion-shield-zero-vX.Y.Z-beta --prerelease=false
 ```
 
 For a final release built from another ref, run the workflow with the `release`

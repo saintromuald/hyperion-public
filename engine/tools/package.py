@@ -1,10 +1,10 @@
-"""Package Hyperion Shield (public, no game files) or Hyperion Zero (private, full
+"""Package Hyperion Shield Zero (public, no game files) or Hyperion Zero Private (private, full
 Remastered install): one archive a player unpacks into a folder of its own, anywhere,
 test maps included.
 
-    python tools/package.py                packages the last build as Hyperion Shield
+    python tools/package.py                packages the last build as Hyperion Shield Zero
     python tools/package.py --edition zero --game-files "D:\\Games\\StarCraft"
-                                           packages a private Hyperion Zero with that install
+                                           packages a private Hyperion Zero Private with that install
 
     python tools/package.py                packages the last build
     python tools/package.py --build        build Hyperion.exe first
@@ -547,14 +547,14 @@ def version() -> str:
 
 
 def edition_prefix(args) -> str:
-    return "Hyperion-Zero" if args.edition == "zero" else "Hyperion-Shield"
+    return "Hyperion-Zero-Private" if args.edition == "zero" else "Hyperion-Shield-Zero"
 
 
 def edition_metadata(args, ver: str, platform: str) -> bytes:
     """The machine-readable identity of a release variant, with no source paths."""
     zero = args.edition == "zero"
     return lf(json.dumps({
-        "product": "Hyperion Zero" if zero else "Hyperion Shield",
+        "product": "Hyperion Zero Private" if zero else "Hyperion Shield Zero",
         "version": ver,
         "channel": args.channel,
         "visibility": "private" if zero else "public",
@@ -565,15 +565,15 @@ def edition_metadata(args, ver: str, platform: str) -> bytes:
 
 def edition_text(args) -> bytes:
     if args.edition == "zero":
-        return crlf("""Hyperion Zero — private full test bundle
+        return crlf("""Hyperion Zero Private — private full test bundle
 
 This package includes a maintainer-supplied StarCraft: Remastered install under Game/.
-Use the included Play Hyperion Zero launcher: it starts Hyperion with those bundled files,
+Use the included Play Hyperion Zero Private launcher: it starts Hyperion with those bundled files,
 without depending on another StarCraft installation or changing that installation.
 
 PRIVATE TEST MATERIAL. Do not publish this package or upload it to a public release.
 """)
-    return crlf("""Hyperion Shield — public package without game files
+    return crlf("""Hyperion Shield Zero — public package without game files
 
 This package includes Hyperion and its own maps, tools and documentation. It includes none
 of StarCraft's proprietary game data. Supply your own StarCraft: Remastered or classic Brood
@@ -584,31 +584,31 @@ War installation when Hyperion asks for it. See README.txt for the supported lay
 def zero_launcher(args, platform: str, program: str = "") -> tuple[str, bytes, int]:
     """A launcher that uses Zero's bundled install, never a Battle.net or system one."""
     if platform == "windows":
-        return "Play Hyperion Zero.cmd", crlf(
+        return "Play Hyperion Zero Private.cmd", crlf(
             "@echo off\r\nstart \"\" \"%~dp0Hyperion.exe\" --install-folder \"%~dp0Game\" %*\r\n"), 0o644
     if platform == "mac":
-        return "Play Hyperion Zero.command", lf(
+        return "Play Hyperion Zero Private.command", lf(
             "#!/bin/sh\nset -eu\nDIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n"
             "exec \"$DIR/Hyperion.app/Contents/MacOS/Hyperion\" --install-folder \"$DIR/Game\" \"$@\"\n"), 0o755
-    return "play-hyperion-zero.sh", lf(
+    return "play-hyperion-zero-private.sh", lf(
         "#!/bin/sh\nset -eu\nDIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\n"
         f"exec \"$DIR/{program}\" --install-folder \"$DIR/Game\" \"$@\"\n"), 0o755
 
 
 def validate_variant(args) -> None:
     if args.edition == "shield" and args.game_files is not None:
-        sys.exit("--game-files is only valid for Hyperion Zero; Shield never bundles game data")
+        sys.exit("--game-files is only valid for Hyperion Zero Private; Shield never bundles game data")
     if args.edition != "zero":
         return
     if args.game_files is None:
-        sys.exit("Hyperion Zero needs --game-files <the maintainer's Remastered install>")
+        sys.exit("Hyperion Zero Private needs --game-files <the maintainer's Remastered install>")
     source = args.game_files
     if not source.is_dir():
-        sys.exit(f"Hyperion Zero's game install is not a directory: {source}")
+        sys.exit(f"Hyperion Zero Private's game install is not a directory: {source}")
     if not (source / "Data").is_dir():
-        sys.exit(f"Hyperion Zero needs a Remastered install with a Data directory: {source}")
+        sys.exit(f"Hyperion Zero Private needs a Remastered install with a Data directory: {source}")
     if not any(p.is_file() for p in source.rglob("*")):
-        sys.exit(f"Hyperion Zero's game install is empty: {source}")
+        sys.exit(f"Hyperion Zero Private's game install is empty: {source}")
 
 
 def game_file_entries(args) -> list:
