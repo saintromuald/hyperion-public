@@ -2,6 +2,7 @@
 // The connection is one of port_lannet.cpp's, framed, with the room's JSON in ROOM frames and
 // a launch's map in a ROOM_FILE. Presentation and transport only.
 #include "port_lanclient.h"
+#include <algorithm>
 #include "../platform/port_json.h"  // PortJsonQuote
 #include "../platform/port_util.h"  // PortNowMs
 #include <windows.h>
