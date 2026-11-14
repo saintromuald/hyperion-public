@@ -14,6 +14,7 @@ already there is left alone.
 
 import hashlib
 import io
+import shutil
 import sys
 import urllib.request
 import zipfile
@@ -40,9 +41,20 @@ def main() -> int:
     if digest != SHA256:
         print(f"checksum mismatch: {digest}, want {SHA256}")
         return 1
-    # the package's folders (bin, lib, inc) sit at its top
+    # Microsoft's ZIP uses Windows path separators, which Python only translates when
+    # extracting on Windows. Normalize them explicitly so Linux can run dxc.exe under Wine.
     with zipfile.ZipFile(io.BytesIO(data)) as z:
-        z.extractall(DEST)
+        for member in z.infolist():
+            relative = Path(*member.filename.replace("\\", "/").split("/"))
+            if relative.is_absolute() or ".." in relative.parts:
+                raise ValueError(f"unsafe path in dxc package: {member.filename}")
+            destination = DEST / relative
+            if member.is_dir():
+                destination.mkdir(parents=True, exist_ok=True)
+                continue
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with z.open(member) as source, destination.open("wb") as output:
+                shutil.copyfileobj(source, output)
     if not DXC.exists():
         print(f"unexpected package layout: no bin/x64/dxc.exe under {DEST}")
         return 1
