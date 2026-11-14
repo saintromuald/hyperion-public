@@ -11,8 +11,9 @@
 // version when bSdl, which is false when SDL3.dll could not be loaded.
 void PortSysInfoGather(bool bSdl = true);
 
-// Sets a fact, replacing one of the same part and name.
+// Sets a fact, replacing one of the same part and name. Get gives one, empty when not set.
 void PortSysInfoSet(const char *pszPart, const char *pszName, const char *pszFormat, ...);
+std::string PortSysInfoGet(const char *pszPart, const char *pszName);
 
 // Every fact, a line each ("part  name: value"), and the same as a JSON object of parts.
 std::string PortSysInfoText(void);

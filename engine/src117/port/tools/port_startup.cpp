@@ -387,7 +387,8 @@ static void Open(bool bPlayer, bool bSay, const char *pszWhat = NULL)
   if (kept.empty() || !earlier.bPlayer || !bPlayer || !bSay)
     return;
   // how the previous start or session ended, said once
-  if (!earlier.bComplete && !earlier.bFailed && !earlier.bCrashed) {
+  // a start that ended on purpose before its menus, as a mod check or a recording does, finished
+  if (!earlier.bComplete && !earlier.bFailed && !earlier.bCrashed && !earlier.bEnded) {
     Put("earlier", "the last start did not finish; its log is " + PortSysInfoMask(kept.c_str()));
     Say("The last start of Hyperion did not finish",
         "It stopped, or was stopped, before its menus came up. Its log is kept in\n" + kept, text, kept.c_str());

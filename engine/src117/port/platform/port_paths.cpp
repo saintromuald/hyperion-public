@@ -181,7 +181,8 @@ void PortPathsSplitCommandLine(const char *pszLine, char *pszGame, size_t cchGam
         PathsOption(szWord, "--lab-worker", &pEnd, pOptions->szLabWorker) ||
         PathsOption(szWord, "--lab-game", &pEnd, pOptions->szLabGame) ||
         PathsOption(szWord, "--lab-out", &pEnd, pOptions->szLabOut) ||
-        PathsOption(szWord, "--after", &pEnd, pOptions->szAfter)) {
+        PathsOption(szWord, "--after", &pEnd, pOptions->szAfter) ||
+        PathsOption(szWord, "--renderer", &pEnd, pOptions->szRenderer)) {
       pszLine = pEnd;
     } else if (lstrcmpiA(szWord, "--canvas") == 0) {
       lstrcpynA(pOptions->szCanvas, PORT_CANVAS_TILESET, MAX_PATH);
