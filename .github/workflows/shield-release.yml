@@ -320,7 +320,7 @@ jobs:
         run: |
           set -euo pipefail
           native="$RUNNER_TEMP/cpuid-probe-macos"
-          clang++ -std=c++17 -O0 engine/tools/pluto-bridge/cpuid_probe.cpp -o "$native"
+          clang++ -std=c++17 -O0 -arch x86_64 engine/tools/pluto-bridge/cpuid_probe.cpp -o "$native"
           echo '--- native x86-64 under Rosetta ---'
           /usr/bin/arch -x86_64 "$native"
           echo '--- Windows x86-64 under Wine/Rosetta ---'
