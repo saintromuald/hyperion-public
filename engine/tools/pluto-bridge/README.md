@@ -64,9 +64,10 @@ Place the official files locally:
 - `pluto.dll` beside `pluto-bridge.exe`;
 - `pluto/pluto_infer.exe` and `pluto/pluto_weights.bin` beside it as well.
 
-macOS additionally requires macOS 15+ Rosetta and an official unified Wine 11 build, with
-`ROSETTA_ADVERTISE_AVX=1` for translated consumers. See `docs/pluto-macos-runtime.md` for exact
-versions, hashes, preflight behavior, and the ARM64 runtime acceptance gate.
+Apple Silicon requires macOS 26.4+ and the signed MetalSharp Wine 6.0 (Wine 11) ARM64/FEX app;
+generic WineHQ/Rosetta is incompatible. Native Intel Macs retain the unified Wine 11 path. See
+`docs/pluto-macos-runtime.md` for exact versions, hashes, preflight behavior, and the ARM64 runtime
+acceptance gate.
 
 Then, with llvm-mingw i686 and the BWAPI checkout described in `build.sh`:
 

@@ -406,10 +406,6 @@ bool PlutoStart() {
   SetEnvironmentVariableA("HYPERION_PLUTO_MAP_FILE", static_cast<const char *>(GetCurrentMap(1)));
   SetEnvironmentVariableA("HYPERION_PLUTO_MAP_NAME", gszMapTitle_g);
   SetEnvironmentVariableA("HYPERION_PLUTO_DIRECT_PIPES", PlutoDirectPipesEnvironment(kPlutoNativeWindows));
-#if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
-  // Rosetta can execute AVX2 on macOS 15 even when its default CPUID advertisement omits it.
-  SetEnvironmentVariableA("ROSETTA_ADVERTISE_AVX", "1");
-#endif
   std::string starts;
   std::vector<pluto_hxpm::Start> mapStarts;
   for (int s = 0; s < PlayerSlots(); ++s) {
