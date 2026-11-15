@@ -4,102 +4,102 @@
 msgid ""
 msgstr "Project-Id-Version: Hyperion\nLanguage: zh_CN\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nPlural-Forms: nplurals=1; plural=0;\n"
 
-#: src117/port/data/port_install.cpp:201
+#: src117/port/data/port_install.cpp:202
 msgid "Files located: StarCraft: Remastered in {0}, its text in {1}."
 msgstr "已找到文件：StarCraft: Remastered 位于{0}，其文本位于{1}。"
 
-#: src117/port/data/port_install.cpp:212
+#: src117/port/data/port_install.cpp:213
 msgid "Files located: {0}."
 msgstr "已找到文件：{0}。"
 
-#: src117/port/data/port_install.cpp:214
+#: src117/port/data/port_install.cpp:215
 msgid "Files not located. Are you sure you chose the correct folder?"
 msgstr "未找到文件。你确定选对文件夹了吗？"
 
-#: src117/port/data/port_install.cpp:216
+#: src117/port/data/port_install.cpp:217
 msgid " This one holds classic StarCraft's files: put it under Classic."
 msgstr " 这个文件夹存放的是经典版 StarCraft 的文件：请填到“经典版”一栏。"
 
-#: src117/port/data/port_install.cpp:218
+#: src117/port/data/port_install.cpp:219
 msgid " This one is StarCraft: Remastered: put it under StarCraft: Remastered."
 msgstr " 这个文件夹是 StarCraft: Remastered：请填到 StarCraft: Remastered 一栏。"
 
-#: src117/port/data/port_install.cpp:231
+#: src117/port/data/port_install.cpp:232
 msgid "Files located, but Hyperion could not open them. Let the Battle.net app finish installing or updating StarCraft, then try again."
 msgstr "已找到文件，但 Hyperion 无法打开它们。请等 Battle.net 应用完成 StarCraft 的安装或更新后再试。"
 
-#: src117/port/data/port_install.cpp:284
-#: src117/port/data/port_install_window.cpp:83
+#: src117/port/data/port_install.cpp:285
+#: src117/port/data/port_install_window.cpp:84
 msgid "Not linked. Leave it empty if you do not have this one."
 msgstr "未关联。如果你没有这一份，留空即可。"
 
-#: src117/port/data/port_install_window.cpp:103
+#: src117/port/data/port_install_window.cpp:104
 msgid "Choose the folder that holds StarDat.mpq and BrooDat.mpq, where the classic game is installed, for example C:\\Program Files (x86)\\StarCraft."
 msgstr "请选择存放 StarDat.mpq 和 BrooDat.mpq 的文件夹，也就是经典版游戏的安装位置，例如 C:\\Program Files (x86)\\StarCraft。"
 
-#: src117/port/data/port_install_window.cpp:106
+#: src117/port/data/port_install_window.cpp:107
 msgid "Choose the folder that holds StarDat.mpq and BrooDat.mpq, where the classic game is installed."
 msgstr "请选择存放 StarDat.mpq 和 BrooDat.mpq 的文件夹，也就是经典版游戏的安装位置。"
 
-#: src117/port/data/port_install_window.cpp:143
+#: src117/port/data/port_install_window.cpp:144
 msgid "Type or paste a folder, or Browse"
 msgstr "输入或粘贴文件夹路径，或点击“浏览”"
 
-#: src117/port/data/port_install_window.cpp:149
+#: src117/port/data/port_install_window.cpp:150
 msgid "Browse..."
 msgstr "浏览..."
 
-#: src117/port/data/port_install_window.cpp:170
+#: src117/port/data/port_install_window.cpp:171
 msgid "Hyperion plays StarCraft from your own copy of its files. Link the ones you have: one is enough."
 msgstr "Hyperion 使用你自己的 StarCraft 文件运行。请关联你拥有的版本：有一份就够了。"
 
-#: src117/port/data/port_install_window.cpp:173
+#: src117/port/data/port_install_window.cpp:174
 msgid "StarCraft: Remastered, from Battle.net (free)"
 msgstr "StarCraft: Remastered，来自 Battle.net（免费）"
 
-#: src117/port/data/port_install_window.cpp:175
+#: src117/port/data/port_install_window.cpp:176
 msgid "Classic (1.16.1 and prior)"
 msgstr "经典版（1.16.1 及更早）"
 
-#: src117/port/data/port_install_window.cpp:178
+#: src117/port/data/port_install_window.cpp:179
 msgid "Use as the game's files:"
 msgstr "使用的游戏文件："
 
-#: src117/port/data/port_install_window.cpp:183
+#: src117/port/data/port_install_window.cpp:184
 msgctxt "the install"
 msgid "Classic"
 msgstr "经典版"
 
-#: src117/port/data/port_install_window.cpp:186
+#: src117/port/data/port_install_window.cpp:187
 msgid "The other stays linked: switch to it later in Settings, under Hyperion."
 msgstr "另一份仍保持关联：以后可在“设置”的 Hyperion 一节切换。"
 
-#: src117/port/data/port_install_window.cpp:191
+#: src117/port/data/port_install_window.cpp:205
 #: src117/port/tools/port_benchview.cpp:728
 msgid "Start"
 msgstr "开始"
 
-#: src117/port/data/port_install_window.cpp:192
+#: src117/port/data/port_install_window.cpp:207
 msgid "Quit"
 msgstr "退出"
 
-#: src117/port/data/port_install_window.cpp:234
+#: src117/port/data/port_install_window.cpp:249
 msgid "Browse could not open a folder dialog here: type or paste the folder."
 msgstr "此处无法打开文件夹选择窗口：请输入或粘贴文件夹路径。"
 
-#: src117/port/data/port_install_window.cpp:328
+#: src117/port/data/port_install_window.cpp:349
 msgid "Hyperion: StarCraft's files"
 msgstr "Hyperion：StarCraft 的文件"
 
-#: src117/port/data/port_install_window.cpp:88
+#: src117/port/data/port_install_window.cpp:89
 msgid "Choose the StarCraft folder itself, the one that holds StarCraft Launcher.exe and the x86_64 and Data folders, for example C:\\Program Files (x86)\\StarCraft."
 msgstr "请选择 StarCraft 文件夹本身，也就是存放 StarCraft Launcher.exe 以及 x86_64 和 Data 文件夹的那一个，例如 C:\\Program Files (x86)\\StarCraft。"
 
-#: src117/port/data/port_install_window.cpp:91
+#: src117/port/data/port_install_window.cpp:92
 msgid "Choose the StarCraft folder itself, the one that holds the Data folder, for example /Applications/StarCraft."
 msgstr "请选择 StarCraft 文件夹本身，也就是存放 Data 文件夹的那一个，例如 /Applications/StarCraft。"
 
-#: src117/port/data/port_install_window.cpp:94
+#: src117/port/data/port_install_window.cpp:95
 msgid "Choose the StarCraft folder itself, the one that holds StarCraft Launcher.exe and the x86_64 and Data folders, for example drive_c/Program Files (x86)/StarCraft in the Wine or Lutris prefix Battle.net is installed in."
 msgstr "请选择 StarCraft 文件夹本身，也就是存放 StarCraft Launcher.exe 以及 x86_64 和 Data 文件夹的那一个，例如安装了 Battle.net 的 Wine 或 Lutris 前缀中的 drive_c/Program Files (x86)/StarCraft。"
 
@@ -642,7 +642,7 @@ msgid "Colours by team come with Team Match."
 msgstr "按队伍配色需要组队对战。"
 
 #: src117/port/front/port_front_bench.cpp:1452
-#: src117/port/front/port_front_settings.cpp:893
+#: src117/port/front/port_front_settings.cpp:895
 #: src117/port/front/port_front_skirmish.cpp:2759
 #: src117/port/front/port_front_skirmish.cpp:2763
 msgid "Game speed"
@@ -758,7 +758,7 @@ msgid "The most units the game holds at once, every player’s and the map’s m
 msgstr "游戏同时容纳的单位总数，包含所有玩家的单位以及地图上的晶体矿和瓦斯气泉。原版为 1,700 个。自动：在原版玩得起的局中使用原版的数值；玩家更多或补给上限超过 200 时，另外为地图自身的单位以及每名玩家的全部上限预留空间。填具体数字则使用 Hyperion 的规则。"
 
 #: src117/port/front/port_front_bench.cpp:1601
-#: src117/port/front/port_front_settings.cpp:920
+#: src117/port/front/port_front_settings.cpp:922
 #: src117/port/tools/port_benchview.cpp:875
 msgid "Renderer"
 msgstr "渲染器"
@@ -1322,7 +1322,7 @@ msgstr "任务 {0}"
 #: src117/port/front/port_front_profile.cpp:1166
 #: src117/port/lan/port_front_lan.cpp:424
 #: src117/port/lan/port_front_lan.cpp:1164
-#: src117/port/lan/port_lanlobby.cpp:113
+#: src117/port/lan/port_lanlobby.cpp:117
 msgid "{0} and {1}"
 msgstr "{0}和{1}"
 
@@ -1470,8 +1470,8 @@ msgstr "现在就玩"
 #: src117/port/front/port_front_replays.cpp:1106
 #: src117/port/front/port_front_replays.cpp:1191
 #: src117/port/front/port_front_score.cpp:1120
-#: src117/port/front/port_front_settings.cpp:2032
-#: src117/port/front/port_front_settings.cpp:2264
+#: src117/port/front/port_front_settings.cpp:2052
+#: src117/port/front/port_front_settings.cpp:2284
 #: src117/port/front/port_front_skirmish.cpp:1608
 #: src117/port/gameplay/port_trainerview.cpp:1496
 #: src117/port/lan/port_front_lan.cpp:1070
@@ -1991,7 +1991,7 @@ msgstr "下一条"
 #: src117/port/front/port_front_gamemenu.cpp:497
 #: src117/port/front/port_front_gamemenu.cpp:499
 #: src117/port/front/port_front_score.cpp:1090
-#: src117/port/front/port_front_settings.cpp:2066
+#: src117/port/front/port_front_settings.cpp:2086
 msgid "OK"
 msgstr "确定"
 
@@ -2095,7 +2095,7 @@ msgstr "共同胜利"
 
 #: src117/port/front/port_front_gamemenu.cpp:617
 #: src117/port/front/port_front_gamemenu.cpp:671
-#: src117/port/front/port_front_settings.cpp:2260
+#: src117/port/front/port_front_settings.cpp:2280
 msgid "Accept"
 msgstr "接受"
 
@@ -2226,7 +2226,7 @@ msgid "As it shows on your screen, over {0}."
 msgstr "与屏幕上显示的一致，叠在{0}上。"
 
 #: src117/port/front/port_front_hud.cpp:602
-#: src117/port/front/port_front_settings.cpp:977
+#: src117/port/front/port_front_settings.cpp:979
 msgid "Actions per minute"
 msgstr "每分钟操作数"
 
@@ -2245,7 +2245,7 @@ msgid "Army"
 msgstr "部队"
 
 #: src117/port/front/port_front_hud.cpp:605
-#: src117/port/front/port_front_settings.cpp:985
+#: src117/port/front/port_front_settings.cpp:987
 msgid "Control groups"
 msgstr "编队"
 
@@ -2256,7 +2256,7 @@ msgstr "地形"
 
 #: src117/port/front/port_front_hud.cpp:607
 #: src117/port/front/port_front_replays.cpp:53
-#: src117/port/front/port_front_settings.cpp:1069
+#: src117/port/front/port_front_settings.cpp:1071
 #: src117/port/hud/port_hudinput.cpp:538
 #: src117/port/hud/port_hudinput.cpp:658
 msgid "Replay TV"
@@ -2273,7 +2273,7 @@ msgid "This design does not load:"
 msgstr "这个设计无法载入："
 
 #: src117/port/front/port_front_hud.cpp:673
-#: src117/port/front/port_front_settings.cpp:1081
+#: src117/port/front/port_front_settings.cpp:1083
 msgid "Layout"
 msgstr "布局"
 
@@ -2348,7 +2348,7 @@ msgid "This design has no buttons to leave out."
 msgstr "这个设计没有可以隐藏的按钮。"
 
 #: src117/port/front/port_front_hud.cpp:871
-#: src117/port/front/port_front_settings.cpp:1120
+#: src117/port/front/port_front_settings.cpp:1124
 msgid "Not available yet"
 msgstr "暂不可用"
 
@@ -2402,7 +2402,7 @@ msgid "Mods"
 msgstr "模组"
 
 #: src117/port/front/port_front_internal.h:37
-#: src117/port/front/port_front_settings.cpp:2149
+#: src117/port/front/port_front_settings.cpp:2169
 #: src117/port/lan/port_front_lanhost.cpp:185
 msgid "Settings"
 msgstr "设置"
@@ -2444,13 +2444,13 @@ msgid "Graphics"
 msgstr "图像"
 
 #: src117/port/front/port_front_internal.h:50
-#: src117/port/front/port_front_settings.cpp:949
+#: src117/port/front/port_front_settings.cpp:951
 #: src117/port/lan/port_front_lanhost.cpp:1273
 msgid "Sound"
 msgstr "声音"
 
 #: src117/port/front/port_front_internal.h:50
-#: src117/port/front/port_front_settings.cpp:1075
+#: src117/port/front/port_front_settings.cpp:1077
 msgid "Interface"
 msgstr "界面"
 
@@ -4362,435 +4362,451 @@ msgid "{0}, out at {1}"
 msgstr "{0}，于 {1} 淘汰"
 
 #: src117/port/front/port_front_settings.cpp:1001
-msgid "Group 8"
+msgid "Group 7"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1003
-msgid "Group 9"
+msgid "Group 8"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1005
-msgid "Group 0"
+msgid "Group 9"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1007
-msgid "Group 11"
+msgid "Group 0"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1009
-msgid "Group 12"
+msgid "Group 11"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1011
-msgid "Group 13"
+msgid "Group 12"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1013
-msgid "Group 14"
+msgid "Group 13"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1015
-msgid "Group 15"
+msgid "Group 14"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1017
-msgid "Group 16"
+msgid "Group 15"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1019
-msgid "Group 17"
+msgid "Group 16"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1021
-msgid "Group 18"
+msgid "Group 17"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1023
-msgid "Group 19"
+msgid "Group 18"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1025
-msgid "Camera locations"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:1026
-msgid "As StarCraft II's: eight saved views, and eight keys in all. F1 to F8 jump to them, and Ctrl with the same key saves, as SC2's Ctrl does; a save says so on the map's message. Each game starts the eight on the start view, and 1.17's Ctrl+F1 help moved to Ctrl+F10."
+msgid "Group 19"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1027
-msgid "Camera location 1"
+msgid "Camera locations"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1028
+msgid "As StarCraft II's: eight saved views, and eight keys in all. F1 to F8 jump to them, and Ctrl with the same key saves, as SC2's Ctrl does; a save says so on the map's message. Each game starts the eight on the start view, and 1.17's Ctrl+F1 help moved to Ctrl+F10."
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1029
-msgid "Camera location 2"
+msgid "Camera location 1"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1031
-msgid "Camera location 3"
+msgid "Camera location 2"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1033
-msgid "Camera location 4"
+msgid "Camera location 3"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1035
-msgid "Camera location 5"
+msgid "Camera location 4"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1037
-msgid "Camera location 6"
+msgid "Camera location 5"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1039
-msgid "Camera location 7"
+msgid "Camera location 6"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1041
-msgid "Camera location 8"
+msgid "Camera location 7"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1043
-msgid "Selection"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:1044
-msgid "The keys that work on the selection and the minimap."
+msgid "Camera location 8"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1045
-msgid "Next subgroup"
-msgstr "下一个子编组"
+msgid "Selection"
+msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1046
-msgid "In a game by Hyperion’s rules, the next kind of unit in the selection: the console shows its card and the page that holds it, as StarCraft II’s Tab. With Shift, the kind before. Click the key and press another, with Ctrl, Shift or Alt if you like."
+msgid "The keys that work on the selection and the minimap."
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1047
+msgid "Next subgroup"
+msgstr "下一个子编组"
+
+#: src117/port/front/port_front_settings.cpp:1048
+msgid "In a game by Hyperion’s rules, the next kind of unit in the selection: the console shows its card and the page that holds it, as StarCraft II’s Tab. With Shift, the kind before. Click the key and press another, with Ctrl, Shift or Alt if you like."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1049
 msgid "Minimap terrain"
 msgstr "微缩地图地形"
 
-#: src117/port/front/port_front_settings.cpp:1048
+#: src117/port/front/port_front_settings.cpp:1050
 msgid "The minimap’s terrain on or off, as its button does; with Shift, the units’ colours, as the original’s Shift+Tab. In a game by classic rules Tab still does it, as in the original; in a game by Hyperion’s rules Tab is the subgroup’s."
 msgstr "开关微缩地图上的地形，与它的按钮相同；按住 Shift 则开关单位颜色，与原版的 Shift+Tab 相同。在使用经典规则的对局中，Tab 仍然执行这个功能，与原版一样；在使用 Hyperion 规则的对局中，Tab 用于切换子编组。"
 
-#: src117/port/front/port_front_settings.cpp:1049
+#: src117/port/front/port_front_settings.cpp:1051
 msgid "Idle worker"
 msgstr "空闲工人"
 
-#: src117/port/front/port_front_settings.cpp:1050
+#: src117/port/front/port_front_settings.cpp:1052
 msgid "Selects your next idle worker and takes the view to it, as the HUD’s idle worker button does, and as the small idle worker icon above the bottom console does when clicked. The ` key, as StarCraft II’s players set it."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1051
+#: src117/port/front/port_front_settings.cpp:1053
 msgid "Select army"
 msgstr "选择部队"
 
-#: src117/port/front/port_front_settings.cpp:1052
+#: src117/port/front/port_front_settings.cpp:1054
 msgid "In a game by Hyperion’s rules, selects your army, every unit that fights, up to 255, as the HUD’s army button does. A game by classic rules keeps the original’s selections and has no army key."
 msgstr "在使用 Hyperion 规则的对局中，选中你的部队，也就是所有能作战的单位，最多 255 个，与 HUD 上的部队按钮相同。使用经典规则的对局保留原版的选择方式，没有部队按键。"
 
-#: src117/port/front/port_front_settings.cpp:1053
+#: src117/port/front/port_front_settings.cpp:1055
 msgid "View and camera"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1054
+#: src117/port/front/port_front_settings.cpp:1056
 msgid "The art, the view's shape, the zoom and the follow and TV keys."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1055
+#: src117/port/front/port_front_settings.cpp:1057
 msgid "Toggle art"
 msgstr "切换图像"
 
-#: src117/port/front/port_front_settings.cpp:1056
+#: src117/port/front/port_front_settings.cpp:1058
 msgid "Classic or HD art in a game, F5 as in Remastered before the camera locations took F1 to F8. Click the key and press another: any key, with Ctrl, Shift or Alt if you like."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1057
+#: src117/port/front/port_front_settings.cpp:1059
 msgid "Toggle view shape"
 msgstr "切换画面比例"
 
-#: src117/port/front/port_front_settings.cpp:1058
+#: src117/port/front/port_front_settings.cpp:1060
 msgid "640 × 480 or the wide view in a game. Set as the art’s key is."
 msgstr "在游戏中切换 640 × 480 和宽屏画面。设置方式与图像按键相同。"
 
-#: src117/port/front/port_front_settings.cpp:1059
+#: src117/port/front/port_front_settings.cpp:1061
 msgid "Zoom out"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1060
+#: src117/port/front/port_front_settings.cpp:1062
 msgid "The camera zoomed out; held, it keeps zooming."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1061
+#: src117/port/front/port_front_settings.cpp:1063
 msgid "Zoom in"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1062
+#: src117/port/front/port_front_settings.cpp:1064
 msgid "The camera zoomed in; held, it keeps zooming."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1063
+#: src117/port/front/port_front_settings.cpp:1065
 msgid "Zoom reset"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1064
+#: src117/port/front/port_front_settings.cpp:1066
 msgid "The zoom back to 1, the game’s view."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1065
+#: src117/port/front/port_front_settings.cpp:1067
 msgid "Zoom fit"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1066
+#: src117/port/front/port_front_settings.cpp:1068
 msgid "The whole map in view, as far as the zoom allows."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1067
+#: src117/port/front/port_front_settings.cpp:1069
 msgid "Follow selected unit"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1068
+#: src117/port/front/port_front_settings.cpp:1070
 msgid "The camera follows the selected unit."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1070
+#: src117/port/front/port_front_settings.cpp:1072
 msgid "A replay’s TV camera, in a replay."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1071
+#: src117/port/front/port_front_settings.cpp:1073
 msgid "Debug and tools"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1073
+#: src117/port/front/port_front_settings.cpp:1075
 msgid "Debug Tools' overlay"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1074
+#: src117/port/front/port_front_settings.cpp:1076
 msgid "Debug Tools’s overlay in a game while its live channel is open: the game in a window with its readings round it, full screen, a counter, then off. With no key, the Overlay button at the top of the game opens it."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1076
+#: src117/port/front/port_front_settings.cpp:1078
 msgid "The command card's and the screen's keys."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1077
+#: src117/port/front/port_front_settings.cpp:1079
 msgid "Research panel"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1078
+#: src117/port/front/port_front_settings.cpp:1080
 msgid "With the Newbie mode mutator on, opens a left-hand list of every technology and upgrade your completed buildings can start now, with those under way and their progress. Click an available row to start it at a free building; click one under way to select its building."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1079
+#: src117/port/front/port_front_settings.cpp:1081
 msgid "Global production queue"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1080
+#: src117/port/front/port_front_settings.cpp:1082
 msgid "In any game, lists every unit you are training or morphing (including waiting queue slots), every technology and upgrade under way, and every building under construction. Click a row to select and centre its source. Ctrl+Q remains the larva-selection key, so this panel uses another default."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1081
+#: src117/port/front/port_front_settings.cpp:1083
 msgid "Classic|Grid"
 msgstr "经典|网格"
 
-#: src117/port/front/port_front_settings.cpp:1082
+#: src117/port/front/port_front_settings.cpp:1084
 msgid "Grid puts the command card on the left hand’s 3 × 3 keys, as StarCraft II can. Remastered has no presets."
 msgstr "“网格”把指令面板映射到左手的 3 × 3 按键上，与 StarCraft II 的做法一样。Remastered 没有预设。"
 
-#: src117/port/front/port_front_settings.cpp:1083
+#: src117/port/front/port_front_settings.cpp:1085
 msgid "Spellcasters’ energy bars"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1084
+#: src117/port/front/port_front_settings.cpp:1086
 msgid "Your visible spellcasters show the original green health bar with its purple energy row beneath it, even when unselected in Hyperion’s wide-selection games. Classic games keep the stack on selected units. On by default; no separate overlay bar is drawn."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1085
+#: src117/port/front/port_front_settings.cpp:1087
 msgid "Screenshot"
 msgstr "截图"
 
-#: src117/port/front/port_front_settings.cpp:1087
+#: src117/port/front/port_front_settings.cpp:1089
 msgid "Allies blue, enemies red"
 msgstr "盟友蓝、敌人红"
 
-#: src117/port/front/port_front_settings.cpp:1088
+#: src117/port/front/port_front_settings.cpp:1090
 msgid "In a game you play, you are drawn in blue, your allies in teal and the other players in red, units, buildings and minimap alike, as StarCraft II’s team colours and Warcraft III’s ally colours do. The original’s minimap button does it for the minimap alone. Only what is drawn changes: replays and saved games keep every player’s own colour. Remastered has the string and no control."
 msgstr "在你参与的对局中，你会被画成蓝色，盟友画成青色，其他玩家画成红色，单位、建筑和微缩地图一律如此，与 StarCraft II 的队伍颜色和 Warcraft III 的盟友颜色一样。原版的微缩地图按钮只对微缩地图起作用。只有画面显示改变：录像和存档仍保留每名玩家自己的颜色。Remastered 有这条文本但没有开关。"
 
-#: src117/port/front/port_front_settings.cpp:1089
+#: src117/port/front/port_front_settings.cpp:1091
 msgid "Colour-blind player colours"
 msgstr "色盲玩家颜色"
 
-#: src117/port/front/port_front_settings.cpp:1089
+#: src117/port/front/port_front_settings.cpp:1091
 msgid "Off|Red-green|Blue-yellow"
 msgstr "关闭|红绿色盲|蓝黄色盲"
 
-#: src117/port/front/port_front_settings.cpp:1090
+#: src117/port/front/port_front_settings.cpp:1092
 msgid "Each player in turn takes a colour from a palette that stays apart for that kind of colour blindness: Okabe and Ito’s for red-green, colours apart along red and cyan and in lightness for blue-yellow. With Allies blue, enemies red, you, your allies and your enemies take three of them. Only what is drawn changes. Remastered has the string and no control."
 msgstr "每名玩家依次从一套对该类色盲仍易区分的调色板中取色：红绿色盲用 Okabe 和 Ito 的配色，蓝黄色盲用在红与青方向以及明度上都拉开的颜色。配合“盟友蓝、敌人红”时，你、盟友和敌人各取其中三种。只有画面显示改变。Remastered 有这条文本但没有开关。"
 
-#: src117/port/front/port_front_settings.cpp:1091
+#: src117/port/front/port_front_settings.cpp:1093
 msgid "Text size"
 msgstr "文字大小"
 
-#: src117/port/front/port_front_settings.cpp:1091
+#: src117/port/front/port_front_settings.cpp:1093
 msgid "Classic|Larger|Largest"
 msgstr "经典|较大|最大"
 
-#: src117/port/front/port_front_settings.cpp:1091
+#: src117/port/front/port_front_settings.cpp:1093
 msgid "fonts larger than those the original draws at 640 by 480"
 msgstr "字体比原版在 640 × 480 下绘制的更大"
 
-#: src117/port/front/port_front_settings.cpp:1093
+#: src117/port/front/port_front_settings.cpp:1095
 msgid "Middle-mouse drag scroll"
 msgstr "中键拖动滚屏"
 
-#: src117/port/front/port_front_settings.cpp:1094
+#: src117/port/front/port_front_settings.cpp:1096
 msgid "Hold the middle button and move the mouse: the map moves with the cursor, at the speed set here, from a tenth of the cursor’s movement to one and a half times it; a little past the middle, the map stays under the cursor. Remastered has the string and no control."
 msgstr "按住中键并移动鼠标：地图随指针移动，速度按此处设定，从指针移动量的十分之一到一点五倍；略过中间档后，地图会贴着指针走。Remastered 有这条文本但没有开关。"
 
-#: src117/port/front/port_front_settings.cpp:1095
+#: src117/port/front/port_front_settings.cpp:1097
 msgid "Player data folder"
 msgstr "玩家数据文件夹"
 
-#: src117/port/front/port_front_settings.cpp:1096
+#: src117/port/front/port_front_settings.cpp:1098
 msgid "Profiles, replays and saved games, kept apart from the original game’s. For now it is set with --data on the command line."
 msgstr "档案、录像和存档，与原版游戏的分开存放。目前只能用命令行的 --data 指定。"
 
-#: src117/port/front/port_front_settings.cpp:1097
+#: src117/port/front/port_front_settings.cpp:1099
 msgid "Game files"
 msgstr "游戏文件"
 
-#: src117/port/front/port_front_settings.cpp:1097
+#: src117/port/front/port_front_settings.cpp:1099
 msgid "StarCraft from Battle.net|Classic (1.16.1 and prior)"
 msgstr "来自 Battle.net 的 StarCraft|经典版（1.16.1 及更早）"
 
-#: src117/port/front/port_front_settings.cpp:1098
+#: src117/port/front/port_front_settings.cpp:1100
 msgid "Where the game’s files come from: StarCraft from Battle.net, which is free, or your classic, pre-Remastered files from 1.16.1 and earlier, the folder with StarDat.mpq and BrooDat.mpq. Either way the game is drawn in its classic art. Hyperion asks when it starts and finds neither."
 msgstr "游戏文件的来源：来自 Battle.net 的 StarCraft（免费），或者你自己 1.16.1 及更早的经典版文件，也就是放着 StarDat.mpq 和 BrooDat.mpq 的文件夹。两种来源都以经典图像绘制游戏。Hyperion 启动时若两者都找不到，就会询问你。"
 
-#: src117/port/front/port_front_settings.cpp:1099
+#: src117/port/front/port_front_settings.cpp:1101
 msgid "Classic StarCraft folder"
 msgstr "经典版 StarCraft 文件夹"
 
-#: src117/port/front/port_front_settings.cpp:1100
+#: src117/port/front/port_front_settings.cpp:1102
 msgid "Browse to the classic StarCraft folder, the one with StarDat.mpq and BrooDat.mpq; Game files then reads from it. Without one, Hyperion.exe’s own folder."
 msgstr "浏览到经典版 StarCraft 文件夹，也就是放着 StarDat.mpq 和 BrooDat.mpq 的那一个；“游戏文件”随后会从那里读取。没有指定时使用 Hyperion.exe 所在的文件夹。"
 
-#: src117/port/front/port_front_settings.cpp:1101
+#: src117/port/front/port_front_settings.cpp:1103
 msgid "StarCraft from Battle.net"
 msgstr "来自 Battle.net 的 StarCraft"
 
-#: src117/port/front/port_front_settings.cpp:1102
+#: src117/port/front/port_front_settings.cpp:1104
 msgid "Found from Battle.net’s uninstall entry, or Browse to it (a folder inside it will do). It gives the game’s files when Game files says so, and Remastered’s subtitles and chat filter either way. Another install than the one in use takes a restart."
 msgstr "从 Battle.net 的卸载项中找到，也可以浏览选择（选它里面的某个文件夹也行）。当“游戏文件”指向它时，它提供游戏文件；无论是否指向它，Remastered 的字幕和聊天过滤词表都来自它。换用另一份安装需要重启。"
 
-#: src117/port/front/port_front_settings.cpp:1103
+#: src117/port/front/port_front_settings.cpp:1105
 msgid "Mods folder"
 msgstr "模组文件夹"
 
-#: src117/port/front/port_front_settings.cpp:1104
+#: src117/port/front/port_front_settings.cpp:1106
 msgid "Where the mods are, each in a folder with its mod.json. A new folder takes a restart, as the chosen mod’s data is read when Hyperion starts."
 msgstr "模组所在的位置，每个模组是一个带 mod.json 的文件夹。更换文件夹需要重启，因为所选模组的数据是在 Hyperion 启动时读取的。"
 
-#: src117/port/front/port_front_settings.cpp:1105
+#: src117/port/front/port_front_settings.cpp:1107
+msgid "Pluto AI runtime"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1107
+msgid "Download Pluto AI"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1108
+msgid "Downloads the official Pluto v2.0 ZIP directly from tscmoo/pluto, checks its exact size and SHA-256, then checks and atomically replaces only the DLL, inference executable and weights. The bridge and your logs, configuration and bandit data are preserved. Retry is available after any failure. Not during a game."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1109
 msgid "Check a mod’s fingerprint"
 msgstr "校验模组指纹"
 
-#: src117/port/front/port_front_settings.cpp:1106
+#: src117/port/front/port_front_settings.cpp:1110
 msgid "A mod that changes the rules is named by a hash of its data, so a replay or a saved game made with another version of it is refused. Off, it plays all the same, for a mod’s author trying a change; it may go its own way where the data differs."
 msgstr "改变规则的模组会以它数据的哈希值命名，因此用它另一个版本制作的录像或存档会被拒绝。关闭后仍可照常播放，方便模组作者试改动；在数据不同的地方，对局可能会跑出不一样的结果。"
 
-#: src117/port/front/port_front_settings.cpp:1107
+#: src117/port/front/port_front_settings.cpp:1111
 msgid "Hyperion’s menus"
 msgstr "Hyperion 的菜单"
 
-#: src117/port/front/port_front_settings.cpp:1108
+#: src117/port/front/port_front_settings.cpp:1112
 msgid "Off: the original menus. Hyperion’s menus need the GPU renderer, which is the default."
 msgstr "关闭则使用原版菜单。Hyperion 的菜单需要 GPU 渲染器，而它是默认选项。"
 
-#: src117/port/front/port_front_settings.cpp:1109
+#: src117/port/front/port_front_settings.cpp:1113
 msgid "Show in Discord"
 msgstr "在 Discord 中显示"
 
-#: src117/port/front/port_front_settings.cpp:1110
+#: src117/port/front/port_front_settings.cpp:1114
 msgid "With the Discord app running on this computer, your friends see Playing Hyperion and what you are doing: the mode, the map and the players, or the mod you have loaded. Off, Discord is told nothing."
 msgstr "本机运行 Discord 应用时，你的好友会看到你正在玩 Hyperion 以及你在做什么：模式、地图和玩家，或者你加载的模组。关闭则不向 Discord 发送任何信息。"
 
-#: src117/port/front/port_front_settings.cpp:1111
+#: src117/port/front/port_front_settings.cpp:1115
 msgid "Settings file"
 msgstr "设置文件"
 
-#: src117/port/front/port_front_settings.cpp:1112
+#: src117/port/front/port_front_settings.cpp:1116
 msgid "Hyperion’s settings and the original game’s, in the player data folder, out of its registry key."
 msgstr "Hyperion 的设置和原版游戏的设置，都放在玩家数据文件夹中，不写进它的注册表项。"
 
-#: src117/port/front/port_front_settings.cpp:1113
+#: src117/port/front/port_front_settings.cpp:1117
 msgid "Processor threads"
 msgstr "处理器线程"
 
-#: src117/port/front/port_front_settings.cpp:1113
+#: src117/port/front/port_front_settings.cpp:1117
 msgid "Auto|Off|2|4|8|16"
 msgstr "自动|关闭|2|4|8|16"
 
-#: src117/port/front/port_front_settings.cpp:1114
+#: src117/port/front/port_front_settings.cpp:1118
 msgid "The threads Hyperion spreads work over beside the game’s: the checks that a replay or a network match plays the same game, and in a large game some of what each frame looks up. Auto uses half your processor’s threads, up to 16; Off keeps it all on one. The game’s own steps always run one after another in the same order, so it plays the same either way."
 msgstr "除游戏本身之外，Hyperion 还会把工作分摊到这些线程上：校验录像或网络对局是否跑出同一局游戏，以及在大型对局中每一帧要查找的部分内容。“自动”使用处理器一半的线程，最多 16 个；“关闭”则全部放在一个线程上。游戏自身的步骤始终按同样的顺序依次执行，因此无论怎么设置，对局结果都一样。"
 
-#: src117/port/front/port_front_settings.cpp:1115
+#: src117/port/front/port_front_settings.cpp:1119
 msgid "Rest between frames"
 msgstr "帧间休眠"
 
-#: src117/port/front/port_front_settings.cpp:1116
+#: src117/port/front/port_front_settings.cpp:1120
 msgid "Between frames Hyperion waits for what is due next, so a game at its own speed uses a small part of one processor core. Off, it goes round without a pause, as the original did, keeping a core busy. Frames come as evenly either way."
 msgstr "在帧与帧之间，Hyperion 会等待下一件该做的事，因此按自身速度运行的对局只占用一个处理器核心的一小部分。关闭则不作停顿地一圈圈运行，与原版一样，会让一个核心一直忙着。无论哪种，帧的间隔都一样均匀。"
 
-#: src117/port/front/port_front_settings.cpp:1117
+#: src117/port/front/port_front_settings.cpp:1121
 msgid "Game’s cores"
 msgstr "游戏使用的核心"
 
-#: src117/port/front/port_front_settings.cpp:1117
+#: src117/port/front/port_front_settings.cpp:1121
 msgid "Auto|Large cache|Any"
 msgstr "自动|大缓存|任意"
 
-#: src117/port/front/port_front_settings.cpp:1118
+#: src117/port/front/port_front_settings.cpp:1122
 msgid "On a processor whose cores do not all share one cache, such as a Ryzen X3D with its two halves, which cores the game runs on. Large cache plays large games faster, a 64-player game by a tenth; Any lets Windows choose, which favours the fastest clocks and suits small games a little better. Auto takes the large cache once a game has 2,000 units. Where every core shares one cache it makes no difference."
 msgstr "在核心并非共用同一缓存的处理器上（例如分成两半的 Ryzen X3D），游戏运行在哪些核心上。“大缓存”让大型对局更快，64 名玩家的对局可快约十分之一；“任意”交由 Windows 选择，它偏向频率最高的核心，略微更适合小型对局。“自动”会在对局达到 2,000 个单位后改用大缓存。在所有核心共用一个缓存的处理器上没有区别。"
 
-#: src117/port/front/port_front_settings.cpp:1149
+#: src117/port/front/port_front_settings.cpp:1153
 msgid "Research automatically"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1150
+#: src117/port/front/port_front_settings.cpp:1154
 msgid "One toggle per upgrade: with the Newbie mode mutator on, it is researched by itself when a building that can do it is free, level after level until it is done. The mutator and its worker-training and mining helpers are in the mutators' Play group."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1156
+#: src117/port/front/port_front_settings.cpp:1160
 msgid "Research this upgrade by itself, level after level until it is done."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1285
+#: src117/port/front/port_front_settings.cpp:1289
 msgid "a multiplayer game, in whose menu it changes"
 msgstr "多人游戏，可在其菜单中更改"
 
-#: src117/port/front/port_front_settings.cpp:1287
+#: src117/port/front/port_front_settings.cpp:1291
 msgid "StarCraft from Battle.net, which the Hyperion tab can point to"
 msgstr "来自 Battle.net 的 StarCraft，可在 Hyperion 选项卡中指定"
 
-#: src117/port/front/port_front_settings.cpp:1289
+#: src117/port/front/port_front_settings.cpp:1293
 msgid "StarCraft: Remastered’s paid content, which this version of Hyperion does not use"
 msgstr "StarCraft: Remastered 的付费内容，此版本的 Hyperion 不使用"
 
-#: src117/port/front/port_front_settings.cpp:1599
+#: src117/port/front/port_front_settings.cpp:1604
 msgid "Primary"
 msgstr "主显示器"
 
-#: src117/port/front/port_front_settings.cpp:1868
-#: src117/port/front/port_front_settings.cpp:1879
+#: src117/port/front/port_front_settings.cpp:1876
+#: src117/port/front/port_front_settings.cpp:1887
 msgid "Press a key"
 msgstr "请按一个键"
 
-#: src117/port/front/port_front_settings.cpp:1876
+#: src117/port/front/port_front_settings.cpp:1884
 #: src117/port/gameplay/port_mutators.cpp:74
 #: src117/port/gameplay/port_mutators.cpp:460
 #: src117/port/gameplay/port_mutators.cpp:570
@@ -4798,570 +4814,566 @@ msgstr "请按一个键"
 msgid "None"
 msgstr "无"
 
-#: src117/port/front/port_front_settings.cpp:1915
+#: src117/port/front/port_front_settings.cpp:1923
 msgid "Browse"
 msgstr "浏览"
 
-#: src117/port/front/port_front_settings.cpp:1955
+#: src117/port/front/port_front_settings.cpp:1972
 #: src117/port/front/port_front_skirmish.cpp:2093
 #: src117/port/front/port_front_skirmish.cpp:3112
 msgid "Open"
 msgstr "打开"
 
-#: src117/port/front/port_front_settings.cpp:1977
+#: src117/port/front/port_front_settings.cpp:1997
 msgid "In the original’s option dialogs."
 msgstr "原版的选项对话框中就有。"
 
-#: src117/port/front/port_front_settings.cpp:1978
+#: src117/port/front/port_front_settings.cpp:1998
 msgid "Added by Remastered."
 msgstr "Remastered 新增。"
 
-#: src117/port/front/port_front_settings.cpp:1979
+#: src117/port/front/port_front_settings.cpp:1999
 msgid "New in Hyperion."
 msgstr "Hyperion 新增。"
 
-#: src117/port/front/port_front_settings.cpp:1993
+#: src117/port/front/port_front_settings.cpp:2013
 #: src117/port/lan/port_front_landevices.cpp:321
 msgid "Not available yet."
 msgstr "暂不可用。"
 
-#: src117/port/front/port_front_settings.cpp:1995
+#: src117/port/front/port_front_settings.cpp:2015
 msgid "Needs {0}."
 msgstr "需要{0}。"
 
-#: src117/port/front/port_front_settings.cpp:1997
+#: src117/port/front/port_front_settings.cpp:2017
 msgid "Not during a game: change it in the main menu’s Settings."
 msgstr "游戏中无法更改：请在主菜单的“设置”里修改。"
 
-#: src117/port/front/port_front_settings.cpp:2000
+#: src117/port/front/port_front_settings.cpp:2020
 msgid "Applies when you accept it."
 msgstr "确认后生效。"
 
-#: src117/port/front/port_front_settings.cpp:2002
+#: src117/port/front/port_front_settings.cpp:2022
 msgid "Applies from the next game."
 msgstr "从下一局游戏开始生效。"
 
-#: src117/port/front/port_front_settings.cpp:2004
+#: src117/port/front/port_front_settings.cpp:2024
 msgid "Applies after a restart."
 msgstr "重启后生效。"
 
-#: src117/port/front/port_front_settings.cpp:2031
+#: src117/port/front/port_front_settings.cpp:2051
 msgid "Restore the {0} settings?"
 msgstr "恢复“{0}”的默认设置？"
 
-#: src117/port/front/port_front_settings.cpp:2032
+#: src117/port/front/port_front_settings.cpp:2052
 msgid "Continue"
 msgstr "继续"
 
-#: src117/port/front/port_front_settings.cpp:2033
+#: src117/port/front/port_front_settings.cpp:2053
 msgid "Every setting on this tab goes back to its default. The other tabs keep theirs."
 msgstr "这个选项卡上的所有设置都会恢复默认。其他选项卡不受影响。"
 
-#: src117/port/front/port_front_settings.cpp:2042
+#: src117/port/front/port_front_settings.cpp:2062
 msgid "Hyperion goes back to the display it had in {0} second."
 msgid_plural "Hyperion goes back to the display it had in {0} seconds."
 msgstr[0] "Hyperion 将在 {0} 秒后恢复原来的显示设置。"
 
-#: src117/port/front/port_front_settings.cpp:2045
+#: src117/port/front/port_front_settings.cpp:2065
 #: src117/port/gameplay/port_trainerview.cpp:850
 msgid "Keep"
 msgstr "保留"
 
-#: src117/port/front/port_front_settings.cpp:2045
+#: src117/port/front/port_front_settings.cpp:2065
 msgid "Revert"
 msgstr "还原"
 
-#: src117/port/front/port_front_settings.cpp:2046
+#: src117/port/front/port_front_settings.cpp:2066
 msgid "Keep this display?"
 msgstr "保留这个显示设置？"
 
-#: src117/port/front/port_front_settings.cpp:2055
+#: src117/port/front/port_front_settings.cpp:2075
 msgid "Allow"
 msgstr "允许"
 
-#: src117/port/front/port_front_settings.cpp:2055
+#: src117/port/front/port_front_settings.cpp:2075
 msgid "Don't allow"
 msgstr "不允许"
 
-#: src117/port/front/port_front_settings.cpp:2056
+#: src117/port/front/port_front_settings.cpp:2076
 msgid "Open the live channel?"
 msgstr "打开实时通道？"
 
-#: src117/port/front/port_front_settings.cpp:2062
+#: src117/port/front/port_front_settings.cpp:2082
 msgid "The setting “{0}” changes when Hyperion next starts."
 msgstr "设置“{0}”会在 Hyperion 下次启动时生效。"
 
-#: src117/port/front/port_front_settings.cpp:2065
+#: src117/port/front/port_front_settings.cpp:2085
 msgid "Restart now"
 msgstr "立即重启"
 
-#: src117/port/front/port_front_settings.cpp:2065
+#: src117/port/front/port_front_settings.cpp:2085
 msgid "Later"
 msgstr "稍后"
 
-#: src117/port/front/port_front_settings.cpp:2068
-#: src117/port/front/port_front_settings.cpp:2072
+#: src117/port/front/port_front_settings.cpp:2088
+#: src117/port/front/port_front_settings.cpp:2092
 msgid "Restart Hyperion"
 msgstr "重启 Hyperion"
 
-#: src117/port/front/port_front_settings.cpp:2189
+#: src117/port/front/port_front_settings.cpp:2209
 msgid "Restore Defaults"
 msgstr "恢复默认"
 
-#: src117/port/front/port_front_settings.cpp:2272
+#: src117/port/front/port_front_settings.cpp:2292
 msgid "Changes apply when you accept them."
 msgstr "更改在确认后生效。"
 
-#: src117/port/front/port_front_settings.cpp:2309
+#: src117/port/front/port_front_settings.cpp:2329
 msgid "A control group’s key is a letter or a digit."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:2321
-#: src117/port/front/port_front_settings.cpp:2343
+#: src117/port/front/port_front_settings.cpp:2341
+#: src117/port/front/port_front_settings.cpp:2363
 msgid "{0} is {1}’s key."
 msgstr "{0} 已分配给{1}。"
 
-#: src117/port/front/port_front_settings.cpp:2331
+#: src117/port/front/port_front_settings.cpp:2351
 msgid "That key is the system’s. A letter, a digit, F1 to F12 and Tab are free."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:2396
+#: src117/port/front/port_front_settings.cpp:2416
 msgid "No classic StarCraft files there: its folder holds StarDat.mpq and BrooDat.mpq."
 msgstr "那里没有经典版 StarCraft 的文件：它的文件夹里应有 StarDat.mpq 和 BrooDat.mpq。"
 
-#: src117/port/front/port_front_settings.cpp:2405
+#: src117/port/front/port_front_settings.cpp:2425
 msgid "No StarCraft: Remastered install there: its folder holds .build.info."
 msgstr "那里没有 StarCraft: Remastered 的安装：它的文件夹里应有 .build.info。"
 
-#: src117/port/front/port_front_settings.cpp:618
+#: src117/port/front/port_front_settings.cpp:620
 msgid "The install’s ({0})"
 msgstr "随安装附带的（{0}）"
 
-#: src117/port/front/port_front_settings.cpp:893
+#: src117/port/front/port_front_settings.cpp:895
 msgid "Slowest|Slower|Slow|Normal|Fast|Faster|Fastest"
 msgstr "最慢|更慢|慢|常规|快|更快|最快"
 
-#: src117/port/front/port_front_settings.cpp:894
+#: src117/port/front/port_front_settings.cpp:896
 msgid "Single player; the lobby sets it in multiplayer."
 msgstr "单人游戏使用；多人游戏由房间设定。"
 
-#: src117/port/front/port_front_settings.cpp:895
+#: src117/port/front/port_front_settings.cpp:897
 msgid "Game frame timing"
 msgstr "游戏帧时序"
 
-#: src117/port/front/port_front_settings.cpp:895
+#: src117/port/front/port_front_settings.cpp:897
 msgid "Classic|Even"
 msgstr "经典|均匀"
 
-#: src117/port/front/port_front_settings.cpp:896
+#: src117/port/front/port_front_settings.cpp:898
 msgid "When each game frame runs. Classic, on the system timer, which steps every 15.6 ms, so at Fastest frames come 31 or 47 ms apart and units move unevenly; Even, on the precise clock, 42 ms apart. What a frame does is the same either way."
 msgstr "每个游戏帧何时运行。“经典”使用系统计时器，它每 15.6 ms 跳一次，因此在“最快”速度下两帧相隔 31 或 47 ms，单位移动不太均匀；“均匀”使用精确时钟，固定相隔 42 ms。无论哪种，每一帧做的事都一样。"
 
-#: src117/port/front/port_front_settings.cpp:897
+#: src117/port/front/port_front_settings.cpp:899
 msgid "Mouse scroll speed"
 msgstr "鼠标滚屏速度"
 
-#: src117/port/front/port_front_settings.cpp:897
 #: src117/port/front/port_front_settings.cpp:899
 #: src117/port/front/port_front_settings.cpp:901
-#: src117/port/front/port_front_settings.cpp:1093
+#: src117/port/front/port_front_settings.cpp:903
+#: src117/port/front/port_front_settings.cpp:1095
 msgid "Slow|Fast"
 msgstr "慢|快"
 
-#: src117/port/front/port_front_settings.cpp:899
+#: src117/port/front/port_front_settings.cpp:901
 msgid "Keyboard scroll speed"
 msgstr "按键滚屏速度"
 
-#: src117/port/front/port_front_settings.cpp:901
+#: src117/port/front/port_front_settings.cpp:903
 msgid "Mouse sensitivity"
 msgstr "鼠标灵敏度"
 
-#: src117/port/front/port_front_settings.cpp:902
+#: src117/port/front/port_front_settings.cpp:904
 msgid "On, the cursor in a game moves by the mouse’s movement times a scale, from half Windows’ speed to twice it, the same at the middle. It needs the cursor held in the window (Confine the mouse to the window), and stops while Ctrl+Alt has let it go. Off, Windows’ own speed, as the original has it."
 msgstr "开启后，游戏中的指针按鼠标移动量乘上一个倍数移动，范围从 Windows 速度的一半到两倍，中间档与它相同。它需要把指针限制在窗口内（“把鼠标限制在窗口内”），并在 Ctrl+Alt 放开指针期间暂停。关闭则使用 Windows 自己的速度，与原版一样。"
 
-#: src117/port/front/port_front_settings.cpp:903
+#: src117/port/front/port_front_settings.cpp:905
 msgid "Confine the mouse to the window"
 msgstr "把鼠标限制在窗口内"
 
-#: src117/port/front/port_front_settings.cpp:904
+#: src117/port/front/port_front_settings.cpp:906
 msgid "In a game, the cursor stays in the window, as the original kept it; edge scrolling in a window needs it. Off, it leaves the window freely. Dragging on the minimap holds it there either way. Ctrl+Alt lets it go until you click the game, as in VMware."
 msgstr "游戏中指针会留在窗口内，与原版一样；窗口模式下的边缘滚屏需要它。关闭则指针可以自由离开窗口。无论哪种，在微缩地图上拖动时指针都会留在那里。按 Ctrl+Alt 可以放开指针，直到你点击游戏画面，就像在 VMware 中一样。"
 
-#: src117/port/front/port_front_settings.cpp:905
+#: src117/port/front/port_front_settings.cpp:907
 msgid "Smooth minimap drag"
 msgstr "微缩地图平滑拖动"
 
-#: src117/port/front/port_front_settings.cpp:906
+#: src117/port/front/port_front_settings.cpp:908
 msgid "Dragging on the minimap moves the view a tile at a time, as the original does. On, the camera follows the drag smoothly between the tiles. A press on the minimap goes there at once either way."
 msgstr "在微缩地图上拖动时，视野按格跳动，与原版一样。开启后，镜头会在格与格之间平滑跟随拖动。无论哪种，在微缩地图上按下都会立刻跳到那里。"
 
-#: src117/port/front/port_front_settings.cpp:907
+#: src117/port/front/port_front_settings.cpp:909
 msgid "Hardware cursor"
 msgstr "硬件指针"
 
-#: src117/port/front/port_front_settings.cpp:908
+#: src117/port/front/port_front_settings.cpp:910
 msgid "On, the system draws the game’s cursor over the window, so it moves with the mouse between the game’s frames; the art is the original’s, scaled as the game is. Off, the game draws it into each frame, as the original does. A browser’s player on a streamed seat always has it drawn into the frame."
 msgstr "开启后，由系统在窗口上绘制游戏指针，因此它在游戏帧之间也会随鼠标移动；图像仍是原版的，并随游戏一起缩放。关闭则由游戏把它画进每一帧，与原版一样。串流座位上的浏览器播放器始终把它画进画面。"
 
-#: src117/port/front/port_front_settings.cpp:909
+#: src117/port/front/port_front_settings.cpp:911
 msgid "Save a replay of every game"
 msgstr "为每局游戏保存录像"
 
-#: src117/port/front/port_front_settings.cpp:910
+#: src117/port/front/port_front_settings.cpp:912
 msgid "The original writes every game’s replay as LastReplay, which the next game writes over. On, a copy of each is kept in the replays folder’s AutoSave folder, named by the date and the map."
 msgstr "原版把每局游戏的录像写成 LastReplay，并被下一局覆盖。开启后，会在录像文件夹的 AutoSave 文件夹中各保留一份，以日期和地图命名。"
 
-#: src117/port/front/port_front_settings.cpp:911
+#: src117/port/front/port_front_settings.cpp:913
 msgid "Run in the background"
 msgstr "在后台继续运行"
 
-#: src117/port/front/port_front_settings.cpp:912
+#: src117/port/front/port_front_settings.cpp:914
 msgid "Off, as the original: a single-player game and a replay pause while another window has the focus, and go on when you come back. On, they go on behind it. A multiplayer game always goes on. Sound in the background (Sound) decides whether you hear it."
 msgstr "关闭则与原版一样：其他窗口获得焦点时，单人游戏和录像会暂停，回来后继续。开启则会在后台继续运行。多人游戏始终继续运行。是否能听到声音由“后台声音”（声音）决定。"
 
-#: src117/port/front/port_front_settings.cpp:913
+#: src117/port/front/port_front_settings.cpp:915
 msgid "Network latency"
 msgstr "网络延迟"
 
-#: src117/port/front/port_front_settings.cpp:913
+#: src117/port/front/port_front_settings.cpp:915
 msgid "Low|High|Extra high"
 msgstr "低|高|超高"
 
-#: src117/port/front/port_front_settings.cpp:914
+#: src117/port/front/port_front_settings.cpp:916
 msgid "How far ahead the players’ commands are sent in a multiplayer game. Low carries them out soonest; High and Extra high wait a little longer for each, so a slow or distant connection holds the game up less. Changed in a multiplayer game’s menu, as the original’s Network dialog changed it, it changes for every player."
 msgstr "多人游戏中玩家的命令提前多久发出。“低”执行得最快；“高”和“超高”会为每条命令多等一会儿，这样较慢或较远的连接就不会那么拖慢游戏。像原版的“网络”对话框那样，在多人游戏的菜单中更改时，会对所有玩家生效。"
 
-#: src117/port/front/port_front_settings.cpp:915
+#: src117/port/front/port_front_settings.cpp:917
 msgid "Display"
 msgstr "显示模式"
 
-#: src117/port/front/port_front_settings.cpp:915
+#: src117/port/front/port_front_settings.cpp:917
 msgid "Window|Full screen|Borderless full screen"
 msgstr "窗口|全屏|无边框全屏"
 
-#: src117/port/front/port_front_settings.cpp:916
+#: src117/port/front/port_front_settings.cpp:918
 msgid "Accept shows the new display at once and asks to keep it; Escape, Revert or 15 seconds go back. Only a kept display is saved. Alt+Enter switches between the saved window and the saved full screen."
 msgstr "确认后会立刻切换到新的显示设置并询问是否保留；按 Esc、“还原”或等待 15 秒都会退回原来的设置。只有保留下来的设置才会被保存。Alt+Enter 可在已保存的窗口和已保存的全屏之间切换。"
 
-#: src117/port/front/port_front_settings.cpp:917
+#: src117/port/front/port_front_settings.cpp:919
 msgid "Monitor and resolution"
 msgstr "显示器与分辨率"
 
-#: src117/port/front/port_front_settings.cpp:918
+#: src117/port/front/port_front_settings.cpp:920
 msgid "What the chosen Display offers. Borderless: each monitor at its desktop size. Full screen: every display mode of each monitor. Window: the sizes that fit on the monitor with the window frame. Changing Display picks the closest on the same monitor."
 msgstr "所选“显示模式”能提供的选项。无边框：每个显示器使用它的桌面尺寸。全屏：每个显示器的所有显示模式。窗口：加上窗口边框后仍放得进显示器的尺寸。更改“显示模式”时会在同一显示器上选择最接近的一项。"
 
-#: src117/port/front/port_front_settings.cpp:920
+#: src117/port/front/port_front_settings.cpp:922
 msgid "Vulkan (Recommended)|Direct3D 12"
 msgstr "Vulkan（推荐）|Direct3D 12"
 
-#: src117/port/front/port_front_settings.cpp:921
+#: src117/port/front/port_front_settings.cpp:923
 msgid "The graphics card’s interface Hyperion draws through. Vulkan shows each frame soonest; Direct3D 12 is there for a card or driver that Vulkan does not run well on. If the one chosen does not start, Hyperion draws through one that does."
 msgstr "Hyperion 绘图所用的显卡接口。Vulkan 呈现每一帧最快；Direct3D 12 则用于 Vulkan 运行不佳的显卡或驱动。如果所选的无法启动，Hyperion 会改用可用的那一个。"
 
-#: src117/port/front/port_front_settings.cpp:923
+#: src117/port/front/port_front_settings.cpp:925
 msgid "Art"
 msgstr "图像"
 
-#: src117/port/front/port_front_settings.cpp:923
+#: src117/port/front/port_front_settings.cpp:925
 msgid "Classic|Remastered HD"
 msgstr "经典|Remastered HD"
 
-#: src117/port/front/port_front_settings.cpp:924
+#: src117/port/front/port_front_settings.cpp:926
 msgid "Remastered’s High Definition box. The art hotkey (F5, as in Remastered) switches it in a game, blending over half a second, and the setting keeps it. Needs the StarCraft: Remastered install (the Hyperion tab) and the GPU renderer."
 msgstr "对应 Remastered 的“高清图像”开关。图像快捷键（F5，与 Remastered 相同）可在游戏中切换，切换时有半秒的渐变，设置会记住它。需要 StarCraft: Remastered 的安装（Hyperion 选项卡）和 GPU 渲染器。"
 
-#: src117/port/front/port_front_settings.cpp:925
+#: src117/port/front/port_front_settings.cpp:927
 msgid "View shape"
 msgstr "画面比例"
 
-#: src117/port/front/port_front_settings.cpp:925
+#: src117/port/front/port_front_settings.cpp:927
 msgid "4:3, as the original|Widescreen, 16:9|Fit the screen"
 msgstr "4:3，与原版相同|宽屏 16:9|适应屏幕"
 
-#: src117/port/front/port_front_settings.cpp:926
+#: src117/port/front/port_front_settings.cpp:928
 msgid "Remastered’s letterbox box: the shape a game starts at, the screen’s own unless another is chosen. The view hotkey (Ctrl+F5) switches between 4:3 and the wide shape in a game, and the setting keeps it. --view on the command line goes before it. Whether a lobby can hold everyone to a shape is decided with multiplayer."
 msgstr "对应 Remastered 的“黑边模式”开关：游戏开始时的画面比例，未另行选择时使用屏幕自身的比例。画面快捷键（Ctrl+F5）可在游戏中切换 4:3 和宽屏，设置会记住它。命令行的 --view 优先于它。房间能否要求所有人使用同一比例，将与多人游戏一起确定。"
 
-#: src117/port/front/port_front_settings.cpp:927
+#: src117/port/front/port_front_settings.cpp:929
 msgid "Classic art filtering"
 msgstr "经典图像过滤"
 
-#: src117/port/front/port_front_settings.cpp:927
+#: src117/port/front/port_front_settings.cpp:929
 msgid "Sharp|Soft|Softer|Filtered"
 msgstr "锐利|柔和|更柔和|全过滤"
 
-#: src117/port/front/port_front_settings.cpp:928
+#: src117/port/front/port_front_settings.cpp:930
 msgid "How the 640 × 480 art is scaled up to the screen. Sharp keeps every pixel square and smooths only its edges, as Hyperion has drawn it until now; Soft and Softer blend more of each pixel into the next; Filtered blends them all. The HD art is always drawn sharp. SDL’s renderer has Sharp and Filtered alone."
 msgstr "640 × 480 的图像如何放大到屏幕上。“锐利”保持每个像素方正，只对边缘做平滑，也就是 Hyperion 此前的画法；“柔和”和“更柔和”让相邻像素更多地互相融合；“全过滤”则全部融合。HD 图像始终锐利绘制。SDL 渲染器只有“锐利”和“全过滤”。"
 
-#: src117/port/front/port_front_settings.cpp:929
-#: src117/port/front/port_front_settings.cpp:979
+#: src117/port/front/port_front_settings.cpp:931
+#: src117/port/front/port_front_settings.cpp:981
 #: src117/port/lan/port_front_lanhost.cpp:1270
 msgid "Frame rate"
 msgstr "帧率"
 
-#: src117/port/front/port_front_settings.cpp:929
+#: src117/port/front/port_front_settings.cpp:931
 msgid "Classic|60|Match the display|144|240|No limit"
 msgstr "经典|60|跟随显示器|144|240|不限制"
 
-#: src117/port/front/port_front_settings.cpp:930
+#: src117/port/front/port_front_settings.cpp:932
 msgid "How often a frame is drawn. Classic, only when the game has something new, about 80 a second, so a scroll steps. Past it, scrolls and the camera glide at the rate chosen. With Vertical sync on, no more are drawn than the display shows, since the rest would only wait in line for it."
 msgstr "画面多久绘制一次。“经典”只在游戏有新内容时绘制，大约每秒 80 帧，因此滚屏是跳动的。更高的档位会让滚屏和镜头按所选帧率平滑移动。开启“垂直同步”时，不会绘制超过显示器能显示的帧数，因为多出来的只会排队等待。"
 
-#: src117/port/front/port_front_settings.cpp:931
+#: src117/port/front/port_front_settings.cpp:933
 msgid "Vertical sync"
 msgstr "垂直同步"
 
-#: src117/port/front/port_front_settings.cpp:932
+#: src117/port/front/port_front_settings.cpp:934
 msgid "Each frame waits for the display’s refresh, so it never tears. Off, frames show the moment they are drawn."
 msgstr "每一帧都等待显示器刷新，因此画面不会撕裂。关闭则画面一绘制完就立刻显示。"
 
-#: src117/port/front/port_front_settings.cpp:933
+#: src117/port/front/port_front_settings.cpp:935
 msgid "Frames ahead"
 msgstr "预渲染帧数"
 
-#: src117/port/front/port_front_settings.cpp:933
+#: src117/port/front/port_front_settings.cpp:935
 msgid "1|2|3"
 msgstr "1|2|3"
 
-#: src117/port/front/port_front_settings.cpp:934
+#: src117/port/front/port_front_settings.cpp:936
 msgid "How many frames the game may prepare before the graphics card has drawn them. 1 shows each frame soonest after it is made; 3 keeps the card busiest when it is the slower part, a little later to the screen; 2 is between them."
 msgstr "游戏最多可以在显卡绘制完成之前准备多少帧。1 让每一帧在生成后最快显示；3 在显卡是瓶颈时让它最忙，到屏幕上会稍晚一点；2 介于两者之间。"
 
-#: src117/port/front/port_front_settings.cpp:935
+#: src117/port/front/port_front_settings.cpp:937
 msgid "Menu background quality"
 msgstr "菜单背景质量"
 
-#: src117/port/front/port_front_settings.cpp:935
+#: src117/port/front/port_front_settings.cpp:937
 msgid "Auto|High|Low"
 msgstr "自动|高|低"
 
-#: src117/port/front/port_front_settings.cpp:936
+#: src117/port/front/port_front_settings.cpp:938
 msgid "The planet behind the menus, the most a menu frame asks of the graphics card. Auto draws it at a lower resolution when the card cannot keep up with the display; High always at full; Low always at a lower one. It is soft, so a lower resolution hardly shows."
 msgstr "菜单背后的星球，也就是菜单每一帧对显卡的最大要求。“自动”在显卡跟不上显示器时用较低分辨率绘制；“高”始终用完整分辨率；“低”始终用较低分辨率。它本身很柔和，因此较低的分辨率几乎看不出来。"
 
-#: src117/port/front/port_front_settings.cpp:937
+#: src117/port/front/port_front_settings.cpp:939
 msgid "Gamma"
 msgstr "灰度校正"
 
-#: src117/port/front/port_front_settings.cpp:937
+#: src117/port/front/port_front_settings.cpp:939
 msgid "Dark|Bright"
 msgstr "暗|亮"
 
-#: src117/port/front/port_front_settings.cpp:938
+#: src117/port/front/port_front_settings.cpp:940
 msgid "The original’s Gamma Correction."
 msgstr "对应原版的“灰度校正”。"
 
-#: src117/port/front/port_front_settings.cpp:939
+#: src117/port/front/port_front_settings.cpp:941
 msgid "Colour cycling"
 msgstr "色彩循环"
 
-#: src117/port/front/port_front_settings.cpp:940
+#: src117/port/front/port_front_settings.cpp:942
 msgid "Water and lava animation."
 msgstr "水和岩浆的动画。"
 
-#: src117/port/front/port_front_settings.cpp:941
+#: src117/port/front/port_front_settings.cpp:943
 msgid "Smooth unit turning"
 msgstr "平滑单位转向"
 
-#: src117/port/front/port_front_settings.cpp:941
+#: src117/port/front/port_front_settings.cpp:943
 msgid "Remastered’s in-between facings in the HD art"
 msgstr "HD 图像中 Remastered 的过渡朝向"
 
-#: src117/port/front/port_front_settings.cpp:942
+#: src117/port/front/port_front_settings.cpp:944
 msgid "HD only: Remastered’s in-between facings."
 msgstr "仅 HD 图像：Remastered 的过渡朝向。"
 
-#: src117/port/front/port_front_settings.cpp:943
+#: src117/port/front/port_front_settings.cpp:945
 msgid "HD lighting"
 msgstr "HD 实时光照"
 
-#: src117/port/front/port_front_settings.cpp:944
+#: src117/port/front/port_front_settings.cpp:946
 msgid "Remastered’s real-time lighting on the HD art: each unit and building shaded by its own normal, specular and occlusion maps, lit from above and by the explosions, fire and muzzle flashes around it, with its lights glowing. Remastered’s box also sways foliage and stacks shadows, which Hyperion does not do yet."
 msgstr "Remastered 在 HD 图像上的实时光照：每个单位和建筑都按自己的法线、高光和遮蔽贴图着色，受上方光源以及周围的爆炸、火焰和枪口闪光照亮，自身的灯光也会发光。Remastered 的这个开关还会让植被摇摆、让阴影叠加，这两项 Hyperion 还没有实现。"
 
-#: src117/port/front/port_front_settings.cpp:945
+#: src117/port/front/port_front_settings.cpp:947
 msgid "Player colours"
 msgstr "玩家颜色"
 
-#: src117/port/front/port_front_settings.cpp:945
+#: src117/port/front/port_front_settings.cpp:947
 msgid "Classic|Exact"
 msgstr "经典|精确"
 
-#: src117/port/front/port_front_settings.cpp:946
+#: src117/port/front/port_front_settings.cpp:948
 msgid "A Remastered map can give each player an exact colour. Exact draws the map’s own, with the map in full colour: shadows, the fog and translucent effects blended as colours. Classic draws every pixel as the original does, a map’s colour as the closest of the original’s. Exact needs the GPU renderer."
 msgstr "Remastered 的地图可以为每名玩家指定精确的颜色。“精确”会绘制地图指定的颜色，并以全彩显示地图：阴影、迷雾和半透明效果都按颜色混合。“经典”像原版一样绘制每个像素，地图指定的颜色取原版中最接近的一种。“精确”需要 GPU 渲染器。"
 
-#: src117/port/front/port_front_settings.cpp:947
+#: src117/port/front/port_front_settings.cpp:949
 msgid "Music"
 msgstr "音乐"
 
-#: src117/port/front/port_front_settings.cpp:947
 #: src117/port/front/port_front_settings.cpp:949
-#: src117/port/front/port_front_settings.cpp:965
+#: src117/port/front/port_front_settings.cpp:951
+#: src117/port/front/port_front_settings.cpp:967
 msgid "Min|Max"
 msgstr "最小|最大"
 
-#: src117/port/front/port_front_settings.cpp:950
+#: src117/port/front/port_front_settings.cpp:952
 msgid "The original calls it Digital Volume. Both volumes start where the original’s do: music at 25, sound at 50."
 msgstr "原版称之为“数字音量”。两个音量的初始值与原版相同：音乐 25，音效 50。"
 
-#: src117/port/front/port_front_settings.cpp:951
+#: src117/port/front/port_front_settings.cpp:953
 msgid "Unit speech"
 msgstr "单位台词"
 
-#: src117/port/front/port_front_settings.cpp:953
+#: src117/port/front/port_front_settings.cpp:955
 msgid "Unit acknowledgements"
 msgstr "单位确认"
 
-#: src117/port/front/port_front_settings.cpp:955
+#: src117/port/front/port_front_settings.cpp:957
 msgid "Building sounds"
 msgstr "建筑声音"
 
-#: src117/port/front/port_front_settings.cpp:957
+#: src117/port/front/port_front_settings.cpp:959
 msgid "Subtitles"
 msgstr "游戏字幕"
 
-#: src117/port/front/port_front_settings.cpp:959
+#: src117/port/front/port_front_settings.cpp:961
 msgid "Cinematic subtitles"
 msgstr "影片字幕"
 
-#: src117/port/front/port_front_settings.cpp:960
+#: src117/port/front/port_front_settings.cpp:962
 msgid "Remastered’s subtitles over the cinematics that speak, in English, read from the StarCraft: Remastered install. Off, the cinematics as the original shows them, without words."
 msgstr "Remastered 为有台词的过场影片提供的英文字幕，从 StarCraft: Remastered 的安装中读取。关闭则与原版一样，影片不带字幕。"
 
-#: src117/port/front/port_front_settings.cpp:961
+#: src117/port/front/port_front_settings.cpp:963
 msgid "Sound in the background"
 msgstr "后台声音"
 
-#: src117/port/front/port_front_settings.cpp:962
+#: src117/port/front/port_front_settings.cpp:964
 msgid "Off, as the original: the game’s sounds stop while another window is in front. On, they go on playing behind it."
 msgstr "关闭则与原版一样：其他窗口在前时游戏声音停止。开启则会在后台继续播放。"
 
-#: src117/port/front/port_front_settings.cpp:963
+#: src117/port/front/port_front_settings.cpp:965
 msgid "Unit voices"
 msgstr "单位语音"
 
-#: src117/port/front/port_front_settings.cpp:963
+#: src117/port/front/port_front_settings.cpp:965
 msgid "Classic|Remastered"
 msgstr "经典|Remastered"
 
-#: src117/port/front/port_front_settings.cpp:964
+#: src117/port/front/port_front_settings.cpp:966
 msgid "Remastered, the voices and the other sounds of a game as Remastered recorded them again, at twice the original’s sample rate, read from the StarCraft: Remastered install; a sound it does not have plays as the original’s. Classic, the original’s. Remastered’s original voice-over box, the other way round."
 msgstr "选“Remastered”则使用 Remastered 重新录制的语音和其他游戏声音，采样率是原版的两倍，从 StarCraft: Remastered 的安装中读取；它没有的声音则播放原版的。选“经典”则使用原版的声音。相当于 Remastered 的“原版单位语音”开关，只是方向相反。"
 
-#: src117/port/front/port_front_settings.cpp:965
+#: src117/port/front/port_front_settings.cpp:967
 msgid "Master volume"
 msgstr "主音量"
 
-#: src117/port/front/port_front_settings.cpp:966
+#: src117/port/front/port_front_settings.cpp:968
 msgid "One volume over everything Hyperion plays, on top of Music and Sound: the game’s sounds, the music and the cinematics. At Max they are as loud as the original makes them."
 msgstr "覆盖 Hyperion 播放的一切的总音量，叠加在“音乐”和“音效”之上：游戏声音、音乐和过场影片。调到“最大”时，它们和原版一样响。"
 
-#: src117/port/front/port_front_settings.cpp:967
+#: src117/port/front/port_front_settings.cpp:969
 msgid "Colour theme"
 msgstr "配色主题"
 
-#: src117/port/front/port_front_settings.cpp:968
+#: src117/port/front/port_front_settings.cpp:970
 msgid "The menus’ colours: an accent, a second accent and the panels. Blue and gold is the design’s own. Custom takes three colours you pick, and with its lightness yours, any text that would grow hard to read is lightened until it reads. The planet, the player colours and the map pictures are never themed."
 msgstr "菜单的配色：一个主色、一个辅色和面板色。“蓝金”是这套设计自带的配色。“自定义”使用你挑选的三种颜色，亮度也由你决定，任何会变得难以辨认的文字都会被提亮到看得清为止。星球、玩家颜色和地图预览从不跟随主题。"
 
-#: src117/port/front/port_front_settings.cpp:969
+#: src117/port/front/port_front_settings.cpp:971
 msgid "Unit portraits"
 msgstr "单位头像"
 
-#: src117/port/front/port_front_settings.cpp:969
+#: src117/port/front/port_front_settings.cpp:971
 msgid "Animated|Still|Off"
 msgstr "动画|静止|关闭"
 
-#: src117/port/front/port_front_settings.cpp:971
+#: src117/port/front/port_front_settings.cpp:973
 msgid "Console layout"
 msgstr "控制台布局"
 
-#: src117/port/front/port_front_settings.cpp:971
+#: src117/port/front/port_front_settings.cpp:973
 msgid "One block|To the edges"
 msgstr "整块|靠向边缘"
 
-#: src117/port/front/port_front_settings.cpp:972
+#: src117/port/front/port_front_settings.cpp:974
 msgid "With the HD art in a view wider than 4:3: To the edges puts the console’s three parts, the minimap, the selection and the command card, toward the screen’s corners, as Remastered draws its HD console; One block keeps it in one piece in the middle, as the original draws it. A mod’s own console may keep it in one block."
 msgstr "在比 4:3 更宽的画面中使用 HD 图像时：“靠向边缘”会把控制台的三部分——微缩地图、选择面板和指令面板——分别靠向屏幕的角落，与 Remastered 绘制 HD 控制台的方式一样；“整块”则像原版一样把它们整体放在中间。模组自带的控制台可能始终保持整块。"
 
-#: src117/port/front/port_front_settings.cpp:973
+#: src117/port/front/port_front_settings.cpp:975
 msgid "Console skin"
 msgstr "控制台外观"
 
-#: src117/port/front/port_front_settings.cpp:973
+#: src117/port/front/port_front_settings.cpp:975
 msgid "By race|Terran|Protoss|Zerg"
 msgstr "按种族|人类|星灵|异虫"
 
-#: src117/port/front/port_front_settings.cpp:974
+#: src117/port/front/port_front_settings.cpp:976
 msgid "The console in a game you play: the race played’s, as the original, or one race’s whatever you play, with its command buttons, chat box and panels. The advisor’s voice and the supply icon stay your race’s, and a replay keeps its own console."
 msgstr "你所玩对局中的控制台：与原版一样使用所玩种族的，或者无论玩什么都使用某一个种族的，连同它的指令按钮、聊天框和面板。顾问的语音和补给图标仍跟随你的种族，录像则保留它自己的控制台。"
 
-#: src117/port/front/port_front_settings.cpp:975
+#: src117/port/front/port_front_settings.cpp:977
 msgid "Game timer"
 msgstr "游戏计时"
 
-#: src117/port/front/port_front_settings.cpp:976
+#: src117/port/front/port_front_settings.cpp:978
 msgid "The game’s time at the top left, as Remastered shows it: at Fastest, 42 ms a frame, which is real time when the game is played at Fastest. The original’s replay panel counts slower, in Normal’s seconds."
 msgstr "左上角的游戏时间，与 Remastered 的显示方式一样：按“最快”速度每帧 42 ms 计算，所以在“最快”速度下玩时它就是实际时间。原版的录像面板走得更慢，按“常规”速度的秒数计。"
 
-#: src117/port/front/port_front_settings.cpp:978
+#: src117/port/front/port_front_settings.cpp:980
 msgid "Your actions over the last game minute, under the timer: every command you give, but not chat, pausing or saving. Not in replays. Remastered can also alert at a chosen rate, which Hyperion does not yet."
 msgstr "计时下方显示你在最近一分钟游戏时间内的操作：你下的每条命令，但不含聊天、暂停和保存。录像中不显示。Remastered 还能在达到设定值时提示，Hyperion 还没有。"
 
-#: src117/port/front/port_front_settings.cpp:980
+#: src117/port/front/port_front_settings.cpp:982
 msgid "The frames shown each second, under the timer. The original’s loop draws about 80. Remastered has it in its exe with no control."
 msgstr "计时下方显示每秒绘制的帧数。原版的循环大约绘制 80 帧。Remastered 把它做在 exe 里，没有开关。"
 
-#: src117/port/front/port_front_settings.cpp:981
+#: src117/port/front/port_front_settings.cpp:983
 msgid "Mature language filter"
 msgstr "语言过滤器"
 
-#: src117/port/front/port_front_settings.cpp:982
+#: src117/port/front/port_front_settings.cpp:984
 msgid "Players’ chat, in a game, a replay and the lobbies, shown with the words on Remastered’s English list starred out, the list read from the StarCraft: Remastered install. A replay keeps what was sent."
 msgstr "游戏、录像和房间里玩家的聊天，会把 Remastered 英文词表中的词用星号遮掉，词表从 StarCraft: Remastered 的安装中读取。录像保留实际发送的内容。"
 
-#: src117/port/front/port_front_settings.cpp:983
+#: src117/port/front/port_front_settings.cpp:985
 msgid "Language"
 msgstr "语言"
 
-#: src117/port/front/port_front_settings.cpp:984
+#: src117/port/front/port_front_settings.cpp:986
 msgid "Hyperion’s menus and the game’s text, as in Remastered. The install’s is the language StarCraft: Remastered was installed in. The game’s text in another language needs that language’s text in the install, which Battle.net installs for its chosen language alone, else the game stays in English. Hyperion’s own text is a first translation, which players are welcome to correct."
 msgstr "Hyperion 的菜单和游戏文本，与 Remastered 一样。“随安装附带”指 StarCraft: Remastered 安装时使用的语言。要让游戏文本使用其他语言，安装中必须有该语言的文本，而 Battle.net 只会安装它所选语言的文本，否则游戏仍为英文。Hyperion 自己的文本是初版翻译，欢迎玩家指正。"
 
-#: src117/port/front/port_front_settings.cpp:986
+#: src117/port/front/port_front_settings.cpp:988
 msgid "The keys that select a group and, with Ctrl, make the selection a group (Shift adds to it, Alt selects and centres): the ten digits, then nine more, the groups 11 to 19, on R, F, V, T, G, B, Y, H and N, which hold units and buildings alike, and which win their letters outright: R no longer repairs, T no longer stims, and G, B and H are the groups' alone, the card keeping every other key. Click a key and press another to change it."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:987
+#: src117/port/front/port_front_settings.cpp:989
 msgid "Group 1"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:989
+#: src117/port/front/port_front_settings.cpp:991
 msgid "Group 2"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:991
+#: src117/port/front/port_front_settings.cpp:993
 msgid "Group 3"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:993
+#: src117/port/front/port_front_settings.cpp:995
 msgid "Group 4"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:995
+#: src117/port/front/port_front_settings.cpp:997
 msgid "Group 5"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:997
-msgid "Group 6"
-msgstr ""
-
 #: src117/port/front/port_front_settings.cpp:999
-msgid "Group 7"
+msgid "Group 6"
 msgstr ""
 
 #: src117/port/front/port_front_skirmish.cpp:1240
@@ -8402,29 +8414,29 @@ msgstr "你的房间仍然开着"
 msgid "This console is back in it."
 msgstr "这个控制台已回到房间。"
 
-#: src117/port/lan/port_front_lan.cpp:1971
+#: src117/port/lan/port_front_lan.cpp:1977
 msgid "The Match Did Not Come"
 msgstr "比赛没有传过来"
 
-#: src117/port/lan/port_front_lan.cpp:1971
+#: src117/port/lan/port_front_lan.cpp:1977
 msgid "The room sent nothing of it. It may have ended."
 msgstr "房间没有发来它的任何内容。它可能已经结束。"
 
-#: src117/port/lan/port_front_lan.cpp:2119
+#: src117/port/lan/port_front_lan.cpp:2125
 msgid "The server stopped"
 msgstr "服务器已停止"
 
-#: src117/port/lan/port_front_lan.cpp:2119
+#: src117/port/lan/port_front_lan.cpp:2125
 msgid "Nobody can join until it starts again."
 msgstr "在它重新启动前，没有人能加入。"
 
-#: src117/port/lan/port_front_lan.cpp:2126
+#: src117/port/lan/port_front_lan.cpp:2132
 msgid "The match did not start"
 msgstr "比赛没有开始"
 
-#: src117/port/lan/port_front_lan.cpp:2139
-#: src117/port/lan/port_front_lan.cpp:2148
-#: src117/port/lan/port_front_lan.cpp:2162
+#: src117/port/lan/port_front_lan.cpp:2145
+#: src117/port/lan/port_front_lan.cpp:2154
+#: src117/port/lan/port_front_lan.cpp:2168
 msgid "The match could not start here"
 msgstr "比赛无法在这里开始"
 
@@ -8476,7 +8488,7 @@ msgstr "正在玩{0}"
 #: src117/port/lan/port_front_lan.cpp:423
 #: src117/port/lan/port_front_lan.cpp:1825
 #: src117/port/lan/port_front_lanhost.cpp:578
-#: src117/port/lan/port_lanlobby.cpp:108
+#: src117/port/lan/port_lanlobby.cpp:112
 msgid "a computer"
 msgid_plural "{0} computers"
 msgstr[0] "{0} 个电脑"
@@ -9422,60 +9434,60 @@ msgstr "每一个的原因都写在它的卡片上"
 msgid "Nobody has joined yet. The join card on the right says how."
 msgstr "还没有人加入。右侧的加入卡片会说明方法。"
 
-#: src117/port/lan/port_lanclient.cpp:257
+#: src117/port/lan/port_lanclient.cpp:258
 msgid "Another version"
 msgstr "版本不同"
 
-#: src117/port/lan/port_lanclient.cpp:259
+#: src117/port/lan/port_lanclient.cpp:260
 msgid "Its host plays {0}, and this copy is {1}: the two compute the game differently."
 msgstr "它的房主运行的是 {0}，而这个副本是 {1}：两者计算游戏的方式不同。"
 
-#: src117/port/lan/port_lanclient.cpp:261
+#: src117/port/lan/port_lanclient.cpp:262
 msgid "Its host's page offers its version to install beside this one."
 msgstr "它房主的页面提供了它的版本，可与当前这份并存安装。"
 
-#: src117/port/lan/port_lanclient.cpp:263
+#: src117/port/lan/port_lanclient.cpp:264
 msgid "Needs a mod"
 msgstr "需要模组"
 
-#: src117/port/lan/port_lanclient.cpp:265
+#: src117/port/lan/port_lanclient.cpp:266
 msgid "This copy has the mod {0} active, and the room plays without one."
 msgstr "这个副本启用了模组{0}，而房间不使用任何模组。"
 
-#: src117/port/lan/port_lanclient.cpp:266
+#: src117/port/lan/port_lanclient.cpp:267
 msgid "Its host plays the mod {0}, which this copy does not have active."
 msgstr "它的房主使用模组{0}，而这个副本没有启用它。"
 
-#: src117/port/lan/port_lanclient.cpp:267
+#: src117/port/lan/port_lanclient.cpp:268
 #: src117/port/lan/port_lanroom_proto.cpp:412
 msgid "Turn it off under Mods, then join."
 msgstr "请在“模组”里关闭它，然后加入。"
 
-#: src117/port/lan/port_lanclient.cpp:268
+#: src117/port/lan/port_lanclient.cpp:269
 msgid "Activate {0} under Mods, then join."
 msgstr "请在“模组”里启用{0}，然后加入。"
 
-#: src117/port/lan/port_lanclient.cpp:270
+#: src117/port/lan/port_lanclient.cpp:271
 msgid "Other game data"
 msgstr "游戏数据不同"
 
-#: src117/port/lan/port_lanclient.cpp:272
+#: src117/port/lan/port_lanclient.cpp:273
 msgid "Its game data is not this copy's (fingerprint {0})."
 msgstr "它的游戏数据与这个副本不同（指纹 {0}）。"
 
-#: src117/port/lan/port_lanclient.cpp:273
+#: src117/port/lan/port_lanclient.cpp:274
 msgid "Its host's page has the game data to install."
 msgstr "它房主的页面提供了可安装的游戏数据。"
 
-#: src117/port/lan/port_lanclient.cpp:276
+#: src117/port/lan/port_lanclient.cpp:277
 msgid "Plays here"
 msgstr "可以加入"
 
-#: src117/port/lan/port_lanclient.cpp:406
+#: src117/port/lan/port_lanclient.cpp:407
 msgid "The host removed you from the room."
 msgstr "房主已把你移出房间。"
 
-#: src117/port/lan/port_lanclient.cpp:408
+#: src117/port/lan/port_lanclient.cpp:409
 msgid "The room has closed."
 msgstr "房间已关闭。"
 
@@ -9499,16 +9511,16 @@ msgstr "{0} · 延迟 {1} 秒"
 msgid "L goes back to {0} s behind"
 msgstr "按 L 回到延迟 {0} 秒处"
 
-#: src117/port/lan/port_lanlobby.cpp:114
+#: src117/port/lan/port_lanlobby.cpp:118
 #: src117/port/platform/port_discord.cpp:615
 msgid "{0}, {1}"
 msgstr "{0}，{1}"
 
-#: src117/port/lan/port_lanlobby.cpp:184
+#: src117/port/lan/port_lanlobby.cpp:188
 msgid "A match"
 msgstr "一场比赛"
 
-#: src117/port/lan/port_lanlobby.cpp:699
+#: src117/port/lan/port_lanlobby.cpp:759
 msgid "Starting the match"
 msgstr "正在开始比赛"
 

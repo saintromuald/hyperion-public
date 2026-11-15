@@ -31,6 +31,7 @@
 
 #![allow(non_snake_case)]
 
+mod download;
 mod rehome;
 mod setup;
 

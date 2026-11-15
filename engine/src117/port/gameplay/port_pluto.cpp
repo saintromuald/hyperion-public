@@ -19,9 +19,11 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <SDL3/SDL.h>
 
 #include "port_pluto.h"
 #include "port_ai.h"  // AiProfileOf, AI_LEVEL_PLUTO
+#include "../data/port_pluto_runtime.h"  // shared runtime folder and inference capability
 #include "../../h/CUnit.h"
 #include "../../h/count.h"        // count_get_supplies_used/available
 #include "../../h/net_cmds.h"      // the net command structs and receivers
@@ -39,10 +41,8 @@
 #include "../../../tools/pluto-bridge/hxp_late.h"  // HXP4 late-state producer
 #include <fcntl.h>
 #include <sys/stat.h>
-#if defined(_MSC_VER)
-// Native Windows cannot create the POSIX FIFO used by the Wine bridge. Keep
-// the client compilable there; mkfifo fails cleanly before any bridge starts.
 #include <errno.h>
+#if defined(_MSC_VER)
 #include <io.h>
 #define open _open
 #define close _close
@@ -54,16 +54,11 @@
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
 #endif
-static int mkfifo(const char *, int) {
-  errno = ENOSYS;
-  return -1;
-}
 #else
 #include <unistd.h>
 #endif
 #include "../../gen/globals117.h"  // gPlayerData, gPlayerMinerals, gPlayerGas, gwMapWidth, gStartLocations
 #include "../platform/port_log.h"  // PortLogger
-#include "../platform/port_paths.h"  // PortDataFolder
 #include "../tools/port_bench.h"     // PortBenchPlaying
 
 extern GameHeader gGameHeader;
@@ -82,6 +77,7 @@ HANDLE s_hProc = NULL;
 HANDLE s_hToBridge = NULL;    // write: Hyperion -> the bridge's stdin
 HANDLE s_hFromBridge = NULL;  // read: the bridge's stdout -> Hyperion
 bool s_bUp = false;
+bool s_bInferenceReady = false;  // a complete reply arrived, not merely a child process
 bool s_bFailed = false;       // tried and could not start; do not try again
 
 // The frame's units, in the order sent (the bot's ids are kPlutoIdBase + i).
@@ -129,6 +125,20 @@ int FindPlutoSlot() {
     if (IsPlutoSlot(s) && gPlayerData[s].nType == 1)
       return s;
   return -1;
+}
+
+void PlutoClassicFallback(const std::string &reason) {
+  const int slot = s_nPlutoSlot;
+  Log("Pluto: %s; slot %d explicitly falls back to Classic", reason, slot);
+  const std::string text = "Pluto AI could not start or answer: " + reason +
+                           "\n\nThis slot will play Classic AI instead. Use Settings > Hyperion > "
+                           "Pluto AI runtime to repair it before the next game.";
+  SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Pluto AI unavailable", text.c_str(), NULL);
+  AiFallbackClassic(slot);
+  PlutoGameEnd();
+  s_nPlutoSlot = -1;
+  s_bFailed = true;
+  s_bInferenceReady = false;
 }
 
 // Resolve a classic owner exactly as replay turns do: find the player record by
@@ -219,14 +229,21 @@ bool PrepareClassicPlayer(int nSlot, DWORD *pStorm, DWORD *pNation, DWORD *pHuma
   return true;
 }
 
-// The bridge's folder: HYPERION_PLUTO_FOLDER, else Data/pluto beside the exe.
-std::string PlutoFolder() {
-  if (const char *psz = getenv("HYPERION_PLUTO_FOLDER"))
-    return psz;
-  std::string s = PortDataFolder();
-  if (!s.empty() && s.back() != '/' && s.back() != '\\')
-    s += '/';
-  return s + "pluto";
+// Native Windows keeps direct anonymous pipes for every frame. The Wine bridge on Linux still
+// changes to its named FIFO after frame 0, because the fork detaches its console descriptors.
+#if defined(_MSC_VER)
+const bool kPlutoNativeWindows = true;
+#else
+const bool kPlutoNativeWindows = false;
+#endif
+
+bool PlutoUsesFrameFifo(bool bNativeWindows) { return !bNativeWindows; }
+
+const char *PlutoDirectPipesEnvironment(bool bNativeWindows) { return bNativeWindows ? "1" : NULL; }
+
+std::string PlutoBridgeCommand(const std::string &folder, const std::string &wine, bool bNativeWindows) {
+  const std::string exe = folder + "/pluto-bridge.exe";
+  return bNativeWindows ? "\"" + exe + "\"" : "\"" + wine + "\" \"" + exe + "\"";
 }
 
 // The frame FIFO: opened late, once the fork's start-up is over. Opening it
@@ -250,22 +267,25 @@ bool WriteAll(HANDLE h, const void *pv, size_t cb);
 bool PlutoStart() {
   if (s_bUp || s_bFailed)
     return s_bUp;
-  const std::string folder = PlutoFolder();
-  std::string exe = folder + "/pluto-bridge.exe";
-  // The wine binary: HYPERION_PLUTO_WINE, else the PATH's.
-  std::string wine = "/usr/bin/wine";
-  if (const char *psz = getenv("HYPERION_PLUTO_WINE"))
-    wine = psz;
+  if (const char *capability = PortPlutoInferenceCapabilityError()) {
+    Log("Pluto: inference is unavailable: %s", capability);
+    s_bFailed = true;
+    return false;
+  }
+  const std::string folder = PortPlutoRuntimeFolder();
+  const std::string wine = PortPlutoWineExecutable();
+  const std::string cmd = PlutoBridgeCommand(folder, wine, kPlutoNativeWindows);
 
-  // The frame transport: stdin/stdout for the first three frames (the fork's
-  // start-up is sensitive to that layout), then the named FIFO, which the
-  // console detach cannot take away.
+#if !defined(_MSC_VER)
+  // The Wine fork detaches its console descriptors after frame 0, so later frames use a FIFO.
+  // Native Windows never calls mkfifo: its anonymous pipes remain the transport for every frame.
   const std::string ff = UnixPath(folder) + "/frames.fifo";
   unlink(ff.c_str());
   if (mkfifo(ff.c_str(), 0666) != 0) {
     Log("Pluto: the frame FIFO was not made (%s): %s", ff.c_str(), strerror(errno));
     return false;
   }
+#endif
   SECURITY_ATTRIBUTES sa = {sizeof sa, NULL, TRUE};  // inheritable
   HANDLE hToRead = NULL, hToWrite = NULL;            // the bridge's stdin ends
   HANDLE hFromRead = NULL, hFromWrite = NULL;        // the bridge's stdout ends
@@ -276,6 +296,18 @@ bool PlutoStart() {
     CloseHandle(hToWrite);
     return false;
   }
+#if defined(_MSC_VER)
+  // The child must not inherit Hyperion's ends. In particular, an inherited stdin writer would
+  // keep EOF from reaching the bridge when Hyperion closes its side during a clean game end.
+  if (!SetHandleInformation(hToWrite, HANDLE_FLAG_INHERIT, 0) ||
+      !SetHandleInformation(hFromRead, HANDLE_FLAG_INHERIT, 0)) {
+    CloseHandle(hToRead);
+    CloseHandle(hToWrite);
+    CloseHandle(hFromRead);
+    CloseHandle(hFromWrite);
+    return false;
+  }
+#endif
   // Hyperion keeps the other ends.
   s_hToBridge = hToWrite;
   s_hFromBridge = hFromRead;
@@ -283,29 +315,40 @@ bool PlutoStart() {
   // The bridge's stderr rides its stdout pipe no more: the client's reply reader
   // skips it, so the bridge's startup sequence was invisible. It now goes to a
   // log file beside the bridge.
+  const std::string errPath = folder + "/bridge.log";
+#if defined(_MSC_VER)
+  HANDLE hErr = CreateFileA(errPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa,
+                            CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+  if (hErr == INVALID_HANDLE_VALUE)
+    hErr = NULL;
+#else
   static int s_errFd = -1;
   if (s_errFd < 0) {
-    const std::string errPath = folder + "/bridge.log";
     FILE *fErr = fopen(errPath.c_str(), "wb");
     if (fErr) {
       setvbuf(fErr, NULL, _IONBF, 0);
       s_errFd = fileno(fErr);
     }
   }
+#endif
   STARTUPINFOA si;
   memset(&si, 0, sizeof si);
   si.cb = sizeof si;
   si.dwFlags = STARTF_USESTDHANDLES;
   si.hStdInput = hToRead;
   si.hStdOutput = hFromWrite;
+#if defined(_MSC_VER)
+  si.hStdError = hErr;
+#else
   si.hStdError = reinterpret_cast<HANDLE>(static_cast<intptr_t>(s_errFd));
+#endif
   PROCESS_INFORMATION pi;
   memset(&pi, 0, sizeof pi);
-  const std::string cmd = "\"" + wine + "\" \"" + exe + "\"";
   // Static map identity is configuration, not per-frame HXP state. The bridge
   // reads the user's local map to compute BWAPI's SHA-1; no game asset is shipped.
   SetEnvironmentVariableA("HYPERION_PLUTO_MAP_FILE", static_cast<const char *>(GetCurrentMap(1)));
   SetEnvironmentVariableA("HYPERION_PLUTO_MAP_NAME", gszMapTitle_g);
+  SetEnvironmentVariableA("HYPERION_PLUTO_DIRECT_PIPES", PlutoDirectPipesEnvironment(kPlutoNativeWindows));
   std::string starts;
   std::vector<pluto_hxpm::Start> mapStarts;
   for (int s = 0; s < PlayerSlots(); ++s) {
@@ -339,8 +382,14 @@ bool PlutoStart() {
   }
   std::vector<char> buf(cmd.begin(), cmd.end());
   buf.push_back('\0');
-  if (!CreateProcessA(NULL, buf.data(), NULL, NULL, TRUE, 0, NULL, folder.c_str(),
-                      &si, &pi)) {
+  const std::string exe = folder + "/pluto-bridge.exe";
+  const BOOL started = CreateProcessA(kPlutoNativeWindows ? exe.c_str() : NULL, buf.data(), NULL, NULL, TRUE, 0,
+                                      NULL, folder.c_str(), &si, &pi);
+#if defined(_MSC_VER)
+  if (hErr != NULL)
+    CloseHandle(hErr);
+#endif
+  if (!started) {
     Log("Pluto: the bridge did not start (%s)", cmd.c_str());
     s_bFailed = true;
     CloseHandle(hToRead);
@@ -355,7 +404,13 @@ bool PlutoStart() {
   s_hProc = pi.hProcess;
   CloseHandle(pi.hThread);
   s_bUp = true;
-  Log("Pluto: the bridge runs (%s)", cmd.c_str());
+  if (WaitForSingleObject(s_hProc, 0) != WAIT_TIMEOUT) {
+    Log("Pluto: the bridge exited during start (%s)", cmd.c_str());
+    PlutoGameEnd();
+    s_bFailed = true;
+    return false;
+  }
+  Log("Pluto: the bridge process started (%s); waiting for its first reply", cmd.c_str());
   if (!mapMetadata.empty()) {
     if (!WriteAll(s_hToBridge, mapMetadata.data(), mapMetadata.size())) {
       Log("Pluto: HXPM did not send");
@@ -372,9 +427,9 @@ bool WriteAll(HANDLE h, const void *pv, size_t cb) {
   const char *p = static_cast<const char *>(pv);
   // From frame 1 the frames go to the named FIFO, not the console pipe: the
   // fork's console detach would cut that pipe a few frames into the game.
-  if (s_dwFrame >= 1) {
+  if (PlutoUsesFrameFifo(kPlutoNativeWindows) && s_dwFrame >= 1) {
     if (s_fifoFrames < 0) {
-      const std::string ff = UnixPath(PlutoFolder()) + "/frames.fifo";
+      const std::string ff = UnixPath(PortPlutoRuntimeFolder()) + "/frames.fifo";
       s_fifoFrames = open(ff.c_str(), O_RDWR | O_CLOEXEC);
       if (s_fifoFrames < 0) {
         Log("Pluto: the frame FIFO did not open (%s)", ff.c_str());
@@ -407,7 +462,7 @@ bool ReadAll(HANDLE h, void *pv, size_t cb) {
   char *p = static_cast<char *>(pv);
   static FILE *s_rawReplyLog = NULL;
   if (s_rawReplyLog == NULL && getenv("HYPERION_PLUTO_DUMP") != NULL)
-    s_rawReplyLog = fopen((PlutoFolder() + "/replies-raw.bin").c_str(), "wb");
+    s_rawReplyLog = fopen((PortPlutoRuntimeFolder() + "/replies-raw.bin").c_str(), "wb");
   while (cb) {
     DWORD n = 0;
     if (!ReadFile(h, p, static_cast<DWORD>(cb), &n, NULL) || n == 0)
@@ -630,7 +685,7 @@ bool PlutoSendFrame() {
   static int s_dumpCount = 0;
   if (getenv("HYPERION_PLUTO_DUMP") != NULL && s_dumpCount < 60) {
     if (s_dump == NULL)
-      s_dump = fopen((PlutoFolder() + "/frames.bin").c_str(), "wb");
+      s_dump = fopen((PortPlutoRuntimeFolder() + "/frames.bin").c_str(), "wb");
     if (s_dump != NULL) {
       fwrite(hdr, sizeof hdr, 1, s_dump);
       fwrite(units.data(), nUnits * sizeof(Unit), 1, s_dump);
@@ -769,6 +824,10 @@ bool PlutoReadAndApply() {
     Log("Pluto: frame %u has %u cmd bytes", out[1], nCmd);
   if (!ReadAll(s_hFromBridge, cmd.data(), nCmd) || !ReadAll(s_hFromBridge, &win, 4))
     return false;
+  if (!s_bInferenceReady) {
+    s_bInferenceReady = true;
+    Log("Pluto: slot %d inference answered its first complete reply", s_nPlutoSlot);
+  }
 
   // Genuine BWAPI applies Pluto's commands three frames after emission.
   // Replies arrive at E+1, so hold them for two more game frames.
@@ -820,10 +879,13 @@ bool PlutoReadAndApply() {
 }  // namespace
 
 void PlutoGameStart() {
+  // A menu download may finish in Settings' background, but no game transition may overlap it.
+  PortPlutoInstallCancelAndWait();
   // Starting a new game or the benchmark's playback must never leave the old
   // bridge alive to share BWRL_SHM and the opponent's stats file.
   PlutoGameEnd();
   s_bUp = false;
+  s_bInferenceReady = false;
   s_bFailed = false;
   s_dwFrame = 0;
   s_nFrame = 0;
@@ -837,18 +899,21 @@ void PlutoGameStart() {
   s_fifoFrames = -1;
   if (s_nPlutoSlot < 0)
     return;
+  std::string readinessError;
+  if (!PortPlutoRuntimeReady(&readinessError)) {
+    PlutoClassicFallback("the runtime is incomplete: " + readinessError);
+    return;
+  }
   // Computer slots can carry 0xFF or alias another seat's Storm id. Choose an
   // actually unique classic owner (0..7); extended slots with no free owner are
   // rejected rather than silently misattributing replay commands.
   if (s_nPlutoSlot >= 8) {
-    Log("Pluto: extended slot %d has no classic replay owner", s_nPlutoSlot);
-    s_bFailed = true;
+    PlutoClassicFallback("the selected extended slot has no classic replay owner");
     return;
   }
   DWORD dwStorm = 0, dwNation = 0, dwHuman = 0;
   if (!PrepareClassicPlayer(s_nPlutoSlot, &dwStorm, &dwNation, &dwHuman)) {
-    Log("Pluto: no unique classic player mapping for slot %d", s_nPlutoSlot);
-    s_bFailed = true;
+    PlutoClassicFallback("no unique classic player mapping is available for the selected slot");
     return;
   }
   // Keep the AI identifiable in the lobby, players panel, replay header, and
@@ -871,8 +936,11 @@ void PlutoGameStart() {
     }
   }
   PlutoStart();
-  if (s_bUp)
-    Log("Pluto: slot %d plays Pluto", s_nPlutoSlot);
+  if (!s_bUp) {
+    PlutoClassicFallback("the bridge or inference process failed during startup");
+    return;
+  }
+  Log("Pluto: slot %d is waiting for Pluto's first inference reply", s_nPlutoSlot);
 }
 
 void PlutoFrame() {
@@ -891,19 +959,18 @@ void PlutoFrame() {
   if (flow)
     Log("Pluto: send begin %u", s_dwFrame);
   if (!PlutoSendFrame()) {  // sends s_dwFrame
-    static int s_fails = 0;
-    if (s_fails++ < 3)
-      Log("Pluto: frame %u did not send (err %lu)", s_dwFrame, GetLastError());
+    Log("Pluto: frame %u did not send (err %lu)", s_dwFrame, GetLastError());
+    PlutoClassicFallback("the bridge's frame input failed");
     return;
   }
   if (flow)
     Log("Pluto: send done %u", s_dwFrame);
   ++s_dwFrame;
-  if (s_dwFrame == 1 && s_fifoFrames < 0) {
+  if (PlutoUsesFrameFifo(kPlutoNativeWindows) && s_dwFrame == 1 && s_fifoFrames < 0) {
     // Open the writer before waiting for frame 0's reply. The bridge switches
     // its input to the FIFO in that reply path; an O_RDONLY open with no writer
     // would otherwise return EOF and shut down before frame 1 can be sent.
-    const std::string ff = UnixPath(PlutoFolder()) + "/frames.fifo";
+    const std::string ff = UnixPath(PortPlutoRuntimeFolder()) + "/frames.fifo";
     s_fifoFrames = open(ff.c_str(), O_RDWR | O_CLOEXEC);
     if (s_fifoFrames < 0) {
       Log("Pluto: the frame FIFO did not open before reply 0 (%s)", ff.c_str());
@@ -914,6 +981,7 @@ void PlutoFrame() {
     Log("Pluto: read begin %u", s_dwFrame - 1);
   if (!PlutoReadAndApply()) {
     Log("Pluto: the reply at frame %u did not arrive", s_dwFrame - 1);
+    PlutoClassicFallback("the bridge or inference failed before completing a reply");
     return;
   }
   if (flow)
@@ -992,5 +1060,6 @@ void PlutoGameEnd() {
     s_hFromBridge = NULL;
   }
   s_bUp = false;
+  s_bInferenceReady = false;
   Log("Pluto: the bridge closed");
 }

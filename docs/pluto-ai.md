@@ -4,6 +4,24 @@ Goal: Pluto (github.com/tscmoo/pluto — the self-play RL Brood War bot, CoG 202
 as a new skirmish computer level (`AI_LEVEL_PLUTO`, beside Classic ... Cheater Insane in
 `port_ai.h`), playing 1v1 melee through `pluto_infer.exe` with Hyperion as its BWAPI.
 
+## Release blocker: every player must have a working Pluto runtime
+
+Pluto is a required feature of every Hyperion Shield Zero and HyperShield release and
+prerelease. Never ship a package whose Pluto level can be selected but cannot start its brain,
+and never treat native integration tests alone as proof that an installed package works.
+
+Every package must include Hyperion's bridge and either the complete runtime or a prominent
+first-run **Download Pluto AI** action that obtains the official runtime, verifies its hashes,
+and installs it at `Data/pluto`. The same action must remain available for repair after first
+run. Until Pluto's author grants redistribution permission, public packages must not bundle or
+mirror the closed-source DLL, inference executable, or weights; direct download from the
+official release is the supported setup path. Redistribution permission is tracked at
+https://github.com/saintromuald/hyperion-public/issues/1; silence is not permission. A release
+requires a real packaged-engine match
+that starts inference and applies Pluto's commands, plus a two-client multiplayer match with a
+Pluto slot. Multiplayer inference must have one authoritative owner, its commands must reach
+every peer deterministically, and the match must produce consistent results and replays.
+
 ## Shape
 
 - The skirmish set-up's computer level pulldown gains "Pluto" (and `--ai-levels` a letter);

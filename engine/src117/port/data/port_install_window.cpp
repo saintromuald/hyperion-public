@@ -13,6 +13,7 @@
 #include <string>
 #include <SDL3/SDL.h>
 #include "port_install.h"
+#include "port_pluto_runtime.h"
 #include "../front/port_text.h"
 #include "../platform/port_drawn.h"
 #include "../tools/port_startup.h"  // PortStartupStep
@@ -37,7 +38,7 @@ struct Window {
   int nFocus;            // the part whose field takes what is typed
   PortInstallKind base;  // the one the game reads
   // where the last frame drew what a click reaches, in units
-  SDL_FRect rBattleNet, rClassic, rStart, rQuit;
+  SDL_FRect rBattleNet, rClassic, rPluto, rStart, rQuit;
   float fBottom;  // the last frame's height, in units
   bool bDone;
   bool bChosen;
@@ -185,10 +186,24 @@ void Draw(Window &w)
   y += PortDrawnWrapped(d, PORT_DRAWN_TEXT, 15.0f,
                         PortText("The other stays linked: switch to it later in Settings, under Hyperion."), kMargin,
                         y, fInner, t.dim) + 16.0f;
+  const PortPlutoInstallStatus pluto = PortPlutoInstallGetStatus();
+  const std::string plutoButton = PortPlutoInstallButtonText(pluto);
+  const std::string plutoText = PortPlutoInstallText(pluto);
+  w.rPluto = {kMargin, y, 220.0f, 40.0f};
+  PortDrawnButton(d, w.rPluto, plutoButton.c_str(),
+                  pluto.phase == PORT_PLUTO_INSTALL_RUNNING || PortPlutoDownloadCapabilityError() == NULL,
+                  pluto.phase == PORT_PLUTO_INSTALL_IDLE);
+  const float fPlutoText = PortDrawnWrapped(
+      d, PORT_DRAWN_TEXT, 14.0f, plutoText, kMargin + 232.0f, y, fInner - 232.0f,
+      pluto.phase == PORT_PLUTO_INSTALL_FAILED ? t.missing
+      : pluto.phase == PORT_PLUTO_INSTALL_READY || pluto.phase == PORT_PLUTO_INSTALL_SUCCEEDED ? t.found
+                                                                                               : t.dim);
+  y += SDL_max(58.0f, fPlutoText + 12.0f);
   const float fButton = 100.0f;
   w.rQuit = {kWidth - kMargin - fButton, y, fButton, 34.0f};
   w.rStart = {w.rQuit.x - 10.0f - fButton, y, fButton, 34.0f};
-  PortDrawnButton(d, w.rStart, PortText("Start"), BaseCheck(w).bFound, true);
+  PortDrawnButton(d, w.rStart, PortText("Start"),
+                  BaseCheck(w).bFound && pluto.phase != PORT_PLUTO_INSTALL_RUNNING, true);
   PortDrawnButton(d, w.rQuit, PortText("Quit"), true, false);
   w.fBottom = y + 34.0f + 20.0f;
   SDL_RenderPresent(d.pRenderer);
@@ -196,7 +211,7 @@ void Draw(Window &w)
 
 void Start(Window &w)
 {
-  if (!BaseCheck(w).bFound)
+  if (!BaseCheck(w).bFound || PortPlutoInstallGetStatus().phase == PORT_PLUTO_INSTALL_RUNNING)
     return;
   std::string why;
   if (PortInstallKeepBoth(w.base, w.parts[PART_BATTLENET].check, w.parts[PART_CLASSIC].check, &why)) {
@@ -246,6 +261,7 @@ void Handle(Window &w, SDL_Event &e)
   switch (e.type) {
   case SDL_EVENT_QUIT:
   case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+    PortPlutoInstallCancelAndWait();
     w.bDone = true;
     break;
   case SDL_EVENT_MOUSE_BUTTON_DOWN: {
@@ -261,9 +277,12 @@ void Handle(Window &w, SDL_Event &e)
     } else if (PortDrawnInside(w.parts[PART_BATTLENET].rField, x, y) ||
                PortDrawnInside(w.parts[PART_CLASSIC].rField, x, y)) {
       w.nFocus = PortDrawnInside(w.parts[PART_CLASSIC].rField, x, y) ? PART_CLASSIC : PART_BATTLENET;
+    } else if (PortDrawnInside(w.rPluto, x, y)) {
+      PortPlutoInstallStartOrCancel(false);
     } else if (PortDrawnInside(w.rStart, x, y)) {
       Start(w);
     } else if (PortDrawnInside(w.rQuit, x, y)) {
+      PortPlutoInstallCancelAndWait();
       w.bDone = true;
     }
     break;
@@ -298,6 +317,7 @@ void Handle(Window &w, SDL_Event &e)
     } else if (e.key.key == SDLK_RETURN || e.key.key == SDLK_KP_ENTER) {
       Start(w);
     } else if (e.key.key == SDLK_ESCAPE) {
+      PortPlutoInstallCancelAndWait();
       w.bDone = true;
     }
     break;
@@ -322,6 +342,7 @@ PortInstallAnswer PortInstallWindowRun(void)
   if (g_pPickLock == NULL)
     g_pPickLock = SDL_CreateMutex();
   Window w = {};
+  PortPlutoInstallRefresh();
   // the base as kept, when it is asked again for a base whose files are gone
   w.base = PortInstallChosen() == PORT_INSTALL_CLASSIC ? PORT_INSTALL_CLASSIC : PORT_INSTALL_BATTLENET;
   const char *pszFailed = "";

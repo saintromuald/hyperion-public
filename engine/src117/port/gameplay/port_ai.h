@@ -66,6 +66,8 @@ bool AiChosenThisGame();
 void AiForGame();
 // A slot's profile in the game being played.
 AiProfile AiProfileOf(int nSlot);
+// Explicit failure fallback: restore Classic behavior and the replay/save profile for this slot.
+void AiFallbackClassic(int nSlot);
 
 // The replay's and the save's record: a level and a style a slot, 2 bytes each, for
 // PLAYER_SLOTS_MAX slots. AiProfilesRecorded(NULL) forgets the last one read.

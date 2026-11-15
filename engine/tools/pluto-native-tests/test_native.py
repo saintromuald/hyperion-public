@@ -250,7 +250,8 @@ class PortRegressionTests(unittest.TestCase):
         ]
         try:
             for source, extra in (("pluto_port_regression.cpp", []),
-                                  ("control_turn_regression.cpp", control_includes)):
+                                  ("control_turn_regression.cpp", control_includes),
+                                  ("pluto_runtime_regression.cpp", ["-DSB_NETCODE_OFF", "-lz"])):
                 output = cls.build / Path(source).stem
                 command = common + extra + [str(cls.folder / source), "-Wl,--gc-sections", "-o", str(output)]
                 built = subprocess.run(command, text=True, capture_output=True, timeout=180)
@@ -292,6 +293,63 @@ class PortRegressionTests(unittest.TestCase):
 
     def test_pluto_seat_and_player_id_mismatch(self):
         self.run_regression("pluto_port_regression", "seat-mismatch")
+
+    def test_pluto_native_windows_process_and_pipe_plan(self):
+        self.run_regression("pluto_port_regression", "process-transport")
+
+    def test_runtime_install_preserves_bridge_and_user_data(self):
+        self.run_regression("pluto_runtime_regression", "success-preserve")
+
+    def test_runtime_installs_small_deflated_zip(self):
+        self.run_regression("pluto_runtime_regression", "deflated")
+
+    def test_runtime_rejects_outer_hash_mismatch(self):
+        self.run_regression("pluto_runtime_regression", "outer-hash")
+
+    def test_runtime_rejects_inner_hash_mismatch(self):
+        self.run_regression("pluto_runtime_regression", "inner-hash")
+
+    def test_runtime_rejects_missing_duplicate_and_traversal_entries(self):
+        self.run_regression("pluto_runtime_regression", "entries")
+
+    def test_runtime_enforces_per_call_zip_size_limits(self):
+        self.run_regression("pluto_runtime_regression", "size-limit")
+
+    def test_runtime_interruption_preserves_existing_files(self):
+        self.run_regression("pluto_runtime_regression", "interruption")
+
+    def test_runtime_cancel_then_retry(self):
+        self.run_regression("pluto_runtime_regression", "cancel-retry")
+
+    def test_runtime_commit_failure_rolls_back(self):
+        self.run_regression("pluto_runtime_regression", "rollback")
+
+    def test_runtime_resolution_and_quantized_progress(self):
+        self.run_regression("pluto_runtime_regression", "resolution-progress")
+
+    def test_runtime_official_release_pins(self):
+        self.run_regression("pluto_runtime_regression", "official-pins")
+
+    def test_runtime_install_actions_are_locked_in_game(self):
+        self.run_regression("pluto_runtime_regression", "in-game-lock")
+
+    def test_runtime_requires_packaged_bridge_before_download(self):
+        self.run_regression("pluto_runtime_regression", "missing-bridge")
+
+    def test_runtime_requires_and_repairs_executable_inference(self):
+        self.run_regression("pluto_runtime_regression", "inference-executable")
+
+    def test_runtime_cancel_and_wait_joins_worker(self):
+        self.run_regression("pluto_runtime_regression", "cancel-wait")
+
+    def test_runtime_rollback_preserves_executable_mode(self):
+        self.run_regression("pluto_runtime_regression", "rollback-mode")
+
+    def test_runtime_wine_bare_name_and_absolute_resolution(self):
+        self.run_regression("pluto_runtime_regression", "wine-resolution")
+
+    def test_runtime_no_sb_has_upfront_download_capability_error(self):
+        self.run_regression("pluto_runtime_regression", "no-sb-capability")
 
     def test_turn_remaps_ff_owner_and_seat_mismatch(self):
         self.run_regression("control_turn_regression", "storm-owner")

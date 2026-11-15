@@ -31,6 +31,7 @@
 #include "port_share.h"    // PortShareStartup
 #include "port_sysinfo.h"
 #include "../platform/port_paths.h"  // PortLogFile, PortDataFolder
+#include "../data/port_pluto_runtime.h"  // join runtime downloads before process shutdown
 
 namespace {
 
@@ -501,6 +502,7 @@ void PortStartupCrashed(const char *pszFolder)
 
 void PortStartupEnded(int nCode)
 {
+  PortPlutoInstallCancelAndWait();
   if (g_bEnded.exchange(true))
     return;
   char sz[64];

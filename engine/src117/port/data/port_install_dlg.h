@@ -17,5 +17,8 @@
 #define IDC_INSTALL_CLASSIC_STATUS 208
 #define IDC_INSTALL_BATTLENET_TITLE 209
 #define IDC_INSTALL_CLASSIC_TITLE 210
+// the official Pluto runtime's Download/Cancel/Retry action and its quantized progress/error text
+#define IDC_INSTALL_PLUTO 211
+#define IDC_INSTALL_PLUTO_STATUS 212
 
 #endif  // PORT_INSTALL_DLG_H

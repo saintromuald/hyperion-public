@@ -1782,11 +1782,11 @@ static bool FlushReply(unsigned frame) {
   memset(tb, 0, 0x200);
   *ScT<unsigned>(0x654AA0) = 0;
   fflush(stdout);
-  if (frame == 0) {
-    // The console detach lands at the end of frame 0. Move input to the named
-    // FIFO now, while frame 1 can still be read; switching at frame 1 was
-    // already too late in a real game. Hyperion opens its writer before waiting
-    // for this reply, so this O_RDONLY open cannot see a writerless EOF.
+  if (frame == 0 && getenv("HYPERION_PLUTO_DIRECT_PIPES") == NULL) {
+    // The Wine fork's console detach lands at the end of frame 0. Move input to the named FIFO
+    // now, while frame 1 can still be read. Hyperion opens its writer before waiting for this
+    // reply, so this O_RDONLY open cannot see a writerless EOF. Native Windows has no detach and
+    // retains its direct pipe instead; it cannot create a POSIX FIFO.
     const int fd = open("frames.fifo", O_RDONLY | O_BINARY);
     if (fd >= 0) {
       _setmode(fd, _O_BINARY);

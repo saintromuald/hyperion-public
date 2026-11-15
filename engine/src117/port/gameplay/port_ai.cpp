@@ -218,6 +218,13 @@ AiProfile AiProfileOf(int nSlot) {
   return nSlot >= 0 && nSlot < PLAYER_SLOTS_MAX ? g_aSlot[nSlot] : AiProfile();
 }
 
+void AiFallbackClassic(int nSlot) {
+  if (nSlot < 0 || nSlot >= PLAYER_SLOTS_MAX)
+    return;
+  g_aSlot[nSlot] = AiProfile();
+  Log("slot %d: Classic after Pluto could not start or answer", nSlot);
+}
+
 void AiProfilesSave(BYTE *pbOut) {
   for (int s = 0; s < PLAYER_SLOTS_MAX; s++) {
     pbOut[s * AI_PROFILE_BYTES] = g_aSlot[s].bLevel;

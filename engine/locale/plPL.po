@@ -4,102 +4,102 @@
 msgid ""
 msgstr "Project-Id-Version: Hyperion\nLanguage: pl\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nPlural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
-#: src117/port/data/port_install.cpp:201
+#: src117/port/data/port_install.cpp:202
 msgid "Files located: StarCraft: Remastered in {0}, its text in {1}."
 msgstr "Pliki znalezione: StarCraft: Remastered w {0}, jego teksty w {1}."
 
-#: src117/port/data/port_install.cpp:212
+#: src117/port/data/port_install.cpp:213
 msgid "Files located: {0}."
 msgstr "Pliki znalezione: {0}."
 
-#: src117/port/data/port_install.cpp:214
+#: src117/port/data/port_install.cpp:215
 msgid "Files not located. Are you sure you chose the correct folder?"
 msgstr "Nie znaleziono plików. Czy to na pewno właściwy folder?"
 
-#: src117/port/data/port_install.cpp:216
+#: src117/port/data/port_install.cpp:217
 msgid " This one holds classic StarCraft's files: put it under Classic."
 msgstr " Ten zawiera pliki klasycznego StarCrafta — wskaż go w polu Klasyczna."
 
-#: src117/port/data/port_install.cpp:218
+#: src117/port/data/port_install.cpp:219
 msgid " This one is StarCraft: Remastered: put it under StarCraft: Remastered."
 msgstr " Ten to StarCraft: Remastered — wskaż go w polu StarCraft: Remastered."
 
-#: src117/port/data/port_install.cpp:231
+#: src117/port/data/port_install.cpp:232
 msgid "Files located, but Hyperion could not open them. Let the Battle.net app finish installing or updating StarCraft, then try again."
 msgstr "Pliki znalezione, ale Hyperion nie mógł ich otworzyć. Poczekaj, aż aplikacja Battle.net skończy instalować lub aktualizować StarCrafta, i spróbuj ponownie."
 
-#: src117/port/data/port_install.cpp:284
-#: src117/port/data/port_install_window.cpp:83
+#: src117/port/data/port_install.cpp:285
+#: src117/port/data/port_install_window.cpp:84
 msgid "Not linked. Leave it empty if you do not have this one."
 msgstr "Nie powiązano. Zostaw puste, jeśli nie masz tej wersji."
 
-#: src117/port/data/port_install_window.cpp:103
+#: src117/port/data/port_install_window.cpp:104
 msgid "Choose the folder that holds StarDat.mpq and BrooDat.mpq, where the classic game is installed, for example C:\\Program Files (x86)\\StarCraft."
 msgstr "Wskaż folder z plikami StarDat.mpq i BrooDat.mpq, w którym zainstalowana jest klasyczna gra, na przykład C:\\Program Files (x86)\\StarCraft."
 
-#: src117/port/data/port_install_window.cpp:106
+#: src117/port/data/port_install_window.cpp:107
 msgid "Choose the folder that holds StarDat.mpq and BrooDat.mpq, where the classic game is installed."
 msgstr "Wskaż folder z plikami StarDat.mpq i BrooDat.mpq, w którym zainstalowana jest klasyczna gra."
 
-#: src117/port/data/port_install_window.cpp:143
+#: src117/port/data/port_install_window.cpp:144
 msgid "Type or paste a folder, or Browse"
 msgstr "Wpisz lub wklej folder albo użyj Przeglądaj"
 
-#: src117/port/data/port_install_window.cpp:149
+#: src117/port/data/port_install_window.cpp:150
 msgid "Browse..."
 msgstr "Przeglądaj..."
 
-#: src117/port/data/port_install_window.cpp:170
+#: src117/port/data/port_install_window.cpp:171
 msgid "Hyperion plays StarCraft from your own copy of its files. Link the ones you have: one is enough."
 msgstr "Hyperion odtwarza StarCrafta z twojej własnej kopii jego plików. Wskaż te, które masz — wystarczy jedna."
 
-#: src117/port/data/port_install_window.cpp:173
+#: src117/port/data/port_install_window.cpp:174
 msgid "StarCraft: Remastered, from Battle.net (free)"
 msgstr "StarCraft: Remastered, z Battle.net (bezpłatnie)"
 
-#: src117/port/data/port_install_window.cpp:175
+#: src117/port/data/port_install_window.cpp:176
 msgid "Classic (1.16.1 and prior)"
 msgstr "Klasyczna (1.16.1 i wcześniejsze)"
 
-#: src117/port/data/port_install_window.cpp:178
+#: src117/port/data/port_install_window.cpp:179
 msgid "Use as the game's files:"
 msgstr "Używaj jako plików gry:"
 
-#: src117/port/data/port_install_window.cpp:183
+#: src117/port/data/port_install_window.cpp:184
 msgctxt "the install"
 msgid "Classic"
 msgstr "Klasyczna"
 
-#: src117/port/data/port_install_window.cpp:186
+#: src117/port/data/port_install_window.cpp:187
 msgid "The other stays linked: switch to it later in Settings, under Hyperion."
 msgstr "Druga pozostaje powiązana — przełączysz się na nią później w Ustawieniach, w sekcji Hyperion."
 
-#: src117/port/data/port_install_window.cpp:191
+#: src117/port/data/port_install_window.cpp:205
 #: src117/port/tools/port_benchview.cpp:728
 msgid "Start"
 msgstr "Start"
 
-#: src117/port/data/port_install_window.cpp:192
+#: src117/port/data/port_install_window.cpp:207
 msgid "Quit"
 msgstr "Wyjdź"
 
-#: src117/port/data/port_install_window.cpp:234
+#: src117/port/data/port_install_window.cpp:249
 msgid "Browse could not open a folder dialog here: type or paste the folder."
 msgstr "Przeglądaj nie mogło tu otworzyć okna wyboru folderu — wpisz lub wklej ścieżkę."
 
-#: src117/port/data/port_install_window.cpp:328
+#: src117/port/data/port_install_window.cpp:349
 msgid "Hyperion: StarCraft's files"
 msgstr "Hyperion: pliki StarCrafta"
 
-#: src117/port/data/port_install_window.cpp:88
+#: src117/port/data/port_install_window.cpp:89
 msgid "Choose the StarCraft folder itself, the one that holds StarCraft Launcher.exe and the x86_64 and Data folders, for example C:\\Program Files (x86)\\StarCraft."
 msgstr "Wskaż sam folder StarCraft, ten z plikiem StarCraft Launcher.exe oraz folderami x86_64 i Data, na przykład C:\\Program Files (x86)\\StarCraft."
 
-#: src117/port/data/port_install_window.cpp:91
+#: src117/port/data/port_install_window.cpp:92
 msgid "Choose the StarCraft folder itself, the one that holds the Data folder, for example /Applications/StarCraft."
 msgstr "Wskaż sam folder StarCraft, ten z folderem Data, na przykład /Applications/StarCraft."
 
-#: src117/port/data/port_install_window.cpp:94
+#: src117/port/data/port_install_window.cpp:95
 msgid "Choose the StarCraft folder itself, the one that holds StarCraft Launcher.exe and the x86_64 and Data folders, for example drive_c/Program Files (x86)/StarCraft in the Wine or Lutris prefix Battle.net is installed in."
 msgstr "Wskaż sam folder StarCraft, ten z plikiem StarCraft Launcher.exe oraz folderami x86_64 i Data, na przykład drive_c/Program Files (x86)/StarCraft w prefiksie Wine lub Lutris, w którym zainstalowany jest Battle.net."
 
@@ -650,7 +650,7 @@ msgid "Colours by team come with Team Match."
 msgstr "Kolory według drużyn są dostępne w Meczu drużynowym."
 
 #: src117/port/front/port_front_bench.cpp:1452
-#: src117/port/front/port_front_settings.cpp:893
+#: src117/port/front/port_front_settings.cpp:895
 #: src117/port/front/port_front_skirmish.cpp:2759
 #: src117/port/front/port_front_skirmish.cpp:2763
 msgid "Game speed"
@@ -766,7 +766,7 @@ msgid "The most units the game holds at once, every player’s and the map’s m
 msgstr "Najwięcej jednostek, jakie gra utrzyma jednocześnie, razem z jednostkami wszystkich graczy oraz minerałami i gejzerami mapy. Oryginał utrzymuje 1 700. Automatycznie: tyle co oryginał w grze, jaką mógłby rozegrać, a przy większej liczbie graczy lub limicie zaopatrzenia powyżej 200 — miejsce na jednostki mapy i na pełny limit każdego gracza. Konkretna liczba gra według zasad Hyperiona."
 
 #: src117/port/front/port_front_bench.cpp:1601
-#: src117/port/front/port_front_settings.cpp:920
+#: src117/port/front/port_front_settings.cpp:922
 #: src117/port/tools/port_benchview.cpp:875
 msgid "Renderer"
 msgstr "Renderer"
@@ -1338,7 +1338,7 @@ msgstr "Misja {0}"
 #: src117/port/front/port_front_profile.cpp:1166
 #: src117/port/lan/port_front_lan.cpp:424
 #: src117/port/lan/port_front_lan.cpp:1164
-#: src117/port/lan/port_lanlobby.cpp:113
+#: src117/port/lan/port_lanlobby.cpp:117
 msgid "{0} and {1}"
 msgstr "{0} i {1}"
 
@@ -1488,8 +1488,8 @@ msgstr "Zagraj teraz"
 #: src117/port/front/port_front_replays.cpp:1106
 #: src117/port/front/port_front_replays.cpp:1191
 #: src117/port/front/port_front_score.cpp:1120
-#: src117/port/front/port_front_settings.cpp:2032
-#: src117/port/front/port_front_settings.cpp:2264
+#: src117/port/front/port_front_settings.cpp:2052
+#: src117/port/front/port_front_settings.cpp:2284
 #: src117/port/front/port_front_skirmish.cpp:1608
 #: src117/port/gameplay/port_trainerview.cpp:1496
 #: src117/port/lan/port_front_lan.cpp:1070
@@ -2009,7 +2009,7 @@ msgstr "Następna"
 #: src117/port/front/port_front_gamemenu.cpp:497
 #: src117/port/front/port_front_gamemenu.cpp:499
 #: src117/port/front/port_front_score.cpp:1090
-#: src117/port/front/port_front_settings.cpp:2066
+#: src117/port/front/port_front_settings.cpp:2086
 msgid "OK"
 msgstr "OK"
 
@@ -2113,7 +2113,7 @@ msgstr "Zwycięstwo w sojuszu"
 
 #: src117/port/front/port_front_gamemenu.cpp:617
 #: src117/port/front/port_front_gamemenu.cpp:671
-#: src117/port/front/port_front_settings.cpp:2260
+#: src117/port/front/port_front_settings.cpp:2280
 msgid "Accept"
 msgstr "Akceptuj"
 
@@ -2244,7 +2244,7 @@ msgid "As it shows on your screen, over {0}."
 msgstr "Tak, jak widać na twoim ekranie, na tle {0}."
 
 #: src117/port/front/port_front_hud.cpp:602
-#: src117/port/front/port_front_settings.cpp:977
+#: src117/port/front/port_front_settings.cpp:979
 msgid "Actions per minute"
 msgstr "Akcje na minutę"
 
@@ -2263,7 +2263,7 @@ msgid "Army"
 msgstr "Armia"
 
 #: src117/port/front/port_front_hud.cpp:605
-#: src117/port/front/port_front_settings.cpp:985
+#: src117/port/front/port_front_settings.cpp:987
 msgid "Control groups"
 msgstr "Grupy kontrolne"
 
@@ -2274,7 +2274,7 @@ msgstr "Teren"
 
 #: src117/port/front/port_front_hud.cpp:607
 #: src117/port/front/port_front_replays.cpp:53
-#: src117/port/front/port_front_settings.cpp:1069
+#: src117/port/front/port_front_settings.cpp:1071
 #: src117/port/hud/port_hudinput.cpp:538
 #: src117/port/hud/port_hudinput.cpp:658
 msgid "Replay TV"
@@ -2291,7 +2291,7 @@ msgid "This design does not load:"
 msgstr "Ten projekt się nie wczytuje:"
 
 #: src117/port/front/port_front_hud.cpp:673
-#: src117/port/front/port_front_settings.cpp:1081
+#: src117/port/front/port_front_settings.cpp:1083
 msgid "Layout"
 msgstr "Układ"
 
@@ -2366,7 +2366,7 @@ msgid "This design has no buttons to leave out."
 msgstr "Ten projekt nie ma przycisków, które można pominąć."
 
 #: src117/port/front/port_front_hud.cpp:871
-#: src117/port/front/port_front_settings.cpp:1120
+#: src117/port/front/port_front_settings.cpp:1124
 msgid "Not available yet"
 msgstr "Jeszcze niedostępne"
 
@@ -2420,7 +2420,7 @@ msgid "Mods"
 msgstr "Mody"
 
 #: src117/port/front/port_front_internal.h:37
-#: src117/port/front/port_front_settings.cpp:2149
+#: src117/port/front/port_front_settings.cpp:2169
 #: src117/port/lan/port_front_lanhost.cpp:185
 msgid "Settings"
 msgstr "Ustawienia"
@@ -2462,13 +2462,13 @@ msgid "Graphics"
 msgstr "Grafika"
 
 #: src117/port/front/port_front_internal.h:50
-#: src117/port/front/port_front_settings.cpp:949
+#: src117/port/front/port_front_settings.cpp:951
 #: src117/port/lan/port_front_lanhost.cpp:1273
 msgid "Sound"
 msgstr "Dźwięk"
 
 #: src117/port/front/port_front_internal.h:50
-#: src117/port/front/port_front_settings.cpp:1075
+#: src117/port/front/port_front_settings.cpp:1077
 msgid "Interface"
 msgstr "Interfejs"
 
@@ -4404,435 +4404,451 @@ msgid "{0}, out at {1}"
 msgstr "{0}, wypadł o {1}"
 
 #: src117/port/front/port_front_settings.cpp:1001
-msgid "Group 8"
+msgid "Group 7"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1003
-msgid "Group 9"
+msgid "Group 8"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1005
-msgid "Group 0"
+msgid "Group 9"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1007
-msgid "Group 11"
+msgid "Group 0"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1009
-msgid "Group 12"
+msgid "Group 11"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1011
-msgid "Group 13"
+msgid "Group 12"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1013
-msgid "Group 14"
+msgid "Group 13"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1015
-msgid "Group 15"
+msgid "Group 14"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1017
-msgid "Group 16"
+msgid "Group 15"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1019
-msgid "Group 17"
+msgid "Group 16"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1021
-msgid "Group 18"
+msgid "Group 17"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1023
-msgid "Group 19"
+msgid "Group 18"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1025
-msgid "Camera locations"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:1026
-msgid "As StarCraft II's: eight saved views, and eight keys in all. F1 to F8 jump to them, and Ctrl with the same key saves, as SC2's Ctrl does; a save says so on the map's message. Each game starts the eight on the start view, and 1.17's Ctrl+F1 help moved to Ctrl+F10."
+msgid "Group 19"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1027
-msgid "Camera location 1"
+msgid "Camera locations"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1028
+msgid "As StarCraft II's: eight saved views, and eight keys in all. F1 to F8 jump to them, and Ctrl with the same key saves, as SC2's Ctrl does; a save says so on the map's message. Each game starts the eight on the start view, and 1.17's Ctrl+F1 help moved to Ctrl+F10."
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1029
-msgid "Camera location 2"
+msgid "Camera location 1"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1031
-msgid "Camera location 3"
+msgid "Camera location 2"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1033
-msgid "Camera location 4"
+msgid "Camera location 3"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1035
-msgid "Camera location 5"
+msgid "Camera location 4"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1037
-msgid "Camera location 6"
+msgid "Camera location 5"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1039
-msgid "Camera location 7"
+msgid "Camera location 6"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1041
-msgid "Camera location 8"
+msgid "Camera location 7"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1043
-msgid "Selection"
-msgstr ""
-
-#: src117/port/front/port_front_settings.cpp:1044
-msgid "The keys that work on the selection and the minimap."
+msgid "Camera location 8"
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1045
-msgid "Next subgroup"
-msgstr "Następna podgrupa"
+msgid "Selection"
+msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1046
-msgid "In a game by Hyperion’s rules, the next kind of unit in the selection: the console shows its card and the page that holds it, as StarCraft II’s Tab. With Shift, the kind before. Click the key and press another, with Ctrl, Shift or Alt if you like."
+msgid "The keys that work on the selection and the minimap."
 msgstr ""
 
 #: src117/port/front/port_front_settings.cpp:1047
+msgid "Next subgroup"
+msgstr "Następna podgrupa"
+
+#: src117/port/front/port_front_settings.cpp:1048
+msgid "In a game by Hyperion’s rules, the next kind of unit in the selection: the console shows its card and the page that holds it, as StarCraft II’s Tab. With Shift, the kind before. Click the key and press another, with Ctrl, Shift or Alt if you like."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1049
 msgid "Minimap terrain"
 msgstr "Teren na minimapie"
 
-#: src117/port/front/port_front_settings.cpp:1048
+#: src117/port/front/port_front_settings.cpp:1050
 msgid "The minimap’s terrain on or off, as its button does; with Shift, the units’ colours, as the original’s Shift+Tab. In a game by classic rules Tab still does it, as in the original; in a game by Hyperion’s rules Tab is the subgroup’s."
 msgstr "Włącza i wyłącza teren na minimapie, tak jak jej przycisk; z Shiftem — kolory jednostek, jak Shift+Tab w oryginale. W grze według klasycznych zasad robi to nadal Tab, jak w oryginale; w grze według zasad Hyperiona Tab należy do podgrupy."
 
-#: src117/port/front/port_front_settings.cpp:1049
+#: src117/port/front/port_front_settings.cpp:1051
 msgid "Idle worker"
 msgstr "Bezczynny robotnik"
 
-#: src117/port/front/port_front_settings.cpp:1050
+#: src117/port/front/port_front_settings.cpp:1052
 msgid "Selects your next idle worker and takes the view to it, as the HUD’s idle worker button does, and as the small idle worker icon above the bottom console does when clicked. The ` key, as StarCraft II’s players set it."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1051
+#: src117/port/front/port_front_settings.cpp:1053
 msgid "Select army"
 msgstr "Zaznacz armię"
 
-#: src117/port/front/port_front_settings.cpp:1052
+#: src117/port/front/port_front_settings.cpp:1054
 msgid "In a game by Hyperion’s rules, selects your army, every unit that fights, up to 255, as the HUD’s army button does. A game by classic rules keeps the original’s selections and has no army key."
 msgstr "W grze według zasad Hyperiona zaznacza twoją armię, czyli każdą walczącą jednostkę, do 255, tak jak przycisk armii w HUD-zie. Gra według klasycznych zasad zachowuje zaznaczenia oryginału i nie ma klawisza armii."
 
-#: src117/port/front/port_front_settings.cpp:1053
+#: src117/port/front/port_front_settings.cpp:1055
 msgid "View and camera"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1054
+#: src117/port/front/port_front_settings.cpp:1056
 msgid "The art, the view's shape, the zoom and the follow and TV keys."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1055
+#: src117/port/front/port_front_settings.cpp:1057
 msgid "Toggle art"
 msgstr "Przełącz oprawę"
 
-#: src117/port/front/port_front_settings.cpp:1056
+#: src117/port/front/port_front_settings.cpp:1058
 msgid "Classic or HD art in a game, F5 as in Remastered before the camera locations took F1 to F8. Click the key and press another: any key, with Ctrl, Shift or Alt if you like."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1057
+#: src117/port/front/port_front_settings.cpp:1059
 msgid "Toggle view shape"
 msgstr "Przełącz kształt widoku"
 
-#: src117/port/front/port_front_settings.cpp:1058
+#: src117/port/front/port_front_settings.cpp:1060
 msgid "640 × 480 or the wide view in a game. Set as the art’s key is."
 msgstr "640 × 480 albo szeroki widok w grze. Ustawia się tak samo jak klawisz oprawy."
 
-#: src117/port/front/port_front_settings.cpp:1059
+#: src117/port/front/port_front_settings.cpp:1061
 msgid "Zoom out"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1060
+#: src117/port/front/port_front_settings.cpp:1062
 msgid "The camera zoomed out; held, it keeps zooming."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1061
+#: src117/port/front/port_front_settings.cpp:1063
 msgid "Zoom in"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1062
+#: src117/port/front/port_front_settings.cpp:1064
 msgid "The camera zoomed in; held, it keeps zooming."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1063
+#: src117/port/front/port_front_settings.cpp:1065
 msgid "Zoom reset"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1064
+#: src117/port/front/port_front_settings.cpp:1066
 msgid "The zoom back to 1, the game’s view."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1065
+#: src117/port/front/port_front_settings.cpp:1067
 msgid "Zoom fit"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1066
+#: src117/port/front/port_front_settings.cpp:1068
 msgid "The whole map in view, as far as the zoom allows."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1067
+#: src117/port/front/port_front_settings.cpp:1069
 msgid "Follow selected unit"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1068
+#: src117/port/front/port_front_settings.cpp:1070
 msgid "The camera follows the selected unit."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1070
+#: src117/port/front/port_front_settings.cpp:1072
 msgid "A replay’s TV camera, in a replay."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1071
+#: src117/port/front/port_front_settings.cpp:1073
 msgid "Debug and tools"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1073
+#: src117/port/front/port_front_settings.cpp:1075
 msgid "Debug Tools' overlay"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1074
+#: src117/port/front/port_front_settings.cpp:1076
 msgid "Debug Tools’s overlay in a game while its live channel is open: the game in a window with its readings round it, full screen, a counter, then off. With no key, the Overlay button at the top of the game opens it."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1076
+#: src117/port/front/port_front_settings.cpp:1078
 msgid "The command card's and the screen's keys."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1077
+#: src117/port/front/port_front_settings.cpp:1079
 msgid "Research panel"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1078
+#: src117/port/front/port_front_settings.cpp:1080
 msgid "With the Newbie mode mutator on, opens a left-hand list of every technology and upgrade your completed buildings can start now, with those under way and their progress. Click an available row to start it at a free building; click one under way to select its building."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1079
+#: src117/port/front/port_front_settings.cpp:1081
 msgid "Global production queue"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1080
+#: src117/port/front/port_front_settings.cpp:1082
 msgid "In any game, lists every unit you are training or morphing (including waiting queue slots), every technology and upgrade under way, and every building under construction. Click a row to select and centre its source. Ctrl+Q remains the larva-selection key, so this panel uses another default."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1081
+#: src117/port/front/port_front_settings.cpp:1083
 msgid "Classic|Grid"
 msgstr "Klasyczne|Siatka"
 
-#: src117/port/front/port_front_settings.cpp:1082
+#: src117/port/front/port_front_settings.cpp:1084
 msgid "Grid puts the command card on the left hand’s 3 × 3 keys, as StarCraft II can. Remastered has no presets."
 msgstr "Siatka układa kartę rozkazów na klawiszach 3 × 3 pod lewą ręką, tak jak potrafi StarCraft II. Remastered nie ma gotowych zestawów."
 
-#: src117/port/front/port_front_settings.cpp:1083
+#: src117/port/front/port_front_settings.cpp:1085
 msgid "Spellcasters’ energy bars"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1084
+#: src117/port/front/port_front_settings.cpp:1086
 msgid "Your visible spellcasters show the original green health bar with its purple energy row beneath it, even when unselected in Hyperion’s wide-selection games. Classic games keep the stack on selected units. On by default; no separate overlay bar is drawn."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1085
+#: src117/port/front/port_front_settings.cpp:1087
 msgid "Screenshot"
 msgstr "Zrzut ekranu"
 
-#: src117/port/front/port_front_settings.cpp:1087
+#: src117/port/front/port_front_settings.cpp:1089
 msgid "Allies blue, enemies red"
 msgstr "Sojusznicy niebiescy, wrogowie czerwoni"
 
-#: src117/port/front/port_front_settings.cpp:1088
+#: src117/port/front/port_front_settings.cpp:1090
 msgid "In a game you play, you are drawn in blue, your allies in teal and the other players in red, units, buildings and minimap alike, as StarCraft II’s team colours and Warcraft III’s ally colours do. The original’s minimap button does it for the minimap alone. Only what is drawn changes: replays and saved games keep every player’s own colour. Remastered has the string and no control."
 msgstr "W grze, którą sam prowadzisz, ty jesteś rysowany na niebiesko, sojusznicy na turkusowo, a pozostali gracze na czerwono — jednostki, budowle i minimapa na równi, tak jak kolory drużyn w StarCrafcie II i kolory sojuszników w Warcrafcie III. Przycisk minimapy w oryginale robi to tylko dla minimapy. Zmienia się jedynie to, co jest rysowane: powtórki i zapisane gry zachowują własny kolor każdego gracza. Remastered ma sam napis, bez opcji."
 
-#: src117/port/front/port_front_settings.cpp:1089
+#: src117/port/front/port_front_settings.cpp:1091
 msgid "Colour-blind player colours"
 msgstr "Kolory graczy dla daltonistów"
 
-#: src117/port/front/port_front_settings.cpp:1089
+#: src117/port/front/port_front_settings.cpp:1091
 msgid "Off|Red-green|Blue-yellow"
 msgstr "Wyłączone|Czerwono-zielony|Niebiesko-żółty"
 
-#: src117/port/front/port_front_settings.cpp:1090
+#: src117/port/front/port_front_settings.cpp:1092
 msgid "Each player in turn takes a colour from a palette that stays apart for that kind of colour blindness: Okabe and Ito’s for red-green, colours apart along red and cyan and in lightness for blue-yellow. With Allies blue, enemies red, you, your allies and your enemies take three of them. Only what is drawn changes. Remastered has the string and no control."
 msgstr "Każdy gracz po kolei dostaje kolor z palety, która pozostaje rozróżnialna przy danym rodzaju daltonizmu: paleta Okabe i Ito dla czerwono-zielonego, kolory rozsunięte wzdłuż czerwieni i cyjanu oraz w jasności dla niebiesko-żółtego. Przy opcji Sojusznicy niebiescy, wrogowie czerwoni ty, sojusznicy i wrogowie zajmujecie trzy z nich. Zmienia się jedynie to, co jest rysowane. Remastered ma sam napis, bez opcji."
 
-#: src117/port/front/port_front_settings.cpp:1091
+#: src117/port/front/port_front_settings.cpp:1093
 msgid "Text size"
 msgstr "Rozmiar tekstu"
 
-#: src117/port/front/port_front_settings.cpp:1091
+#: src117/port/front/port_front_settings.cpp:1093
 msgid "Classic|Larger|Largest"
 msgstr "Klasyczny|Większy|Największy"
 
-#: src117/port/front/port_front_settings.cpp:1091
+#: src117/port/front/port_front_settings.cpp:1093
 msgid "fonts larger than those the original draws at 640 by 480"
 msgstr "czcionki większe niż te, które oryginał rysuje przy 640 na 480"
 
-#: src117/port/front/port_front_settings.cpp:1093
+#: src117/port/front/port_front_settings.cpp:1095
 msgid "Middle-mouse drag scroll"
 msgstr "Przewijanie środkowym przyciskiem"
 
-#: src117/port/front/port_front_settings.cpp:1094
+#: src117/port/front/port_front_settings.cpp:1096
 msgid "Hold the middle button and move the mouse: the map moves with the cursor, at the speed set here, from a tenth of the cursor’s movement to one and a half times it; a little past the middle, the map stays under the cursor. Remastered has the string and no control."
 msgstr "Przytrzymaj środkowy przycisk i poruszaj myszą: mapa jedzie za kursorem z ustawioną tu szybkością, od jednej dziesiątej ruchu kursora do półtora raza tyle; trochę za środkiem mapa trzyma się dokładnie pod kursorem. Remastered ma sam napis, bez opcji."
 
-#: src117/port/front/port_front_settings.cpp:1095
+#: src117/port/front/port_front_settings.cpp:1097
 msgid "Player data folder"
 msgstr "Folder danych gracza"
 
-#: src117/port/front/port_front_settings.cpp:1096
+#: src117/port/front/port_front_settings.cpp:1098
 msgid "Profiles, replays and saved games, kept apart from the original game’s. For now it is set with --data on the command line."
 msgstr "Profile, powtórki i zapisane gry, trzymane osobno od plików oryginalnej gry. Na razie ustawia się go przez --data w wierszu poleceń."
 
-#: src117/port/front/port_front_settings.cpp:1097
+#: src117/port/front/port_front_settings.cpp:1099
 msgid "Game files"
 msgstr "Pliki gry"
 
-#: src117/port/front/port_front_settings.cpp:1097
+#: src117/port/front/port_front_settings.cpp:1099
 msgid "StarCraft from Battle.net|Classic (1.16.1 and prior)"
 msgstr "StarCraft z Battle.net|Klasyczna (1.16.1 i wcześniejsze)"
 
-#: src117/port/front/port_front_settings.cpp:1098
+#: src117/port/front/port_front_settings.cpp:1100
 msgid "Where the game’s files come from: StarCraft from Battle.net, which is free, or your classic, pre-Remastered files from 1.16.1 and earlier, the folder with StarDat.mpq and BrooDat.mpq. Either way the game is drawn in its classic art. Hyperion asks when it starts and finds neither."
 msgstr "Skąd pochodzą pliki gry: StarCraft z Battle.net, który jest bezpłatny, albo twoje klasyczne pliki sprzed Remastered, z 1.16.1 i wcześniejszych, czyli folder z StarDat.mpq i BrooDat.mpq. W obu przypadkach gra jest rysowana w klasycznej grafice. Hyperion pyta przy starcie, gdy nie znajdzie żadnej z nich."
 
-#: src117/port/front/port_front_settings.cpp:1099
+#: src117/port/front/port_front_settings.cpp:1101
 msgid "Classic StarCraft folder"
 msgstr "Folder klasycznego StarCrafta"
 
-#: src117/port/front/port_front_settings.cpp:1100
+#: src117/port/front/port_front_settings.cpp:1102
 msgid "Browse to the classic StarCraft folder, the one with StarDat.mpq and BrooDat.mpq; Game files then reads from it. Without one, Hyperion.exe’s own folder."
 msgstr "Wskaż folder klasycznego StarCrafta, ten z StarDat.mpq i BrooDat.mpq; Pliki gry będą wtedy czytane z niego. Bez niego — własny folder Hyperion.exe."
 
-#: src117/port/front/port_front_settings.cpp:1101
+#: src117/port/front/port_front_settings.cpp:1103
 msgid "StarCraft from Battle.net"
 msgstr "StarCraft z Battle.net"
 
-#: src117/port/front/port_front_settings.cpp:1102
+#: src117/port/front/port_front_settings.cpp:1104
 msgid "Found from Battle.net’s uninstall entry, or Browse to it (a folder inside it will do). It gives the game’s files when Game files says so, and Remastered’s subtitles and chat filter either way. Another install than the one in use takes a restart."
 msgstr "Znajdowany z wpisu odinstalowania Battle.net albo wskazywany przez Przeglądaj (wystarczy folder wewnątrz). Daje pliki gry, gdy tak mówią Pliki gry, a napisy i filtr czatu z Remastered w obu przypadkach. Zmiana na inną instalację niż używana wymaga ponownego uruchomienia."
 
-#: src117/port/front/port_front_settings.cpp:1103
+#: src117/port/front/port_front_settings.cpp:1105
 msgid "Mods folder"
 msgstr "Folder modów"
 
-#: src117/port/front/port_front_settings.cpp:1104
+#: src117/port/front/port_front_settings.cpp:1106
 msgid "Where the mods are, each in a folder with its mod.json. A new folder takes a restart, as the chosen mod’s data is read when Hyperion starts."
 msgstr "Gdzie leżą mody, każdy w folderze ze swoim mod.json. Nowy folder wymaga ponownego uruchomienia, bo dane wybranego moda czytane są przy starcie Hyperiona."
 
-#: src117/port/front/port_front_settings.cpp:1105
+#: src117/port/front/port_front_settings.cpp:1107
+msgid "Pluto AI runtime"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1107
+msgid "Download Pluto AI"
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1108
+msgid "Downloads the official Pluto v2.0 ZIP directly from tscmoo/pluto, checks its exact size and SHA-256, then checks and atomically replaces only the DLL, inference executable and weights. The bridge and your logs, configuration and bandit data are preserved. Retry is available after any failure. Not during a game."
+msgstr ""
+
+#: src117/port/front/port_front_settings.cpp:1109
 msgid "Check a mod’s fingerprint"
 msgstr "Sprawdzaj odcisk moda"
 
-#: src117/port/front/port_front_settings.cpp:1106
+#: src117/port/front/port_front_settings.cpp:1110
 msgid "A mod that changes the rules is named by a hash of its data, so a replay or a saved game made with another version of it is refused. Off, it plays all the same, for a mod’s author trying a change; it may go its own way where the data differs."
 msgstr "Mod, który zmienia zasady, jest identyfikowany skrótem swoich danych, więc powtórka albo zapisana gra z innej jego wersji zostaje odrzucona. Wyłączone: odtwarza się mimo to, z myślą o autorze moda próbującym zmiany; przy innych danych gra może pójść własną drogą."
 
-#: src117/port/front/port_front_settings.cpp:1107
+#: src117/port/front/port_front_settings.cpp:1111
 msgid "Hyperion’s menus"
 msgstr "Menu Hyperiona"
 
-#: src117/port/front/port_front_settings.cpp:1108
+#: src117/port/front/port_front_settings.cpp:1112
 msgid "Off: the original menus. Hyperion’s menus need the GPU renderer, which is the default."
 msgstr "Wyłączone: menu oryginału. Menu Hyperiona wymagają renderera GPU, który jest domyślny."
 
-#: src117/port/front/port_front_settings.cpp:1109
+#: src117/port/front/port_front_settings.cpp:1113
 msgid "Show in Discord"
 msgstr "Pokazuj w Discordzie"
 
-#: src117/port/front/port_front_settings.cpp:1110
+#: src117/port/front/port_front_settings.cpp:1114
 msgid "With the Discord app running on this computer, your friends see Playing Hyperion and what you are doing: the mode, the map and the players, or the mod you have loaded. Off, Discord is told nothing."
 msgstr "Przy uruchomionej na tym komputerze aplikacji Discord twoi znajomi widzą, że grasz w Hyperiona, i czym się zajmujesz: tryb, mapę i graczy albo wczytany mod. Wyłączone: Discord nie dowiaduje się niczego."
 
-#: src117/port/front/port_front_settings.cpp:1111
+#: src117/port/front/port_front_settings.cpp:1115
 msgid "Settings file"
 msgstr "Plik ustawień"
 
-#: src117/port/front/port_front_settings.cpp:1112
+#: src117/port/front/port_front_settings.cpp:1116
 msgid "Hyperion’s settings and the original game’s, in the player data folder, out of its registry key."
 msgstr "Ustawienia Hyperiona i oryginalnej gry, w folderze danych gracza, poza jej kluczem rejestru."
 
-#: src117/port/front/port_front_settings.cpp:1113
+#: src117/port/front/port_front_settings.cpp:1117
 msgid "Processor threads"
 msgstr "Wątki procesora"
 
-#: src117/port/front/port_front_settings.cpp:1113
+#: src117/port/front/port_front_settings.cpp:1117
 msgid "Auto|Off|2|4|8|16"
 msgstr "Auto|Wył.|2|4|8|16"
 
-#: src117/port/front/port_front_settings.cpp:1114
+#: src117/port/front/port_front_settings.cpp:1118
 msgid "The threads Hyperion spreads work over beside the game’s: the checks that a replay or a network match plays the same game, and in a large game some of what each frame looks up. Auto uses half your processor’s threads, up to 16; Off keeps it all on one. The game’s own steps always run one after another in the same order, so it plays the same either way."
 msgstr "Wątki, na które Hyperion rozkłada pracę obok samej gry: sprawdzenia, czy powtórka albo mecz sieciowy toczy się tak samo, oraz w dużej grze część wyliczeń każdej klatki. Auto wykorzystuje połowę wątków procesora, najwyżej 16; Wył. zostawia wszystko na jednym. Kroki samej gry zawsze wykonują się jeden po drugim w tej samej kolejności, więc gra przebiega identycznie w obu wariantach."
 
-#: src117/port/front/port_front_settings.cpp:1115
+#: src117/port/front/port_front_settings.cpp:1119
 msgid "Rest between frames"
 msgstr "Odpoczynek między klatkami"
 
-#: src117/port/front/port_front_settings.cpp:1116
+#: src117/port/front/port_front_settings.cpp:1120
 msgid "Between frames Hyperion waits for what is due next, so a game at its own speed uses a small part of one processor core. Off, it goes round without a pause, as the original did, keeping a core busy. Frames come as evenly either way."
 msgstr "Między klatkami Hyperion czeka na to, co ma nastąpić, więc gra przy własnej szybkości zajmuje tylko część jednego rdzenia procesora. Wyłączone: krąży bez przerwy, jak robił to oryginał, obciążając rdzeń. Klatki przypadają równie równomiernie w obu wariantach."
 
-#: src117/port/front/port_front_settings.cpp:1117
+#: src117/port/front/port_front_settings.cpp:1121
 msgid "Game’s cores"
 msgstr "Rdzenie gry"
 
-#: src117/port/front/port_front_settings.cpp:1117
+#: src117/port/front/port_front_settings.cpp:1121
 msgid "Auto|Large cache|Any"
 msgstr "Auto|Duża pamięć podręczna|Dowolne"
 
-#: src117/port/front/port_front_settings.cpp:1118
+#: src117/port/front/port_front_settings.cpp:1122
 msgid "On a processor whose cores do not all share one cache, such as a Ryzen X3D with its two halves, which cores the game runs on. Large cache plays large games faster, a 64-player game by a tenth; Any lets Windows choose, which favours the fastest clocks and suits small games a little better. Auto takes the large cache once a game has 2,000 units. Where every core shares one cache it makes no difference."
 msgstr "Na procesorze, którego rdzenie nie dzielą jednej pamięci podręcznej — jak Ryzen X3D z dwiema połowami — na których rdzeniach biegnie gra. Duża pamięć podręczna szybciej liczy duże gry, grę 64 graczy o jedną dziesiątą; Dowolne pozostawia wybór Windows, co sprzyja najwyższym zegarom i trochę lepiej pasuje do małych gier. Auto przechodzi na dużą pamięć podręczną, gdy gra ma 2 000 jednostek. Tam, gdzie wszystkie rdzenie dzielą jedną pamięć, nie ma to znaczenia."
 
-#: src117/port/front/port_front_settings.cpp:1149
+#: src117/port/front/port_front_settings.cpp:1153
 msgid "Research automatically"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1150
+#: src117/port/front/port_front_settings.cpp:1154
 msgid "One toggle per upgrade: with the Newbie mode mutator on, it is researched by itself when a building that can do it is free, level after level until it is done. The mutator and its worker-training and mining helpers are in the mutators' Play group."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1156
+#: src117/port/front/port_front_settings.cpp:1160
 msgid "Research this upgrade by itself, level after level until it is done."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:1285
+#: src117/port/front/port_front_settings.cpp:1289
 msgid "a multiplayer game, in whose menu it changes"
 msgstr "gry wielu graczy, w której menu się to zmienia"
 
-#: src117/port/front/port_front_settings.cpp:1287
+#: src117/port/front/port_front_settings.cpp:1291
 msgid "StarCraft from Battle.net, which the Hyperion tab can point to"
 msgstr "StarCrafta z Battle.net, na którego może wskazać karta Hyperion"
 
-#: src117/port/front/port_front_settings.cpp:1289
+#: src117/port/front/port_front_settings.cpp:1293
 msgid "StarCraft: Remastered’s paid content, which this version of Hyperion does not use"
 msgstr "płatnej treści StarCraft: Remastered, której ta wersja Hyperiona nie używa"
 
-#: src117/port/front/port_front_settings.cpp:1599
+#: src117/port/front/port_front_settings.cpp:1604
 msgid "Primary"
 msgstr "Główny"
 
-#: src117/port/front/port_front_settings.cpp:1868
-#: src117/port/front/port_front_settings.cpp:1879
+#: src117/port/front/port_front_settings.cpp:1876
+#: src117/port/front/port_front_settings.cpp:1887
 msgid "Press a key"
 msgstr "Naciśnij klawisz"
 
-#: src117/port/front/port_front_settings.cpp:1876
+#: src117/port/front/port_front_settings.cpp:1884
 #: src117/port/gameplay/port_mutators.cpp:74
 #: src117/port/gameplay/port_mutators.cpp:460
 #: src117/port/gameplay/port_mutators.cpp:570
@@ -4840,572 +4856,568 @@ msgstr "Naciśnij klawisz"
 msgid "None"
 msgstr "Żadne"
 
-#: src117/port/front/port_front_settings.cpp:1915
+#: src117/port/front/port_front_settings.cpp:1923
 msgid "Browse"
 msgstr "Przeglądaj"
 
-#: src117/port/front/port_front_settings.cpp:1955
+#: src117/port/front/port_front_settings.cpp:1972
 #: src117/port/front/port_front_skirmish.cpp:2093
 #: src117/port/front/port_front_skirmish.cpp:3112
 msgid "Open"
 msgstr "Otwórz"
 
-#: src117/port/front/port_front_settings.cpp:1977
+#: src117/port/front/port_front_settings.cpp:1997
 msgid "In the original’s option dialogs."
 msgstr "W okienkach opcji oryginału."
 
-#: src117/port/front/port_front_settings.cpp:1978
+#: src117/port/front/port_front_settings.cpp:1998
 msgid "Added by Remastered."
 msgstr "Dodane przez Remastered."
 
-#: src117/port/front/port_front_settings.cpp:1979
+#: src117/port/front/port_front_settings.cpp:1999
 msgid "New in Hyperion."
 msgstr "Nowe w Hyperionie."
 
-#: src117/port/front/port_front_settings.cpp:1993
+#: src117/port/front/port_front_settings.cpp:2013
 #: src117/port/lan/port_front_landevices.cpp:321
 msgid "Not available yet."
 msgstr "Jeszcze niedostępne."
 
-#: src117/port/front/port_front_settings.cpp:1995
+#: src117/port/front/port_front_settings.cpp:2015
 msgid "Needs {0}."
 msgstr "Wymaga {0}."
 
-#: src117/port/front/port_front_settings.cpp:1997
+#: src117/port/front/port_front_settings.cpp:2017
 msgid "Not during a game: change it in the main menu’s Settings."
 msgstr "Nie w trakcie gry — zmień to w Ustawieniach w menu głównym."
 
-#: src117/port/front/port_front_settings.cpp:2000
+#: src117/port/front/port_front_settings.cpp:2020
 msgid "Applies when you accept it."
 msgstr "Działa po zatwierdzeniu."
 
-#: src117/port/front/port_front_settings.cpp:2002
+#: src117/port/front/port_front_settings.cpp:2022
 msgid "Applies from the next game."
 msgstr "Działa od następnej gry."
 
-#: src117/port/front/port_front_settings.cpp:2004
+#: src117/port/front/port_front_settings.cpp:2024
 msgid "Applies after a restart."
 msgstr "Działa po ponownym uruchomieniu."
 
-#: src117/port/front/port_front_settings.cpp:2031
+#: src117/port/front/port_front_settings.cpp:2051
 msgid "Restore the {0} settings?"
 msgstr "Przywrócić ustawienia {0}?"
 
-#: src117/port/front/port_front_settings.cpp:2032
+#: src117/port/front/port_front_settings.cpp:2052
 msgid "Continue"
 msgstr "Kontynuuj"
 
-#: src117/port/front/port_front_settings.cpp:2033
+#: src117/port/front/port_front_settings.cpp:2053
 msgid "Every setting on this tab goes back to its default. The other tabs keep theirs."
 msgstr "Każde ustawienie na tej karcie wraca do domyślnego. Inne karty zachowują swoje."
 
-#: src117/port/front/port_front_settings.cpp:2042
+#: src117/port/front/port_front_settings.cpp:2062
 msgid "Hyperion goes back to the display it had in {0} second."
 msgid_plural "Hyperion goes back to the display it had in {0} seconds."
 msgstr[0] "Hyperion wróci do poprzedniego ekranu za {0} sekundę."
 msgstr[1] "Hyperion wróci do poprzedniego ekranu za {0} sekundy."
 msgstr[2] "Hyperion wróci do poprzedniego ekranu za {0} sekund."
 
-#: src117/port/front/port_front_settings.cpp:2045
+#: src117/port/front/port_front_settings.cpp:2065
 #: src117/port/gameplay/port_trainerview.cpp:850
 msgid "Keep"
 msgstr "Zachowaj"
 
-#: src117/port/front/port_front_settings.cpp:2045
+#: src117/port/front/port_front_settings.cpp:2065
 msgid "Revert"
 msgstr "Przywróć"
 
-#: src117/port/front/port_front_settings.cpp:2046
+#: src117/port/front/port_front_settings.cpp:2066
 msgid "Keep this display?"
 msgstr "Zachować ten ekran?"
 
-#: src117/port/front/port_front_settings.cpp:2055
+#: src117/port/front/port_front_settings.cpp:2075
 msgid "Allow"
 msgstr "Zezwól"
 
-#: src117/port/front/port_front_settings.cpp:2055
+#: src117/port/front/port_front_settings.cpp:2075
 msgid "Don't allow"
 msgstr "Nie zezwalaj"
 
-#: src117/port/front/port_front_settings.cpp:2056
+#: src117/port/front/port_front_settings.cpp:2076
 msgid "Open the live channel?"
 msgstr "Otworzyć kanał na żywo?"
 
-#: src117/port/front/port_front_settings.cpp:2062
+#: src117/port/front/port_front_settings.cpp:2082
 msgid "The setting “{0}” changes when Hyperion next starts."
 msgstr "Ustawienie „{0}” zmieni się przy następnym uruchomieniu Hyperiona."
 
-#: src117/port/front/port_front_settings.cpp:2065
+#: src117/port/front/port_front_settings.cpp:2085
 msgid "Restart now"
 msgstr "Uruchom ponownie teraz"
 
-#: src117/port/front/port_front_settings.cpp:2065
+#: src117/port/front/port_front_settings.cpp:2085
 msgid "Later"
 msgstr "Później"
 
-#: src117/port/front/port_front_settings.cpp:2068
-#: src117/port/front/port_front_settings.cpp:2072
+#: src117/port/front/port_front_settings.cpp:2088
+#: src117/port/front/port_front_settings.cpp:2092
 msgid "Restart Hyperion"
 msgstr "Uruchom Hyperiona ponownie"
 
-#: src117/port/front/port_front_settings.cpp:2189
+#: src117/port/front/port_front_settings.cpp:2209
 msgid "Restore Defaults"
 msgstr "Przywróć domyślne"
 
-#: src117/port/front/port_front_settings.cpp:2272
+#: src117/port/front/port_front_settings.cpp:2292
 msgid "Changes apply when you accept them."
 msgstr "Zmiany działają po zatwierdzeniu."
 
-#: src117/port/front/port_front_settings.cpp:2309
+#: src117/port/front/port_front_settings.cpp:2329
 msgid "A control group’s key is a letter or a digit."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:2321
-#: src117/port/front/port_front_settings.cpp:2343
+#: src117/port/front/port_front_settings.cpp:2341
+#: src117/port/front/port_front_settings.cpp:2363
 msgid "{0} is {1}’s key."
 msgstr "{0} to klawisz przypisany do {1}."
 
-#: src117/port/front/port_front_settings.cpp:2331
+#: src117/port/front/port_front_settings.cpp:2351
 msgid "That key is the system’s. A letter, a digit, F1 to F12 and Tab are free."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:2396
+#: src117/port/front/port_front_settings.cpp:2416
 msgid "No classic StarCraft files there: its folder holds StarDat.mpq and BrooDat.mpq."
 msgstr "Nie ma tam plików klasycznego StarCrafta — jego folder zawiera StarDat.mpq i BrooDat.mpq."
 
-#: src117/port/front/port_front_settings.cpp:2405
+#: src117/port/front/port_front_settings.cpp:2425
 msgid "No StarCraft: Remastered install there: its folder holds .build.info."
 msgstr "Nie ma tam instalacji StarCraft: Remastered — jej folder zawiera .build.info."
 
-#: src117/port/front/port_front_settings.cpp:618
+#: src117/port/front/port_front_settings.cpp:620
 msgid "The install’s ({0})"
 msgstr "Z instalacji ({0})"
 
-#: src117/port/front/port_front_settings.cpp:893
+#: src117/port/front/port_front_settings.cpp:895
 msgid "Slowest|Slower|Slow|Normal|Fast|Faster|Fastest"
 msgstr "Najwolniejsza|Wolniejsza|Wolna|Normalna|Szybka|Szybsza|Najszybsza"
 
-#: src117/port/front/port_front_settings.cpp:894
+#: src117/port/front/port_front_settings.cpp:896
 msgid "Single player; the lobby sets it in multiplayer."
 msgstr "Jeden gracz; w grze wielu graczy ustawia ją poczekalnia."
 
-#: src117/port/front/port_front_settings.cpp:895
+#: src117/port/front/port_front_settings.cpp:897
 msgid "Game frame timing"
 msgstr "Taktowanie klatek gry"
 
-#: src117/port/front/port_front_settings.cpp:895
+#: src117/port/front/port_front_settings.cpp:897
 msgid "Classic|Even"
 msgstr "Klasyczne|Równomierne"
 
-#: src117/port/front/port_front_settings.cpp:896
+#: src117/port/front/port_front_settings.cpp:898
 msgid "When each game frame runs. Classic, on the system timer, which steps every 15.6 ms, so at Fastest frames come 31 or 47 ms apart and units move unevenly; Even, on the precise clock, 42 ms apart. What a frame does is the same either way."
 msgstr "Kiedy wykonuje się każda klatka gry. Klasyczne — na zegarze systemowym, który tyka co 15,6 ms, więc przy Najszybszej klatki przypadają co 31 lub 47 ms i jednostki poruszają się nierówno; Równomierne — na zegarze precyzyjnym, co 42 ms. To, co robi klatka, jest w obu wariantach takie samo."
 
-#: src117/port/front/port_front_settings.cpp:897
+#: src117/port/front/port_front_settings.cpp:899
 msgid "Mouse scroll speed"
 msgstr "Szybkość przewijania myszką"
 
-#: src117/port/front/port_front_settings.cpp:897
 #: src117/port/front/port_front_settings.cpp:899
 #: src117/port/front/port_front_settings.cpp:901
-#: src117/port/front/port_front_settings.cpp:1093
+#: src117/port/front/port_front_settings.cpp:903
+#: src117/port/front/port_front_settings.cpp:1095
 msgid "Slow|Fast"
 msgstr "wolno|szybko"
 
-#: src117/port/front/port_front_settings.cpp:899
+#: src117/port/front/port_front_settings.cpp:901
 msgid "Keyboard scroll speed"
 msgstr "Szybkość przewijania klawiszami"
 
-#: src117/port/front/port_front_settings.cpp:901
+#: src117/port/front/port_front_settings.cpp:903
 msgid "Mouse sensitivity"
 msgstr "Czułość myszy"
 
-#: src117/port/front/port_front_settings.cpp:902
+#: src117/port/front/port_front_settings.cpp:904
 msgid "On, the cursor in a game moves by the mouse’s movement times a scale, from half Windows’ speed to twice it, the same at the middle. It needs the cursor held in the window (Confine the mouse to the window), and stops while Ctrl+Alt has let it go. Off, Windows’ own speed, as the original has it."
 msgstr "Włączone: kursor w grze porusza się o ruch myszy przemnożony przez skalę, od połowy szybkości Windows do jej dwukrotności, a w środku dokładnie tyle. Wymaga kursora utrzymanego w oknie (Ogranicz mysz do okna) i nie działa, dopóki Ctrl+Alt go zwolniło. Wyłączone: szybkość samego Windows, jak w oryginale."
 
-#: src117/port/front/port_front_settings.cpp:903
+#: src117/port/front/port_front_settings.cpp:905
 msgid "Confine the mouse to the window"
 msgstr "Ogranicz mysz do okna"
 
-#: src117/port/front/port_front_settings.cpp:904
+#: src117/port/front/port_front_settings.cpp:906
 msgid "In a game, the cursor stays in the window, as the original kept it; edge scrolling in a window needs it. Off, it leaves the window freely. Dragging on the minimap holds it there either way. Ctrl+Alt lets it go until you click the game, as in VMware."
 msgstr "W grze kursor zostaje w oknie, tak jak trzymał go oryginał; przewijanie krawędzią w oknie tego wymaga. Wyłączone: kursor swobodnie opuszcza okno. Przeciąganie po minimapie trzyma go w oknie w obu wariantach. Ctrl+Alt zwalnia go do chwili kliknięcia w grę, jak w VMware."
 
-#: src117/port/front/port_front_settings.cpp:905
+#: src117/port/front/port_front_settings.cpp:907
 msgid "Smooth minimap drag"
 msgstr "Płynne przeciąganie po minimapie"
 
-#: src117/port/front/port_front_settings.cpp:906
+#: src117/port/front/port_front_settings.cpp:908
 msgid "Dragging on the minimap moves the view a tile at a time, as the original does. On, the camera follows the drag smoothly between the tiles. A press on the minimap goes there at once either way."
 msgstr "Przeciąganie po minimapie przesuwa widok o kratkę naraz, tak jak w oryginale. Włączone: kamera płynnie nadąża za przeciąganiem między kratkami. Kliknięcie minimapy w obu wariantach przenosi tam od razu."
 
-#: src117/port/front/port_front_settings.cpp:907
+#: src117/port/front/port_front_settings.cpp:909
 msgid "Hardware cursor"
 msgstr "Kursor sprzętowy"
 
-#: src117/port/front/port_front_settings.cpp:908
+#: src117/port/front/port_front_settings.cpp:910
 msgid "On, the system draws the game’s cursor over the window, so it moves with the mouse between the game’s frames; the art is the original’s, scaled as the game is. Off, the game draws it into each frame, as the original does. A browser’s player on a streamed seat always has it drawn into the frame."
 msgstr "Włączone: kursor gry rysuje system nad oknem, więc między klatkami gry podąża za myszą; grafika jest oryginalna, skalowana jak gra. Wyłączone: gra rysuje go w każdej klatce, jak oryginał. Odtwarzacz w przeglądarce na strumieniowanym miejscu zawsze ma go wrysowanego w klatkę."
 
-#: src117/port/front/port_front_settings.cpp:909
+#: src117/port/front/port_front_settings.cpp:911
 msgid "Save a replay of every game"
 msgstr "Zapisuj powtórkę każdej gry"
 
-#: src117/port/front/port_front_settings.cpp:910
+#: src117/port/front/port_front_settings.cpp:912
 msgid "The original writes every game’s replay as LastReplay, which the next game writes over. On, a copy of each is kept in the replays folder’s AutoSave folder, named by the date and the map."
 msgstr "Oryginał zapisuje powtórkę każdej gry jako LastReplay, którą nadpisuje następna gra. Włączone: kopia każdej zostaje w podfolderze AutoSave folderu powtórek, nazwana datą i mapą."
 
-#: src117/port/front/port_front_settings.cpp:911
+#: src117/port/front/port_front_settings.cpp:913
 msgid "Run in the background"
 msgstr "Działaj w tle"
 
-#: src117/port/front/port_front_settings.cpp:912
+#: src117/port/front/port_front_settings.cpp:914
 msgid "Off, as the original: a single-player game and a replay pause while another window has the focus, and go on when you come back. On, they go on behind it. A multiplayer game always goes on. Sound in the background (Sound) decides whether you hear it."
 msgstr "Wyłączone, jak w oryginale: gra jednoosobowa i powtórka zatrzymują się, gdy aktywne jest inne okno, i ruszają dalej po powrocie. Włączone: biegną dalej w tle. Gra wielu graczy zawsze biegnie dalej. O tym, czy ją słyszysz, decyduje Dźwięk w tle (Dźwięk)."
 
-#: src117/port/front/port_front_settings.cpp:913
+#: src117/port/front/port_front_settings.cpp:915
 msgid "Network latency"
 msgstr "Opóźnienie sieci"
 
-#: src117/port/front/port_front_settings.cpp:913
+#: src117/port/front/port_front_settings.cpp:915
 msgid "Low|High|Extra high"
 msgstr "Niskie|Wysokie|Bardzo wysokie"
 
-#: src117/port/front/port_front_settings.cpp:914
+#: src117/port/front/port_front_settings.cpp:916
 msgid "How far ahead the players’ commands are sent in a multiplayer game. Low carries them out soonest; High and Extra high wait a little longer for each, so a slow or distant connection holds the game up less. Changed in a multiplayer game’s menu, as the original’s Network dialog changed it, it changes for every player."
 msgstr "Z jakim wyprzedzeniem wysyłane są rozkazy graczy w grze wielu graczy. Niskie wykonuje je najwcześniej; Wysokie i Bardzo wysokie czekają na każdy trochę dłużej, więc wolne lub odległe połączenie mniej wstrzymuje grę. Zmienione w menu gry wielu graczy, tak jak zmieniało to okienko Sieć w oryginale, zmienia się dla wszystkich graczy."
 
-#: src117/port/front/port_front_settings.cpp:915
+#: src117/port/front/port_front_settings.cpp:917
 msgid "Display"
 msgstr "Tryb wyświetlania"
 
-#: src117/port/front/port_front_settings.cpp:915
+#: src117/port/front/port_front_settings.cpp:917
 msgid "Window|Full screen|Borderless full screen"
 msgstr "Okno|Pełny ekran|Pełny ekran bez obramowania"
 
-#: src117/port/front/port_front_settings.cpp:916
+#: src117/port/front/port_front_settings.cpp:918
 msgid "Accept shows the new display at once and asks to keep it; Escape, Revert or 15 seconds go back. Only a kept display is saved. Alt+Enter switches between the saved window and the saved full screen."
 msgstr "Zatwierdzenie od razu pokazuje nowy tryb i pyta, czy go zachować; Esc, Przywróć albo 15 sekund przywraca poprzedni. Zapisywany jest tylko zachowany tryb. Alt+Enter przełącza między zapisanym oknem a zapisanym pełnym ekranem."
 
-#: src117/port/front/port_front_settings.cpp:917
+#: src117/port/front/port_front_settings.cpp:919
 msgid "Monitor and resolution"
 msgstr "Monitor i rozdzielczość"
 
-#: src117/port/front/port_front_settings.cpp:918
+#: src117/port/front/port_front_settings.cpp:920
 msgid "What the chosen Display offers. Borderless: each monitor at its desktop size. Full screen: every display mode of each monitor. Window: the sizes that fit on the monitor with the window frame. Changing Display picks the closest on the same monitor."
 msgstr "To, co daje wybrany Tryb wyświetlania. Bez obramowania: każdy monitor w rozmiarze pulpitu. Pełny ekran: każdy tryb obrazu każdego monitora. Okno: rozmiary, które mieszczą się na monitorze razem z ramką okna. Zmiana trybu wybiera najbliższy na tym samym monitorze."
 
-#: src117/port/front/port_front_settings.cpp:920
+#: src117/port/front/port_front_settings.cpp:922
 msgid "Vulkan (Recommended)|Direct3D 12"
 msgstr "Vulkan (zalecany)|Direct3D 12"
 
-#: src117/port/front/port_front_settings.cpp:921
+#: src117/port/front/port_front_settings.cpp:923
 msgid "The graphics card’s interface Hyperion draws through. Vulkan shows each frame soonest; Direct3D 12 is there for a card or driver that Vulkan does not run well on. If the one chosen does not start, Hyperion draws through one that does."
 msgstr "Interfejs karty graficznej, przez który rysuje Hyperion. Vulkan pokazuje każdą klatkę najwcześniej; Direct3D 12 jest dla karty lub sterownika, na którym Vulkan nie działa dobrze. Jeśli wybrany się nie uruchomi, Hyperion rysuje przez ten, który działa."
 
-#: src117/port/front/port_front_settings.cpp:923
+#: src117/port/front/port_front_settings.cpp:925
 msgid "Art"
 msgstr "Oprawa graficzna"
 
-#: src117/port/front/port_front_settings.cpp:923
+#: src117/port/front/port_front_settings.cpp:925
 msgid "Classic|Remastered HD"
 msgstr "Klasyczna|Remastered HD"
 
-#: src117/port/front/port_front_settings.cpp:924
+#: src117/port/front/port_front_settings.cpp:926
 msgid "Remastered’s High Definition box. The art hotkey (F5, as in Remastered) switches it in a game, blending over half a second, and the setting keeps it. Needs the StarCraft: Remastered install (the Hyperion tab) and the GPU renderer."
 msgstr "Pole High Definition z Remastered. Skrót oprawy (F5, jak w Remastered) przełącza ją w grze z półsekundowym przejściem, a ustawienie ją zapamiętuje. Wymaga instalacji StarCraft: Remastered (karta Hyperion) i renderera GPU."
 
-#: src117/port/front/port_front_settings.cpp:925
+#: src117/port/front/port_front_settings.cpp:927
 msgid "View shape"
 msgstr "Kształt widoku"
 
-#: src117/port/front/port_front_settings.cpp:925
+#: src117/port/front/port_front_settings.cpp:927
 msgid "4:3, as the original|Widescreen, 16:9|Fit the screen"
 msgstr "4:3, jak w oryginale|Szerokoekranowy, 16:9|Dopasuj do ekranu"
 
-#: src117/port/front/port_front_settings.cpp:926
+#: src117/port/front/port_front_settings.cpp:928
 msgid "Remastered’s letterbox box: the shape a game starts at, the screen’s own unless another is chosen. The view hotkey (Ctrl+F5) switches between 4:3 and the wide shape in a game, and the setting keeps it. --view on the command line goes before it. Whether a lobby can hold everyone to a shape is decided with multiplayer."
 msgstr "Pole letterbox z Remastered: kształt, w jakim startuje gra — kształt ekranu, o ile nie wybrano innego. Skrót widoku (Ctrl+F5) przełącza w grze między 4:3 a szerokim kształtem, a ustawienie go zapamiętuje. --view w wierszu poleceń ma pierwszeństwo. Czy poczekalnia może narzucić kształt wszystkim, rozstrzygnie się wraz z grą wielu graczy."
 
-#: src117/port/front/port_front_settings.cpp:927
+#: src117/port/front/port_front_settings.cpp:929
 msgid "Classic art filtering"
 msgstr "Filtrowanie klasycznej grafiki"
 
-#: src117/port/front/port_front_settings.cpp:927
+#: src117/port/front/port_front_settings.cpp:929
 msgid "Sharp|Soft|Softer|Filtered"
 msgstr "Ostre|Miękkie|Bardziej miękkie|Filtrowane"
 
-#: src117/port/front/port_front_settings.cpp:928
+#: src117/port/front/port_front_settings.cpp:930
 msgid "How the 640 × 480 art is scaled up to the screen. Sharp keeps every pixel square and smooths only its edges, as Hyperion has drawn it until now; Soft and Softer blend more of each pixel into the next; Filtered blends them all. The HD art is always drawn sharp. SDL’s renderer has Sharp and Filtered alone."
 msgstr "Jak grafika 640 × 480 jest skalowana do ekranu. Ostre zachowuje każdy piksel kwadratowy i wygładza tylko jego krawędzie, tak jak Hyperion rysował dotychczas; Miękkie i Bardziej miękkie coraz mocniej przelewają piksele jeden w drugi; Filtrowane zlewa je wszystkie. Grafika HD jest zawsze rysowana ostro. Renderer SDL ma tylko Ostre i Filtrowane."
 
-#: src117/port/front/port_front_settings.cpp:929
-#: src117/port/front/port_front_settings.cpp:979
+#: src117/port/front/port_front_settings.cpp:931
+#: src117/port/front/port_front_settings.cpp:981
 #: src117/port/lan/port_front_lanhost.cpp:1270
 msgid "Frame rate"
 msgstr "Liczba klatek"
 
-#: src117/port/front/port_front_settings.cpp:929
+#: src117/port/front/port_front_settings.cpp:931
 msgid "Classic|60|Match the display|144|240|No limit"
 msgstr "Klasyczna|60|Jak ekran|144|240|Bez limitu"
 
-#: src117/port/front/port_front_settings.cpp:930
+#: src117/port/front/port_front_settings.cpp:932
 msgid "How often a frame is drawn. Classic, only when the game has something new, about 80 a second, so a scroll steps. Past it, scrolls and the camera glide at the rate chosen. With Vertical sync on, no more are drawn than the display shows, since the rest would only wait in line for it."
 msgstr "Jak często rysowana jest klatka. Klasyczna — tylko gdy gra ma coś nowego, około 80 na sekundę, więc przewijanie skacze. Powyżej przewijanie i kamera suną płynnie z wybraną częstotliwością. Przy włączonej Synchronizacji pionowej nie rysuje się więcej klatek, niż pokazuje ekran, bo reszta tylko czekałaby w kolejce."
 
-#: src117/port/front/port_front_settings.cpp:931
+#: src117/port/front/port_front_settings.cpp:933
 msgid "Vertical sync"
 msgstr "Synchronizacja pionowa"
 
-#: src117/port/front/port_front_settings.cpp:932
+#: src117/port/front/port_front_settings.cpp:934
 msgid "Each frame waits for the display’s refresh, so it never tears. Off, frames show the moment they are drawn."
 msgstr "Każda klatka czeka na odświeżenie ekranu, więc obraz nigdy się nie rwie. Wyłączone: klatki pokazują się w chwili narysowania."
 
-#: src117/port/front/port_front_settings.cpp:933
+#: src117/port/front/port_front_settings.cpp:935
 msgid "Frames ahead"
 msgstr "Klatki z wyprzedzeniem"
 
-#: src117/port/front/port_front_settings.cpp:933
+#: src117/port/front/port_front_settings.cpp:935
 msgid "1|2|3"
 msgstr "1|2|3"
 
-#: src117/port/front/port_front_settings.cpp:934
+#: src117/port/front/port_front_settings.cpp:936
 msgid "How many frames the game may prepare before the graphics card has drawn them. 1 shows each frame soonest after it is made; 3 keeps the card busiest when it is the slower part, a little later to the screen; 2 is between them."
 msgstr "Ile klatek gra może przygotować, zanim karta graficzna je narysuje. 1 pokazuje każdą klatkę najwcześniej po jej powstaniu; 3 najmocniej obciąża kartę, gdy jest wolniejszą częścią, kosztem niewielkiego opóźnienia; 2 jest pośrodku."
 
-#: src117/port/front/port_front_settings.cpp:935
+#: src117/port/front/port_front_settings.cpp:937
 msgid "Menu background quality"
 msgstr "Jakość tła menu"
 
-#: src117/port/front/port_front_settings.cpp:935
+#: src117/port/front/port_front_settings.cpp:937
 msgid "Auto|High|Low"
 msgstr "Auto|Wysoka|Niska"
 
-#: src117/port/front/port_front_settings.cpp:936
+#: src117/port/front/port_front_settings.cpp:938
 msgid "The planet behind the menus, the most a menu frame asks of the graphics card. Auto draws it at a lower resolution when the card cannot keep up with the display; High always at full; Low always at a lower one. It is soft, so a lower resolution hardly shows."
 msgstr "Planeta za menu, czyli to, co klatka menu najbardziej wymaga od karty graficznej. Auto rysuje ją w niższej rozdzielczości, gdy karta nie nadąża za ekranem; Wysoka zawsze w pełnej; Niska zawsze w niższej. Jest miękka, więc niższa rozdzielczość prawie nie rzuca się w oczy."
 
-#: src117/port/front/port_front_settings.cpp:937
+#: src117/port/front/port_front_settings.cpp:939
 msgid "Gamma"
 msgstr "Gamma"
 
-#: src117/port/front/port_front_settings.cpp:937
+#: src117/port/front/port_front_settings.cpp:939
 msgid "Dark|Bright"
 msgstr "Ciemno|Jasno"
 
-#: src117/port/front/port_front_settings.cpp:938
+#: src117/port/front/port_front_settings.cpp:940
 msgid "The original’s Gamma Correction."
 msgstr "Korekcja gammy z oryginału."
 
-#: src117/port/front/port_front_settings.cpp:939
+#: src117/port/front/port_front_settings.cpp:941
 msgid "Colour cycling"
 msgstr "Przełączanie kolorów"
 
-#: src117/port/front/port_front_settings.cpp:940
+#: src117/port/front/port_front_settings.cpp:942
 msgid "Water and lava animation."
 msgstr "Animacja wody i lawy."
 
-#: src117/port/front/port_front_settings.cpp:941
+#: src117/port/front/port_front_settings.cpp:943
 msgid "Smooth unit turning"
 msgstr "Płynny obrót jednostek"
 
-#: src117/port/front/port_front_settings.cpp:941
+#: src117/port/front/port_front_settings.cpp:943
 msgid "Remastered’s in-between facings in the HD art"
 msgstr "Pośrednie kąty obrotu z Remastered w grafice HD"
 
-#: src117/port/front/port_front_settings.cpp:942
+#: src117/port/front/port_front_settings.cpp:944
 msgid "HD only: Remastered’s in-between facings."
 msgstr "Tylko HD: pośrednie kąty obrotu z Remastered."
 
-#: src117/port/front/port_front_settings.cpp:943
+#: src117/port/front/port_front_settings.cpp:945
 msgid "HD lighting"
 msgstr "Oświetlenie HD"
 
-#: src117/port/front/port_front_settings.cpp:944
+#: src117/port/front/port_front_settings.cpp:946
 msgid "Remastered’s real-time lighting on the HD art: each unit and building shaded by its own normal, specular and occlusion maps, lit from above and by the explosions, fire and muzzle flashes around it, with its lights glowing. Remastered’s box also sways foliage and stacks shadows, which Hyperion does not do yet."
 msgstr "Oświetlenie w czasie rzeczywistym z Remastered na grafice HD: każda jednostka i budowla cieniowana własnymi mapami normalnych, odblasków i zasłonięcia, oświetlona z góry oraz przez wybuchy, ogień i błyski wystrzałów wokół, z jarzącymi się światłami. Pole w Remastered kołysze też roślinność i nakłada cienie, czego Hyperion jeszcze nie robi."
 
-#: src117/port/front/port_front_settings.cpp:945
+#: src117/port/front/port_front_settings.cpp:947
 msgid "Player colours"
 msgstr "Kolory graczy"
 
-#: src117/port/front/port_front_settings.cpp:945
+#: src117/port/front/port_front_settings.cpp:947
 msgid "Classic|Exact"
 msgstr "Klasyczne|Dokładne"
 
-#: src117/port/front/port_front_settings.cpp:946
+#: src117/port/front/port_front_settings.cpp:948
 msgid "A Remastered map can give each player an exact colour. Exact draws the map’s own, with the map in full colour: shadows, the fog and translucent effects blended as colours. Classic draws every pixel as the original does, a map’s colour as the closest of the original’s. Exact needs the GPU renderer."
 msgstr "Mapa z Remastered może nadać każdemu graczowi dokładny kolor. Dokładne rysuje kolory z mapy, a samą mapę w pełnej palecie: cienie, mgła i przezroczyste efekty mieszane jako kolory. Klasyczne rysuje każdy piksel tak jak oryginał, a kolor z mapy jako najbliższy z palety oryginału. Dokładne wymagają renderera GPU."
 
-#: src117/port/front/port_front_settings.cpp:947
+#: src117/port/front/port_front_settings.cpp:949
 msgid "Music"
 msgstr "Muzyka"
 
-#: src117/port/front/port_front_settings.cpp:947
 #: src117/port/front/port_front_settings.cpp:949
-#: src117/port/front/port_front_settings.cpp:965
+#: src117/port/front/port_front_settings.cpp:951
+#: src117/port/front/port_front_settings.cpp:967
 msgid "Min|Max"
 msgstr "min.|maks."
 
-#: src117/port/front/port_front_settings.cpp:950
+#: src117/port/front/port_front_settings.cpp:952
 msgid "The original calls it Digital Volume. Both volumes start where the original’s do: music at 25, sound at 50."
 msgstr "Oryginał nazywa to głośnością cyfrową. Obie głośności startują tak jak w oryginale: muzyka na 25, dźwięk na 50."
 
-#: src117/port/front/port_front_settings.cpp:951
+#: src117/port/front/port_front_settings.cpp:953
 msgid "Unit speech"
 msgstr "Głosy jednostek"
 
-#: src117/port/front/port_front_settings.cpp:953
+#: src117/port/front/port_front_settings.cpp:955
 msgid "Unit acknowledgements"
 msgstr "Meldunki jednostek"
 
-#: src117/port/front/port_front_settings.cpp:955
+#: src117/port/front/port_front_settings.cpp:957
 msgid "Building sounds"
 msgstr "Dźwięki budowy"
 
-#: src117/port/front/port_front_settings.cpp:957
+#: src117/port/front/port_front_settings.cpp:959
 msgid "Subtitles"
 msgstr "Napisy"
 
-#: src117/port/front/port_front_settings.cpp:959
+#: src117/port/front/port_front_settings.cpp:961
 msgid "Cinematic subtitles"
 msgstr "Napisy w filmikach"
 
-#: src117/port/front/port_front_settings.cpp:960
+#: src117/port/front/port_front_settings.cpp:962
 msgid "Remastered’s subtitles over the cinematics that speak, in English, read from the StarCraft: Remastered install. Off, the cinematics as the original shows them, without words."
 msgstr "Napisy z Remastered na filmikach z dialogami, po angielsku, czytane z instalacji StarCraft: Remastered. Wyłączone: filmiki tak, jak pokazuje je oryginał, bez napisów."
 
-#: src117/port/front/port_front_settings.cpp:961
+#: src117/port/front/port_front_settings.cpp:963
 msgid "Sound in the background"
 msgstr "Dźwięk w tle"
 
-#: src117/port/front/port_front_settings.cpp:962
+#: src117/port/front/port_front_settings.cpp:964
 msgid "Off, as the original: the game’s sounds stop while another window is in front. On, they go on playing behind it."
 msgstr "Wyłączone, jak w oryginale: dźwięki gry milkną, gdy na pierwszym planie jest inne okno. Włączone: grają dalej w tle."
 
-#: src117/port/front/port_front_settings.cpp:963
+#: src117/port/front/port_front_settings.cpp:965
 msgid "Unit voices"
 msgstr "Nagrania jednostek"
 
-#: src117/port/front/port_front_settings.cpp:963
+#: src117/port/front/port_front_settings.cpp:965
 msgid "Classic|Remastered"
 msgstr "Klasyczne|Remastered"
 
-#: src117/port/front/port_front_settings.cpp:964
+#: src117/port/front/port_front_settings.cpp:966
 msgid "Remastered, the voices and the other sounds of a game as Remastered recorded them again, at twice the original’s sample rate, read from the StarCraft: Remastered install; a sound it does not have plays as the original’s. Classic, the original’s. Remastered’s original voice-over box, the other way round."
 msgstr "Remastered: głosy i pozostałe dźwięki gry tak, jak Remastered nagrał je ponownie, z dwukrotnie wyższą częstotliwością próbkowania, czytane z instalacji StarCraft: Remastered; dźwięk, którego nie ma, odtwarza się jak w oryginale. Klasyczne: dźwięki oryginału. To pole „stare głosy jednostek” z Remastered, tylko na odwrót."
 
-#: src117/port/front/port_front_settings.cpp:965
+#: src117/port/front/port_front_settings.cpp:967
 msgid "Master volume"
 msgstr "Głośność główna"
 
-#: src117/port/front/port_front_settings.cpp:966
+#: src117/port/front/port_front_settings.cpp:968
 msgid "One volume over everything Hyperion plays, on top of Music and Sound: the game’s sounds, the music and the cinematics. At Max they are as loud as the original makes them."
 msgstr "Jedna głośność nad wszystkim, co odtwarza Hyperion, ponad Muzyką i Dźwiękiem: dźwięki gry, muzyka i filmiki. Na maks. są tak głośne, jak robi to oryginał."
 
-#: src117/port/front/port_front_settings.cpp:967
+#: src117/port/front/port_front_settings.cpp:969
 msgid "Colour theme"
 msgstr "Motyw kolorów"
 
-#: src117/port/front/port_front_settings.cpp:968
+#: src117/port/front/port_front_settings.cpp:970
 msgid "The menus’ colours: an accent, a second accent and the panels. Blue and gold is the design’s own. Custom takes three colours you pick, and with its lightness yours, any text that would grow hard to read is lightened until it reads. The planet, the player colours and the map pictures are never themed."
 msgstr "Kolory menu: akcent, drugi akcent i panele. Niebieski ze złotem to kolory samego projektu. Własne przyjmuje trzy wybrane przez ciebie kolory, a przy twojej jasności każdy tekst, który stałby się trudny do odczytania, jest rozjaśniany, aż da się go czytać. Planeta, kolory graczy i obrazki map nigdy nie zmieniają motywu."
 
-#: src117/port/front/port_front_settings.cpp:969
+#: src117/port/front/port_front_settings.cpp:971
 msgid "Unit portraits"
 msgstr "Portrety jednostek"
 
-#: src117/port/front/port_front_settings.cpp:969
+#: src117/port/front/port_front_settings.cpp:971
 msgid "Animated|Still|Off"
 msgstr "Animowane|Nieruchome|Wyłączone"
 
-#: src117/port/front/port_front_settings.cpp:971
+#: src117/port/front/port_front_settings.cpp:973
 msgid "Console layout"
 msgstr "Układ konsoli"
 
-#: src117/port/front/port_front_settings.cpp:971
+#: src117/port/front/port_front_settings.cpp:973
 msgid "One block|To the edges"
 msgstr "Jeden blok|Do krawędzi"
 
-#: src117/port/front/port_front_settings.cpp:972
+#: src117/port/front/port_front_settings.cpp:974
 msgid "With the HD art in a view wider than 4:3: To the edges puts the console’s three parts, the minimap, the selection and the command card, toward the screen’s corners, as Remastered draws its HD console; One block keeps it in one piece in the middle, as the original draws it. A mod’s own console may keep it in one block."
 msgstr "Przy grafice HD w widoku szerszym niż 4:3: Do krawędzi odsuwa trzy części konsoli — minimapę, zaznaczenie i kartę rozkazów — ku narożnikom ekranu, tak jak Remastered rysuje swoją konsolę HD; Jeden blok trzyma ją w całości na środku, tak jak rysuje ją oryginał. Własna konsola moda może zostać w jednym bloku."
 
-#: src117/port/front/port_front_settings.cpp:973
+#: src117/port/front/port_front_settings.cpp:975
 msgid "Console skin"
 msgstr "Skórka konsoli"
 
-#: src117/port/front/port_front_settings.cpp:973
+#: src117/port/front/port_front_settings.cpp:975
 msgid "By race|Terran|Protoss|Zerg"
 msgstr "Według rasy|Terranie|Protosi|Zergi"
 
-#: src117/port/front/port_front_settings.cpp:974
+#: src117/port/front/port_front_settings.cpp:976
 msgid "The console in a game you play: the race played’s, as the original, or one race’s whatever you play, with its command buttons, chat box and panels. The advisor’s voice and the supply icon stay your race’s, and a replay keeps its own console."
 msgstr "Konsola w grze, którą sam prowadzisz: tej rasy, którą grasz, jak w oryginale, albo jednej wybranej rasy niezależnie od gry, z jej przyciskami rozkazów, okienkiem czatu i panelami. Głos doradcy i ikona zaopatrzenia pozostają twojej rasy, a powtórka zachowuje własną konsolę."
 
-#: src117/port/front/port_front_settings.cpp:975
+#: src117/port/front/port_front_settings.cpp:977
 msgid "Game timer"
 msgstr "Zegar czasu gry"
 
-#: src117/port/front/port_front_settings.cpp:976
+#: src117/port/front/port_front_settings.cpp:978
 msgid "The game’s time at the top left, as Remastered shows it: at Fastest, 42 ms a frame, which is real time when the game is played at Fastest. The original’s replay panel counts slower, in Normal’s seconds."
 msgstr "Czas gry w lewym górnym narożniku, tak jak pokazuje go Remastered: przy Najszybszej, 42 ms na klatkę, co odpowiada czasowi rzeczywistemu, gdy gra toczy się przy Najszybszej. Panel powtórki w oryginale liczy wolniej, w sekundach Normalnej."
 
-#: src117/port/front/port_front_settings.cpp:978
+#: src117/port/front/port_front_settings.cpp:980
 msgid "Your actions over the last game minute, under the timer: every command you give, but not chat, pausing or saving. Not in replays. Remastered can also alert at a chosen rate, which Hyperion does not yet."
 msgstr "Twoje akcje z ostatniej minuty gry, pod zegarem: każdy wydany rozkaz, ale nie czat, pauza ani zapisywanie. Nie w powtórkach. Remastered potrafi też ostrzegać przy wybranej wartości, czego Hyperion jeszcze nie robi."
 
-#: src117/port/front/port_front_settings.cpp:980
+#: src117/port/front/port_front_settings.cpp:982
 msgid "The frames shown each second, under the timer. The original’s loop draws about 80. Remastered has it in its exe with no control."
 msgstr "Liczba klatek pokazywanych w sekundzie, pod zegarem. Pętla oryginału rysuje około 80. Remastered ma to w swoim pliku exe, bez żadnej opcji."
 
-#: src117/port/front/port_front_settings.cpp:981
+#: src117/port/front/port_front_settings.cpp:983
 msgid "Mature language filter"
 msgstr "Filtr wulgaryzmów"
 
-#: src117/port/front/port_front_settings.cpp:982
+#: src117/port/front/port_front_settings.cpp:984
 msgid "Players’ chat, in a game, a replay and the lobbies, shown with the words on Remastered’s English list starred out, the list read from the StarCraft: Remastered install. A replay keeps what was sent."
 msgstr "Czat graczy — w grze, w powtórce i w poczekalniach — pokazywany z zagwiazdkowanymi słowami z angielskiej listy Remastered, czytanej z instalacji StarCraft: Remastered. Powtórka zachowuje to, co zostało wysłane."
 
-#: src117/port/front/port_front_settings.cpp:983
+#: src117/port/front/port_front_settings.cpp:985
 msgid "Language"
 msgstr "Język"
 
-#: src117/port/front/port_front_settings.cpp:984
+#: src117/port/front/port_front_settings.cpp:986
 msgid "Hyperion’s menus and the game’s text, as in Remastered. The install’s is the language StarCraft: Remastered was installed in. The game’s text in another language needs that language’s text in the install, which Battle.net installs for its chosen language alone, else the game stays in English. Hyperion’s own text is a first translation, which players are welcome to correct."
 msgstr "Menu Hyperiona i tekst gry, jak w Remastered. Z instalacji oznacza język, w którym zainstalowano StarCraft: Remastered. Tekst gry w innym języku wymaga tekstu tego języka w instalacji, a Battle.net instaluje go tylko dla wybranego języka — w przeciwnym razie gra zostaje po angielsku. Własny tekst Hyperiona to pierwsze tłumaczenie, które gracze mogą poprawiać."
 
-#: src117/port/front/port_front_settings.cpp:986
+#: src117/port/front/port_front_settings.cpp:988
 msgid "The keys that select a group and, with Ctrl, make the selection a group (Shift adds to it, Alt selects and centres): the ten digits, then nine more, the groups 11 to 19, on R, F, V, T, G, B, Y, H and N, which hold units and buildings alike, and which win their letters outright: R no longer repairs, T no longer stims, and G, B and H are the groups' alone, the card keeping every other key. Click a key and press another to change it."
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:987
+#: src117/port/front/port_front_settings.cpp:989
 msgid "Group 1"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:989
+#: src117/port/front/port_front_settings.cpp:991
 msgid "Group 2"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:991
+#: src117/port/front/port_front_settings.cpp:993
 msgid "Group 3"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:993
+#: src117/port/front/port_front_settings.cpp:995
 msgid "Group 4"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:995
+#: src117/port/front/port_front_settings.cpp:997
 msgid "Group 5"
 msgstr ""
 
-#: src117/port/front/port_front_settings.cpp:997
-msgid "Group 6"
-msgstr ""
-
 #: src117/port/front/port_front_settings.cpp:999
-msgid "Group 7"
+msgid "Group 6"
 msgstr ""
 
 #: src117/port/front/port_front_skirmish.cpp:1240
@@ -8482,29 +8494,29 @@ msgstr "Twój pokój jest nadal otwarty"
 msgid "This console is back in it."
 msgstr "Ta konsola do niego wróciła."
 
-#: src117/port/lan/port_front_lan.cpp:1971
+#: src117/port/lan/port_front_lan.cpp:1977
 msgid "The Match Did Not Come"
 msgstr "Mecz nie nadszedł"
 
-#: src117/port/lan/port_front_lan.cpp:1971
+#: src117/port/lan/port_front_lan.cpp:1977
 msgid "The room sent nothing of it. It may have ended."
 msgstr "Pokój nic z niego nie przysłał. Mógł się zakończyć."
 
-#: src117/port/lan/port_front_lan.cpp:2119
+#: src117/port/lan/port_front_lan.cpp:2125
 msgid "The server stopped"
 msgstr "Serwer zatrzymany"
 
-#: src117/port/lan/port_front_lan.cpp:2119
+#: src117/port/lan/port_front_lan.cpp:2125
 msgid "Nobody can join until it starts again."
 msgstr "Nikt nie dołączy, dopóki nie uruchomi się ponownie."
 
-#: src117/port/lan/port_front_lan.cpp:2126
+#: src117/port/lan/port_front_lan.cpp:2132
 msgid "The match did not start"
 msgstr "Mecz nie wystartował"
 
-#: src117/port/lan/port_front_lan.cpp:2139
-#: src117/port/lan/port_front_lan.cpp:2148
-#: src117/port/lan/port_front_lan.cpp:2162
+#: src117/port/lan/port_front_lan.cpp:2145
+#: src117/port/lan/port_front_lan.cpp:2154
+#: src117/port/lan/port_front_lan.cpp:2168
 msgid "The match could not start here"
 msgstr "Mecz nie mógł się tu zacząć"
 
@@ -8556,7 +8568,7 @@ msgstr "Gra {0}"
 #: src117/port/lan/port_front_lan.cpp:423
 #: src117/port/lan/port_front_lan.cpp:1825
 #: src117/port/lan/port_front_lanhost.cpp:578
-#: src117/port/lan/port_lanlobby.cpp:108
+#: src117/port/lan/port_lanlobby.cpp:112
 msgid "a computer"
 msgid_plural "{0} computers"
 msgstr[0] "komputer"
@@ -9512,60 +9524,60 @@ msgstr "każdy z powodem, na swojej karcie"
 msgid "Nobody has joined yet. The join card on the right says how."
 msgstr "Nikt jeszcze nie dołączył. Karta dołączania po prawej mówi, jak to zrobić."
 
-#: src117/port/lan/port_lanclient.cpp:257
+#: src117/port/lan/port_lanclient.cpp:258
 msgid "Another version"
 msgstr "Inna wersja"
 
-#: src117/port/lan/port_lanclient.cpp:259
+#: src117/port/lan/port_lanclient.cpp:260
 msgid "Its host plays {0}, and this copy is {1}: the two compute the game differently."
 msgstr "Jego gospodarz gra na {0}, a ta kopia to {1} — obie liczą grę inaczej."
 
-#: src117/port/lan/port_lanclient.cpp:261
+#: src117/port/lan/port_lanclient.cpp:262
 msgid "Its host's page offers its version to install beside this one."
 msgstr "Strona jego gospodarza oferuje swoją wersję do zainstalowania obok tej."
 
-#: src117/port/lan/port_lanclient.cpp:263
+#: src117/port/lan/port_lanclient.cpp:264
 msgid "Needs a mod"
 msgstr "Wymaga moda"
 
-#: src117/port/lan/port_lanclient.cpp:265
+#: src117/port/lan/port_lanclient.cpp:266
 msgid "This copy has the mod {0} active, and the room plays without one."
 msgstr "Ta kopia ma aktywny mod {0}, a pokój gra bez moda."
 
-#: src117/port/lan/port_lanclient.cpp:266
+#: src117/port/lan/port_lanclient.cpp:267
 msgid "Its host plays the mod {0}, which this copy does not have active."
 msgstr "Jego gospodarz gra z modem {0}, którego ta kopia nie ma aktywnego."
 
-#: src117/port/lan/port_lanclient.cpp:267
+#: src117/port/lan/port_lanclient.cpp:268
 #: src117/port/lan/port_lanroom_proto.cpp:412
 msgid "Turn it off under Mods, then join."
 msgstr "Wyłącz go w Modach, a potem dołącz."
 
-#: src117/port/lan/port_lanclient.cpp:268
+#: src117/port/lan/port_lanclient.cpp:269
 msgid "Activate {0} under Mods, then join."
 msgstr "Aktywuj {0} w Modach, a potem dołącz."
 
-#: src117/port/lan/port_lanclient.cpp:270
+#: src117/port/lan/port_lanclient.cpp:271
 msgid "Other game data"
 msgstr "Inne dane gry"
 
-#: src117/port/lan/port_lanclient.cpp:272
+#: src117/port/lan/port_lanclient.cpp:273
 msgid "Its game data is not this copy's (fingerprint {0})."
 msgstr "Jego dane gry to nie dane tej kopii (odcisk {0})."
 
-#: src117/port/lan/port_lanclient.cpp:273
+#: src117/port/lan/port_lanclient.cpp:274
 msgid "Its host's page has the game data to install."
 msgstr "Strona jego gospodarza ma dane gry do zainstalowania."
 
-#: src117/port/lan/port_lanclient.cpp:276
+#: src117/port/lan/port_lanclient.cpp:277
 msgid "Plays here"
 msgstr "Gra tutaj"
 
-#: src117/port/lan/port_lanclient.cpp:406
+#: src117/port/lan/port_lanclient.cpp:407
 msgid "The host removed you from the room."
 msgstr "Gospodarz usunął cię z pokoju."
 
-#: src117/port/lan/port_lanclient.cpp:408
+#: src117/port/lan/port_lanclient.cpp:409
 msgid "The room has closed."
 msgstr "Pokój został zamknięty."
 
@@ -9589,16 +9601,16 @@ msgstr "{0} · {1} s z opóźnieniem"
 msgid "L goes back to {0} s behind"
 msgstr "L wraca do {0} s opóźnienia"
 
-#: src117/port/lan/port_lanlobby.cpp:114
+#: src117/port/lan/port_lanlobby.cpp:118
 #: src117/port/platform/port_discord.cpp:615
 msgid "{0}, {1}"
 msgstr "{0}, {1}"
 
-#: src117/port/lan/port_lanlobby.cpp:184
+#: src117/port/lan/port_lanlobby.cpp:188
 msgid "A match"
 msgstr "Mecz"
 
-#: src117/port/lan/port_lanlobby.cpp:699
+#: src117/port/lan/port_lanlobby.cpp:759
 msgid "Starting the match"
 msgstr "Rozpoczynanie meczu"
 

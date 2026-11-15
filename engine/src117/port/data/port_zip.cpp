@@ -43,7 +43,8 @@ bool PortZipDirectory(const std::vector<uint8_t> &zip, std::vector<PortZipEntry>
   return true;
 }
 
-bool PortZipRead(const std::vector<uint8_t> &zip, const PortZipEntry &e, std::vector<uint8_t> *pOut) {
+bool PortZipRead(const std::vector<uint8_t> &zip, const PortZipEntry &e, std::vector<uint8_t> *pOut,
+                 uint32_t cbMax) {
   // compared by subtraction, as in PortZipDirectory: an offset or size near 4 GB wraps a sum
   const size_t local = e.dwLocal;
   if (local > zip.size() || zip.size() - local < 30 || Le32(&zip[local]) != 0x04034B50)
@@ -51,7 +52,7 @@ bool PortZipRead(const std::vector<uint8_t> &zip, const PortZipEntry &e, std::ve
   const size_t data = local + 30 + Le16(&zip[local + 26]) + Le16(&zip[local + 28]);
   if (data > zip.size() || e.cbPacked > zip.size() - data)
     return false;
-  if (e.cbSize > PORT_ZIP_ENTRY_MAX)  // the size is the file's word, read before a byte is inflated
+  if (e.cbSize > cbMax)  // the size is the file's word, read before a byte is inflated
     return false;
   if (e.wMethod == 0) {
     pOut->assign(zip.begin() + data, zip.begin() + data + e.cbPacked);

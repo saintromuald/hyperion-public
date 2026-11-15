@@ -34,6 +34,7 @@
 #include "../render/port_gpu.h"
 #include "../loop/port_workers.h"  // PortCoresSet
 #include "../data/port_install.h"  // PortInstallChosen, PortInstallChoose, PortInstallClassicCheck
+#include "../data/port_pluto_runtime.h"  // official Pluto runtime download and repair
 #include "../data/port_language.h"  // the Language row
 #include "../data/port_mods.h"
 #include "../data/port_remastered.h"  // PortGameSource
@@ -133,6 +134,7 @@ enum Bind {
   BIND_MODS_FOLDER,     // where the mods are, with Browse (g_modsPick)
   BIND_THEME,           // the menus' colours (port_frontkit.cpp) and Custom's picker (g_custom)
   BIND_LANGUAGE,        // the language (port_language.cpp), its words made as the row is read
+  BIND_PLUTO_RUNTIME,   // the official runtime's immediate Download/Repair action
 };
 
 struct SetValue {
@@ -1102,6 +1104,8 @@ const Setting kSettings[] = {
      NULL, WriteRemastered, NULL, PT_("Found from Battle.net\xE2\x80\x99""s uninstall entry, or Browse to it (a folder inside it will do). It gives the game\xE2\x80\x99""s files when Game files says so, and Remastered\xE2\x80\x99""s subtitles and chat filter either way. Another install than the one in use takes a restart.")},
     {"hyperion", PT_("Mods folder"), CTL_PATH, "<data folder>\\mods", 0.0f, false, "Hyperion", NULL, "restart", BIND_MODS_FOLDER,
      NULL, WriteModsFolder, NULL, PT_("Where the mods are, each in a folder with its mod.json. A new folder takes a restart, as the chosen mod\xE2\x80\x99""s data is read when Hyperion starts.")},
+    {"hyperion", PT_("Pluto AI runtime"), CTL_BUTTON, PT_("Download Pluto AI"), 0.0f, false, "Hyperion", NULL, "live", BIND_PLUTO_RUNTIME,
+     NULL, NULL, NULL, PT_("Downloads the official Pluto v2.0 ZIP directly from tscmoo/pluto, checks its exact size and SHA-256, then checks and atomically replaces only the DLL, inference executable and weights. The bridge and your logs, configuration and bandit data are preserved. Retry is available after any failure. Not during a game.")},
     {"hyperion", PT_("Check a mod\xE2\x80\x99""s fingerprint"), CTL_TOGGLE, NULL, 1.0f, false, "Hyperion", NULL, "live", BIND_NONE,
      ReadFlag, WriteFlag, "checkModFingerprint", PT_("A mod that changes the rules is named by a hash of its data, so a replay or a saved game made with another version of it is refused. Off, it plays all the same, for a mod\xE2\x80\x99""s author trying a change; it may go its own way where the data differs.")},
     {"hyperion", PT_("Hyperion\xE2\x80\x99""s menus"), CTL_TOGGLE, NULL, 1.0f, false, "Hyperion", NULL, "restart", BIND_NONE,
@@ -1252,7 +1256,7 @@ bool Locked(const Setting &s)
   if (!g_bSettingsGame)
     return false;
   return strcmp(s.pszApplies, "restart") == 0 || s.bind == BIND_DISPLAY || s.bind == BIND_RESOLUTION ||
-         s.bind == BIND_REMASTERED || s.pfnWrite == WriteFrameTiming ||
+         s.bind == BIND_REMASTERED || s.bind == BIND_PLUTO_RUNTIME || s.pfnWrite == WriteFrameTiming ||
          (s.pfnWrite == WriteSpeed && (gbMultiPlayerMode || gPlayback));
 }
 
@@ -1357,6 +1361,7 @@ std::string ClassicInUse(void)
 
 void SettingsOpen(bool bInGame, const char *pszTab)
 {
+  PortPlutoInstallRefresh();
   g_bSettingsGame = bInGame;
   g_bAcceptAsked = false;
   for (int t = 0; pszTab != NULL && t < kTabCount; ++t)
@@ -1804,7 +1809,10 @@ void Field(const char *psz, bool bGrow, bool bDim, int nId = -1)
 void SettingGroup(int i)
 {
   const Setting &s = SettingsRows()[i];
-  const bool bLive = Editable(s);
+  const bool bLive = s.bind == BIND_PLUTO_RUNTIME
+                         ? !Locked(s) && (PortPlutoInstallGetStatus().phase == PORT_PLUTO_INSTALL_RUNNING ||
+                                          PortPlutoDownloadCapabilityError() == NULL)
+                         : Editable(s);
   const bool bDim = NeedsOf(s) != NULL || Locked(s);
   SetValue &v = g_set[i];
   Decl g;
@@ -1952,7 +1960,17 @@ void SettingGroup(int i)
       Decl b;
       b.d.id = Id("setbutton", i);
       b.d.layout.sizing.height = Fixed(Sc(42));
-      ScMini(b, s.pszWords != NULL ? PortText(s.pszWords) : PortText("Open"), 0, false);
+      if (s.bind == BIND_PLUTO_RUNTIME) {
+        const PortPlutoInstallStatus status = PortPlutoInstallGetStatus();
+        const std::string button = PortPlutoInstallButtonText(status);
+        if (ScMini(b, button.c_str(), 0, bLive))
+          PortPlutoInstallStartOrCancel(g_bSettingsGame);
+        const std::string text = PortPlutoInstallText(status);
+        Text(Keep(text), UI_FACE_WIDE, Fs(14), 0.0f,
+             status.phase == PORT_PLUTO_INSTALL_FAILED ? kScInkOff : kScInkLabel);
+      } else {
+        ScMini(b, s.pszWords != NULL ? PortText(s.pszWords) : PortText("Open"), 0, false);
+      }
       break;
     }
   }
@@ -1967,6 +1985,8 @@ int SettingHeight(const Setting &s)
     return lroundf(g_set[RowOf(BIND_THEME)].f) == 5 ? 760 : 260;
   if (s.control == CTL_HEAD)
     return 50;
+  if (s.control == CTL_BUTTON)
+    return 130;
   return s.control == CTL_TOGGLE ? 44 : s.control == CTL_SLIDER ? (s.bToggle ? 120 : 110) : s.control == CTL_STEPS ? 110 : 90;
 }
 

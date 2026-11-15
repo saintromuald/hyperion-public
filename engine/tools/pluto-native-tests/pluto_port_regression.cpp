@@ -280,6 +280,23 @@ bool TestPendingReplyTiming() {
   return ok;
 }
 
+bool TestBridgeProcessTransportPlans() {
+  const std::string folder = "C:\\Hyperion\\Data\\pluto";
+  const std::string native = PlutoBridgeCommand(folder, "/usr/bin/wine", true);
+  const std::string posix = PlutoBridgeCommand(folder, "/usr/bin/wine", false);
+  return Check(native == "\"C:\\Hyperion\\Data\\pluto/pluto-bridge.exe\"",
+               "native Windows launches pluto-bridge.exe directly, without Wine") &&
+         Check(!PlutoUsesFrameFifo(true),
+               "native Windows retains direct anonymous pipes instead of calling mkfifo") &&
+         Check(PlutoDirectPipesEnvironment(true) != NULL &&
+                   strcmp(PlutoDirectPipesEnvironment(true), "1") == 0 &&
+                   PlutoDirectPipesEnvironment(false) == NULL,
+               "only native Windows tells the bridge to skip its Wine FIFO handoff") &&
+         Check(posix == "\"/usr/bin/wine\" \"C:\\Hyperion\\Data\\pluto/pluto-bridge.exe\"",
+               "the Wine launch remains unchanged off native Windows") &&
+         Check(PlutoUsesFrameFifo(false), "the Wine transport retains its frame FIFO");
+}
+
 bool TestSeatAndPlayerIdMismatch() {
   ResetPlayers();
   gPlayerData[3].nType = 2;
@@ -328,6 +345,8 @@ int main(int argc, char **argv) {
     ok = TestRepairClassicStormMappingParticipants();
   else if (scenario == "seat-mismatch")
     ok = TestSeatAndPlayerIdMismatch();
+  else if (scenario == "process-transport")
+    ok = TestBridgeProcessTransportPlans();
   else
     return 2;
   return ok ? 0 : 1;

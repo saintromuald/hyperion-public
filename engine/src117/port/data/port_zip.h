@@ -18,5 +18,7 @@ const uint32_t PORT_ZIP_ENTRY_MAX = 256u << 20;
 // The entries of the zip in zip, or false when it is not one.
 bool PortZipDirectory(const std::vector<uint8_t> &zip, std::vector<PortZipEntry> *pOut);
 // An entry's bytes: false for a method other than stored or deflated, an entry larger than
-// PORT_ZIP_ENTRY_MAX, or bytes that do not unpack to its size.
-bool PortZipRead(const std::vector<uint8_t> &zip, const PortZipEntry &e, std::vector<uint8_t> *pOut);
+// cbMax, or bytes that do not unpack to its size. Existing package readers retain the 256 MiB
+// default; a caller with a larger pinned artifact (Pluto's weights) raises its own call's limit.
+bool PortZipRead(const std::vector<uint8_t> &zip, const PortZipEntry &e, std::vector<uint8_t> *pOut,
+                 uint32_t cbMax = PORT_ZIP_ENTRY_MAX);

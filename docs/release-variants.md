@@ -131,6 +131,19 @@ on 600 meaningful-input turns and produce a replay. `--classic` checks ordinary
 Classic rules; `--negative` exercises rollback, roster/profile mismatch, and bad
 map hashes/bytes through the native fail-closed parser.
 
+## Pluto is a mandatory release gate
+
+Pluto AI must be functional in every release and every prerelease, without exception. A package
+is incomplete if its Pluto level can be selected but its runtime cannot start. The package must
+include Hyperion's bridge and either the complete, unmodified runtime or the built-in
+**Download Pluto AI** setup on the first-run screen and in Settings. Do not bundle or mirror the
+official DLL, inference executable, or weights without the author's redistribution permission;
+the built-in setup downloads them directly from the official Pluto release and verifies their
+published hashes. Run a real packaged-engine Pluto match and a two-client multiplayer match with
+a Pluto slot before publication or promotion. Multiplayer needs one authoritative inference
+owner, deterministic commands on every peer, consistent results, and valid replays. Native
+scenario tests without that runtime are necessary but not sufficient.
+
 ## Prerelease, then release
 
 Run **Hyperion Shield Zero release** manually with the ref, tag, and `prerelease`

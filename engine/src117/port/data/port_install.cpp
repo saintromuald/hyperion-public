@@ -22,6 +22,7 @@
 #include <string>
 #include <SDL3/SDL.h>
 #include "port_install.h"
+#include "port_pluto_runtime.h"
 #include "../front/port_text.h"
 #include "../front/port_ui.h"            // PortCascAvailable, PortCascCheck, PortCascFolder, PortCascUse
 #include "../platform/port_paths.h"      // PortCommandOptions, PortProgramFolder
@@ -295,7 +296,13 @@ static void DialogShow(HWND hDlg, InstallDialog *pDialog)
   CheckRadioButton(hDlg, IDC_INSTALL_BATTLENET, IDC_INSTALL_CLASSIC,
                    pDialog->base == PORT_INSTALL_CLASSIC ? IDC_INSTALL_CLASSIC : IDC_INSTALL_BATTLENET);
   const PortInstallCheck &base = pDialog->base == PORT_INSTALL_CLASSIC ? pDialog->classic : pDialog->battleNet;
-  EnableWindow(GetDlgItem(hDlg, IDOK), base.bFound);
+  const PortPlutoInstallStatus pluto = PortPlutoInstallGetStatus();
+  EnableWindow(GetDlgItem(hDlg, IDOK), base.bFound && pluto.phase != PORT_PLUTO_INSTALL_RUNNING);
+  SetDlgItemTextA(hDlg, IDC_INSTALL_PLUTO, PortPlutoInstallButtonText(pluto).c_str());
+  EnableWindow(GetDlgItem(hDlg, IDC_INSTALL_PLUTO),
+               pluto.phase == PORT_PLUTO_INSTALL_RUNNING || PortPlutoDownloadCapabilityError() == NULL);
+  SetDlgItemTextA(hDlg, IDC_INSTALL_PLUTO_STATUS, PortPlutoInstallText(pluto).c_str());
+  InvalidateRect(GetDlgItem(hDlg, IDC_INSTALL_PLUTO_STATUS), NULL, TRUE);
   InvalidateRect(GetDlgItem(hDlg, IDC_INSTALL_BATTLENET_STATUS), NULL, TRUE);
   InvalidateRect(GetDlgItem(hDlg, IDC_INSTALL_CLASSIC_STATUS), NULL, TRUE);
 }
@@ -362,12 +369,20 @@ static INT_PTR CALLBACK InstallDialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, L
                       IDC_INSTALL_CLASSIC_STATUS})
         SendDlgItemMessageA(hDlg, nId, WM_SETFONT, reinterpret_cast<WPARAM>(pDialog->hBold), FALSE);
     }
+    PortPlutoInstallRefresh();
     // the fields' own EN_CHANGE checks them as they are filled
     SetDlgItemTextA(hDlg, IDC_INSTALL_BATTLENET_FOLDER, PortInstallStartFolder(PORT_INSTALL_BATTLENET).c_str());
     SetDlgItemTextA(hDlg, IDC_INSTALL_CLASSIC_FOLDER, PortInstallStartFolder(PORT_INSTALL_CLASSIC).c_str());
     DialogCheck(hDlg, pDialog);
+    SetTimer(hDlg, 1, 100, NULL);
     return TRUE;
   }
+  case WM_TIMER:
+    if (wParam == 1) {
+      DialogShow(hDlg, pDialog);
+      return TRUE;
+    }
+    break;
   case WM_CTLCOLORSTATIC: {
     const HWND hCtl = reinterpret_cast<HWND>(lParam);
     const bool bBattleNet = hCtl == GetDlgItem(hDlg, IDC_INSTALL_BATTLENET_STATUS);
@@ -376,6 +391,16 @@ static INT_PTR CALLBACK InstallDialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, L
       const bool bEmpty = bBattleNet ? pDialog->bBattleNetEmpty : pDialog->bClassicEmpty;
       const bool bFound = bBattleNet ? pDialog->battleNet.bFound : pDialog->classic.bFound;
       SetTextColor(hdc, bEmpty ? GetSysColor(COLOR_GRAYTEXT) : bFound ? RGB(0, 100, 0) : RGB(139, 0, 0));
+      SetBkMode(hdc, TRANSPARENT);
+      return reinterpret_cast<INT_PTR>(GetSysColorBrush(COLOR_BTNFACE));
+    }
+    if (hCtl == GetDlgItem(hDlg, IDC_INSTALL_PLUTO_STATUS)) {
+      const PortPlutoInstallPhase phase = PortPlutoInstallGetStatus().phase;
+      HDC hdc = reinterpret_cast<HDC>(wParam);
+      SetTextColor(hdc, phase == PORT_PLUTO_INSTALL_FAILED ? RGB(139, 0, 0) :
+                            phase == PORT_PLUTO_INSTALL_READY || phase == PORT_PLUTO_INSTALL_SUCCEEDED
+                                ? RGB(0, 100, 0)
+                                : GetSysColor(COLOR_GRAYTEXT));
       SetBkMode(hdc, TRANSPARENT);
       return reinterpret_cast<INT_PTR>(GetSysColorBrush(COLOR_BTNFACE));
     }
@@ -401,7 +426,14 @@ static INT_PTR CALLBACK InstallDialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, L
     case IDC_INSTALL_CLASSIC_BROWSE:
       DialogBrowse(hDlg, IDC_INSTALL_CLASSIC_FOLDER);
       return TRUE;
+    case IDC_INSTALL_PLUTO:
+      if (HIWORD(wParam) == BN_CLICKED)
+        PortPlutoInstallStartOrCancel(false);
+      DialogShow(hDlg, pDialog);
+      return TRUE;
     case IDOK: {
+      if (PortPlutoInstallGetStatus().phase == PORT_PLUTO_INSTALL_RUNNING)
+        return TRUE;
       std::string why;
       PortInstallCheck &base = pDialog->base == PORT_INSTALL_CLASSIC ? pDialog->classic : pDialog->battleNet;
       if (!base.bFound)
@@ -416,6 +448,7 @@ static INT_PTR CALLBACK InstallDialogProc(HWND hDlg, UINT uMsg, WPARAM wParam, L
       return TRUE;
     }
     case IDCANCEL:
+      PortPlutoInstallCancelAndWait();
       EndDialog(hDlg, IDCANCEL);
       return TRUE;
     }
