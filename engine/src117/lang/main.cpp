@@ -553,7 +553,7 @@ void InitLocale()
   DWORD dwLocale;
   const char *pszAppData;
   intptr_t cchLeft;
-  void *pf;
+  FILE *pf;
 
   dwLocale = GetLocaleFourCC();
   if (dwLocale == 0)
