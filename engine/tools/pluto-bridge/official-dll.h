@@ -113,22 +113,22 @@ class Sha256 {
 };
 
 inline bool HashFileSha256(const char *path, char hex[65]) {
-  FILE *file = std::fopen(path, "rb");
+  FILE *file = ::fopen(path, "rb");
   if (file == NULL)
     return false;
   Sha256 hash;
   unsigned char block[65536];
   bool ok = true;
   for (;;) {
-    const std::size_t got = std::fread(block, 1, sizeof block, file);
+    const std::size_t got = ::fread(block, 1, sizeof block, file);
     if (got != 0)
       hash.Update(block, got);
     if (got != sizeof block) {
-      ok = std::ferror(file) == 0;
+      ok = ::ferror(file) == 0;
       break;
     }
   }
-  ok = std::fclose(file) == 0 && ok;
+  ok = ::fclose(file) == 0 && ok;
   if (ok)
     hash.Finish(hex);
   return ok;

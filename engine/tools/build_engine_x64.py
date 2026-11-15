@@ -104,7 +104,7 @@ GEN = COMMON + ["/TP", "/DOC_DLL_MODE", "/I" + os.path.join(SRC, "h")]
 # The port's own TUs name game globals as externs, bound by abs_globals.py --bind-only
 #. They use the standard library, so they unwind its
 # exceptions (/EHsc); the game's TUs keep the original flags.
-PORT = COMMON + ["/TP", "/EHsc", "/DOC_WITH_HELD", "/I" + os.path.join(SRC, "h"), "/I" + OUT,
+PORT = COMMON + ["/TP", "/EHsc", "/std:c++20", "/DOC_WITH_HELD", "/I" + os.path.join(SRC, "h"), "/I" + OUT,
                  "/I" + os.path.join(SDL3, "include"), "/I" + SHADERS,
                  "/I" + CLAY, "/I" + STB, "/I" + os.path.join(CASCLIB, "src"),
                  "/DCASCLIB_NO_AUTO_LINK_LIBRARY", "/I" + LIBVPX, "/I" + LIBVPX_CONFIG, "/I" + LIBWEBM,
