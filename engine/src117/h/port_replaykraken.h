@@ -11,11 +11,11 @@ namespace ReplayKraken {
 
 // The current server accepts a 2 MiB JSON body. Keep replay input bounded before
 // Base64 encoding; the final encoded body is checked exactly as well.
-inline constexpr size_t kMaxRequestBytes = 2 * 1024 * 1024;
-inline constexpr size_t kMaxReplayBytes = 1500 * 1024;
-inline constexpr size_t kMaxResponseBytes = 8 * 1024 * 1024;
-inline constexpr size_t kPageSize = 50;
-inline constexpr size_t kMaxPageSize = 200;
+constexpr size_t kMaxRequestBytes = 2 * 1024 * 1024;
+constexpr size_t kMaxReplayBytes = 1500 * 1024;
+constexpr size_t kMaxResponseBytes = 8 * 1024 * 1024;
+constexpr size_t kPageSize = 50;
+constexpr size_t kMaxPageSize = 200;
 
 struct Endpoint {
   std::string input;   // The trimmed setting, for display only.

@@ -6,8 +6,12 @@
 
 #include "../h/gds_appcrit.h"
 #include "../h/gds_file.h"
-#include "../h/port_replayonline.h"
 #include "../gen/globals117.h"
+
+// Keep this legacy CRT translation unit isolated from modern C++ library headers.
+namespace ReplayOnline {
+void CaptureWrite(const void *pData, size_t bytes, void *pFile);
+}
 
 // The CRT entry points, declared here rather than through <stdio.h>, as init.cpp
 // and creep.cpp do. FILE is spelled `void *`, as in gds_file.h: the wrappers
