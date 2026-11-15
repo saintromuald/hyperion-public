@@ -36,7 +36,8 @@ REPO = ENGINE.parent
 THIRD = ["SDL3-3.4.16-src", "StormLib-9.40", "CascLib-3.0", "clay-0.14", "stb-6e9f34d", "fonts-8b0a1d0", "webrtc",
          "libvpx-1.17.0", "dr_libs-dfe8377", "libwebp-1.5.0", "dav1d-1.5.4"]
 # what tools/package.py reads from outside engine/'s tracked files
-PACKAGE_DOCS = ["hxm-for-editors.md", "hxm-format.md", "live-channel-for-editors.md", "release-notes.md"]
+PACKAGE_DOCS = ["hxm-for-editors.md", "hxm-format.md", "live-channel-for-editors.md", "release-notes.md",
+                "release-variants.md"]
 MAPS = ENGINE / "testrun" / "play" / "maps" / "Hyperion"
 
 

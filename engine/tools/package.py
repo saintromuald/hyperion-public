@@ -34,11 +34,12 @@ testrun/play/maps/Hyperion/, which the user allows sharing (PRD 2026-10-13). The
 folder of its own, not into a StarCraft folder (PRD 2026-10-21): Hyperion.exe finds the game's
 files where they are installed and keeps its own data in the same Data\\
 (src117/port/platform/port_paths.cpp), whose maps\\ it looks in beside the install's;
-PortPackagedFile finds web\\ and notes\\ there. Nothing of Blizzard's goes in: the player has
-the game. It is one zip with no zips inside (the user, 2026-10-15).
+PortPackagedFile finds web\\ and notes\\ there. Shield Zero contains none of Blizzard's data;
+Zero Private deliberately includes the maintainer's licensed install under Game\\. Each package
+is one archive with no nested archives.
 
-Each run writes a new folder, hyperion_<version>_<stamp>/, with the zip and a list of what
-went in; earlier ones are kept.
+Each run writes a new folder named for its variant, version and timestamp, with the archive and
+a list of what went in; earlier ones are kept.
 
 The Linux package holds the same, with the Linux program Hyperion.x86_64 (or
 Hyperion.aarch64) and libSDL3.so.0 beside it (tools/build_engine_linux.py), a README for Linux, text with Linux's

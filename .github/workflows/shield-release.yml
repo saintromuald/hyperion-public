@@ -10,7 +10,7 @@ on:
         required: true
         default: "release-v0.7.3"
       tag:
-        description: "release tag to create or update"
+        description: "unique release tag to create"
         required: true
         default: "hyperion-shield-zero-v0.7.3-beta"
       channel:
@@ -37,6 +37,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install 1.95 --profile minimal
+          rustup default 1.95
 
       - name: Python bits
         run: python -m pip install fonttools
@@ -180,11 +185,10 @@ jobs:
           gh release create "$TAG" --target "${{ inputs.ref }}" --title "Hyperion Shield Zero $TAG" \
             --notes "Hyperion Shield Zero, without StarCraft game files. Supply your own StarCraft: Remastered or classic Brood War install." \
             "${prerelease[@]}"
-          (
-            cd packages
-            find . -type f \( -name 'Hyperion-Shield-Zero-*.zip' -o -name 'Hyperion-Shield-Zero-*.tar.gz' \) \
-              -print0 | sort -z | xargs -0 sha256sum > hyperion-shield-zero-checksums.txt
-          )
+          find packages -type f \( -name 'Hyperion-Shield-Zero-*.zip' -o -name 'Hyperion-Shield-Zero-*.tar.gz' \) \
+            -print0 | sort -z | while IFS= read -r -d '' file; do
+              (cd "${file%/*}" && sha256sum "${file##*/}")
+            done > packages/hyperion-shield-zero-checksums.txt
           find packages -type f \( -name 'Hyperion-Shield-Zero-*.zip' -o -name 'Hyperion-Shield-Zero-*.tar.gz' \) \
             -exec gh release upload "$TAG" {} \;
           gh release upload "$TAG" packages/hyperion-shield-zero-checksums.txt

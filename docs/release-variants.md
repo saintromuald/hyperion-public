@@ -61,7 +61,7 @@ archive or metadata. Use the platform's launcher after extraction:
 
 - Windows: `Play Hyperion Zero Private.cmd`
 - Linux: `./play-hyperion-zero-private.sh`
-- Mac: `./Play Hyperion Zero Private.command`
+- Mac: `"./Play Hyperion Zero Private.command"`
 
 For a non-GUI check on Linux:
 
