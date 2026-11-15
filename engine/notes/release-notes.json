@@ -3,6 +3,40 @@
   "about": "Hyperion's release notes, newest first (docs/versioning.md). Hyperion.exe carries them: the build compiles this file in, the home screen shows the first three entries as notifications (each with its line), and Patch Notes shows them all. tools/release_notes.py checks it against hyperion/version.h and writes docs/release-notes.md from it.",
   "entries": [
     {
+      "id": "v0.7.4-beta",
+      "kind": "release",
+      "version": "0.7.4-beta",
+      "date": "2026-11-15",
+      "title": "One-click Pluto AI and multiplayer",
+      "summary": "Install Pluto AI from its official release on first run or repair it in Settings. Custom multiplayer matches can include a Pluto opponent with one authoritative brain, synchronized commands, and ordinary replays.",
+      "line": "One-click official Pluto setup, native Windows support, and synchronized multiplayer opponents.",
+      "new": [
+        {
+          "title": "Official Pluto setup",
+          "text": "Download Pluto AI from the author's GitHub release with one click. Hyperion checks the archive and every runtime file before installing it. The closed-source Pluto files are not bundled or mirrored, and your existing configuration and bandit records are preserved during repair."
+        },
+        {
+          "title": "Pluto in multiplayer",
+          "text": "Compatible custom matches can include one Pluto opponent. One player owns inference, every client applies the same AI-owned commands, and replays use the recorded commands without starting inference."
+        },
+        {
+          "title": "Pluto in HyperShield",
+          "text": "HyperShield offers the same official setup on first run and in Updates & versions. A host with a Pluto opponent can also install or repair it beside the lobby's start controls."
+        }
+      ],
+      "changed": [],
+      "fixed": [
+        {
+          "title": "Native Windows Pluto",
+          "text": "Hyperion starts its Pluto bridge directly with native pipes instead of requiring Wine and a POSIX FIFO."
+        },
+        {
+          "title": "Complete and safe runtime setup",
+          "text": "Packages include Hyperion's bridge and BWAPI notices. Missing or damaged runtimes produce a visible error or explicit Classic fallback, and cancellation, game transitions, and process exit cannot leave a partially replaced runtime."
+        }
+      ]
+    },
+    {
       "id": "v0.7.3-beta",
       "kind": "release",
       "version": "0.7.3-beta",

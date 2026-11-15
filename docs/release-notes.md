@@ -4,6 +4,21 @@ What changed in each version of Hyperion, newest first. The game shows the same 
 Patch Notes. Versions are numbered as `docs/versioning.md` says; this page is written from
 `engine/notes/release-notes.json` by `engine/tools/release_notes.py md`.
 
+## v0.7.4-beta, 2026-11-15
+
+**One-click Pluto AI and multiplayer.** Install Pluto AI from its official release on first run or repair it in Settings. Custom multiplayer matches can include a Pluto opponent with one authoritative brain, synchronized commands, and ordinary replays.
+
+### New
+
+- **Official Pluto setup.** Download Pluto AI from the author's GitHub release with one click. Hyperion checks the archive and every runtime file before installing it. The closed-source Pluto files are not bundled or mirrored, and your existing configuration and bandit records are preserved during repair.
+- **Pluto in multiplayer.** Compatible custom matches can include one Pluto opponent. One player owns inference, every client applies the same AI-owned commands, and replays use the recorded commands without starting inference.
+- **Pluto in HyperShield.** HyperShield offers the same official setup on first run and in Updates & versions. A host with a Pluto opponent can also install or repair it beside the lobby's start controls.
+
+### Fixed
+
+- **Native Windows Pluto.** Hyperion starts its Pluto bridge directly with native pipes instead of requiring Wine and a POSIX FIFO.
+- **Complete and safe runtime setup.** Packages include Hyperion's bridge and BWAPI notices. Missing or damaged runtimes produce a visible error or explicit Classic fallback, and cancellation, game transitions, and process exit cannot leave a partially replaced runtime.
+
 ## v0.7.3-beta, 2026-11-14
 
 **Pluto AI and graphics startup recovery.** Pluto AI gains official HXP4 integration and recovery snapshots, and Hyperion can recover when a graphics driver stalls during startup.
