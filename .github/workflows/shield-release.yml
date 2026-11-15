@@ -21,6 +21,11 @@ on:
         options:
           - prerelease
           - release
+      publish:
+        description: "create the GitHub release after acceptance; false leaves workflow artifacts only"
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -315,6 +320,7 @@ jobs:
             --work "$RUNNER_TEMP/pluto-macos-runtime-acceptance"
 
   publish:
+    if: ${{ inputs.publish }}
     needs: [pluto-bridge, windows, linux, mac, pluto-macos-runtime]
     runs-on: ubuntu-24.04
     permissions:
