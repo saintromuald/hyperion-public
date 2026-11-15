@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
+#include <cstdio>
 #include <deque>
 #include <filesystem>
 #include <functional>
@@ -1895,9 +1896,9 @@ void CaptureFinish(void *pFile, bool bSuccess)
   g_capture = Capture();
 }
 
-size_t Write(const void *pData, size_t size, size_t count, FILE *pFile)
+size_t Write(const void *pData, size_t size, size_t count, void *pFile)
 {
-  const size_t written = fwrite(pData, size, count, pFile);
+  const size_t written = fwrite(pData, size, count, static_cast<FILE *>(pFile));
   if (written == count)
     CaptureWrite(pData, size * count, pFile);
   return written;

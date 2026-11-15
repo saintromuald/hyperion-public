@@ -5,7 +5,7 @@
 #define PORT_REPLAYONLINE_H
 
 #include <atomic>
-#include <cstdio>
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -107,7 +107,7 @@ void CaptureBegin(void *pFile);
 void CaptureHeader(const void *pHeader, size_t bytes);
 void CaptureWrite(const void *pData, size_t bytes, void *pFile);
 void CaptureFinish(void *pFile, bool bSuccess);
-size_t Write(const void *pData, size_t size, size_t count, FILE *pFile);
+size_t Write(const void *pData, size_t size, size_t count, void *pFile);
 
 // Test/diagnostics hooks: no game state, bounded waits, and a monotonic count of
 // engine-bound validation requests handed back to the main thread.

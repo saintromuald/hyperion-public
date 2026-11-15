@@ -211,12 +211,11 @@ void DownloadLinkingAndFileFailures()
   Check(AtomicWrite("basename.json", "{}", &error), error.c_str());
   Check(std::filesystem::exists(root / "basename.json"), "basename export writes in the current directory");
   std::filesystem::current_path(previous);
-  std::ofstream(root / "secret.json") << ToJson(second);
-  std::filesystem::permissions(root / "secret.json", std::filesystem::perms::none);
+  // A directory fails to read as a file for an unprivileged user and for root in CI.
+  std::filesystem::create_directory(root / "secret.json");
   Data preserved = second;
-  Check(!LoadAtomic((root / "secret.json").string(), &preserved, &error), "permission/read failure is not a first run");
+  Check(!LoadAtomic((root / "secret.json").string(), &preserved, &error), "read failure is not a first run");
   Check(!error.empty() && preserved.records.size() == second.records.size(), "read failure preserves user data and reports error");
-  std::filesystem::permissions(root / "secret.json", std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
   std::filesystem::remove_all(root);
 }
 
