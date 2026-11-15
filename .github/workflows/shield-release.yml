@@ -31,6 +31,14 @@ on:
         required: true
         default: false
         type: boolean
+      mac-backend:
+        description: "runtime-only diagnostic backend; non-default backends cannot publish"
+        required: true
+        default: "rosetta"
+        type: choice
+        options:
+          - rosetta
+          - fex-probe
 
 permissions:
   contents: read
@@ -46,6 +54,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
+
+      - name: Restrict alternate Mac backends to diagnostic runs
+        run: |
+          if [ "${{ inputs.mac-backend }}" != rosetta ] && [ "${{ inputs.runtime-only }}" != true ]; then
+            echo "Alternate Mac backends are probe-only; use runtime-only with publish=false." >&2
+            exit 1
+          fi
 
       - name: Install the pinned llvm-mingw toolchain
         run: |
@@ -256,12 +271,14 @@ jobs:
 
   pluto-macos-runtime:
     needs: pluto-bridge
-    runs-on: macos-15
+    runs-on: ${{ inputs.mac-backend == 'fex-probe' && 'macos-26' || 'macos-15' }}
     timeout-minutes: 60
     env:
       WINE_VERSION: "11.21"
       WINE_ARCHIVE: "wine-devel-11.21-osx64.tar.xz"
       WINE_SHA256: "9909b486657e10ab66c7279371ae1f990345b596b3b1b3a0cf21f28af24fa0ce"
+      FEX_WINE_ARCHIVE: "MetalSharp-Wine-6.0-arm64.zip"
+      FEX_WINE_SHA256: "25f7dff91000c03c835b800980878acb12c1f952a4b7853f77de7f21fb87046f"
       PLUTO_ARCHIVE_SHA256: "17544fc3ab32e3e2823646887e021cf998362348d73740817e94d1a78aa6209d"
       ROSETTA_ADVERTISE_AVX: "1"
     steps:
@@ -292,7 +309,21 @@ jobs:
           fi
           /usr/bin/arch -x86_64 /usr/bin/true
 
+      - name: Require the FEX runtime's signed i386-capable macOS floor
+        if: ${{ inputs.mac-backend == 'fex-probe' }}
+        run: |
+          python3 - <<'PY'
+          import re
+          import subprocess
+          version = subprocess.check_output(['/usr/sbin/sysctl', '-n', 'kern.osproductversion'], text=True).strip()
+          parts = tuple(int(part) for part in re.findall(r'\d+', version)[:2])
+          if parts < (26, 4):
+              raise SystemExit(f'MetalSharp Wine i386 needs macOS 26.4+, found {version}')
+          print(f'FEX probe OS: {version}')
+          PY
+
       - name: Install the pinned official WineHQ macOS build without Homebrew
+        if: ${{ inputs.mac-backend == 'rosetta' }}
         run: |
           set -euo pipefail
           archive="$RUNNER_TEMP/$WINE_ARCHIVE"
@@ -316,7 +347,30 @@ jobs:
           test -x "$wine_root/lib/wine/x86_64-unix/wine"
           echo "HYPERION_PLUTO_WINE=$wine" >> "$GITHUB_ENV"
 
+      - name: Install the pinned signed MetalSharp Wine/FEX diagnostic runtime
+        if: ${{ inputs.mac-backend == 'fex-probe' }}
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/$FEX_WINE_ARCHIVE"
+          curl --proto '=https' --tlsv1.2 --retry 3 -fL \
+            "https://github.com/metalsharp/MetalSharp-Wine/releases/download/v6.0/$FEX_WINE_ARCHIVE" \
+            -o "$archive"
+          printf '%s  %s\n' "$FEX_WINE_SHA256" "$archive" | shasum -a 256 -c -
+          root="$RUNNER_TEMP/metalsharp-wine-6.0"
+          mkdir -p "$root"
+          ditto -x -k "$archive" "$root"
+          app="$root/MetalSharp-Wine.app"
+          codesign --verify --strict --deep "$app"
+          wine="$app/Contents/MacOS/wine"
+          test -x "$wine"
+          test -x "$app/Contents/MacOS/wineserver"
+          test -f "$app/Contents/embedded.provisionprofile"
+          file "$wine"
+          "$wine" --version
+          echo "HYPERION_PLUTO_WINE=$wine" >> "$GITHUB_ENV"
+
       - name: Compare native Rosetta and Wine x86 feature detection
+        if: ${{ inputs.mac-backend == 'rosetta' }}
         run: |
           set -euo pipefail
           native="$RUNNER_TEMP/cpuid-probe-macos"
@@ -327,7 +381,15 @@ jobs:
           WINEPREFIX="$RUNNER_TEMP/wine-cpuid-prefix" WINEDEBUG=-all \
             "$HYPERION_PLUTO_WINE" "$PWD/engine/tools/pluto-bridge/cpuid-probe.exe"
 
+      - name: Probe x86 feature detection through signed Wine/FEX
+        if: ${{ inputs.mac-backend == 'fex-probe' }}
+        run: |
+          set -euo pipefail
+          WINEPREFIX="$RUNNER_TEMP/wine-fex-cpuid-prefix" WINEDEBUG=-all \
+            "$HYPERION_PLUTO_WINE" "$PWD/engine/tools/pluto-bridge/cpuid-probe.exe"
+
       - name: Check production capability resolution and the harness's host-only tests
+        if: ${{ inputs.mac-backend == 'rosetta' }}
         run: |
           set -euo pipefail
           probe="$RUNNER_TEMP/pluto_runtime_regression"
@@ -345,6 +407,7 @@ jobs:
           python3 engine/tools/pluto-bridge/test_macos_runtime_acceptance.py
 
       - name: Run the real 32-bit DLL bridge and 64-bit inference on synthetic frames
+        if: ${{ inputs.mac-backend == 'rosetta' }}
         run: |
           set -euo pipefail
           archive="$RUNNER_TEMP/pluto-v2.0.zip"
@@ -359,7 +422,7 @@ jobs:
             --work "$RUNNER_TEMP/pluto-macos-runtime-acceptance"
 
   publish:
-    if: ${{ inputs.publish && !inputs.runtime-only }}
+    if: ${{ inputs.publish && !inputs.runtime-only && inputs.mac-backend == 'rosetta' }}
     needs: [pluto-bridge, windows, linux, mac, pluto-macos-runtime]
     runs-on: ubuntu-24.04
     permissions:
