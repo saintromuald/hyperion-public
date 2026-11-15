@@ -388,7 +388,7 @@ jobs:
           WINEPREFIX="$RUNNER_TEMP/wine-fex-cpuid-prefix" WINEDEBUG=-all \
             "$HYPERION_PLUTO_WINE" "$PWD/engine/tools/pluto-bridge/cpuid-probe.exe"
 
-      - name: Check production capability resolution and the harness's host-only tests
+      - name: Check production Wine/Rosetta capability resolution
         if: ${{ inputs.mac-backend == 'rosetta' }}
         run: |
           set -euo pipefail
@@ -404,12 +404,15 @@ jobs:
           "$probe" wine-resolution
           "$probe" wine-11-preflight
           "$probe" mac-wine-capability
-          python3 engine/tools/pluto-bridge/test_macos_runtime_acceptance.py
+
+      - name: Check the macOS harness's host-only tests
+        run: python3 engine/tools/pluto-bridge/test_macos_runtime_acceptance.py
 
       - name: Run the real 32-bit DLL bridge and 64-bit inference on synthetic frames
-        if: ${{ inputs.mac-backend == 'rosetta' }}
         run: |
           set -euo pipefail
+          backend=rosetta
+          if [ "${{ inputs.mac-backend }}" = fex-probe ]; then backend=fex; fi
           archive="$RUNNER_TEMP/pluto-v2.0.zip"
           curl --proto '=https' --tlsv1.2 --retry 3 -fL \
             "https://github.com/tscmoo/pluto/releases/download/v2.0/pluto-v2.0.zip" \
@@ -417,6 +420,7 @@ jobs:
           printf '%s  %s\n' "$PLUTO_ARCHIVE_SHA256" "$archive" | shasum -a 256 -c -
           python3 engine/tools/pluto-bridge/macos_runtime_acceptance.py \
             --wine "$HYPERION_PLUTO_WINE" \
+            --mac-backend "$backend" \
             --bridge engine/tools/pluto-bridge/pluto-bridge.exe \
             --pluto-zip "$archive" \
             --work "$RUNNER_TEMP/pluto-macos-runtime-acceptance"

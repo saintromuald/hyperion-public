@@ -320,24 +320,57 @@ def probe_wine_11_unified(wine: Path, env: dict[str, str]) -> str:
     return reported
 
 
-def require_macos_rosetta() -> None:
+def probe_wine_11_fex(wine: Path, env: dict[str, str]) -> str:
+    if not wine.is_file() or not os.access(wine, os.X_OK):
+        raise RuntimeError(f"Wine/FEX is not a regular executable file: {wine}")
+    version = subprocess.run(
+        [str(wine), "--version"], env=env, text=True, capture_output=True, timeout=30
+    )
+    reported = version.stdout.strip()
+    if version.returncode != 0 or not reported.startswith("wine-11.") or "MetalSharp Wine" not in reported:
+        raise RuntimeError(
+            "resolved Wine/FEX must report Wine 11 and MetalSharp Wine; "
+            f"got status {version.returncode}, stdout {reported!r}, stderr {version.stderr.strip()!r}"
+        )
+    contents = wine.parent.parent
+    wineserver = contents / "MacOS" / "wineserver"
+    i386_ntdll = contents / "lib" / "wine" / "i386-windows" / "ntdll.dll"
+    loader = contents / "lib" / "wine" / "aarch64-unix" / "wine"
+    if (
+        not i386_ntdll.is_file()
+        or not wineserver.is_file()
+        or not os.access(wineserver, os.X_OK)
+        or not loader.is_file()
+        or not os.access(loader, os.X_OK)
+    ):
+        raise RuntimeError(f"resolved MetalSharp Wine lacks its signed i386/ARM64EC runtime below {contents}")
+    if not (contents / "embedded.provisionprofile").is_file():
+        raise RuntimeError("resolved MetalSharp Wine lacks its embedded cross-architecture provisioning profile")
+    return reported
+
+
+def require_macos_runtime(backend: str) -> None:
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         raise RuntimeError("this acceptance run must execute on a macOS ARM64 host")
+    version = subprocess.run(
+        ["/usr/sbin/sysctl", "-n", "kern.osproductversion"], text=True, capture_output=True, timeout=20
+    )
+    match = re.match(r"^(\d+)(?:\.(\d+))?", version.stdout.strip())
+    if version.returncode != 0 or match is None:
+        raise RuntimeError(f"could not determine macOS version: {version.stdout.strip()!r}")
+    parts = (int(match.group(1)), int(match.group(2) or 0))
+    minimum = (26, 4) if backend == "fex" else (15, 0)
+    if parts < minimum:
+        raise RuntimeError(f"macOS {minimum[0]}.{minimum[1]}+ is required for the {backend} runtime")
+    if backend == "fex":
+        return
     env = os.environ.copy()
     env["ROSETTA_ADVERTISE_AVX"] = "1"
     probe = subprocess.run(
-        ["/usr/bin/arch", "-x86_64", "/usr/sbin/sysctl", "-n", "kern.osproductversion"],
-        text=True,
-        capture_output=True,
-        timeout=20,
-        env=env,
+        ["/usr/bin/arch", "-x86_64", "/usr/bin/true"], capture_output=True, timeout=20, env=env
     )
-    match = re.match(r"^(\d+)(?:\.|$)", probe.stdout.strip())
-    if probe.returncode != 0 or match is None or int(match.group(1)) < 15:
-        raise RuntimeError(
-            "macOS 15+ with a working Rosetta 2 x86-64 translator is required "
-            f"(status {probe.returncode}, stdout {probe.stdout.strip()!r}, stderr {probe.stderr.strip()!r})"
-        )
+    if probe.returncode != 0:
+        raise RuntimeError("a working Rosetta 2 x86-64 translator is required for the rosetta runtime")
 
 
 def process_descriptions(records: list[ProcessRecord]) -> list[str]:
@@ -352,7 +385,7 @@ def cleanup_failed_evidence(owned: OwnedProcesses, summary: dict) -> None:
 
 
 def run_acceptance(args: argparse.Namespace) -> dict:
-    require_macos_rosetta()
+    require_macos_runtime(args.mac_backend)
     wine_arg = Path(args.wine)
     if not wine_arg.is_absolute():
         raise RuntimeError("--wine must be the same explicit absolute path used by capability detection")
@@ -384,7 +417,7 @@ def run_acceptance(args: argparse.Namespace) -> dict:
         "HX_TEST_ASYNC_CLIENT",
     ):
         env.pop(name, None)
-    version = probe_wine_11_unified(wine, env)
+    version = probe_wine_11_fex(wine, env) if args.mac_backend == "fex" else probe_wine_11_unified(wine, env)
 
     runtime = work / "runtime"
     archive_evidence = extract_official_runtime(Path(args.pluto_zip).resolve(strict=True), runtime)
@@ -444,6 +477,7 @@ def run_acceptance(args: argparse.Namespace) -> dict:
             {
                 "wine": str(wine),
                 "wine_version": version,
+                "mac_backend": args.mac_backend,
                 "bridge_sha256": sha256_file(bridge),
                 "input_sha256": hashlib.sha256(payload).hexdigest(),
                 "official": archive_evidence,
@@ -473,6 +507,9 @@ def run_acceptance(args: argparse.Namespace) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wine", required=True, help="absolute path to the pinned official Wine executable")
+    parser.add_argument(
+        "--mac-backend", choices=("rosetta", "fex"), default="rosetta", help="macOS translation runtime"
+    )
     parser.add_argument("--bridge", required=True, type=Path, help="Hyperion-owned 32-bit pluto-bridge.exe")
     parser.add_argument("--pluto-zip", required=True, type=Path, help="official pinned pluto-v2.0.zip")
     parser.add_argument("--work", required=True, type=Path, help="new/empty isolated runtime and evidence directory")

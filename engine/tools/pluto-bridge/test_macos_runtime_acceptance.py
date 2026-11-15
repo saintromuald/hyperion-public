@@ -99,6 +99,24 @@ class WinePreflightTests(unittest.TestCase):
                 path.chmod(0o755)
         return executable
 
+    def fake_fex_wine(self, profile=True):
+        executable = self.root / "fex" / "Contents" / "MacOS" / "wine"
+        executable.parent.mkdir(parents=True, exist_ok=True)
+        executable.write_text("#!/bin/sh\nprintf '%s\\n' 'wine-11.20 (MetalSharp Wine 6.0)'\n", encoding="utf-8")
+        executable.chmod(0o755)
+        contents = executable.parent.parent
+        for relative in ("MacOS/wineserver", "lib/wine/i386-windows/ntdll.dll", "lib/wine/aarch64-unix/wine"):
+            path = contents / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"synthetic Wine/FEX runtime")
+            path.chmod(0o755)
+        profile_path = contents / "embedded.provisionprofile"
+        if profile:
+            profile_path.write_bytes(b"synthetic provisioning profile")
+        else:
+            profile_path.unlink(missing_ok=True)
+        return executable
+
     def test_regular_wine_11_unified_executable_passes(self):
         self.assertEqual(acceptance.probe_wine_11_unified(self.fake_wine(), {}), "wine-11.21")
 
@@ -116,6 +134,15 @@ class WinePreflightTests(unittest.TestCase):
             acceptance.probe_wine_11_unified(self.fake_wine("wine-10.0"), {})
         with self.assertRaisesRegex(RuntimeError, "unified i386/x86-64"):
             acceptance.probe_wine_11_unified(self.fake_wine(dual_architecture=False, name="incomplete"), {})
+
+    def test_signed_fex_layout_and_profile_are_required(self):
+        self.assertEqual(
+            acceptance.probe_wine_11_fex(self.fake_fex_wine(), {}), "wine-11.20 (MetalSharp Wine 6.0)"
+        )
+        with self.assertRaisesRegex(RuntimeError, "provisioning profile"):
+            acceptance.probe_wine_11_fex(self.fake_fex_wine(profile=False), {})
+        with self.assertRaisesRegex(RuntimeError, "MetalSharp Wine"):
+            acceptance.probe_wine_11_fex(self.fake_wine(), {})
 
 
 class EvidenceTests(unittest.TestCase):
