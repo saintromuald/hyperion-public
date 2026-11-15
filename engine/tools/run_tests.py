@@ -1,6 +1,6 @@
 """Hyperion's tests that need none of the game's files.
 
-    python tools/run_tests.py [--exe <Hyperion>] [--game <StarCraft folder>] [--only <name>,...]
+    python tools/run_tests.py [--exe <Hyperion>] [--data <data folder>] [--game <StarCraft folder>] [--only <name>,...]
 
 Run from engine/ after a build. Each test prints a line, and the exit code is 0 when all
 pass. The tests:
@@ -13,6 +13,7 @@ pass. The tests:
   mods       every built-in mod's JSON reads; with --game, each also passes --mod-check against
              that StarCraft
   replays    ReplayKraken protocol, identity, persistence/privacy and synthetic-library contracts
+             (Linux only, where its native test libraries are built)
 
 The replay comparisons that keep the game the same as the original need the game's files and
 a replay collection, and are run before each release.
@@ -125,6 +126,8 @@ def test_maps(a):
 
 
 def test_replays(a):
+    if sys.platform != "linux":
+        return None, ["requires the Linux native build"]
     return tool("replay-tests/run_tests.py")
 
 
@@ -143,7 +146,19 @@ def test_mods(a):
                         bad.append("%s: %s" % (os.path.relpath(p, ENGINE), e))
     if a.game and a.exe:
         for m in mods:
-            code, out = run([a.exe, "--mod-check", m, "--install", a.game], timeout=600)
+            mod_id = m
+            manifest = os.path.join(folder, m, "mod.json")
+            if os.path.isfile(manifest):
+                try:
+                    with open(manifest, encoding="utf-8") as f:
+                        mod_id = json.load(f).get("id", m)
+                except ValueError:
+                    pass  # the JSON validation above reports the bad manifest
+            cmd = [a.exe, "--mod-check", mod_id]
+            if a.data:
+                cmd += ["--data", a.data]
+            cmd += ["--install-folder", a.game]
+            code, out = run(cmd, timeout=600)
             if code != 0:
                 bad.append("%s: --mod-check exit %d %s" % (m, code, out.strip()[-300:]))
     return not bad, bad or ["%d mods%s" % (len(mods), ", checked against the game" if a.game else "")]
@@ -157,6 +172,7 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--exe", help="the Hyperion to test (default: the newest build here)")
+    ap.add_argument("--data", help="a Hyperion data folder containing the mods to check")
     ap.add_argument("--game", help="a StarCraft folder, for the mod checks")
     ap.add_argument("--only", help="the tests to run, by name, with commas")
     a = ap.parse_args()

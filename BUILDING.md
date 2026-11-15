@@ -29,7 +29,8 @@ build writes `engine/src117/build/x64/Hyperion.exe` with `SDL3.dll` beside it.
 folders a file `engine/install_to.txt` names, one a line, if you make one.
 
 To make the zip a player unpacks: `python tools/package.py`. It goes into
-`engine/testrun/share/`.
+`engine/testrun/share/`. For the public Hyperion Shield Zero and private Hyperion Zero Private
+variants, see `docs/release-variants.md`.
 
 ## Linux
 

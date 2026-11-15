@@ -1,0 +1,194 @@
+# Manual public Hyperion Shield Zero packages. Hyperion Zero Private has no upload workflow:
+# its private full bundle is built locally with the maintainer's own game install.
+name: Hyperion Shield Zero release
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "branch, tag or commit to package"
+        required: true
+        default: "pre-release"
+      tag:
+        description: "unique release tag to create"
+        required: true
+        default: "hyperion-shield-zero-v0.7.3-beta-pre"
+      channel:
+        description: "publish as a prerelease for testing or a final release"
+        required: true
+        default: "prerelease"
+        type: choice
+        options:
+          - prerelease
+          - release
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install 1.95 --profile minimal
+          rustup default 1.95
+
+      - name: Python bits
+        run: python -m pip install fonttools
+
+      - name: Libraries
+        working-directory: engine
+        run: python tools/get_libraries.py
+
+      - name: Build
+        working-directory: engine
+        run: python tools/build_engine_x64.py --no-install
+
+      - name: Package Shield
+        working-directory: engine
+        run: python tools/package.py --edition shield --channel ${{ inputs.channel }} --out testrun/share/variants
+
+      - name: Test the public package
+        working-directory: engine
+        run: |
+          python tools/test_package_variants.py
+          python tools/run_tests.py
+
+      - name: Package the Mac build inputs
+        working-directory: engine
+        run: python tools/mac_sync.py --out mac-inputs.tar.gz --extras --third
+
+      - name: Upload the Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperion-shield-zero-windows
+          path: engine/testrun/share/variants/**/Hyperion-Shield-Zero-*.zip
+          if-no-files-found: error
+
+      - name: Upload the Mac build inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperion-mac-inputs
+          path: engine/mac-inputs.tar.gz
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Build the Linux toolchain image
+        run: docker build -t hyperion-linux engine/tools/linux
+
+      - name: Build and package Shield
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src/engine hyperion-linux bash -lc '
+            set -euo pipefail
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends wine curl ca-certificates python3-pip
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.95
+            . "$HOME/.cargo/env"
+            python3 -m pip install fonttools
+            python3 tools/get_libraries.py
+            python3 -c "import sys; sys.path.insert(0, \"tools\"); import build_sdl3; build_sdl3.fetch_source(); build_sdl3.apply_patches()"
+            python3 tools/build_shaders_linux.py
+            python3 tools/build_engine_linux.py
+            python3 tools/package.py --linux x64 --edition shield --channel "${{ inputs.channel }}" --out testrun/share/variants
+            python3 tools/test_package_variants.py
+            python3 tools/run_tests.py
+          '
+
+      - name: Upload the Linux package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperion-shield-zero-linux
+          path: engine/testrun/share/variants/**/Hyperion-Shield-Zero-*.tar.gz
+          if-no-files-found: error
+
+  mac:
+    needs: windows
+    runs-on: macos-15
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Tools
+        run: |
+          brew install ninja cmake || brew upgrade cmake ninja || true
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.95
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Unpack the Windows build inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: hyperion-mac-inputs
+          path: ${{ runner.temp }}/mac-inputs
+
+      - name: Extract the Windows build inputs
+        run: tar xzf "$RUNNER_TEMP/mac-inputs/mac-inputs.tar.gz"
+
+      - name: Build and package Shield
+        working-directory: engine
+        run: |
+          set -euo pipefail
+          python3 tools/build_engine_linux.py
+          python3 tools/package.py --mac --edition shield --channel "${{ inputs.channel }}" --out testrun/share/variants
+          python3 tools/test_package_variants.py
+          python3 tools/run_tests.py
+
+      - name: Upload the Mac package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperion-shield-zero-mac
+          path: engine/testrun/share/variants/**/Hyperion-Shield-Zero-*-mac-arm64.zip
+          if-no-files-found: error
+
+  publish:
+    needs: [windows, linux, mac]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.tag }}
+      CHANNEL: ${{ inputs.channel }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+
+      - name: Create an immutable public Shield release
+        run: |
+          set -euo pipefail
+          prerelease=()
+          if [ "$CHANNEL" = prerelease ]; then prerelease=(--prerelease); fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; choose a new version instead of replacing its assets." >&2
+            exit 1
+          fi
+          gh release create "$TAG" --target "${{ inputs.ref }}" --title "Hyperion Shield Zero $TAG" \
+            --notes "Hyperion Shield Zero, without StarCraft game files. Supply your own StarCraft: Remastered or classic Brood War install." \
+            "${prerelease[@]}"
+          find packages -type f \( -name 'Hyperion-Shield-Zero-*.zip' -o -name 'Hyperion-Shield-Zero-*.tar.gz' \) \
+            -print0 | sort -z | while IFS= read -r -d '' file; do
+              (cd "${file%/*}" && sha256sum "${file##*/}")
+            done > packages/hyperion-shield-zero-checksums.txt
+          find packages -type f \( -name 'Hyperion-Shield-Zero-*.zip' -o -name 'Hyperion-Shield-Zero-*.tar.gz' \) \
+            -exec gh release upload "$TAG" {} \;
+          gh release upload "$TAG" packages/hyperion-shield-zero-checksums.txt

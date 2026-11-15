@@ -6,7 +6,9 @@ Your maps, classic replays and saved games play as they always have. Expanded un
 make room for new units and races, and mutators add new twists to skirmish and local
 multiplayer matches.
 
-Hyperion is an early beta. Builds are on the [Releases](../../releases) page.
+Hyperion is an early beta. Builds are on the [Releases](../../releases) page. **Hyperion Shield Zero**
+is the public HyperShield engine package without game files; **Hyperion Zero Private** is the
+private, full-install test bundle. See [Release variants](docs/release-variants.md).
 
 ## This fork
 

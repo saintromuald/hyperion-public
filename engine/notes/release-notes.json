@@ -3,6 +3,33 @@
   "about": "Hyperion's release notes, newest first (docs/versioning.md). Hyperion.exe carries them: the build compiles this file in, the home screen shows the first three entries as notifications (each with its line), and Patch Notes shows them all. tools/release_notes.py checks it against hyperion/version.h and writes docs/release-notes.md from it.",
   "entries": [
     {
+      "id": "v0.7.3-beta",
+      "kind": "release",
+      "version": "0.7.3-beta",
+      "date": "2026-11-14",
+      "title": "Pluto AI, package names and graphics startup recovery",
+      "summary": "Pluto AI gains official HXP4 integration and recovery snapshots, the public engine is Hyperion Shield Zero, and graphics startup can recover from a stalled driver.",
+      "line": "Pluto AI recovery, Hyperion Shield Zero, and graphics driver startup fallback.",
+      "new": [
+        {
+          "title": "Pluto AI integration and recovery",
+          "text": "Pluto now uses the official HXP4 integration and can restore validated recovery snapshots without weakening content checks."
+        }
+      ],
+      "changed": [
+        {
+          "title": "Package names",
+          "text": "The public HyperShield engine package is Hyperion Shield Zero, while the maintainer-only full-install bundle is Hyperion Zero Private."
+        }
+      ],
+      "fixed": [
+        {
+          "title": "Graphics driver startup recovery",
+          "text": "Hyperion remembers a graphics driver that did not finish starting, restarts after a stalled attempt, and can fall back to SDL or software rendering. An explicitly selected renderer is still always tried."
+        }
+      ]
+    },
+    {
       "id": "v0.7.1-beta",
       "kind": "release",
       "version": "0.7.1-beta",

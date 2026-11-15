@@ -34,9 +34,11 @@ from pathlib import Path
 ENGINE = Path(__file__).resolve().parents[1]
 REPO = ENGINE.parent
 THIRD = ["SDL3-3.4.16-src", "StormLib-9.40", "CascLib-3.0", "clay-0.14", "stb-6e9f34d", "fonts-8b0a1d0", "webrtc",
-         "libvpx-1.17.0", "dr_libs-dfe8377", "libwebp-1.5.0", "dav1d-1.5.4"]
+         "libvpx-1.17.0", "dr_libs-dfe8377", "libwebp-1.5.0", "dav1d-1.5.4", "curl-8.23.0",
+         "cacert-2026-11-05.pem"]
 # what tools/package.py reads from outside engine/'s tracked files
-PACKAGE_DOCS = ["hxm-for-editors.md", "hxm-format.md", "live-channel-for-editors.md", "release-notes.md"]
+PACKAGE_DOCS = ["hxm-for-editors.md", "hxm-format.md", "live-channel-for-editors.md", "release-notes.md",
+                "release-variants.md"]
 MAPS = ENGINE / "testrun" / "play" / "maps" / "Hyperion"
 
 
@@ -64,7 +66,11 @@ def main() -> int:
     files += [p.relative_to(REPO).as_posix() for p in sorted(MAPS.glob("*.hxm"))] if MAPS.is_dir() else []
     if a.third is not None:
         for d in a.third or THIRD:
-            files += [p.relative_to(REPO).as_posix() for p in (ENGINE / "third_party" / d).rglob("*") if p.is_file()]
+            root = ENGINE / "third_party" / d
+            if root.is_file():
+                files.append(root.relative_to(REPO).as_posix())
+            else:
+                files += [p.relative_to(REPO).as_posix() for p in root.rglob("*") if p.is_file()]
     files = [f for f in dict.fromkeys(files) if (REPO / f).is_file()]
     origin = {"commit": git("rev-parse", "--short", "HEAD"), "branch": git("rev-parse", "--abbrev-ref", "HEAD"),
               "dirty": bool(git("status", "--porcelain", "--untracked-files=no", "--", "engine")),

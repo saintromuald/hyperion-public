@@ -17,7 +17,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         wget gnupg lsb-release software-properties-common ca-certificates \
         cmake ninja-build pkg-config git python3 make file \
-        g++-12 libstdc++-12-dev \
+        build-essential g++-12 libstdc++-12-dev \
         libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev libxfixes-dev \
         libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols libdecor-0-dev \
         libegl1-mesa-dev libgl-dev libgbm-dev libdrm-dev \
