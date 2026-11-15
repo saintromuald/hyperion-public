@@ -100,6 +100,8 @@ int NetCmdWideSize(const BYTE *pCmd) {
     return sizeof(net_cmd_word_t);
   case 0xA9:
     return sizeof(net_cmd_dword_t);
+  case NET_CMD_PLUTO_AI:
+    return pCmd[1] + 2;
   }
   return 0;
 }

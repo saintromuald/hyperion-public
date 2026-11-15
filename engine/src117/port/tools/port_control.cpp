@@ -1915,10 +1915,9 @@ bool SandboxTurnBytes(const std::vector<unsigned char> &ab) {
     const unsigned char op = p[0];
     if (op == 0x05 || op == 0x06 || op == 0x07 || op == 0x08 || op == 0x37 ||
         op == 0x48 || op == 0x54 || op == 0x57 || op == 0x5B ||
-        (op >= 0x3C && op <= 0x44))
+        op == NET_CMD_PLUTO_AI || (op >= 0x3C && op <= 0x44))
       return false;
-    if (nLeft < 2 && ((op >= 0x09 && op <= 0x0B) ||
-                      (op >= 0x89 && op <= 0x8B) || op == NET_CMD_SELECT_CHUNK))
+    if (NetCmdHasCountByte(op) && nLeft < 2)
       return false;
     const int size = GetCommandByteSize(reinterpret_cast<const net_cmd_select_t *>(p));
     if (size <= 0 || static_cast<size_t>(size) > nLeft)

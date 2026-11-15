@@ -16,6 +16,7 @@
 #include "../h/net_rand.h"     // set_rand_enabled
 #include "../port/render/port_overlay.h"  // Hyperion: PortOverlayAction
 #include "../port/replays/port_replay.h"  // Hyperion: PortReplayTurnsUse, PortReplayTurnsKeep
+#include "../port/gameplay/port_pluto.h"  // Hyperion: PlutoReceiveEnvelope
 #include "../port/sb/port_stormsb.h"  // Hyperion: SbTurnsInTransitTarget
 #include "../h/game_evt.h"    // game_event_reset
 #include "../h/Storm.h"        // SStrCopy, SStrPack
@@ -417,6 +418,8 @@ void net_process_game_turn(char *pData, unsigned int nSize, int nFlag)
 
       default: {
         // Hyperion: a command of no size ends the turn, which 1.17 walked forever
+        if (NetCmdHasCountByte(cmd) && nLeft < 2)
+          goto done;
         const int nSkip = GetCommandByteSize(reinterpret_cast<const net_cmd_select_t *>(pCmd));
         if (nSkip <= 0)
           goto done;
@@ -881,6 +884,22 @@ void net_process_game_turn(char *pData, unsigned int nSize, int nFlag)
         goto done;
       recv_net_cmd_ExitTransportWide(reinterpret_cast<const net_cmd_dword_t *>(pCmd));
       break;
+
+    case NET_CMD_PLUTO_AI:
+      nLeft -= 2;
+      if (nLeft < 0)
+        goto done;
+      nBytes = pCmd[1];
+      nLeft -= nBytes;
+      if (nLeft < 0)
+        goto done;
+      nBytes += 2;
+      // The outer command belongs to the inference owner only as transport.
+      // PlutoReceiveEnvelope dispatches and records its payload under the AI's
+      // identity, so recording the envelope here would execute it as the owner.
+      PlutoReceiveEnvelope(pCmd, nBytes, g_ActiveStormID);
+      pCmd += nBytes;
+      continue;
 
     case 0x2A:
       nBytes = 1;

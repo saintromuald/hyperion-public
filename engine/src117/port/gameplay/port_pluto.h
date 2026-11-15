@@ -14,7 +14,14 @@
 // slot then sits as a computer that never acts.
 #pragma once
 
+// A network launch chooses one stable Storm/Rally Point slot as the only
+// inference owner. All peers apply that owner's AI-addressed turn envelopes;
+// playback and watchers never start inference.
+void PlutoChooseNetOwner(int nStorm, const char *pszConfiguredName = nullptr);
+bool PlutoReceiveEnvelope(const unsigned char *pData, unsigned int nSize, int nOwnerStorm);
 void PlutoGameStart();
+// Rebuild the recorded AI's classic owner mapping for playback without inference.
+void PlutoReplayStart();
 void PlutoFrame();
 void PlutoNoteResult(int nLastPlayer);
 void PlutoGameEnd();

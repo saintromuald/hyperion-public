@@ -72,6 +72,7 @@
 #include "../port/data/port_moddata.h"  // Hyperion: ModRacesForGame
 #include "../port/gameplay/port_score.h"  // Hyperion: PortScoreGameStart
 #include "../port/sb/port_stormsb.h"  // Hyperion: SbInMatch
+#include "../port/sb/port_sbmanifest.h"  // Hyperion: SbManifestCaptureGameSlots
 #include "../port/tools/port_crashnotes.h"  // Hyperion: PortCrashNotesGameStart
 #include "../port/tools/port_crash.h"  // Hyperion: PortCrashTest
 #include "../h/img.h"  // Hyperion: _img_list
@@ -424,6 +425,7 @@ BOOL game_init()
     TeamsAlliances();  // Hyperion: a game with chosen teams allied by team (port_teams.h)
     ModRacesForGame();  // Hyperion: and the slots' races, a mod's
     AiForGame();  // Hyperion: and the computers' levels (port_ai.h)
+    SbManifestCaptureGameSlots();  // Hyperion: stable participants for raw results
     HandicapForGame();  // Hyperion: and the players' handicaps (port_handicap.h)
     MutatorsForGame();  // Hyperion: and its mutators (port_mutators.h)
     if (gpLoadGameFile == 0)

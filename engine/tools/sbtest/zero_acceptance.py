@@ -24,7 +24,6 @@ import time
 import uuid
 
 ENGINE = Path(__file__).resolve().parents[2]
-HX = ENGINE / "src117/build/linux-x64/Hyperion.x86_64"
 R2 = ENGINE / "tools/rallypoint2"
 TARGET = ENGINE / "src117/build/linux-x64/rallypoint"
 DEFAULT_GAME = ENGINE / "testrun/share/variants/zero-smoke/Game"
@@ -36,9 +35,12 @@ DEFAULT_MAPS = {
 RESULT_CODES = [f"zero-acceptance-result-{1001 + i}" for i in range(6)]
 RACES = ["z", "t", "p", "z", "t", "p"]
 NAMES = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"]
+PLUTO_NAME = "Pluto"  # HyperShield's configured identity, deliberately not the legacy PLuto label
 
 sys.path.insert(0, str(ENGINE / "tools"))
+sys.path.insert(0, str(ENGINE / "tools/replaytest"))
 from hxlive import ws_call  # noqa: E402
+import repfile  # noqa: E402
 
 
 class NoticeHandler(BaseHTTPRequestHandler):
@@ -135,6 +137,14 @@ def surrender_both(ports, seats, timeout):
             break
 
 
+def surrender_pluto(ports):
+    # With a third simulated side, the first human's surrender does not produce
+    # a two-player victory dialog. Both humans use the real quit action; the AI
+    # row remains in each raw result without inventing a user credential.
+    for seat in reversed(range(len(ports))):
+        quit_seat(ports, seat)
+
+
 def wait_for_notices(server, timeout, player_count, drop=False):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -163,7 +173,8 @@ def wait_for_drop(server, slot, timeout):
     raise RuntimeError(f"timed out waiting for slot {slot}'s dropped departure")
 
 
-def validate_result_notices(server, game_id, team_size=1, random_race=False, decisive=False, drop=False):
+def validate_result_notices(server, game_id, team_size=1, random_race=False, decisive=False, drop=False,
+                            pluto=False):
     with server.notices_lock:
         notices = list(server.notices)
     player_count = team_size * 2
@@ -189,22 +200,58 @@ def validate_result_notices(server, game_id, team_size=1, random_race=False, dec
             raise RuntimeError(f"result slot {slot} has the wrong version or reporter")
         if report["resultCode"] != RESULT_CODES[slot] or report["time"] <= 0:
             raise RuntimeError(f"result slot {slot} has invalid credentials or time")
-        if len(report["players"]) != player_count:
-            raise RuntimeError(f"result slot {slot} does not contain every player row")
-        expected_users = [1001 + i for i in range(player_count)]
-        for player, expected_user, expected_race in zip(report["players"], expected_users, RACES):
-            bw_id = expected_user - 1001
-            if player["userId"] != expected_user or player["bwPlayerId"] != bw_id:
+        expected_users = [1001 + i for i in range(player_count)] + ([None] if pluto else [])
+        expected_races = RACES[:player_count] + (["z"] if pluto else [])
+        if len(report["players"]) != len(expected_users):
+            rows = [(player.get("userId"), player.get("bwPlayerId"), player.get("stormId"))
+                    for player in report["players"]]
+            raise RuntimeError(
+                f"result slot {slot} does not contain every human and AI player row: {rows}")
+        ai_rows = 0
+        human_origins = set()
+        seen_bw_ids = set()
+        for bw_id, (player, expected_user, expected_race) in enumerate(
+                zip(report["players"], expected_users, expected_races)):
+            actual_bw = player["bwPlayerId"]
+            if pluto:
+                if actual_bw not in range(8) or actual_bw in seen_bw_ids:
+                    raise RuntimeError(f"result slot {slot} has an invalid or duplicate actual BW id")
+                seen_bw_ids.add(actual_bw)
+            elif actual_bw != bw_id:
                 raise RuntimeError(f"result slot {slot} has a mismatched player identity")
-            if player["stormId"] != bw_id:
-                raise RuntimeError(f"result slot {slot} has a mismatched slot or assigned race: {player}")
-            if random_race:
-                if player["race"] not in ("z", "t", "p"):
-                    raise RuntimeError(f"result slot {slot} retained an unresolved random race: {player}")
-                if assigned_races.setdefault(bw_id, player["race"]) != player["race"]:
-                    raise RuntimeError(f"result slot {slot} disagrees on the resolved race: {player}")
-            elif player["race"] != expected_race:
-                raise RuntimeError(f"result slot {slot} has a mismatched slot or assigned race: {player}")
+            if pluto:
+                actual_user = player["userId"]
+                actual_storm = player["stormId"]
+                if actual_user is None:
+                    ai_rows += 1
+                    if actual_storm is not None or player["race"] != "z":
+                        raise RuntimeError(f"result slot {slot} has a malformed Pluto row: {player}")
+                else:
+                    if actual_storm not in range(player_count) or actual_user != 1001 + actual_storm:
+                        raise RuntimeError(f"result slot {slot} has a human row with the wrong manifest origin: {player}")
+                    if actual_storm in human_origins:
+                        raise RuntimeError(f"result slot {slot} duplicated human origin {actual_storm}")
+                    human_origins.add(actual_storm)
+                    expected_race = RACES[actual_storm]
+                    if random_race:
+                        if player["race"] not in ("z", "t", "p"):
+                            raise RuntimeError(f"result slot {slot} retained an unresolved random race: {player}")
+                        if assigned_races.setdefault(bw_id, player["race"]) != player["race"]:
+                            raise RuntimeError(f"result slot {slot} disagrees on the resolved race: {player}")
+                    elif player["race"] != expected_race:
+                        raise RuntimeError(f"result slot {slot} has a mismatched assigned race: {player}")
+            else:
+                if player["userId"] != expected_user:
+                    raise RuntimeError(f"result slot {slot} has a mismatched player identity")
+                if player["stormId"] != bw_id:
+                    raise RuntimeError(f"result slot {slot} has a mismatched slot or assigned race: {player}")
+                if random_race:
+                    if player["race"] not in ("z", "t", "p"):
+                        raise RuntimeError(f"result slot {slot} retained an unresolved random race: {player}")
+                    if assigned_races.setdefault(bw_id, player["race"]) != player["race"]:
+                        raise RuntimeError(f"result slot {slot} disagrees on the resolved race: {player}")
+                elif player["race"] != expected_race:
+                    raise RuntimeError(f"result slot {slot} has a mismatched slot or assigned race: {player}")
             if player["victoryState"] not in (0, 1, 2, 3):
                 raise RuntimeError(f"result slot {slot} has an invalid victory state")
             if decisive:
@@ -215,6 +262,8 @@ def validate_result_notices(server, game_id, team_size=1, random_race=False, dec
                     raise RuntimeError(f"result slot {slot} disagrees on the verdict: {player}")
             if len(player["alliances"]) != 8 or any(value not in (0, 1, 2) for value in player["alliances"]):
                 raise RuntimeError(f"result slot {slot} has invalid alliance evidence")
+        if pluto and ai_rows != 1:
+            raise RuntimeError(f"result slot {slot} does not contain exactly one uncredentialed Pluto row")
         if len(report["netPlayers"]) != 8:
             raise RuntimeError(f"result slot {slot} does not contain all network rows")
         for storm_id, row in enumerate(report["netPlayers"]):
@@ -272,7 +321,8 @@ def validate_drop_notice(server, game_id):
         raise RuntimeError("the dropped departure has wrong identity or unexpected result evidence")
 
 
-def manifest(setup, seat, game_id, seed, map_path, compatibility, rule, team_size, random_race=False, classic=False):
+def manifest(setup, seat, game_id, seed, map_path, compatibility, rule, team_size, random_race=False, classic=False,
+             pluto=False, pluto_owner=0):
     user_ids = [1001 + i for i in range(team_size * 2)]
     selected = dict(compatibility)
     selected["rules"] = "classic" if classic else "hyperion"
@@ -280,7 +330,7 @@ def manifest(setup, seat, game_id, seed, map_path, compatibility, rule, team_siz
         "protocol": 1,
         "gameId": game_id,
         "name": "Zero Private acceptance",
-        "gameType": "oneVOne" if team_size == 1 else "topVBottom",
+        "gameType": "melee" if pluto else "oneVOne" if team_size == 1 else "topVBottom",
         "gameSubType": 0 if team_size == 1 else team_size,
         "seed": seed,
         "speed": 6,
@@ -292,7 +342,7 @@ def manifest(setup, seat, game_id, seed, map_path, compatibility, rule, team_siz
                 "stormId": i,
                 "bwPlayerId": i,
                 "userId": user_ids[i],
-                "teamId": i // team_size,
+                "teamId": 0 if pluto else i // team_size,
                 "name": NAMES[i],
                 "race": "r" if random_race else RACES[i],
                 "host": i == 0,
@@ -306,6 +356,17 @@ def manifest(setup, seat, game_id, seed, map_path, compatibility, rule, team_siz
         },
         "compatibility": selected,
     }
+    if pluto:
+        setup["hyperion"]["ai"] = {
+            "ownerRpSlot": pluto_owner,
+            "slots": [{
+                "stormId": 2,
+                "bwPlayerId": 2,
+                "name": PLUTO_NAME,
+                "race": "z",
+                "level": "pluto",
+            }],
+        }
     if rule == 2:
         setup["hyperion"]["mutators"] = {"antiMeta": 1}
     return setup
@@ -406,6 +467,160 @@ def validate_replays(seats, rule, expected_roll):
         raise RuntimeError("the seats' Rule 2 replay mutators differ")
 
 
+# Native command lengths used only to audit the replay's owner/command pairs.
+# This is the same table as Rally Point's proto/src/commands.rs; no proprietary
+# executable or data file is needed to read the recording.
+CLASSIC_COMMAND_SIZES = [
+    0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 8, 3, 5, 2,
+    1, 1, 5, 3, 10, 11, 0, 0, 1, 1, 2, 1, 1, 1, 2, 3,
+    3, 2, 2, 3, 0, 2, 2, 1, 2, 3, 1, 2, 2, 2, 1, 5,
+    2, 1, 2, 1, 1, 3, 1, 7, 1, 1, 2, 2, 1, 2, 6, 8,
+    18, 3, 2, 2, 3, 3, 0, 0, 13, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 1, 2, 10, 2, 5, 0, 1, 1, 82, 5, 0, 2,
+    12, 13, 5, 0, 0, 0, 4, 0,
+] + [0] * 14
+
+
+def pluto_live_command_counts(seats, owner):
+    counts = []
+    native_slots = []
+    for seat, path in enumerate(seats):
+        log = read(path / "hyperion_pluto.log")
+        ai_log = read(path / "hyperion_ai.log")
+        slots = [int(value) for value in re.findall(r"slot (\d+): Pluto", ai_log)]
+        if len(slots) != 1:
+            raise RuntimeError(f"seat {seat} did not install exactly one shared Pluto AI profile")
+        native_slots.append(slots[0])
+        expected_owner = f"inference owner {owner} is {'local' if seat == owner else 'remote'}"
+        if expected_owner not in log:
+            raise RuntimeError(f"seat {seat} did not retain shared Pluto owner {owner}")
+        if seat == owner:
+            started = "Pluto: the bridge runs" in log or "Pluto: the bridge process started" in log
+            if not started or "Pluto: the bridge closed" not in log:
+                raise RuntimeError("the owner did not start and cleanly close the real Pluto bridge")
+            if "inference answered its first complete reply" not in log:
+                raise RuntimeError("the owner did not receive Pluto's first complete inference reply")
+            runtime = path.parent / "pluto-runtime"
+            if "ready:" not in read(runtime / "pluto_infer.log"):
+                raise RuntimeError("the owner's test-owned inference engine did not become ready")
+        elif ("Pluto: the bridge runs" in log or "Pluto: the bridge process started" in log or
+              "Pluto: sending frame" in log):
+            raise RuntimeError("the guest started inference or produced observations without authority")
+        totals = [int(value) for value in re.findall(r"; \d+ commands, (\d+) total\)", log)]
+        if not totals or totals[-1] <= 0 or "rejected AI envelope" in log:
+            raise RuntimeError(f"seat {seat} has no valid nonzero AI command application evidence")
+        counts.append(totals[-1])
+    if counts[0] != counts[1]:
+        raise RuntimeError(f"the peers applied different numbers of AI commands: {counts}")
+    if native_slots[0] != native_slots[1]:
+        raise RuntimeError(f"the peers assigned Pluto to different native slots: {native_slots}")
+    return counts, native_slots[0]
+
+
+def validate_pluto_replays(seats, live_counts, native_slot, expected_name=PLUTO_NAME):
+    recorded_counts = []
+    recorded_storms = []
+    for seat, path in enumerate(seats):
+        replay = path / "maps/replays/LastReplay.rep"
+        header = repfile.header(replay)
+        if header["magic"] != "hxRS":
+            raise RuntimeError(f"seat {seat}'s Pluto replay is not a Hyperion recording")
+        ai = [player for player in header["players"] if player["slot"] == native_slot]
+        if len(ai) != 1 or ai[0]["type"] != "computer" or ai[0]["name"] != expected_name:
+            raise RuntimeError(f"seat {seat}'s replay header does not preserve the Pluto computer identity: {ai}")
+        ai_storm = ai[0]["storm"]
+        if ai_storm not in range(2, 8):
+            raise RuntimeError(f"seat {seat}'s Pluto has an invalid or human-aliased Storm owner: {ai_storm}")
+        recorded_storms.append(ai_storm)
+
+        data = replay.read_bytes()
+        marker = data.rfind(b"HYPERION")
+        if marker < 0:
+            raise RuntimeError("the Pluto replay has no Hyperion sections")
+        sections = {}
+        offset = marker + 12
+        while offset + 20 <= len(data):
+            tag, _version, _flags, count, record_size, size = struct.unpack_from("<IHHIII", data, offset)
+            name = struct.pack("<I", tag).decode("latin1")
+            sections[name] = data[offset + 20:offset + 20 + size]
+            offset += 20 + size
+        if offset != len(data):
+            raise RuntimeError("the Pluto replay has a truncated Hyperion section")
+        profiles = sections.get("AILV", b"")
+        if len(profiles) != 65 * 2 or profiles[native_slot * 2] != 11:
+            raise RuntimeError("the Pluto replay does not record AI_LEVEL_PLUTO on the shared native slot")
+        rule = sections.get("RULE", b"")
+        if len(rule) < 76 or not struct.unpack_from("<I", rule, 72)[0] & 0x4:
+            raise RuntimeError("the Pluto replay did not retain HX_OPT_AI_LEVELS")
+
+        ai_commands = 0
+        for _frame, body in repfile.records(repfile.read_commands(replay)):
+            at = 0
+            while at < len(body):
+                owner = body[at]
+                op = body[at + 1]
+                if owner not in (0, 1, ai_storm):
+                    raise RuntimeError(f"seat {seat}'s replay has an invalid command owner {owner}")
+                if op == 0xAA:
+                    raise RuntimeError("a transport envelope leaked into the replay instead of AI-owned commands")
+                size = repfile._size(body, at + 1, CLASSIC_COMMAND_SIZES)
+                if size <= 0 or at + 1 + size > len(body):
+                    raise RuntimeError(f"seat {seat}'s replay contains a malformed owner/command pair")
+                ai_commands += owner == ai_storm
+                at += 1 + size
+        if ai_commands != live_counts[seat]:
+            raise RuntimeError(
+                f"seat {seat} recorded {ai_commands} AI commands but applied {live_counts[seat]}; recording is not once-only")
+        recorded_counts.append(ai_commands)
+    if recorded_counts[0] != recorded_counts[1] or recorded_counts[0] == 0:
+        raise RuntimeError(f"the recordings disagree on real AI ownership: {recorded_counts}")
+    if recorded_storms[0] != recorded_storms[1]:
+        raise RuntimeError(f"the recordings disagree on Pluto's Storm owner: {recorded_storms}")
+    return recorded_counts
+
+
+def validate_pluto_replay_playback(hx, work, seats, args):
+    data = work / "replay-playback"
+    data.mkdir()
+    port = free_port()
+    missing_runtime = work / "no-runtime-for-replay"
+    env = {**os.environ, "HYPERION_WINDOW": "hidden", "SDL_AUDIO_DRIVER": "dummy",
+           "HYPERION_PLUTO_FOLDER": str(missing_runtime),
+           "WINEPREFIX": str(work / "replay-no-runtime-wine-prefix")}
+    env.pop("HYPERION_PLUTO_DUMP", None)
+    process = subprocess.Popen([
+        str(hx), "--data", data, "--replay", seats[0] / "maps/replays/LastReplay.rep",
+        f"--control={port}", "--install-folder", args.game,
+    ], env=env, stdout=(work / "replay-playback.log").open("w"), stderr=subprocess.STDOUT)
+    try:
+        deadline = time.monotonic() + args.timeout
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                raise RuntimeError("replay playback exited before checking its recorded AI turns")
+            try:
+                answer = ws_call(port, {"id": 1, "cmd": "status"}, timeout=2)
+            except (ConnectionError, OSError):
+                time.sleep(0.1)
+                continue
+            sync = answer.get("sync", {})
+            if sync.get("state") == "mismatch" or sync.get("state") == "refused":
+                raise RuntimeError(f"runtime-free replay playback diverged: {sync}")
+            completed = (sync.get("state") == "ok" and sync.get("recorded", 0) > 0 and
+                         sync.get("checked", 0) >= sync.get("recorded", 0))
+            if (answer.get("frame", 0) >= args.steps and sync.get("checked", 0) > 0) or completed:
+                break
+            time.sleep(0.1)
+        else:
+            raise RuntimeError("timed out playing the recorded AI commands without a runtime")
+        pluto_log = read(data / "hyperion_pluto.log")
+        runtime_evidence = ["the bridge runs", "the bridge process started", "sending frame",
+                            "the frame FIFO", "HXPM", "inference start refused", "the bridge closed"]
+        if any(evidence in pluto_log for evidence in runtime_evidence) or missing_runtime.exists():
+            raise RuntimeError("replay playback attempted to start inference or create a runtime")
+    finally:
+        stop(process)
+
+
 def validate_lifecycle_events(seats):
     for seat in range(len(seats)):
         events = []
@@ -477,12 +692,23 @@ def run_negative_case(hx, work, setup_path, args):
     elif kind == "map-bytes":
         with open(setup["hyperion"]["map"]["path"], "ab") as altered:
             altered.write(b"altered after authentication")
+    elif kind == "pluto-multiple":
+        first = setup["hyperion"]["ai"]["slots"][0]
+        second = dict(first, stormId=3, bwPlayerId=3)
+        setup["hyperion"]["ai"]["slots"].append(second)
+    elif kind == "pluto-owner":
+        setup["hyperion"]["ai"]["ownerRpSlot"] = 2
+    elif kind == "pluto-profile":
+        setup["hyperion"]["ai"]["slots"][0]["level"] = "classic"
     expected_reason = {
         "rollback": "rollback is not supported",
         "roster": "the authenticated roster does not match the manifest slots",
         "profile": "simulation revision does not match this Hyperion",
         "map-hash": "map hash does not match the downloaded map",
         "map-bytes": "map hash does not match the downloaded map",
+        "pluto-multiple": "ai.slots must contain exactly one Pluto computer",
+        "pluto-owner": "the Pluto inference owner must be an authenticated human slot",
+        "pluto-profile": "the computer's AI level must be pluto",
     }[kind]
     negative_seat = work / "negative-seat"
     negative_seat.mkdir(exist_ok=True)
@@ -494,7 +720,9 @@ def run_negative_case(hx, work, setup_path, args):
         "--sb-role", "create", "--sb-map", setup["hyperion"]["map"]["path"],
         "--sb-name", "Negative", "--sb-speed", "6", "--sb-type", "oneVOne",
         "--install-folder", args.game,
-    ], env={**os.environ, "HYPERION_WINDOW": "hidden", "SDL_AUDIO_DRIVER": "dummy"},
+    ], env={**os.environ, "HYPERION_WINDOW": "hidden", "SDL_AUDIO_DRIVER": "dummy",
+            "HYPERION_PLUTO_FOLDER": str(work / "negative-no-runtime"),
+            "WINEPREFIX": str(work / "negative-no-runtime-wine-prefix")},
        stdout=(work / "negative.log").open("w"), stderr=subprocess.STDOUT)
     rejected = False
     try:
@@ -546,7 +774,14 @@ def main():
                         help="players per team: 1v1, 2v2, or 3v3")
     parser.add_argument("--random-race", action="store_true",
                         help="request random races and validate their resolved raw-result evidence")
-    parser.add_argument("--negative", choices=("rollback", "roster", "profile", "map-hash", "map-bytes"),
+    parser.add_argument("--pluto", action="store_true",
+                        help="two humans plus one shared-owner Pluto computer, including results and runtime-free replay playback")
+    parser.add_argument("--pluto-owner", type=int, choices=(0, 1), default=0,
+                        help="authenticated human Rally Point slot that exclusively runs inference")
+    parser.add_argument("--pluto-runtime", type=Path, default=Path.home() / "Games/pluto-runtime",
+                        help="read-only source for the owner seat's test-owned runtime copy")
+    parser.add_argument("--negative", choices=("rollback", "roster", "profile", "map-hash", "map-bytes",
+                                                "pluto-multiple", "pluto-owner", "pluto-profile"),
                         help="require the native parser to reject one invalid manifest before gameplay")
     args = parser.parse_args()
     if args.classic and args.rule == 2:
@@ -559,15 +794,22 @@ def main():
         if args.team_size != 1:
             parser.error("--drop currently supports only 1v1")
         args.result = True
+    if args.pluto:
+        if args.team_size != 1 or args.classic or args.rule != 1 or args.drop:
+            parser.error("--pluto is the two-human Hyperion-rule melee case and cannot be combined with --drop")
+        args.result = True
+    if any(kind.startswith("pluto-") for kind in [args.negative or ""]):
+        if not args.pluto:
+            parser.error("Pluto negative cases require --pluto")
     if args.map_file is None:
-        args.map_file = DEFAULT_MAPS[args.team_size]
+        args.map_file = DEFAULT_MAPS[2] if args.pluto else DEFAULT_MAPS[args.team_size]
     if args.steps < 1 or args.timeout < 1:
         parser.error("--steps and --timeout must be positive")
     windows = args.target == "windows-x64"
     hx = args.engine or ENGINE / ("src117/build/x64/Hyperion.exe" if windows else "src117/build/linux-x64/Hyperion.x86_64")
     target = args.rallypoint_target or ENGINE / ("src117/build/x64/rallypoint" if windows else "src117/build/linux-x64/rallypoint")
     executable_suffix = ".exe" if windows else ""
-    for path in [hx, args.game, args.map_file]:
+    for path in [hx, args.game, args.map_file] + ([args.pluto_runtime] if args.pluto else []):
         if not path.exists():
             parser.error(f"missing {path}")
 
@@ -598,7 +840,9 @@ def main():
         run([str(bin_dir / "rp_dev_setup"), "gen-tenant"], stdout=tenant.open("w"))
         tenant_pkcs8 = tenant.read_text().splitlines()[0].strip()
         client_seed = os.urandom(32).hex()
-        seed = random.SystemRandom().randrange(2**32)
+        # This reviewed three-player start survives the full 600-step combat
+        # window without disabling melee victory conditions or weakening Pluto.
+        seed = 1838266983 if args.pluto else random.SystemRandom().randrange(2**32)
         game_id = str(uuid.uuid4())
         coordinator_port, relay_port = free_port(), free_port()
         coordinator_url = f"http://127.0.0.1:{coordinator_port}"
@@ -632,8 +876,13 @@ def main():
             raise RuntimeError("the development session could not be created")
 
         identity = json.loads(subprocess.check_output([
-            str(HX), "--sb-identity", "--install-folder", args.game,
+            str(hx), "--sb-identity", "--install-folder", args.game,
         ], env={**os.environ, "HYPERION_WINDOW": "hidden", "SDL_AUDIO_DRIVER": "dummy"}, text=True))
+        if args.pluto:
+            if identity.get("engineBuild") != "Hyperion-v0.7.4-beta":
+                raise RuntimeError(f"the Pluto acceptance requires the 0.7.4 engine identity: {identity}")
+            if "plutoComputer" not in identity.get("features", []):
+                raise RuntimeError(f"the engine does not advertise its Pluto computer feature: {identity}")
         seats = []
         for seat in range(args.team_size * 2):
             seat_dir = work / f"seat{seat}"
@@ -644,10 +893,16 @@ def main():
             setup_path = work / f"s{seat}.json"
             setup = json.loads(setup_path.read_text())
             setup = manifest(setup, seat, game_id, seed, map_path, identity, args.rule, args.team_size,
-                             args.random_race, args.classic)
+                             args.random_race, args.classic, args.pluto, args.pluto_owner)
             setup_path.write_text(json.dumps(setup))
             setup_path.chmod(0o600)
             seats.append(seat_dir)
+
+        if args.pluto:
+            # Only seat 0 receives this new, test-owned copy. The source's
+            # known-good logs, FIFOs and captures are neither modified nor copied.
+            shutil.copytree(args.pluto_runtime, work / "pluto-runtime", ignore=shutil.ignore_patterns(
+                "*.log", "*.fifo", "frames.bin", "replies-raw.bin", "runtime-source.json"))
 
         if args.negative:
             run_negative_case(hx, work, work / "s0.json", args)
@@ -657,15 +912,22 @@ def main():
         for seat, seat_dir in enumerate(seats):
             role = "create" if seat == 0 else "join"
             seat_args = [
-                str(HX), "--data", seat_dir, "--sb-setup", work / f"s{seat}.json",
+                str(hx), "--data", seat_dir, "--sb-setup", work / f"s{seat}.json",
                 "--sb-role", role, "--sb-map", seat_dir / "maps" / args.map_file.name,
                 "--sb-name", NAMES[seat], "--sb-speed", "6",
-                "--sb-type", "oneVOne" if args.team_size == 1 else "topVBottom",
-                "--record-orders=24",
+                "--sb-type", "melee" if args.pluto else "oneVOne" if args.team_size == 1 else "topVBottom",
+                "--record-orders=0" if args.pluto else "--record-orders=24",
                 "--install-folder", args.game,
             ]
             seat_env = {**os.environ, "HYPERION_WINDOW": "hidden", "SDL_AUDIO_DRIVER": "dummy",
                         "HYPERION_SB_EVENTS": "1"}
+            seat_env.pop("HYPERION_PLUTO_FOLDER", None)
+            seat_env.pop("HYPERION_PLUTO_DUMP", None)
+            if args.pluto and seat == args.pluto_owner:
+                seat_env["HYPERION_PLUTO_FOLDER"] = str(work / "pluto-runtime")
+                seat_env["WINEPREFIX"] = str(work / "wine-prefix")
+            elif args.pluto:
+                seat_env["WINEPREFIX"] = str(work / "guest-no-runtime-wine-prefix")
             seat_args.append(f"--control={control_ports[seat]}")
             if args.result:
                 seat_env["HYPERION_SB_RESULT_CODE"] = RESULT_CODES[seat]
@@ -708,14 +970,25 @@ def main():
             print(f"PASS: the dropped seat was evicted, the survivor passed {args.steps + 10} steps, "
                   "reported raw v2 evidence, and departed cleanly")
         elif args.result:
-            surrender_both(control_ports, seats, args.timeout)
+            if args.pluto:
+                surrender_pluto(control_ports)
+            else:
+                surrender_both(control_ports, seats, args.timeout)
             wait_for_notices(notice_server, args.timeout, args.team_size * 2)
             validate_result_notices(notice_server, game_id, args.team_size, args.random_race,
-                                    decisive=args.team_size == 1)
+                                    decisive=args.team_size == 1 and not args.pluto, pluto=args.pluto)
             validate_secret_free_logs(seats)
             wait_for_game_end(seats, args.team_size * 2, args.timeout)
             validate_lifecycle_events(seats)
-            validate_replays(seats, 0 if args.classic else args.rule, expected_roll)
+            if not args.pluto:
+                validate_replays(seats, 0 if args.classic else args.rule, expected_roll)
+            if args.pluto:
+                live_counts, native_slot = pluto_live_command_counts(seats, args.pluto_owner)
+                recorded_counts = validate_pluto_replays(seats, live_counts, native_slot)
+                validate_pluto_replay_playback(hx, work, seats, args)
+                print(f"PASS: owner-{args.pluto_owner}-only Pluto inference on shared native slot {native_slot} "
+                      f"applied and recorded {recorded_counts[0]} real AI commands identically on both peers; "
+                      "replay playback needed no runtime")
             print(f"PASS: all {len(seats)} Zero clients read {args.steps} identical steps, reported raw v2 results, "
                   "and made clean departures")
         else:

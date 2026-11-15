@@ -77,6 +77,12 @@ bool g_bVision;                           // a slot of this game sees the whole 
 bool g_bVisionFirst;                      // and the fog made with the map is not yet off
 PORT_SNAP_KEEP(g_bVisionFirst);           // the trainer's snapshots hold it (port_snap.cpp)
 
+// A network match's shared computer profiles, in native computer-seat order.
+// Unlike the single-player row mapping, this does not depend on which human is
+// local to this process.
+bool g_bNet;
+std::vector<int> g_netComputers;
+
 const Knobs &KnobsOf(int nPlayer) {
   return kKnobs[nPlayer >= 0 && nPlayer < PLAYER_SLOTS_MAX && g_aSlot[nPlayer].bLevel < AI_LEVELS
                     ? g_aSlot[nPlayer].bLevel : AI_LEVEL_CLASSIC];
@@ -94,6 +100,21 @@ AiProfile SeatedProfile(int nRow) {
     p.bStyle = Session().aRow[nRow].bAiStyle;
   }
   return p;
+}
+
+bool NetChosen() {
+  return g_bNet && gbMultiPlayerMode != 0;
+}
+
+int ComputerOrder(int nSlot) {
+  if (nSlot < 0 || nSlot >= PLAYER_SLOTS_MAX || gPlayerData[nSlot].nType != 1)
+    return -1;
+  const int nFrom = PlayersCameFrom(nSlot);
+  int nOrder = 0;
+  for (int s = 0; s < PLAYER_SLOTS_MAX; ++s)
+    if (s != nSlot && gPlayerData[s].nType == 1 && PlayersCameFrom(s) < nFrom)
+      ++nOrder;
+  return nOrder;
 }
 
 // hyperion_ai.log: the levels each game's computers play with
@@ -163,6 +184,13 @@ void AiChooseList(const char *pszList) {
   }
 }
 
+void AiChooseNet(const std::vector<int> &computers) {
+  g_bNet = true;
+  g_netComputers.clear();
+  for (int nLevel : computers)
+    g_netComputers.push_back(AiLevelReady(nLevel) ? nLevel : AI_LEVEL_CLASSIC);
+}
+
 void AiSeat() {
   g_bSeated = true;
   // the local player (the benchmark's plays as a computer), then each computer seated
@@ -174,6 +202,12 @@ void AiSeat() {
 }
 
 bool AiChosenThisGame() {
+  if (NetChosen()) {
+    for (int nLevel : g_netComputers)
+      if (nLevel != AI_LEVEL_CLASSIC)
+        return true;
+    return false;
+  }
   if (!g_bSeated)
     return false;
   for (int r = 0; r < g_nSeated; r++)
@@ -190,6 +224,10 @@ void AiForGame() {
       continue;
     if (bOld) {
       g_aSlot[s] = g_aRecorded[s];
+    } else if (NetChosen()) {
+      const int k = ComputerOrder(s);
+      if (k >= 0 && k < static_cast<int>(g_netComputers.size()))
+        g_aSlot[s].bLevel = static_cast<BYTE>(g_netComputers[k]);
     } else if (g_bSeated) {
       // the row each player came from (PlayersSeatedComputer), wherever the starts put it
       const int k = PlayersSeatedComputer(s);
@@ -202,9 +240,21 @@ void AiForGame() {
   Log("a game: %s, %s", bOld ? "played back or loaded" : g_bSeated ? "new, seated" : "new",
       (g_hxRuleOptions & HX_OPT_AI_LEVELS) ? "with levels" : "every computer Classic");
   g_bSeated = false;
+  g_bNet = false;
   g_bVision = false;
   g_bVisionFirst = true;
+  bool bPlutoSeen = false;
   for (int s = 0; s < PLAYER_SLOTS_MAX; s++) {
+    if (!bOld && g_aSlot[s].bLevel == AI_LEVEL_PLUTO) {
+      if (!bPlutoSeen) {
+        bPlutoSeen = true;
+      } else {
+        // The bridge and native replay identity support one Pluto seat. An
+        // extra choice is a functional Classic computer, never an inert slot.
+        g_aSlot[s] = AiProfile();
+        Log("slot %d: only one Pluto seat is supported; using Classic AI", s);
+      }
+    }
     if (IsClassic(g_aSlot[s]))
       continue;
     g_bVision = g_bVision || KnobsOf(s).bVision;
@@ -212,6 +262,8 @@ void AiForGame() {
   }
   if (!bOld)
     PlutoGameStart();  // Hyperion: the bridge, once a live game with a Pluto slot starts
+  else
+    PlutoReplayStart();  // Hyperion: the recorded AI's owner mapping, never its runtime
 }
 
 AiProfile AiProfileOf(int nSlot) {

@@ -17,6 +17,24 @@ struct SbManifestSlot {
   bool host = false;
 };
 
+// A simulated computer is not an authenticated relay member. Its identity and
+// profile are shared launch data; only the human slots above have credentials.
+struct SbManifestComputer {
+  uint32_t stormId = 0;
+  uint32_t bwPlayerId = 0;
+  std::string name;
+  std::string race;
+  std::string level;
+};
+
+struct SbManifestParticipant {
+  bool active = false;
+  uint32_t origin = 0;
+  uint32_t stormId = 0;
+  uint32_t race = 6;
+  std::string name;
+};
+
 struct SbManifest {
   int protocol = 0;
   std::string gameId;
@@ -28,6 +46,8 @@ struct SbManifest {
   bool disableAllianceChanges = false;
   uint32_t localUserId = 0;
   std::vector<SbManifestSlot> slots;
+  std::vector<SbManifestComputer> computers;
+  int plutoOwnerRpSlot = -1;  // -1 when no Pluto computer was configured
   std::string mapFormat;
   std::string mapHash;
   std::string mapPath;
@@ -52,6 +72,10 @@ bool SbManifestActive();
 const std::string &SbManifestError();
 const SbManifest &SbManifestGet();
 const SbManifestSlot *SbManifestLocalSlot();
+// Captures the actual participants after native start-slot shuffling and AI
+// initialization. Raw results use this stable snapshot through game teardown.
+void SbManifestCaptureGameSlots();
+const SbManifestParticipant &SbManifestParticipantAt(uint32_t bwPlayerId);
 uint32_t SbManifestSeed();
 // The active installation's compatibility record as JSON, after the game's
 // data and active mod have loaded. Used by local install/acceptance tooling.

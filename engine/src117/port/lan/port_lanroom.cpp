@@ -283,9 +283,9 @@ bool MintSession(Match &m, std::string *pszWhy)
     return false;
   }
   for (int i = 0; i < kPlayers; ++i)
-    if (m.seats[i].owner == "computer") {
+    if (m.seats[i].owner == "computer" && m.seats[i].aiLevel != "pluto") {
       if (pszWhy)
-        *pszWhy = "Online matches with computer players are not in yet.";
+        *pszWhy = "Online matches currently support only the Pluto computer level.";
       return false;
     }
   const std::string tenant = Setting("sbTenant", "hyperion-dev");
@@ -348,7 +348,8 @@ std::string LaunchJson(const Match &m, const Device &d, bool bCreate)
     nHumans += t.owner == "player";
     s += std::string(bFirst ? "" : ",") + "{\"slot\":" + std::to_string(i) + ",\"kind\":" + PortJsonQuote(t.owner) +
          ",\"race\":" + std::to_string(RaceId(p ? p->race : t.race)) +
-         ",\"handicap\":" + std::to_string(p ? p->nHandicap : t.nHandicap) + ",\"name\":" + PortJsonQuote(p ? p->name : "") +
+         ",\"handicap\":" + std::to_string(p ? p->nHandicap : t.nHandicap) +
+         ",\"aiLevel\":" + PortJsonQuote(t.aiLevel) + ",\"name\":" + PortJsonQuote(p ? p->name : "") +
          ",\"colour\":" + std::to_string(t.nColour) + ",\"team\":" + std::to_string(t.nTeam) + "}";
     bFirst = false;
   }
@@ -403,6 +404,18 @@ std::string Launch(Match &m, bool bForce)
     return "Nobody is seated.";
   if (nAll < 2)
     return "A match needs two players or more.";
+  int nPluto = 0;
+  for (const Seat &seat : m.seats) {
+    if (seat.owner != "computer")
+      continue;
+    if (seat.aiLevel != "classic" && seat.aiLevel != "pluto")
+      return "A computer has an unknown AI level.";
+    if (seat.aiLevel == "pluto" && !m.bHyperion)
+      return "Pluto requires Hyperion rules.";
+    nPluto += seat.aiLevel == "pluto";
+  }
+  if (nPluto > 1)
+    return "A match supports only one Pluto computer.";
   if (!seating.empty()) {
     for (Device *d : seating)
       if (d->route == "tab")

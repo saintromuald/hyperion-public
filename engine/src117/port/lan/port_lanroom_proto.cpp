@@ -80,7 +80,8 @@ std::string MatchJson(const Match &m, uint64_t qwNow)
     const Device *d = t.owner == "player" ? Dev(t.nDev) : NULL;
     s += std::string(i ? "," : "") + "{\"owner\":" + PortJsonQuote(t.owner) + ",\"dev\":" + std::to_string(t.nDev) +
          ",\"race\":" + PortJsonQuote(d ? d->race : t.race) +
-         ",\"handicap\":" + std::to_string(d ? d->nHandicap : t.nHandicap) + ",\"colour\":" + std::to_string(t.nColour) +
+         ",\"handicap\":" + std::to_string(d ? d->nHandicap : t.nHandicap) +
+         ",\"aiLevel\":" + PortJsonQuote(t.aiLevel) + ",\"colour\":" + std::to_string(t.nColour) +
          ",\"team\":" + std::to_string(t.nTeam) + ",\"ready\":" + Bool(d && d->bReady) +
          ",\"name\":" + PortJsonQuote(d ? d->name : "") + "}";
   }
@@ -548,24 +549,40 @@ void Admin(Device &d, const std::string &t, const PortJson &j)
     if (i >= 0 && i < kPlayers) {
       Seat &s = m->seats[i];
       const std::string owner = j["owner"].Str(s.owner.c_str());
-      if (owner == "player") {
-        if (Device *p = Dev(static_cast<int>(j["dev"].Num())))
-          Sit(*p, *m, i);
+      const std::string aiLevel = j["aiLevel"].Str(s.aiLevel.c_str());
+      bool bValid = aiLevel == "classic" || aiLevel == "pluto";
+      if (aiLevel == "pluto" && (owner != "computer" || !m->bHyperion))
+        bValid = false;
+      for (int other = 0; other < kPlayers; ++other)
+        if (other != i && m->seats[other].owner == "computer" && m->seats[other].aiLevel == "pluto" &&
+            aiLevel == "pluto" && owner == "computer")
+          bValid = false;
+      if (!bValid) {
+        err = !m->bHyperion && aiLevel == "pluto"
+                  ? "Pluto requires Hyperion rules."
+                  : "A room supports one computer at the Pluto level; choose Classic for the others.";
       } else {
-        if (s.owner == "player")
-          if (Device *p = Dev(s.nDev))
-            Unseat(*p);
-        s.owner = owner;
-        s.nDev = 0;
+        if (owner == "player") {
+          if (Device *p = Dev(static_cast<int>(j["dev"].Num())))
+            Sit(*p, *m, i);
+        } else {
+          if (s.owner == "player")
+            if (Device *p = Dev(s.nDev))
+              Unseat(*p);
+          s.owner = owner;
+          s.nDev = 0;
+        }
+        if (j["aiLevel"].kind == PortJson::STRING)
+          s.aiLevel = aiLevel;
+        if (j["race"].kind == PortJson::STRING)
+          s.race = j["race"].Str();
+        if (j["handicap"].kind == PortJson::NUMBER)
+          s.nHandicap = HandicapClamp(static_cast<int>(j["handicap"].Num()));
+        if (j["team"].kind == PortJson::NUMBER)
+          s.nTeam = static_cast<int>(j["team"].Num());
+        if (j["colour"].kind == PortJson::NUMBER)
+          s.nColour = static_cast<int>(j["colour"].Num());
       }
-      if (j["race"].kind == PortJson::STRING)
-        s.race = j["race"].Str();
-      if (j["handicap"].kind == PortJson::NUMBER)
-        s.nHandicap = HandicapClamp(static_cast<int>(j["handicap"].Num()));
-      if (j["team"].kind == PortJson::NUMBER)
-        s.nTeam = static_cast<int>(j["team"].Num());
-      if (j["colour"].kind == PortJson::NUMBER)
-        s.nColour = static_cast<int>(j["colour"].Num());
     }
   } else if (t == "start" && m) {
     m->nStarter = d.nId;

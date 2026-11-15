@@ -15,6 +15,7 @@
 #include "../platform/port_paths.h"  // PortCommandOptions
 #include <stdio.h>
 #include <string.h>
+#include <algorithm>
 #include <string>
 #include "../platform/port_json.h"
 #include "port_lanclient.h"
@@ -48,6 +49,8 @@
 #include "../render/port_present.h"      // PortPresentGpu
 #include "../gameplay/port_handicap.h"   // HandicapChooseNet
 #include "../gameplay/port_mutators.h"   // MutatorsChooseNet
+#include "../gameplay/port_ai.h"         // AiChooseNet, AI_LEVEL_*
+#include "../gameplay/port_pluto.h"      // PlutoChooseNetOwner
 #include "../../h/hxrules.h"             // RulesChooseNext
 #include "../../h/playertables.h"        // PlayersSeatsBegin
 
@@ -168,17 +171,36 @@ bool PortLaunchNetGame(const PortJson &launch)
   // the same on every seat (port_handicap.h)
   std::vector<std::pair<std::string, int>> handicapPeople;
   std::vector<int> handicapComputers;
+  std::vector<int> computerLevels;
+  int nPluto = 0;
   for (size_t i = 0; i < seats.size(); ++i) {
     const int nHandicap = static_cast<int>(seats.At(i)["handicap"].Num(100));
     if (seats.At(i)["kind"].Str() == "computer") {
       g_plan.computers.push_back(LobbyRace(static_cast<int>(seats.At(i)["race"].Num(6))));
       handicapComputers.push_back(nHandicap);
+      const std::string level = seats.At(i)["aiLevel"].Str("classic");
+      if (level != "classic" && level != "pluto") {
+        Log("the room sent an unknown computer AI level");
+        return false;
+      }
+      nPluto += level == "pluto";
+      computerLevels.push_back(level == "pluto" ? AI_LEVEL_PLUTO : AI_LEVEL_CLASSIC);
     } else {
       g_plan.people.push_back(
           std::make_pair(seats.At(i)["name"].Str(), LobbyRace(static_cast<int>(seats.At(i)["race"].Num(6)))));
       handicapPeople.push_back(std::make_pair(seats.At(i)["name"].Str(), nHandicap));
     }
   }
+  if (nPluto > 1) {
+    Log("the room sent more than one Pluto computer");
+    return false;
+  }
+  if (nPluto == 1 && launch["rules"].Str() != "hyperion") {
+    Log("Pluto requires Hyperion rules");
+    return false;
+  }
+  AiChooseNet(computerLevels);
+  PlutoChooseNetOwner(0);  // the room's creator, stable for the whole match
   // the rules the host chose, the same on every seat (hxrules.h): a guest is told them here
   RulesChooseNext(launch["rules"].Str() == "hyperion" ? 1 : 0);
   HandicapChooseNet(handicapPeople, handicapComputers);
@@ -253,6 +275,9 @@ struct SbLaunchArgs {
   bool bMutators = false;
   MutatorSet mut;
   int nRace = 6;
+  std::vector<int> computers;       // room computer races, in seat order
+  std::vector<int> computerLevels;  // the same computers' shared AI profiles
+  int nPlutoOwner = 0;              // stable Storm/Rally Point owner slot
 };
 
 // The shared launch: the room's and the command line's differ only in where
@@ -273,6 +298,10 @@ bool PortSbLaunchNetGameInner(const SbLaunchArgs &a)
   const int nRoster = SbRosterCount();
   g_plan.nHumans = nRoster > 0 && nRoster <= 8 ? nRoster : 2;
   g_plan.nRace = a.nRace >= 0 && a.nRace <= 6 ? a.nRace : 6;
+  g_plan.computers = a.computers;
+  std::vector<int> computerLevels = a.computerLevels;
+  int nPlutoOwner = a.nPlutoOwner;
+  std::string plutoName;
   if (bCanonical) {
     g_plan.nRace = local->race == "z" ? RACE_ZERG : local->race == "t" ? RACE_TERRAN
                    : local->race == "p" ? RACE_PROTOSS : RACE_RANDOM;
@@ -281,7 +310,24 @@ bool PortSbLaunchNetGameInner(const SbLaunchArgs &a)
                        : slot.race == "p" ? RACE_PROTOSS : RACE_RANDOM;
       g_plan.people.push_back(std::make_pair(slot.name, race));
     }
+    computerLevels.clear();
+    for (const SbManifestComputer &computer : SbManifestGet().computers) {
+      g_plan.computers.push_back(computer.race == "z" ? RACE_ZERG : computer.race == "t" ? RACE_TERRAN
+                                 : computer.race == "p" ? RACE_PROTOSS : RACE_RANDOM);
+      computerLevels.push_back(AI_LEVEL_PLUTO);  // the manifest admits only this level
+      plutoName = computer.name;
+    }
+    nPlutoOwner = SbManifestGet().plutoOwnerRpSlot >= 0 ? SbManifestGet().plutoOwnerRpSlot : 0;
   }
+  const int nPluto = static_cast<int>(std::count(computerLevels.begin(), computerLevels.end(), AI_LEVEL_PLUTO));
+  if (computerLevels.size() != g_plan.computers.size() || nPluto > 1 ||
+      (nPluto == 1 && (bCanonical ? SbManifestGet().rules != "hyperion"
+                                  : lstrcmpiA(a.pszRules, "hyperion") != 0))) {
+    Log("the relay launch has invalid computer AI profiles or rules");
+    return false;
+  }
+  AiChooseNet(computerLevels);
+  PlutoChooseNetOwner(nPlutoOwner, plutoName.empty() ? nullptr : plutoName.c_str());
   const char *pszName = bCanonical ? local->name.c_str()
                                    : (a.pszName && a.pszName[0] ? a.pszName : "Relay");
   g_plan.mapName = bCanonical ? SbManifestGet().name : pszName;
@@ -319,7 +365,9 @@ bool PortSbLaunchNetGameInner(const SbLaunchArgs &a)
   if (g_plan.bCreator || bCanonical) {
     const bool bFfa = lstrcmpiA(a.pszType, "ffa") == 0;
     const int nKey = bCanonical
-        ? (SbManifestGet().gameType == "topVBottom" ? TOP_VS_BOTTOM_KEY : ONE_VS_ONE_KEY)
+        ? (SbManifestGet().gameType == "topVBottom" ? TOP_VS_BOTTOM_KEY
+           : SbManifestGet().gameType == "melee" ? MELEE_KEY
+           : SbManifestGet().gameType == "freeForAll" ? FFA_KEY : ONE_VS_ONE_KEY)
         : (bFfa ? FFA_KEY : MELEE_KEY);
     const TGAMEPARAMS *pTemplate = gametype_find_template(static_cast<BYTE>(nKey), static_cast<BYTE>(nKey >> 8),
                                                           static_cast<WORD>(nKey >> 16));
@@ -504,6 +552,17 @@ bool PortSbLaunchNetGame(const PortJson &launch)
   a.mut = MutatorsFromJson(launch["mutators"]);
   a.bMutators = !MutatorsStandard(a.mut);
   a.nRace = static_cast<int>(launch["race"].Num(6));
+  const PortJson &seats = launch["seats"];
+  for (size_t i = 0; i < seats.size(); ++i) {
+    if (seats.At(i)["kind"].Str() != "computer")
+      continue;
+    const std::string level = seats.At(i)["aiLevel"].Str("classic");
+    a.computers.push_back(LobbyRace(static_cast<int>(seats.At(i)["race"].Num(6))));
+    a.computerLevels.push_back(level == "pluto" ? AI_LEVEL_PLUTO : AI_LEVEL_CLASSIC);
+    if (level != "classic" && level != "pluto")
+      return false;
+  }
+  a.nPlutoOwner = 0;
   return PortSbLaunchNetGame(a);
 }
 

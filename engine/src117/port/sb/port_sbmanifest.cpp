@@ -13,6 +13,7 @@
 #include "../../h/net_player.h"
 #include "../../h/net_slot.h"
 #include "../../h/playerlimits.h"
+#include "../../h/playertables.h"  // PlayersCameFrom
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -22,6 +23,7 @@ extern PlayerTable<PlayerData, PlayerTagNetData> gNetPlayerData_g;
 namespace {
 
 SbManifest g_manifest;
+SbManifestParticipant g_participants[8];
 bool g_active = false;
 std::string g_error;
 
@@ -180,26 +182,29 @@ bool Validate(const SbManifest &m, const std::string &mapPath, std::string *why)
     return Fail(why, "gameId is required");
   if (!NameOf(m.name))
     return Fail(why, "name must contain 1 to 24 UTF-8 bytes without NULs");
-  if (m.gameType != "oneVOne" && m.gameType != "topVBottom")
-    return Fail(why, "only oneVOne and topVBottom are supported");
-  const int expectedPlayers = m.gameType == "oneVOne" ? 2 : m.gameSubType * 2;
-  if ((m.gameType == "oneVOne" && m.gameSubType != 0) ||
+  const bool customMelee = m.gameType == "melee" || m.gameType == "freeForAll";
+  if (m.gameType != "oneVOne" && m.gameType != "topVBottom" && !customMelee)
+    return Fail(why, "only oneVOne, topVBottom, melee and freeForAll are supported");
+  const int expectedPlayers = m.gameType == "oneVOne" ? 2 : customMelee ? 0 : m.gameSubType * 2;
+  if (((m.gameType == "oneVOne" || customMelee) && m.gameSubType != 0) ||
       (m.gameType == "topVBottom" && m.gameSubType != 2 && m.gameSubType != 3))
-    return Fail(why, "gameSubType must be 0 for 1v1 or 2/3 for team play");
+    return Fail(why, "gameSubType must be 0 for 1v1/melee or 2/3 for team play");
+  if (customMelee && m.slots.size() < 2)
+    return Fail(why, "a multiplayer melee needs at least two authenticated humans");
   if (m.speed < 0 || m.speed > 6)
     return Fail(why, "speed must be between 0 and 6");
   if (!m.disableAllianceChanges)
     return Fail(why, "disableAllianceChanges must be true");
   if (m.localUserId == 0)
     return Fail(why, "localUserId must be positive");
-  if (m.slots.size() != static_cast<size_t>(expectedPlayers))
+  if (!customMelee && m.slots.size() != static_cast<size_t>(expectedPlayers))
     return Fail(why, "the slot count does not match the game type");
   for (size_t i = 0; i < m.slots.size(); ++i) {
     const SbManifestSlot &s = m.slots[i];
     if (s.rpSlot != i || s.stormId != i || s.bwPlayerId != i)
       return Fail(why, "slot ids must be contiguous from 0");
     const uint32_t teamSize = m.gameType == "topVBottom" ? static_cast<uint32_t>(m.gameSubType) : 1;
-    if (s.teamId != i / teamSize)
+    if (customMelee ? s.teamId != 0 : s.teamId != i / teamSize)
       return Fail(why, "teamId does not match the canonical team layout");
     if (s.userId == 0)
       return Fail(why, "userIds must be positive and unique");
@@ -212,6 +217,27 @@ bool Validate(const SbManifest &m, const std::string &mapPath, std::string *why)
       return Fail(why, "an invalid race was supplied");
     if (s.host != (i == 0))
       return Fail(why, "only rpSlot 0 may be the host");
+  }
+  if (!customMelee && !m.computers.empty())
+    return Fail(why, "computer profiles require melee or freeForAll");
+  if (!m.computers.empty() && m.rules != "hyperion")
+    return Fail(why, "Pluto requires hyperion rules");
+  if (m.computers.size() > 1)
+    return Fail(why, "at most one Pluto computer is supported");
+  if (m.computers.empty() && m.plutoOwnerRpSlot != -1)
+    return Fail(why, "a Pluto owner requires a Pluto computer");
+  for (const SbManifestComputer &computer : m.computers) {
+    if (computer.level != "pluto")
+      return Fail(why, "the computer's AI level must be pluto");
+    if (computer.bwPlayerId != m.slots.size() || computer.stormId != computer.bwPlayerId ||
+        computer.bwPlayerId >= 8)
+      return Fail(why, "the Pluto computer must occupy the first free classic slot");
+    if (!NameOf(computer.name))
+      return Fail(why, "the Pluto computer's name is invalid");
+    if (computer.race != "z" && computer.race != "t" && computer.race != "p" && computer.race != "r")
+      return Fail(why, "the Pluto computer's race is invalid");
+    if (m.plutoOwnerRpSlot < 0 || m.plutoOwnerRpSlot >= static_cast<int>(m.slots.size()))
+      return Fail(why, "the Pluto inference owner must be an authenticated human slot");
   }
   bool localFound = false;
   for (const SbManifestSlot &slot : m.slots)
@@ -330,6 +356,23 @@ bool Load(const std::string &json, const std::string &mapPath, std::string *why)
       return Fail(why, "mutators must contain exactly antiMeta: 1");
   }
 
+  const PortJson &ai = h["ai"];
+  if (ai.kind != PortJson::NONE) {
+    if (ai.kind != PortJson::OBJECT || !Int(ai["ownerRpSlot"], &m.plutoOwnerRpSlot))
+      return Fail(why, "ai.ownerRpSlot must be an integer");
+    const PortJson &computers = ai["slots"];
+    if (computers.kind != PortJson::ARRAY || computers.size() != 1)
+      return Fail(why, "ai.slots must contain exactly one Pluto computer");
+    const PortJson &j = computers.At(0);
+    SbManifestComputer computer;
+    if (!Uint(j["stormId"], &computer.stormId) || !Uint(j["bwPlayerId"], &computer.bwPlayerId))
+      return Fail(why, "AI slot ids must be unsigned integers");
+    computer.name = j["name"].Str();
+    computer.race = j["race"].Str();
+    computer.level = j["level"].Str();
+    m.computers.push_back(computer);
+  }
+
   const PortJson &roster = root["roster"];
   if (roster.kind != PortJson::ARRAY || roster.size() != m.slots.size())
     return Fail(why, "the authenticated roster must match the manifest slots");
@@ -364,6 +407,8 @@ bool Load(const std::string &json, const std::string &mapPath, std::string *why)
 bool SbManifestLoad(const std::string &json, const std::string &mapPath, std::string *why) {
   g_active = false;
   g_manifest = SbManifest();
+  for (SbManifestParticipant &participant : g_participants)
+    participant = SbManifestParticipant();
   g_error.clear();
   std::string discarded;
   std::string *message = why != nullptr ? why : &discarded;
@@ -376,6 +421,8 @@ bool SbManifestLoad(const std::string &json, const std::string &mapPath, std::st
 void SbManifestClear() {
   g_active = false;
   g_manifest = SbManifest();
+  for (SbManifestParticipant &participant : g_participants)
+    participant = SbManifestParticipant();
   g_error.clear();
 }
 
@@ -401,6 +448,28 @@ const SbManifestSlot *SbManifestLocalSlot() {
   return nullptr;
 }
 
+void SbManifestCaptureGameSlots() {
+  if (!g_active)
+    return;
+  for (uint32_t i = 0; i < 8; ++i) {
+    SbManifestParticipant &participant = g_participants[i];
+    participant = SbManifestParticipant();
+    const BYTE type = gPlayerData[i].nType;
+    if (type != 1 && type != 2)
+      continue;
+    participant.active = true;
+    participant.origin = PlayersCameFrom(i);
+    participant.stormId = gPlayerData[i].dwStormID;
+    participant.race = gPlayerData[i].nRace;
+    participant.name = gPlayerData[i].szName;
+  }
+}
+
+const SbManifestParticipant &SbManifestParticipantAt(uint32_t bwPlayerId) {
+  static const SbManifestParticipant inactive;
+  return bwPlayerId < 8 ? g_participants[bwPlayerId] : inactive;
+}
+
 uint32_t SbManifestSeed() {
   return g_active ? g_manifest.seed : 0;
 }
@@ -411,7 +480,7 @@ std::string SbManifestCompatibilityJson() {
          ",\"rules\":\"classic\",\"modId\":" + PortJsonQuote(ModDataId()) +
          ",\"modFingerprint\":" + PortJsonQuote(ModFingerprint()) +
          ",\"dataFingerprint\":" + PortJsonQuote(LanFingerprint()) +
-         ",\"rollback\":false}";
+         ",\"features\":[\"plutoComputer\"],\"rollback\":false}";
 }
 
 void SbManifestCompatibilityPrint() {
@@ -426,11 +495,21 @@ bool SbManifestApplyLobby() {
     return false;
 
   PlayerClear(gPlayerData);
+  PlayerClear(gNetPlayerData_g);
   for (int i = 0; i < 8; ++i) {
     gPlayerData[i].dwPlayerID = i;
     gPlayerData[i].dwStormID = 0xFFFFFFFFu;
     gPlayerData[i].nType = 6;  // open
     gPlayerData[i].nRace = 6;  // random, as an unoccupied lobby slot has it
+    // The start-slot shuffle takes open destinations from this second table.
+    // Clear it explicitly so a template's default computers cannot become
+    // unauthenticated extra players beside the manifest's configured AI.
+    gNetPlayerData_g[i].dwPlayerID = i;
+    gNetPlayerData_g[i].dwStormID = 0xFFFFFFFFu;
+    gNetPlayerData_g[i].nType = 6;
+    gNetPlayerData_g[i].nRace = 6;
+    gNetPlayerData_g[i].nTeam = 0;
+    gNetPlayerData_g[i].szName[0] = '\0';
   }
   for (const SbManifestSlot &slot : g_manifest.slots) {
     if (slot.bwPlayerId >= 8 || slot.stormId >= 8)
@@ -451,6 +530,27 @@ bool SbManifestApplyLobby() {
     lobby.nRace = out.nRace;
     lobby.nTeam = out.nTeam;
     SStrCopy(lobby.szName, slot.name.c_str(), sizeof lobby.szName);
+  }
+
+  for (const SbManifestComputer &computer : g_manifest.computers) {
+    if (computer.bwPlayerId >= 8 || computer.stormId >= 8)
+      return false;
+    PlayerData &out = gPlayerData[computer.bwPlayerId];
+    out.dwPlayerID = computer.bwPlayerId;
+    out.dwStormID = computer.stormId;
+    out.nType = 1;  // computer: simulated locally, absent from the relay roster
+    out.nRace = computer.race == "z" ? 0 : computer.race == "t" ? 1 : computer.race == "p" ? 2 : 6;
+    out.nTeam = 0;
+    SStrCopy(out.szName, computer.name.c_str(), sizeof out.szName);
+    PlayerData &lobby = gNetPlayerData_g[computer.bwPlayerId];
+    lobby.dwPlayerID = computer.bwPlayerId;
+    lobby.dwStormID = computer.stormId;
+    // The active AI is seated by the start-slot shuffle. Its lobby destination
+    // must stay open, or that source record survives as a second Classic computer.
+    lobby.nType = 6;
+    lobby.nRace = out.nRace;
+    lobby.nTeam = 0;
+    SStrCopy(lobby.szName, computer.name.c_str(), sizeof lobby.szName);
   }
 
   net_slot_init(g_LocalStormID);

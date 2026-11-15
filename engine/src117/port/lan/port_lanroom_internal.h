@@ -59,6 +59,7 @@ struct Seat {
   int nDev = 0;
   std::string race = "random";
   int nHandicap = 100;  // a computer's, the host's choice
+  std::string aiLevel = "classic";  // a computer's shared profile: classic or pluto
   int nColour = -1;
   int nTeam = 0;
 };

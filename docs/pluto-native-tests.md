@@ -33,6 +33,16 @@ not executable, or lacks `turn` is a failure, never a skip or a pass. `--data` d
 the engine's folder. An explicit output folder is not reused: each scenario must be able
 to create a new directory beneath it.
 
+The pure Pluto regressions also cover multiplayer envelope ownership (including a
+nonzero owner and rehome identity), bounded packetization, hostile/malformed/nested
+or truncated inner commands, non-owner/replay inference prevention, and the latched
+no-successor behavior after a coherent owner drop, plus network startup failure's
+fail-closed policy and single-player's separate Classic fallback. They use no runtime or match.
+The separate `tools/sbtest/zero_acceptance.py --pluto` case is the real two-client
+inference, result, recording and runtime-free replay gate; `--pluto-owner 1` proves
+the non-default owner. `tools/sbtest/lan_pluto_acceptance.py` covers the native
+standalone-room UI and a real LAN match.
+
 ## Sandbox command and unit evidence
 
 The live-control sandbox command is:

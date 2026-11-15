@@ -446,6 +446,28 @@ Traps learned the hard way:
 
 `port_pluto.cpp` reads `12 + n + 4` per reply and re-syncs on the magic.
 
+### Multiplayer AI envelope (native turn opcode `0xAA`)
+
+A live network owner does not apply the bridge reply directly. It packetizes the
+translated classic commands in its ordinary authorized turn stream. Each envelope
+is `{0xAA, count, version=1, aiSlot, commands...}`, where `count` is two plus the
+command byte count and the total serialized size is `count + 2`. A payload holds
+at most 253 command bytes and never splits a native command. Rally Point treats
+the outer envelope as a count-prefixed command with one-byte entries, then walks
+the complete inner stream with the same AI-unit-order allowlist used by the native
+receiver. Nested envelopes, relay-owned pacing/latency (including `0x55`), sync or
+opaque session controls, alliances, replay commands, malformed counts, and
+truncation reject the whole turn rather than being stripped or partially applied.
+
+The outer turn remains bound to the human inference owner. The receiver requires
+that exact owner and the configured Pluto slot, rejects nested/malformed payloads
+before executing any command, and dispatches the inner bytes under the AI's
+unique classic Storm/native identity. The outer envelope is not recorded or
+counted as a human action. Inner commands are recorded once under the AI identity,
+so playback consumes ordinary recorded turns without the bridge or inference.
+Reply translation, network packetization, sandbox turns, replay readers, and LAN
+snapshot walkers all check a counted command's header byte before reading it.
+
 At match end Hyperion sends a 12-byte `HXPE` record (`magic`, `winner`, zero)
 before closing transport. `winner` is 1 only when Pluto is the last side alive;
 otherwise it is 0. The bridge calls `onEnd` only after receiving this record, so

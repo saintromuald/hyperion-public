@@ -243,6 +243,8 @@ bool Watching(void)
 Uint64 g_qwRaceAt;
 // and their handicap, likewise
 Uint64 g_qwHandicapAt;
+// the host's computer-level choice, until the room has heard it
+Uint64 g_qwLevelAt;
 
 Held HoldSetUp(void)
 {
@@ -2246,18 +2248,35 @@ void SlotRow(int i)
            s.bReady ? kScInkAccept : kLbInkDesc);
       Close();
     } else if (s.nKind == KIND_COMPUTER) {
-      const bool bComputer = !UseMapSettings() && RoomMode() == 0;
-      const int nLevel = Pulldown("sklevel", i, 200, LevelNames(), bComputer ? s.nLevel : AI_LEVEL_CLASSIC,
+      bool bPlutoElsewhere = false;
+      for (size_t k = 0; k < g_slots.size(); ++k)
+        if (k != i && g_slots[k].nKind == KIND_COMPUTER && g_slots[k].nLevel == AI_LEVEL_PLUTO)
+          bPlutoElsewhere = true;
+      const bool bRoom = RoomMode() != 0;
+      std::vector<std::string> levels;
+      if (!bRoom) {
+        levels = LevelNames();
+      } else {
+        levels.push_back(PortText("Classic AI"));
+        if (HyperionRules() && (s.nLevel == AI_LEVEL_PLUTO || !bPlutoElsewhere))
+          levels.push_back(PortText("Pluto"));
+      }
+      int nCurrent = bRoom && s.nLevel == AI_LEVEL_PLUTO ? static_cast<int>(levels.size()) - 1 : s.nLevel;
+      if (nCurrent < 0 || nCurrent >= static_cast<int>(levels.size()))
+        nCurrent = 0;
+      const bool bComputer = !UseMapSettings() && !Guest();
+      const int nLevel = Pulldown("sklevel", i, 200, levels, nCurrent,
                                   bComputer ? PD_ON : PD_OFF, NULL, NULL, 200);
       if (nLevel >= 0) {
-        s.nLevel = nLevel;
+        s.nLevel = bRoom ? (nLevel == 1 ? AI_LEVEL_PLUTO : AI_LEVEL_CLASSIC) : nLevel;
+        g_qwLevelAt = SDL_GetTicks();
         NoteSlots("a computer level");
       }
       TipOn(Id("sklevel", i), PortText("Computer level"),
-            UseMapSettings()  ? PortText("Use Map Settings: the map runs its computers.")
-            : RoomMode() != 0 ? PortText("A room\xe2\x80\x99s computers are the original\xe2\x80\x99s own, Classic AI. Other "
-                                         "levels in a room are not available yet.")
-                              : PortText(kLevelTip));
+            UseMapSettings() ? PortText("Use Map Settings: the map runs its computers.")
+            : bRoom && !HyperionRules() ? PortText("Pluto requires Hyperion rules. This room uses Classic AI.")
+            : bRoom ? PortText("Classic AI, or one Pluto computer shared by every seat. Only the host's chosen owner runs inference.")
+                    : PortText(kLevelTip));
       PulldownLater("skpers", i, 150, PortText("Its own script"), PortText("Personality"),
                     PortText("How the computer plays: turtle, rusher, expander and the like. Not available yet."));
     } else {
@@ -2408,16 +2427,23 @@ void SlotTools(float fWidth)
   for (size_t i = 0; i < g_slots.size(); ++i)
     if (g_slots[i].nKind == KIND_COMPUTER)
       nSameLevel = nSameLevel == -2 ? g_slots[i].nLevel : nSameLevel == g_slots[i].nLevel ? nSameLevel : -1;
-  const int nAllLevel = Pulldown("skalllevel", 0, 200, LevelNames(), nSameLevel < 0 ? -1 : nSameLevel,
-                                 nComputers && !UseMapSettings() ? PD_ON : PD_OFF, NULL,
+  const bool bRoom = RoomMode() != 0;
+  const std::vector<std::string> allLevels = bRoom
+      ? std::vector<std::string>{PortText("Classic AI")} : LevelNames();
+  const int nAllLevel = Pulldown("skalllevel", 0, 200, allLevels,
+                                 bRoom ? 0 : nSameLevel < 0 ? -1 : nSameLevel,
+                                 nComputers && !UseMapSettings() && !Guest() ? PD_ON : PD_OFF, NULL,
                                  nSameLevel < 0 ? PortText("Level") : NULL, 190);
   if (nAllLevel >= 0) {
     for (size_t i = 0; i < g_slots.size(); ++i)
       if (g_slots[i].nKind == KIND_COMPUTER)
-        g_slots[i].nLevel = nAllLevel;
+        g_slots[i].nLevel = bRoom ? AI_LEVEL_CLASSIC : nAllLevel;
+    g_qwLevelAt = SDL_GetTicks();
     NoteSlots("every computer's level");
   }
-  TipOn(Id("skalllevel", 0), PortText("Every computer\xe2\x80\x99s level"), PortText(kLevelTip));
+  TipOn(Id("skalllevel", 0), PortText("Every computer\xe2\x80\x99s level"),
+        bRoom ? PortText("Set every computer to Classic AI. Choose Pluto for at most one row above.")
+              : PortText(kLevelTip));
   PulldownLater("skallpers", 0, 150, PortText("Its own script"), PortText("Every computer\xe2\x80\x99s personality"),
                 PortText("How the computers play: turtle, rusher, expander and the like. Not available yet."));
   // the first row's width with the button, every piece at its own width and the label on one line
@@ -3330,6 +3356,7 @@ bool SkirmishRoomNow(SkirmishRoomSetUp *pOut)
     SkirmishRoomSeat seat;
     seat.owner = s.nKind == KIND_COMPUTER ? "computer" : s.nKind == KIND_CLOSED ? "closed" : s.nKind == KIND_OPEN ? "open"
                                                                                                       : "player";
+    seat.aiLevel = s.nLevel == AI_LEVEL_PLUTO ? "pluto" : "classic";
     seat.nRace = s.nRace;
     seat.nHandicap = s.nHandicap;
     seat.name = s.name;
@@ -3350,6 +3377,7 @@ void SkirmishRoomSeats(const std::vector<SkirmishRoomSeat> &seats)
     return;
   const bool bRaceHeld = SDL_GetTicks() - g_qwRaceAt < 1500;
   const bool bHandicapHeld = SDL_GetTicks() - g_qwHandicapAt < 1500;
+  const bool bLevelHeld = SDL_GetTicks() - g_qwLevelAt < 1500;
   for (size_t i = 0; i < g_slots.size(); ++i) {
     Slot &s = g_slots[i];
     const SkirmishRoomSeat *p = i < seats.size() ? &seats[i] : NULL;
@@ -3383,6 +3411,8 @@ void SkirmishRoomSeats(const std::vector<SkirmishRoomSeat> &seats)
       s.name.clear();
       s.chip.clear();
       s.bReady = s.bYou = false;
+      if (p != NULL && p->owner == "computer" && (Guest() || !bLevelHeld))
+        s.nLevel = p->aiLevel == "pluto" ? AI_LEVEL_PLUTO : AI_LEVEL_CLASSIC;
       if (Guest() && p != NULL) {
         s.nRace = p->nRace;
         s.nHandicap = p->nHandicap;

@@ -108,6 +108,32 @@ struct net_cmd_placebox_o_t { BYTE bOpcode; WORD wOrderID; point16_t pos; WORD w
 // and SELECT_CHUNK_MORE one that more follow. The count is the byte after the opcode, as in
 // 1.17's: 3 + 4 bytes a unit.
 #define NET_CMD_SELECT_CHUNK 0x8C
+// An authorized inference owner's turn carries Pluto's commands for another
+// simulated slot. Byte 1 counts the version/slot bytes and command payload;
+// byte 2 is the format version and byte 3 the AI's native lobby slot.
+#define NET_CMD_PLUTO_AI 0xAA
+#define NET_CMD_PLUTO_AI_VERSION 1
+#define NET_CMD_PLUTO_AI_HEADER 4
+#define NET_CMD_PLUTO_AI_PAYLOAD_MAX 253
+
+// Command walkers must not read the count byte until they know it exists.
+inline bool NetCmdHasCountByte(BYTE bOpcode) {
+  return (bOpcode >= 0x09 && bOpcode <= 0x0B) ||
+         (bOpcode >= 0x63 && bOpcode <= 0x65) ||
+         (bOpcode >= 0x89 && bOpcode <= 0x8C) || bOpcode == NET_CMD_PLUTO_AI;
+}
+
+// An AI envelope carries orders to one computer's units, never another player's
+// session, pacing, alliance, replay, or sync controls. Keep this allowlist in
+// agreement with Rally Point's recursive envelope validation.
+inline bool NetCmdPlutoInnerAllowed(BYTE bOpcode) {
+  if ((bOpcode >= 0x09 && bOpcode <= 0x0C) || bOpcode == 0x14 || bOpcode == 0x15 ||
+      (bOpcode >= 0x18 && bOpcode <= 0x23) || (bOpcode >= 0x25 && bOpcode <= 0x36) ||
+      bOpcode == 0x5A || (bOpcode >= 0x89 && bOpcode <= 0x8D) ||
+      (bOpcode >= 0x94 && bOpcode <= 0x98) || bOpcode == 0xA9)
+    return true;
+  return false;
+}
 #define SELECT_CHUNK_UNITS 60
 #define SELECT_CHUNK_NEXT 0x40
 #define SELECT_CHUNK_MORE 0x80

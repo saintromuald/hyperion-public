@@ -48,6 +48,8 @@
 #include "../port/gameplay/port_score.h"  // Hyperion: PortScoreGameEnd
 #include "../port/tools/port_startup.h"  // Hyperion: PortStartupStep, PortStartupWait, PortStartupReady
 #include "../port/tools/port_crashnotes.h"  // Hyperion: PortCrashNotesGameEnd
+#include "../port/gameplay/port_teams.h"    // Hyperion: TeamsSidesLeft
+#include "../port/gameplay/port_pluto.h"    // Hyperion: PlutoNoteResult, PlutoGameEnd
 #endif
 #include "../h/TrigAct.h"
 #include "../h/uiSingle.h"
@@ -704,6 +706,13 @@ void main_game_run()
   if (bStarted) {
     PortScoreGameEnd();  // Hyperion: the score screen's game, kept before it is freed
     PortCrashNotesGameEnd();  // Hyperion: the games played, for a crash report
+    // Finalize Pluto for every live match, not only a benchmark. The native
+    // result is captured while the unit state still exists; a draw or aborted
+    // match is never reported to the policy as a victory.
+    int nLastPlayer = -1;
+    TeamsSidesLeft(&nLastPlayer);
+    PlutoNoteResult(nLastPlayer);
+    PlutoGameEnd();
   }
   free_game(bStarted);
   PortViewSet(640);  // Hyperion: back to the menus' size

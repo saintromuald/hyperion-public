@@ -100,6 +100,78 @@ fn is_stripped_from_live_turn(command: &[u8]) -> bool {
     }
 }
 
+const PLUTO_AI: u8 = 0xAA;
+const PLUTO_AI_VERSION: u8 = 1;
+
+/// Unit orders an AI may issue for its own player. Session, alliance, pacing,
+/// replay, voice, sync, chat, and nested-transport commands are deliberately
+/// excluded. Keep this allowlist in agreement with NetCmdPlutoInnerAllowed.
+fn is_pluto_inner_order(opcode: u8) -> bool {
+    matches!(opcode,
+        0x09..=0x0C | 0x14 | 0x15 | 0x18..=0x23 | 0x25..=0x36 |
+        0x5A | 0x89..=0x8D | 0x94..=0x98 | 0xA9)
+}
+
+fn checked_command_length(commands: &[u8], offset: usize) -> Result<usize, ValidationError> {
+    let rest = &commands[offset..];
+    let opcode = rest[0];
+    let length = match classify(CommandId(opcode)) {
+        None => return Err(ValidationError::UnknownOpcode { offset, opcode }),
+        Some(CommandLength::Fixed(n)) => usize::from(n),
+        Some(CommandLength::Variable { stride }) => {
+            let count = *rest
+                .get(1)
+                .ok_or(ValidationError::Truncated { offset, opcode })?;
+            2 + usize::from(stride) * usize::from(count)
+        }
+        Some(CommandLength::Variable3 { stride }) => {
+            let count = *rest
+                .get(1)
+                .ok_or(ValidationError::Truncated { offset, opcode })?;
+            3 + usize::from(stride) * usize::from(count)
+        }
+    };
+    rest.get(..length)
+        .ok_or(ValidationError::Truncated { offset, opcode })?;
+    Ok(length)
+}
+
+/// Validate an envelope's complete inner stream before any of it is forwarded.
+/// Unlike top-level live-turn sanitization, no hostile inner command may be
+/// stripped to salvage the rest: the owner's whole turn is rejected.
+fn validate_pluto_inner(envelope: &[u8], outer_offset: usize) -> Result<(), ValidationError> {
+    if envelope.len() < 5 || envelope[2] != PLUTO_AI_VERSION {
+        return Err(ValidationError::InvalidPlutoEnvelope {
+            offset: outer_offset,
+        });
+    }
+    let inner = &envelope[4..];
+    let mut offset = 0;
+    while offset < inner.len() {
+        let opcode = inner[offset];
+        if !is_pluto_inner_order(opcode) {
+            return Err(ValidationError::UnsafePlutoCommand {
+                offset: outer_offset + 4 + offset,
+                opcode,
+            });
+        }
+        let length = checked_command_length(inner, offset).map_err(|error| match error {
+            ValidationError::UnknownOpcode { offset, opcode } => ValidationError::UnknownOpcode {
+                offset: outer_offset + 4 + offset,
+                opcode,
+            },
+            ValidationError::Truncated { offset, opcode } => ValidationError::Truncated {
+                offset: outer_offset + 4 + offset,
+                opcode,
+            },
+            ValidationError::UnsafePlutoCommand { .. }
+            | ValidationError::InvalidPlutoEnvelope { .. } => error,
+        })?;
+        offset += length;
+    }
+    Ok(())
+}
+
 /// A client turn that passed validation: the sanitized payload to forward, plus
 /// how many commands were stripped out of it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -137,6 +209,12 @@ pub enum ValidationError {
     /// declared length exceeds the bytes that remain.
     #[error("command {opcode:#04x} at offset {offset} runs past the end of the turn")]
     Truncated { offset: usize, opcode: u8 },
+    /// A command that has no valid meaning as one computer player's unit order.
+    #[error("unsafe Pluto inner command {opcode:#04x} at offset {offset}")]
+    UnsafePlutoCommand { offset: usize, opcode: u8 },
+    /// A truncated header, empty payload, or unsupported envelope version.
+    #[error("invalid Pluto AI envelope at offset {offset}")]
+    InvalidPlutoEnvelope { offset: usize },
 }
 /// Validates and sanitizes one client turn, binding it to `slot`.
 ///
@@ -171,30 +249,12 @@ pub fn validate_turn(slot: SlotId, mut payload: Payload) -> Result<ValidatedTurn
     let mut offset = 0;
 
     while offset < commands.len() {
-        let rest = &commands[offset..];
-        let opcode = rest[0];
-        let id = CommandId(opcode);
-
-        let length = match classify(id) {
-            None => return Err(ValidationError::UnknownOpcode { offset, opcode }),
-            Some(CommandLength::Fixed(n)) => usize::from(n),
-            Some(CommandLength::Variable { stride }) => {
-                let count = *rest
-                    .get(1)
-                    .ok_or(ValidationError::Truncated { offset, opcode })?;
-                2 + usize::from(stride) * usize::from(count)
-            }
-            Some(CommandLength::Variable3 { stride }) => {
-                let count = *rest
-                    .get(1)
-                    .ok_or(ValidationError::Truncated { offset, opcode })?;
-                3 + usize::from(stride) * usize::from(count)
-            }
-        };
-
-        let command = rest
-            .get(..length)
-            .ok_or(ValidationError::Truncated { offset, opcode })?;
+        let opcode = commands[offset];
+        let length = checked_command_length(commands, offset)?;
+        let command = &commands[offset..offset + length];
+        if opcode == PLUTO_AI {
+            validate_pluto_inner(command, offset)?;
+        }
 
         if is_stripped_from_live_turn(command) {
             stripped_control += 1;
@@ -279,7 +339,9 @@ pub fn assert_validate_turn_invariants(
         }
         Err(
             ValidationError::UnknownOpcode { offset, .. }
-            | ValidationError::Truncated { offset, .. },
+            | ValidationError::Truncated { offset, .. }
+            | ValidationError::UnsafePlutoCommand { offset, .. }
+            | ValidationError::InvalidPlutoEnvelope { offset },
         ) => {
             assert!(
                 offset < commands.len(),
@@ -428,6 +490,83 @@ mod tests {
         let select = [0x09, 2, 0xAA, 0xBB, 0xCC, 0xDD];
         let turn = validated(&select);
         assert_eq!(&turn.payload.commands[..], &select);
+    }
+
+    #[test]
+    fn forwards_and_bounds_a_pluto_ai_envelope() {
+        // Version 1, AI slot 2, then Stop. It rides in the authorized owner's
+        // turn; validation does not rebind the addressed AI to a relay client.
+        let envelope = [0xAA, 4, 1, 2, 0x1A, 0];
+        let turn = validated(&envelope);
+        assert_eq!(&turn.payload.commands[..], &envelope);
+        assert_eq!(turn.payload.slot, u32::from(SLOT.0));
+        assert!(matches!(
+            validate_bytes(SLOT, 0, None, &[0xAA, 5, 1, 2, 0x1A]),
+            Err(ValidationError::Truncated {
+                offset: 0,
+                opcode: 0xAA
+            })
+        ));
+    }
+
+    fn pluto_envelope(inner: &[u8]) -> Vec<u8> {
+        let mut envelope = vec![PLUTO_AI, (inner.len() + 2) as u8, PLUTO_AI_VERSION, 2];
+        envelope.extend_from_slice(inner);
+        envelope
+    }
+
+    #[test]
+    fn rejects_hostile_pluto_inner_commands() {
+        let hostile: &[&[u8]] = &[
+            &[0x55, 2],                          // relay-owned latency
+            &[0x5f, 0],                          // relay-owned turn rate
+            &[0x66, 0, 0, 0],                    // relay-owned dynamic turn rate
+            &[0x05],                             // sync/keepalive
+            &[0x37, 0, 0, 0, 0, 0, 0],           // opaque sync report
+            &[0x57, 0],                          // replay/session leave
+            &[0x0E, 0, 0, 0, 0],                 // alliance control
+            &[PLUTO_AI, 3, PLUTO_AI_VERSION, 2], // nested envelope
+        ];
+        for inner in hostile {
+            let error = validate_bytes(SLOT, 0, None, &pluto_envelope(inner)).unwrap_err();
+            assert_eq!(
+                error,
+                ValidationError::UnsafePlutoCommand {
+                    offset: 4,
+                    opcode: inner[0],
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_truncated_and_invalid_pluto_envelopes() {
+        assert_eq!(
+            validate_bytes(SLOT, 0, None, &[PLUTO_AI]).unwrap_err(),
+            ValidationError::Truncated {
+                offset: 0,
+                opcode: PLUTO_AI
+            }
+        );
+        assert_eq!(
+            validate_bytes(SLOT, 0, None, &[PLUTO_AI, 2, PLUTO_AI_VERSION, 2]).unwrap_err(),
+            ValidationError::InvalidPlutoEnvelope { offset: 0 }
+        );
+        let mut wrong_version = pluto_envelope(&[0x1A, 0]);
+        wrong_version[2] = 2;
+        assert_eq!(
+            validate_bytes(SLOT, 0, None, &wrong_version).unwrap_err(),
+            ValidationError::InvalidPlutoEnvelope { offset: 0 }
+        );
+        for inner in [&[0x09][..], &[0x09, 1, 0][..]] {
+            assert_eq!(
+                validate_bytes(SLOT, 0, None, &pluto_envelope(inner)).unwrap_err(),
+                ValidationError::Truncated {
+                    offset: 4,
+                    opcode: 0x09
+                }
+            );
+        }
     }
 
     #[test]

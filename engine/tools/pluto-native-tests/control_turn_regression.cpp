@@ -252,6 +252,8 @@ bool TestMalformedAndUnsafeTurns() {
       {0x05},                         // sync counter is not a sandbox gameplay order
       {0x08},                         // restart is session control, not a native test order
       {0x57, 0},                      // quit is session control
+      {0xAA},                         // a transport envelope has no sandbox meaning
+      {0xAA, 4, 1, 2, 0x1A, 0},      // even a complete AI envelope is rejected outright
   };
   for (const std::vector<unsigned char> &bytes : rejected) {
     ResetPlayers();

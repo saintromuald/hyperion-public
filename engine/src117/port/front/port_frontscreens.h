@@ -82,6 +82,7 @@ bool SkirmishGameNow(SkirmishGame *pOut);
 // and handicap, and a player's name, seat chip, Ready, and whether it is this copy's own seat.
 struct SkirmishRoomSeat {
   std::string owner;
+  std::string aiLevel = "classic";  // a computer's shared profile: classic or pluto
   int nRace = 6;
   int nHandicap = 100;  // a person's their own, a computer's the host's (port_handicap.h)
   std::string name, chip;

@@ -147,9 +147,14 @@
 //                  by their size. Seven of classic's images are 256 a
 //                  side (the Ion Cannon, the Xel'Naga Temple and its shadow, a plasma, two
 //                  ice trees and an Installation doodad), which grow by a pixel.
+//  23  2026-11-15  a multiplayer computer can use the shared Pluto profile: one
+//                  authenticated human owns inference, its versioned 0xAA envelopes
+//                  apply deterministic AI-owned orders on every peer, and recordings
+//                  retain the AI identity. Peers at another revision must not simulate
+//                  a different computer or command policy in the same game.
 #ifndef HXSIM_H
 #define HXSIM_H
 
-#define HX_SIM_REVISION 22
+#define HX_SIM_REVISION 23
 
 #endif

@@ -116,16 +116,25 @@ void sub_478430(void *pArg0)
 {
   CNetRecord *p = (CNetRecord *)pArg0;
   BYTE *pCur = p->pBuf;
+  const BYTE *const pEnd = p->pBuf + p->nLen;
   BYTE bCount;
   int i;
 
-  while (pCur < p->pBuf + p->nLen) {
+  while (pCur < pEnd) {
+    if (pEnd - pCur < 5)
+      return;
     bCount = pCur[4];
     i = 0;
     pCur += 5;
     while (i < bCount) {
+      if (pCur >= pEnd)
+        return;
       ++pCur;
+      if (pCur >= pEnd || (NetCmdHasCountByte(*pCur) && pEnd - pCur < 2))
+        return;
       int nSize = GetCommandByteSize((const net_cmd_select_t *)pCur);
+      if (nSize <= 0 || nSize > pEnd - pCur)
+        return;
       ++i;
       pCur += nSize;
       i += nSize;
@@ -208,8 +217,10 @@ int net_record_read_turn(intptr_t nArg0, intptr_t nArg1, void *pArg2, intptr_t n
       if (p->bReading != 0) {
         ((BYTE *)nArg3)[nIdx] = *p->pRead;
         p->pRead++;
+        if (NetCmdHasCountByte(*p->pRead) && pEnd - p->pRead < 2)
+          return Broken();
         int nSize = GetCommandByteSize((const net_cmd_select_t *)p->pRead);
-        if (nSize < 0 || nSize > pEnd - p->pRead)
+        if (nSize <= 0 || nSize > pEnd - p->pRead)
           return Broken();
         if (nSize != 0) {
           nOff = pDst - pUnk->pBytes;

@@ -12,6 +12,34 @@ int g_hxSlots = PLAYER_SLOTS_117;
 PlayerTable<PlayerData, PlayerTagData> gPlayerData = {};
 DWORD g_StormToNationID[8] = {};
 DWORD g_StormToHumanID[8] = {};
+DWORD g_ActiveNationID = 0, g_ActiveHumanID = 0, g_ActiveStormID = 0;
+DWORD sgdwPlayerStatus_g[8] = {};
+DWORD gPlayback = 0;
+void *gpLoadGameFile = NULL;
+BYTE gbInPacketProcess = 0;
+
+AiProfile g_testProfiles[PLAYER_SLOTS_MAX];
+AiProfile AiProfileOf(int nSlot) {
+  return nSlot >= 0 && nSlot < PLAYER_SLOTS_MAX ? g_testProfiles[nSlot] : AiProfile();
+}
+
+int g_fallbackSlot = -1;
+void AiFallbackClassic(int nSlot) {
+  g_fallbackSlot = nSlot;
+  if (nSlot >= 0 && nSlot < PLAYER_SLOTS_MAX)
+    g_testProfiles[nSlot] = AiProfile();
+}
+
+bool SDL_ShowSimpleMessageBox(SDL_MessageBoxFlags, const char *, const char *, SDL_Window *) {
+  return true;
+}
+
+std::string PortPlutoRuntimeFolder() { return "test-runtime"; }
+
+BOOL __stdcall CloseHandle(HANDLE) { return TRUE; }
+DWORD __stdcall WaitForSingleObject(HANDLE, DWORD) { return 0; }
+BOOL __stdcall TerminateProcess(HANDLE, UINT) { return TRUE; }
+BOOL __stdcall WriteFile(HANDLE, LPCVOID, DWORD, LPDWORD, LPOVERLAPPED) { return TRUE; }
 
 std::string g_lastPortLog;
 void PortLogger::Line(const char *) const {}
@@ -55,8 +83,31 @@ int __fastcall GetCommandByteSize(const net_cmd_select_t *pCmd) {
     case 0x15: return 11;
     case 0x1A: return 2;
     case 0x29: return 3;
+    case NET_CMD_PLUTO_AI: return pCmd->bCount + 2;
     default: return 0;
   }
+}
+
+std::vector<unsigned char> g_dispatched;
+DWORD g_dispatchedStorm = 0xFFFFFFFFu;
+unsigned g_dispatchCalls = 0;
+void net_process_game_turn(char *pData, unsigned int nSize, int) {
+  ++g_dispatchCalls;
+  g_dispatchedStorm = g_ActiveStormID;
+  g_dispatched.assign(pData, pData + nSize);
+}
+
+int g_randEnabled = 0;
+int set_rand_enabled(int nEnabled) {
+  const int old = g_randEnabled;
+  g_randEnabled = nEnabled;
+  return old;
+}
+
+std::vector<std::vector<unsigned char>> g_queuedTurnCommands;
+void __fastcall netmgr_queue_cmd(const void *pData, DWORD nSize) {
+  const unsigned char *p = static_cast<const unsigned char *>(pData);
+  g_queuedTurnCommands.emplace_back(p, p + nSize);
 }
 
 namespace {
@@ -326,6 +377,210 @@ bool TestSeatAndPlayerIdMismatch() {
   return ok;
 }
 
+void PrepareNetworkEnvelope(int owner = 0) {
+  ResetPlayers();
+  memset(g_testProfiles, 0, sizeof g_testProfiles);
+  for (int s = 0; s < 3; ++s) {
+    gPlayerData[s].dwPlayerID = s;
+    gPlayerData[s].dwStormID = s;
+    gPlayerData[s].nType = s == 2 ? 1 : 2;
+    g_StormToNationID[s] = g_StormToHumanID[s] = s;
+  }
+  g_testProfiles[2].bLevel = AI_LEVEL_PLUTO;
+  s_nPlutoSlot = 2;
+  s_nOwnerStorm = owner;
+  s_bNetwork = true;
+  s_bOwner = false;
+  s_bOwnerLost = false;
+  s_bFailed = false;
+  s_bInEnvelope = false;
+  s_bUp = false;
+  s_networkBytes = 0;
+  s_networkCommands = 0;
+  gPlayback = 0;
+  gpLoadGameFile = NULL;
+  for (DWORD &status : sgdwPlayerStatus_g)
+    status = 0;
+  sgdwPlayerStatus_g[owner] = 0x20000;
+  g_ActiveNationID = g_ActiveHumanID = g_ActiveStormID = owner;
+  gbInPacketProcess = 1;
+  g_dispatchCalls = 0;
+  g_dispatched.clear();
+  g_dispatchedStorm = 0xFFFFFFFFu;
+  g_queuedTurnCommands.clear();
+}
+
+std::vector<unsigned char> StopEnvelope() {
+  return {NET_CMD_PLUTO_AI, 4, NET_CMD_PLUTO_AI_VERSION, 2, 0x1A, 0};
+}
+
+bool TestAiEnvelopeOwnership() {
+  PrepareNetworkEnvelope();
+  const std::vector<unsigned char> envelope = StopEnvelope();
+  bool ok = Check(PlutoReceiveEnvelope(envelope.data(), envelope.size(), 0), "owner envelope is accepted") &&
+            Check(g_dispatchCalls == 1, "the inner command dispatches exactly once") &&
+            Check(g_dispatched == std::vector<unsigned char>({0x1A, 0}), "only inner command bytes dispatch") &&
+            Check(g_dispatchedStorm == 2, "the AI Storm identity owns the native command") &&
+            Check(g_ActiveStormID == 0 && g_ActiveNationID == 0 && g_ActiveHumanID == 0,
+                  "the transport owner's active identity is restored");
+  ok = Check(!PlutoReceiveEnvelope(envelope.data(), envelope.size(), 1) && g_dispatchCalls == 1,
+             "a non-owner cannot issue AI commands") && ok;
+  gPlayback = 1;
+  ok = Check(!PlutoReceiveEnvelope(envelope.data(), envelope.size(), 0) && g_dispatchCalls == 1,
+             "playback never dispatches a transport envelope") && ok;
+  gPlayback = 0;
+  std::vector<unsigned char> wrongSlot = envelope;
+  wrongSlot[3] = 1;
+  ok = Check(!PlutoReceiveEnvelope(wrongSlot.data(), wrongSlot.size(), 0) && g_dispatchCalls == 1,
+             "an envelope cannot address a human slot") && ok;
+  return ok;
+}
+
+bool TestAiNonZeroOwner() {
+  PrepareNetworkEnvelope(1);
+  PlutoChooseNetOwner(1);
+  s_nOwnerStorm = s_nChosenOwnerStorm;
+  const std::vector<unsigned char> envelope = StopEnvelope();
+  bool ok = Check(PlutoReceiveEnvelope(envelope.data(), envelope.size(), 1),
+                  "owner slot 1's envelope is accepted") &&
+            Check(g_dispatchCalls == 1 && g_dispatchedStorm == 2,
+                  "a nonzero transport owner still records under the AI identity") &&
+            Check(g_ActiveStormID == 1 && g_ActiveNationID == 1 && g_ActiveHumanID == 1,
+                  "owner slot 1's active identity is restored") &&
+            Check(s_nChosenOwnerStorm == 1 && s_nOwnerStorm == 1,
+                  "relay rehome leaves the manifest owner identity unchanged");
+  ok = Check(!PlutoReceiveEnvelope(envelope.data(), envelope.size(), 0) && g_dispatchCalls == 1,
+             "owner slot 0 cannot issue into owner slot 1's AI stream") && ok;
+  return ok;
+}
+
+bool TestAiEnvelopeMalformed() {
+  PrepareNetworkEnvelope();
+  const std::vector<unsigned char> valid = StopEnvelope();
+  std::vector<std::vector<unsigned char>> bad;
+  bad.push_back({});
+  bad.push_back({NET_CMD_PLUTO_AI});       // no count byte
+  bad.push_back({NET_CMD_PLUTO_AI, 4});   // truncated envelope header/body
+  bad.push_back({NET_CMD_PLUTO_AI, 4, NET_CMD_PLUTO_AI_VERSION, 2, 0x55, 0});
+  bad.push_back({NET_CMD_PLUTO_AI, 9, NET_CMD_PLUTO_AI_VERSION, 2,
+                 0x37, 0, 0, 0, 0, 0, 0});  // opaque sync payload
+  bad.push_back({NET_CMD_PLUTO_AI, 3, NET_CMD_PLUTO_AI_VERSION, 2, 0x05});
+  std::vector<unsigned char> version = valid;
+  version[2]++;
+  bad.push_back(version);
+  std::vector<unsigned char> count = valid;
+  count[1]++;
+  bad.push_back(count);
+  bad.push_back({NET_CMD_PLUTO_AI, 3, NET_CMD_PLUTO_AI_VERSION, 2});  // empty payload
+  bad.push_back({NET_CMD_PLUTO_AI, 5, NET_CMD_PLUTO_AI_VERSION, 2, 0x09, 1, 1});  // truncated select
+  bad.push_back({NET_CMD_PLUTO_AI, 6, NET_CMD_PLUTO_AI_VERSION, 2,
+                 NET_CMD_PLUTO_AI, 3, NET_CMD_PLUTO_AI_VERSION, 2});  // no nested transport
+  bool ok = true;
+  for (const auto &envelope : bad)
+    ok = Check(!PlutoReceiveEnvelope(envelope.data(), envelope.size(), 0), "malformed envelope is rejected") && ok;
+  ok = Check(g_dispatchCalls == 0, "malformed input never partially dispatches") && ok;
+  for (std::vector<unsigned char> commands : {std::vector<unsigned char>{0x09},
+                                              std::vector<unsigned char>{NET_CMD_PLUTO_AI},
+                                              std::vector<unsigned char>{0x1A},
+                                              std::vector<unsigned char>{0x55, 0}}) {
+    ok = Check(!TranslatePlutoCommands(4, &commands),
+               "reply translation rejects truncation and non-order commands") && ok;
+  }
+  std::vector<unsigned char> genuine{0x1A, 0};
+  return Check(TranslatePlutoCommands(4, &genuine) && genuine == std::vector<unsigned char>({0x1A, 0}),
+               "the strict policy still accepts a genuine AI Stop order") && ok;
+}
+
+bool TestAiPacketization() {
+  PrepareNetworkEnvelope();
+  std::vector<unsigned char> commands;
+  for (int i = 0; i < 300; ++i) {
+    commands.push_back(0x1A);
+    commands.push_back(0);
+  }
+  bool ok = Check(PlutoQueueNetworkCommands(commands), "a large reply packetizes") &&
+            Check(g_queuedTurnCommands.size() == 3, "600 command bytes become three bounded envelopes");
+  std::vector<unsigned char> joined;
+  for (const auto &envelope : g_queuedTurnCommands) {
+    ok = Check(envelope.size() >= 5 && envelope[0] == NET_CMD_PLUTO_AI &&
+               envelope[1] + 2 == envelope.size() && envelope[2] == NET_CMD_PLUTO_AI_VERSION && envelope[3] == 2,
+               "each queued command is one well-formed AI envelope") && ok;
+    joined.insert(joined.end(), envelope.begin() + NET_CMD_PLUTO_AI_HEADER, envelope.end());
+  }
+  ok = Check(joined == commands, "packetization preserves every inner byte and their order") && ok;
+
+  g_queuedTurnCommands.clear();
+  std::vector<unsigned char> oversized{0x1A, 0, 0x09, 0xFF};
+  oversized.resize(oversized.size() + 255 * 2, 0);
+  ok = Check(!PlutoQueueNetworkCommands(oversized), "an over-cap individual command is rejected") &&
+       Check(g_queuedTurnCommands.empty(), "a malformed reply does not enqueue a valid prefix") && ok;
+  return ok;
+}
+
+bool TestAiCoherentOwnerDrop() {
+  bool ok = true;
+  for (int owner = 0; owner < 2; ++owner) {
+    PrepareNetworkEnvelope(owner);
+    s_bOwner = owner == 0;  // exercise both the former policy process and its guest
+    const std::vector<unsigned char> envelope = StopEnvelope();
+    sgdwPlayerStatus_g[owner] = 0;
+    PlutoNoteOwnerLoss();
+    ok = Check(s_bOwnerLost && s_bFailed, "owner loss latches the same fallback on owner and guest") &&
+         Check(!PlutoReceiveEnvelope(envelope.data(), envelope.size(), owner) && g_dispatchCalls == 0,
+               "no AI turn is accepted after the coherent owner drop") && ok;
+    sgdwPlayerStatus_g[owner] = 0x20000;
+    PlutoNoteOwnerLoss();
+    ok = Check(s_bOwnerLost && !PlutoReceiveEnvelope(envelope.data(), envelope.size(), owner),
+               "a returning owner cannot create a second policy epoch") && ok;
+  }
+  return ok;
+}
+
+bool TestAiOwnerLossAndInferenceGate() {
+  PrepareNetworkEnvelope();
+  const std::vector<unsigned char> envelope = StopEnvelope();
+  sgdwPlayerStatus_g[0] = 0;
+  PlutoNoteOwnerLoss();
+  bool ok = Check(s_bOwnerLost && s_bFailed, "owner loss latches the safe fallback") &&
+            Check(!PlutoReceiveEnvelope(envelope.data(), envelope.size(), 0) && g_dispatchCalls == 0,
+                  "no AI turn is accepted after owner loss");
+  sgdwPlayerStatus_g[0] = 0x20000;
+  ok = Check(!PlutoReceiveEnvelope(envelope.data(), envelope.size(), 0),
+             "a returning owner cannot create a second policy epoch") && ok;
+  s_bOwnerLost = false;
+  s_bOwner = false;
+  ok = Check(!PlutoInferencePermitted() && !s_bUp, "a non-owner cannot start inference") && ok;
+  s_bOwner = true;
+  gPlayback = 1;
+  return Check(!PlutoInferencePermitted() && !s_bUp,
+               "a replay cannot start inference even on the owner") && ok;
+}
+
+bool TestAiFailurePolicy() {
+  PrepareNetworkEnvelope(1);
+  s_bOwner = true;
+  g_fallbackSlot = -1;
+  const std::vector<unsigned char> envelope = StopEnvelope();
+  PlutoInferenceFailed("test startup failure");
+  bool ok = Check(g_fallbackSlot == -1 && s_nPlutoSlot == 2,
+                  "network failure never performs an owner-only Classic profile change") &&
+            Check(g_testProfiles[2].bLevel == AI_LEVEL_PLUTO,
+                  "every peer retains the shared Pluto profile after startup failure") &&
+            Check(s_bOwnerLost && s_bFailed && !s_bInferenceReady && !PlutoInferencePermitted(),
+                  "network startup failure closes the policy stream without a successor") &&
+            Check(!PlutoReceiveEnvelope(envelope.data(), envelope.size(), 1) && g_dispatchCalls == 0,
+                  "late envelopes are rejected after the coherent startup failure");
+
+  PrepareNetworkEnvelope(1);
+  s_bNetwork = false;  // local single-player: Classic fallback cannot desynchronize a peer
+  g_fallbackSlot = -1;
+  PlutoInferenceFailed("test local failure");
+  return Check(g_fallbackSlot == 2 && s_nPlutoSlot == -1,
+               "single-player failure retains the explicit Classic fallback") &&
+         Check(g_testProfiles[2].bLevel == AI_LEVEL_CLASSIC,
+               "single-player fallback really changes the local profile to Classic") && ok;
+}
+
 }  // namespace
 
 int main(int argc, char **argv) {
@@ -347,6 +602,20 @@ int main(int argc, char **argv) {
     ok = TestSeatAndPlayerIdMismatch();
   else if (scenario == "process-transport")
     ok = TestBridgeProcessTransportPlans();
+  else if (scenario == "ai-envelope")
+    ok = TestAiEnvelopeOwnership();
+  else if (scenario == "ai-nonzero-owner")
+    ok = TestAiNonZeroOwner();
+  else if (scenario == "ai-malformed")
+    ok = TestAiEnvelopeMalformed();
+  else if (scenario == "ai-packets")
+    ok = TestAiPacketization();
+  else if (scenario == "ai-owner-loss")
+    ok = TestAiOwnerLossAndInferenceGate();
+  else if (scenario == "ai-owner-drop")
+    ok = TestAiCoherentOwnerDrop();
+  else if (scenario == "ai-failure-policy")
+    ok = TestAiFailurePolicy();
   else
     return 2;
   return ok ? 0 : 1;

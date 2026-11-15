@@ -23,6 +23,7 @@ from native_runner import EngineSession
 ENGINE = os.environ.get("HYPERION_NATIVE_ENGINE")
 DATA = os.environ.get("HYPERION_NATIVE_DATA")
 OUTPUT = os.environ.get("HYPERION_NATIVE_OUTPUT")
+INSTALL = os.environ.get("HYPERION_NATIVE_INSTALL")
 
 
 def units_of(record, unit_type=None, player=None, x=None, y=None, alive=True):
@@ -361,6 +362,27 @@ class PortRegressionTests(unittest.TestCase):
     def test_runtime_current_host_capability(self):
         self.run_regression("pluto_runtime_regression", "current-capability")
 
+    def test_pluto_ai_envelope_uses_ai_owner_not_transport_owner(self):
+        self.run_regression("pluto_port_regression", "ai-envelope")
+
+    def test_pluto_ai_nonzero_owner_and_rehome_identity(self):
+        self.run_regression("pluto_port_regression", "ai-nonzero-owner")
+
+    def test_pluto_ai_envelope_rejects_malformed_input(self):
+        self.run_regression("pluto_port_regression", "ai-malformed")
+
+    def test_pluto_ai_packetization_is_bounded_and_ordered(self):
+        self.run_regression("pluto_port_regression", "ai-packets")
+
+    def test_pluto_ai_owner_loss_and_inference_gate(self):
+        self.run_regression("pluto_port_regression", "ai-owner-loss")
+
+    def test_pluto_ai_coherent_owner_drop(self):
+        self.run_regression("pluto_port_regression", "ai-owner-drop")
+
+    def test_pluto_network_failure_is_fail_closed_and_local_fallback_is_preserved(self):
+        self.run_regression("pluto_port_regression", "ai-failure-policy")
+
     def test_turn_remaps_ff_owner_and_seat_mismatch(self):
         self.run_regression("control_turn_regression", "storm-owner")
 
@@ -375,6 +397,19 @@ class PortRegressionTests(unittest.TestCase):
 
     def test_turn_valid_command_after_sync_rejection(self):
         self.run_regression("control_turn_regression", "valid-after-reject")
+
+
+@unittest.skipUnless(ENGINE and INSTALL, "requires an engine and licensed game data")
+class ManifestCompatibilityTests(unittest.TestCase):
+    def test_pluto_computer_feature_and_release_identity(self):
+        answer = subprocess.check_output([
+            ENGINE, "--sb-identity", "--install-folder", INSTALL,
+        ], env={**os.environ, "HYPERION_WINDOW": "hidden", "SDL_AUDIO_DRIVER": "dummy"}, text=True)
+        compatibility = json.loads(answer)
+        self.assertEqual(compatibility["engineBuild"], "Hyperion-v0.7.4-beta")
+        self.assertEqual(compatibility["simRevision"], 23)
+        self.assertIsInstance(compatibility.get("features"), list)
+        self.assertIn("plutoComputer", compatibility["features"])
 
 
 @unittest.skipUnless(ENGINE, "requires an explicit engine path (run_tests.py --engine)")

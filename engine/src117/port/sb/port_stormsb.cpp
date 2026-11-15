@@ -862,22 +862,35 @@ std::string RawResultJson()
   const SbManifest &manifest = SbManifestGet();
   std::string players;
   for (DWORD i = 0; i < kPlayers; ++i) {
+    const SbManifestParticipant &participant = SbManifestParticipantAt(i);
+    if (!participant.active)
+      continue;
     const SbManifestSlot *slot = NULL;
+    // The captured origin identifies the authenticated human or configured
+    // computer after start-slot shuffling; current lobby types cannot change it.
     for (const SbManifestSlot &candidate : manifest.slots)
-      if (candidate.bwPlayerId == i) {
+      if (candidate.bwPlayerId == participant.origin) {
         slot = &candidate;
         break;
       }
-    // Humans come from the authenticated roster. Unmapped computer slots are
-    // read directly, as ShieldBattery's raw reporter does.
-    if (slot == NULL && gPlayerData[i].nType != 1)
+    const SbManifestComputer *computer = NULL;
+    if (slot == NULL) {
+      for (const SbManifestComputer &candidate : manifest.computers)
+        if (candidate.bwPlayerId == participant.origin) {
+          computer = &candidate;
+          break;
+        }
+    }
+    if ((slot != NULL && slot->name != participant.name) ||
+        (computer != NULL && computer->name != participant.name) ||
+        (slot == NULL && computer == NULL))
       continue;
-    const char *race = AssignedRaceJson(slot != NULL ? byte_526494[i + 12] : gPlayerData[i].nRace);
+    const char *race = AssignedRaceJson(participant.race);
     if (race == NULL) {
       Log("the result report has no valid assigned race for BW slot %u", i);
       return std::string();
     }
-    const DWORD nation = g_StormToNationID[i];
+    const DWORD nation = participant.stormId < 8 ? g_StormToNationID[participant.stormId] : 8;
     BYTE victory = nation < 8 ? gbVictoryState[nation] : 0;
     if (victory == 5)  // BW's draw has no raw-v2 verdict; the server reconciles it.
       victory = 0;

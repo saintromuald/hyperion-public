@@ -114,6 +114,17 @@ void LogPlutoDispatch(const PendingCommand &pending, unsigned nReceivedBytes,
 int s_nPlutoSlot = -1;
 bool s_bResultKnown = false;
 bool s_bPlutoWon = false;
+// Network launches choose the owner before game_init. The identity is a stable
+// Storm/Rally Point slot, not a relay address, so relay rehome cannot move it.
+int s_nChosenOwnerStorm = 0;
+int s_nOwnerStorm = 0;
+std::string s_configuredName;
+bool s_bNetwork = false;
+bool s_bOwner = true;
+bool s_bOwnerLost = false;
+bool s_bInEnvelope = false;
+unsigned s_networkBytes = 0;
+unsigned s_networkCommands = 0;
 
 bool IsPlutoSlot(int nSlot) {
   return nSlot >= 0 && nSlot < PLAYER_SLOTS_MAX &&
@@ -127,9 +138,24 @@ int FindPlutoSlot() {
   return -1;
 }
 
-void PlutoClassicFallback(const std::string &reason) {
+void PlutoInferenceFailed(const std::string &reason) {
   const int slot = s_nPlutoSlot;
-  Log("Pluto: %s; slot %d explicitly falls back to Classic", reason, slot);
+  if (s_bNetwork) {
+    // A local Classic fallback would change only the owner's simulation. Keep
+    // every peer on Pluto and close the AI stream instead: no peer can start a
+    // replacement policy, and late envelopes are rejected deterministically.
+    Log("Pluto: %s; inference is disabled on every peer for this match", reason.c_str());
+    const std::string text = "Pluto AI could not start or answer: " + reason +
+                             "\n\nPluto is disabled for every player in this match. "
+                             "Repair the runtime before the next game.";
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Pluto AI unavailable", text.c_str(), NULL);
+    s_bOwnerLost = true;
+    s_bFailed = true;
+    s_bInferenceReady = false;
+    PlutoGameEnd();
+    return;
+  }
+  Log("Pluto: %s; slot %d explicitly falls back to Classic", reason.c_str(), slot);
   const std::string text = "Pluto AI could not start or answer: " + reason +
                            "\n\nThis slot will play Classic AI instead. Use Settings > Hyperion > "
                            "Pluto AI runtime to repair it before the next game.";
@@ -139,6 +165,28 @@ void PlutoClassicFallback(const std::string &reason) {
   s_nPlutoSlot = -1;
   s_bFailed = true;
   s_bInferenceReady = false;
+}
+
+bool PlutoOwnerActive() {
+  return !s_bNetwork ||
+         (s_nOwnerStorm >= 0 && s_nOwnerStorm < 8 &&
+          (sgdwPlayerStatus_g[s_nOwnerStorm] & 0x20000) != 0);
+}
+
+bool PlutoNoteOwnerLoss() {
+  if (!s_bNetwork || s_bOwnerLost || PlutoOwnerActive())
+    return false;
+  s_bOwnerLost = true;
+  s_bFailed = true;
+  Log("Pluto: inference owner %d left; the AI is disabled on every peer", s_nOwnerStorm);
+  return true;
+}
+
+void PlutoOwnerLeave() {
+  // There is no second owner and no policy-state migration. Already recorded
+  // turns still replay, but no peer can initialize a fresh policy mid-match.
+  if (PlutoNoteOwnerLoss())
+    PlutoGameEnd();
 }
 
 // Resolve a classic owner exactly as replay turns do: find the player record by
@@ -263,8 +311,17 @@ static std::string UnixPath(const std::string &s) {
 
 bool WriteAll(HANDLE h, const void *pv, size_t cb);
 
+bool PlutoInferencePermitted() {
+  return !gPlayback && gpLoadGameFile == NULL &&
+         (!s_bNetwork || (s_bOwner && !s_bOwnerLost));
+}
+
 // The bridge's process, once the game starts.
 bool PlutoStart() {
+  if (!PlutoInferencePermitted()) {
+    Log("Pluto: inference start refused for a non-owner, watcher, replay, or load");
+    return false;
+  }
   if (s_bUp || s_bFailed)
     return s_bUp;
   if (const char *capability = PortPlutoInferenceCapabilityError()) {
@@ -742,8 +799,12 @@ bool TranslatePlutoCommands(DWORD dwEmitted, std::vector<unsigned char> *pComman
   const unsigned char *pEnd = p + commands.size();
   while (p < pEnd) {
     const unsigned char op = p[0];
-    if (pEnd - p < 2 && (op == 0x09 || op == 0x0A || op == 0x0B)) {
-      Log("Pluto: truncated selection command %02x at frame %u", op, dwEmitted);
+    if (!NetCmdPlutoInnerAllowed(op)) {
+      Log("Pluto: rejected non-order command %02x at frame %u", op, dwEmitted);
+      return false;
+    }
+    if (NetCmdHasCountByte(op) && pEnd - p < 2) {
+      Log("Pluto: truncated counted command %02x at frame %u", op, dwEmitted);
       return false;
     }
     const int size = GetCommandByteSize(reinterpret_cast<const net_cmd_select_t *>(p));
@@ -782,6 +843,48 @@ bool TranslatePlutoCommands(DWORD dwEmitted, std::vector<unsigned char> *pComman
     p += size;
   }
   commands.swap(translated);
+  return true;
+}
+
+// A network game never dispatches a fresh inference reply locally. Doing so
+// would advance only the owner's simulation. Packetize whole, already translated
+// commands into the owner's ordinary outgoing turns instead; the relay binds
+// that transport to the owner while the envelope retains the simulated AI slot.
+bool PlutoQueueNetworkCommands(const std::vector<unsigned char> &commands) {
+  size_t nAt = 0;
+  std::vector<unsigned char> payload;
+  std::vector<std::vector<unsigned char>> envelopes;
+  auto flush = [&]() {
+    if (payload.empty())
+      return;
+    std::vector<unsigned char> envelope;
+    envelope.reserve(payload.size() + NET_CMD_PLUTO_AI_HEADER);
+    envelope.push_back(NET_CMD_PLUTO_AI);
+    envelope.push_back(static_cast<unsigned char>(payload.size() + 2));
+    envelope.push_back(NET_CMD_PLUTO_AI_VERSION);
+    envelope.push_back(static_cast<unsigned char>(s_nPlutoSlot));
+    envelope.insert(envelope.end(), payload.begin(), payload.end());
+    envelopes.push_back(std::move(envelope));
+    payload.clear();
+  };
+  while (nAt < commands.size()) {
+    const unsigned char op = commands[nAt];
+    const size_t nLeft = commands.size() - nAt;
+    if (!NetCmdPlutoInnerAllowed(op) || (NetCmdHasCountByte(op) && nLeft < 2))
+      return false;
+    const int nSize = GetCommandByteSize(
+        reinterpret_cast<const net_cmd_select_t *>(commands.data() + nAt));
+    if (nSize <= 0 || nSize > NET_CMD_PLUTO_AI_PAYLOAD_MAX ||
+        nAt + static_cast<size_t>(nSize) > commands.size())
+      return false;
+    if (payload.size() + static_cast<size_t>(nSize) > NET_CMD_PLUTO_AI_PAYLOAD_MAX)
+      flush();
+    payload.insert(payload.end(), commands.begin() + nAt, commands.begin() + nAt + nSize);
+    nAt += static_cast<size_t>(nSize);
+  }
+  flush();
+  for (const std::vector<unsigned char> &envelope : envelopes)
+    netmgr_queue_cmd(envelope.data(), static_cast<DWORD>(envelope.size()));
   return true;
 }
 
@@ -852,6 +955,12 @@ bool PlutoReadAndApply() {
     LogPlutoDispatch(pending, nReceivedBytes, nCmd);
     return true;
   }
+  if (s_bNetwork) {
+    if (!s_bOwner || s_bOwnerLost || !PlutoQueueNetworkCommands(cmd))
+      return false;
+    LogPlutoDispatch(pending, nReceivedBytes, nCmd);
+    return true;
+  }
   DWORD dwStorm = 0, dwNation = 0, dwHuman = 0;
   if (!ResolveClassicPlayer(s_nPlutoSlot, &dwStorm, &dwNation, &dwHuman)) {
     Log("Pluto: slot %d has no unique classic player mapping", s_nPlutoSlot);
@@ -882,9 +991,116 @@ bool PlutoReadAndApply() {
 
 }  // namespace
 
+void PlutoChooseNetOwner(int nStorm, const char *pszConfiguredName) {
+  s_nChosenOwnerStorm = nStorm >= 0 && nStorm < 8 ? nStorm : 0;
+  s_configuredName = pszConfiguredName != NULL ? pszConfiguredName : "";
+}
+
+bool PlutoReceiveEnvelope(const unsigned char *pData, unsigned int nSize, int nOwnerStorm) {
+  // Reject the whole envelope before executing any part of its payload. In
+  // particular, a peer cannot address the AI from its own authorized turn, and
+  // nesting cannot turn the transport command into a second recording layer.
+  const auto reject = [&](const char *why) {
+    Log("Pluto: rejected AI envelope from owner %d (%s)", nOwnerStorm, why);
+    return false;
+  };
+  if (pData == NULL || nSize < NET_CMD_PLUTO_AI_HEADER + 1 ||
+      pData[0] != NET_CMD_PLUTO_AI || pData[1] < 3 ||
+      nSize != static_cast<unsigned>(pData[1]) + 2 ||
+      pData[2] != NET_CMD_PLUTO_AI_VERSION)
+    return reject("malformed header");
+  const int nSlot = pData[3];
+  if (!s_bNetwork || gPlayback || s_bInEnvelope)
+    return reject("not a live network game");
+  if (s_bOwnerLost || nOwnerStorm != s_nOwnerStorm || !PlutoOwnerActive())
+    return reject("not the active inference owner");
+  if (nSlot != s_nPlutoSlot || !IsPlutoSlot(nSlot) || gPlayerData[nSlot].nType != 1)
+    return reject("not the configured Pluto slot");
+
+  const unsigned int nCommands = nSize - NET_CMD_PLUTO_AI_HEADER;
+  unsigned int nAt = 0, nInner = 0;
+  while (nAt < nCommands) {
+    const unsigned char *p = pData + NET_CMD_PLUTO_AI_HEADER + nAt;
+    const unsigned int nLeft = nCommands - nAt;
+    if (!NetCmdPlutoInnerAllowed(*p))
+      return reject("inner command is not an AI unit order");
+    if (NetCmdHasCountByte(*p) && nLeft < 2)
+      return reject("truncated inner command header");
+    const int nCommand = GetCommandByteSize(reinterpret_cast<const net_cmd_select_t *>(p));
+    if (nCommand <= 0 || static_cast<unsigned>(nCommand) > nLeft)
+      return reject("truncated or unknown inner command");
+    nAt += static_cast<unsigned>(nCommand);
+    ++nInner;
+  }
+
+  DWORD dwStorm = 0, dwNation = 0, dwHuman = 0;
+  if (!ResolveClassicPlayer(nSlot, &dwStorm, &dwNation, &dwHuman))
+    return reject("AI has no unique classic owner");
+  const DWORD dwSavedNation = g_ActiveNationID;
+  const DWORD dwSavedHuman = g_ActiveHumanID;
+  const DWORD dwSavedStorm = g_ActiveStormID;
+  const BYTE bSavedPacket = gbInPacketProcess;
+  const int nSavedRand = set_rand_enabled(1);
+  s_bInEnvelope = true;
+  gbInPacketProcess = 1;
+  g_ActiveNationID = dwNation;
+  g_ActiveHumanID = dwHuman;
+  g_ActiveStormID = dwStorm;
+  net_process_game_turn(reinterpret_cast<char *>(const_cast<unsigned char *>(pData + NET_CMD_PLUTO_AI_HEADER)),
+                        nCommands, 1);
+  g_ActiveNationID = dwSavedNation;
+  g_ActiveHumanID = dwSavedHuman;
+  g_ActiveStormID = dwSavedStorm;
+  gbInPacketProcess = bSavedPacket;
+  s_bInEnvelope = false;
+  set_rand_enabled(nSavedRand);
+  s_networkBytes += nCommands;
+  s_networkCommands += nInner;
+  Log("Pluto: applied AI envelope from owner %d for slot %d (%u bytes, %u total; %u commands, %u total)",
+      nOwnerStorm, nSlot, nCommands, s_networkBytes, nInner, s_networkCommands);
+  return true;
+}
+
+namespace {
+
+int PlutoPrepareClassicSlot() {
+  s_nPlutoSlot = FindPlutoSlot();
+  if (s_nPlutoSlot < 0)
+    return -1;
+  // Computer slots can carry 0xFF or alias another seat's Storm id. Choose an
+  // actually unique classic owner (0..7); extended slots with no free owner are
+  // rejected rather than silently misattributing replay commands.
+  if (s_nPlutoSlot >= 8)
+    return -1;
+  DWORD dwStorm = 0, dwNation = 0, dwHuman = 0;
+  if (!PrepareClassicPlayer(s_nPlutoSlot, &dwStorm, &dwNation, &dwHuman))
+    return -1;
+  if (!gPlayback && gpLoadGameFile == NULL) {
+    // A canonical launch supplies the AI's configured identity. Legacy games
+    // retain the original PLuto label; playback keeps the recorded name exactly.
+    const char *name = s_configuredName.empty() ? "PLuto" : s_configuredName.c_str();
+    snprintf(gPlayerData[s_nPlutoSlot].szName, sizeof gPlayerData[s_nPlutoSlot].szName,
+             "%s", name);
+  }
+  return s_nPlutoSlot;
+}
+
+}  // namespace
+
+void PlutoReplayStart() {
+  // Playback needs the same AI owner mapping as the live game, but no bridge,
+  // runtime, policy state, or transport envelopes.
+  s_bUp = false;
+  s_bNetwork = false;
+  s_bOwnerLost = false;
+  s_bInEnvelope = false;
+  s_networkBytes = 0;
+  s_networkCommands = 0;
+  if (PlutoPrepareClassicSlot() < 0)
+    s_bFailed = true;
+}
+
 void PlutoGameStart() {
-  // A menu download may finish in Settings' background, but no game transition may overlap it.
-  PortPlutoInstallCancelAndWait();
   // Starting a new game or the benchmark's playback must never leave the old
   // bridge alive to share BWRL_SHM and the opponent's stats file.
   PlutoGameEnd();
@@ -899,31 +1115,19 @@ void PlutoGameStart() {
   s_hProc = NULL;
   s_hToBridge = NULL;
   s_hFromBridge = NULL;
-  s_nPlutoSlot = FindPlutoSlot();
+  s_bNetwork = gbMultiPlayerMode != 0 && !PortBenchPlaying();
+  s_nOwnerStorm = s_bNetwork ? s_nChosenOwnerStorm : static_cast<int>(g_LocalStormID);
+  s_bOwner = !s_bNetwork || static_cast<int>(g_LocalStormID) == s_nOwnerStorm;
+  s_bOwnerLost = false;
+  s_bInEnvelope = false;
+  s_networkBytes = 0;
+  s_networkCommands = 0;
   s_fifoFrames = -1;
-  if (s_nPlutoSlot < 0)
-    return;
-  std::string readinessError;
-  if (!PortPlutoRuntimeReady(&readinessError)) {
-    PlutoClassicFallback("the runtime is incomplete: " + readinessError);
+  if (PlutoPrepareClassicSlot() < 0) {
+    if (s_nPlutoSlot >= 0)
+      PlutoInferenceFailed("no unique classic player mapping is available for the selected slot");
     return;
   }
-  // Computer slots can carry 0xFF or alias another seat's Storm id. Choose an
-  // actually unique classic owner (0..7); extended slots with no free owner are
-  // rejected rather than silently misattributing replay commands.
-  if (s_nPlutoSlot >= 8) {
-    PlutoClassicFallback("the selected extended slot has no classic replay owner");
-    return;
-  }
-  DWORD dwStorm = 0, dwNation = 0, dwHuman = 0;
-  if (!PrepareClassicPlayer(s_nPlutoSlot, &dwStorm, &dwNation, &dwHuman)) {
-    PlutoClassicFallback("no unique classic player mapping is available for the selected slot");
-    return;
-  }
-  // Keep the AI identifiable in the lobby, players panel, replay header, and
-  // benchmark summary rather than only by its AI-level label.
-  snprintf(gPlayerData[s_nPlutoSlot].szName, sizeof gPlayerData[s_nPlutoSlot].szName,
-           "PLuto");
   // Benchmark playback marks the viewer allied with the recorded players for
   // vision. That is useful for watching, but wrong for an AI-vs-AI melee: the
   // combat receivers turn attacks into Follow orders. Restore melee hostility
@@ -939,16 +1143,33 @@ void PlutoGameStart() {
       }
     }
   }
-  PlutoStart();
-  if (!s_bUp) {
-    PlutoClassicFallback("the bridge or inference process failed during startup");
+  // Only a local live owner touches the installer, runtime, or inference
+  // capability checks. Guests, watchers, replay and loaded games need no runtime.
+  if (!PlutoInferencePermitted()) {
+    if (s_bNetwork)
+      Log("Pluto: slot %d plays Pluto; inference owner %d is remote", s_nPlutoSlot, s_nOwnerStorm);
     return;
   }
-  Log("Pluto: slot %d is waiting for Pluto's first inference reply", s_nPlutoSlot);
+  // A menu download may finish in Settings' background, but no game transition may overlap it.
+  PortPlutoInstallCancelAndWait();
+  std::string readinessError;
+  if (!PortPlutoRuntimeReady(&readinessError)) {
+    PlutoInferenceFailed("the runtime is incomplete: " + readinessError);
+    return;
+  }
+  PlutoStart();
+  if (!s_bUp) {
+    PlutoInferenceFailed("the bridge or inference process failed during startup");
+    return;
+  }
+  Log("Pluto: slot %d plays Pluto; inference owner %d is local; waiting for its first reply",
+      s_nPlutoSlot, s_nOwnerStorm);
 }
 
 void PlutoFrame() {
   static int s_guardLogs = 0;
+  if (s_nPlutoSlot >= 0 && s_bNetwork)
+    PlutoOwnerLeave();
   if (s_guardLogs++ < 24)
     Log("Pluto: tick %u up=%d slot=%d", s_dwFrame, s_bUp ? 1 : 0, s_nPlutoSlot);
   if (s_nPlutoSlot < 0 || !s_bUp)
@@ -964,7 +1185,7 @@ void PlutoFrame() {
     Log("Pluto: send begin %u", s_dwFrame);
   if (!PlutoSendFrame()) {  // sends s_dwFrame
     Log("Pluto: frame %u did not send (err %lu)", s_dwFrame, GetLastError());
-    PlutoClassicFallback("the bridge's frame input failed");
+    PlutoInferenceFailed("the bridge's frame input failed");
     return;
   }
   if (flow)
@@ -985,7 +1206,7 @@ void PlutoFrame() {
     Log("Pluto: read begin %u", s_dwFrame - 1);
   if (!PlutoReadAndApply()) {
     Log("Pluto: the reply at frame %u did not arrive", s_dwFrame - 1);
-    PlutoClassicFallback("the bridge or inference failed before completing a reply");
+    PlutoInferenceFailed("the bridge or inference failed before completing a reply");
     return;
   }
   if (flow)

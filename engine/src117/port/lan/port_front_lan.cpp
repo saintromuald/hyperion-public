@@ -833,6 +833,7 @@ std::vector<SkirmishRoomSeat> RoomSeats(const PortJson &m)
     const PortJson &s = seats.At(i);
     SkirmishRoomSeat r;
     r.owner = s["owner"].Str("open");
+    r.aiLevel = s["aiLevel"].Str("classic");
     r.nRace = RaceOf(s["race"].Str());
     r.nHandicap = HandicapClamp(static_cast<int>(s["handicap"].Num(100)));
     r.name = s["name"].Str();
@@ -979,7 +980,8 @@ void HostSync(void)
         continue;  // a person's seat is theirs
       const std::string seat = "{\"t\":\"slot\",\"match\":" + match + ",\"slot\":" + std::to_string(i) +
                                ",\"owner\":" + PortJsonQuote(s.owner) + ",\"race\":" + PortJsonQuote(RaceId(s.nRace)) +
-                               ",\"handicap\":" + std::to_string(s.nHandicap) + "}";
+                               ",\"handicap\":" + std::to_string(s.nHandicap) +
+                               ",\"aiLevel\":" + PortJsonQuote(s.aiLevel) + "}";
       if (seat != g_sent.seats[i]) {
         LanClientSay(seat);
         g_sent.seats[i] = seat;

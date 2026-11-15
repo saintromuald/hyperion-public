@@ -75,6 +75,10 @@ pub fn classify(id: CommandId) -> Option<CommandLength> {
         0x96 => Some(CommandLength::Fixed(14)),
         0x97 | 0x98 => Some(CommandLength::Fixed(3)),
         0xA9 => Some(CommandLength::Fixed(5)),
+        // Pluto AI commands enclosed in their authoritative owner's turn. The
+        // count covers a version byte, the AI slot byte, and the native command
+        // payload; the owner never executes the enclosed commands as itself.
+        0xAA => Some(CommandLength::Variable { stride: 1 }),
         op => match FIXED_LEN.get(op as usize).copied().unwrap_or(0) {
             0 => None,
             n => Some(CommandLength::Fixed(u16::from(n))),
@@ -169,6 +173,7 @@ pub fn command_name(id: CommandId) -> Option<&'static str> {
         0x63 => "Select121",
         0x64 => "SelectAdd121",
         0x65 => "SelectRemove121",
+        0xAA => "PlutoAiEnvelope",
         _ => return None,
     })
 }
@@ -223,6 +228,9 @@ mod tests {
         );
         assert_eq!(command_length(&[0x63, 3]), Some(14));
         assert_eq!(command_length(&[0x65, 12]), Some(50));
+        // Pluto's envelope: version + AI slot + a two-byte Stop command.
+        assert_eq!(command_length(&[0xAA, 4]), Some(6));
+        assert_eq!(command_length(&[0xAA]), None);
     }
 
     #[test]

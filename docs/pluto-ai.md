@@ -175,3 +175,38 @@ disassembly (base+0x307F0), then the Hyperion side: the obs builder, the engine 
 an owned helper process (the lab's pattern), the action executor over the reply's
 net commands, AI_LEVEL_PLUTO in port_ai.h, the skirmish row and --ai-levels, and the
 replay/save record — the multiplayer computer seat follows the same level.
+
+## Multiplayer: one inference owner, deterministic AI turns
+
+A LAN room or canonical Rally Point melee/FFA launch can include one computer at
+the Pluto level. The launch carries the same profile on every peer and names one
+stable human Storm/Rally Point slot as inference owner. Computer slots are not
+relay roster members and have no user credential; native raw results report their
+`userId` as `null`. A canonical launch's configured AI name (for HyperShield,
+`Pluto`) is preserved through native initialization, replay and result matching;
+legacy local games retain the `PLuto` label. `HX_SIM_REVISION` 23 prevents an
+older peer from silently simulating another multiplayer AI policy.
+
+Only the owner starts the bridge. Its fresh replies are translated against the
+observation and then queued as AI-addressed envelopes in its ordinary outgoing
+turns. Every peer receives those envelopes at the same lockstep turn, validates
+the owner, AI slot and complete command payload, and dispatches the payload with
+the AI's native active-player identity. No fresh reply is dispatched directly on
+the owner, and no guest, watcher, replay or loaded game starts inference.
+
+The recorder writes the inner commands under the AI's Storm id, once, and never
+writes the transport envelope. Replay and live-watch playback therefore preserve
+AI ownership and require no runtime. Relay rehome retains the owner identity.
+If that owner leaves, every peer permanently disables Pluto for the match; there
+is deliberately no mid-game policy migration or competing successor. Runtime and
+capability checks run only for a local live owner: guests, watchers, replay and
+loaded games need no runtime. A local single-player startup/reply failure may use
+the explicit Classic fallback, but a network failure instead keeps the shared
+Pluto profile and closes the AI stream on every peer. It never makes an owner-only
+Classic change that would desynchronize the match. Extra live
+Pluto choices are rejected by network launches, and local extras use Classic AI
+rather than becoming inert. The standalone room's actual skirmish UI carries
+`aiLevel` through `SkirmishRoomSeat`, host/guest sync and room launch; its level
+pulldown offers Classic AI or one Pluto seat for Hyperion-rule rooms.
+`engine/tools/sbtest/lan_pluto_acceptance.py` drives that UI and two real LAN
+clients, then applies the same AI-command, recording and no-runtime replay gates.

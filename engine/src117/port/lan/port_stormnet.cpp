@@ -864,8 +864,7 @@ size_t PortNetKeepSyncs(unsigned char *p, size_t cb)
     // a select command's size is its count byte, the one after the opcode: a turn that ends on
     // the opcode ends the walk, since the size cannot be read
     const BYTE bOpcode = p[nAt];
-    const bool bCounted = (bOpcode >= 9 && bOpcode <= 11) || (bOpcode >= 0x89 && bOpcode <= 0x8C);
-    if (bCounted && nAt + 2 > cb)
+    if (NetCmdHasCountByte(bOpcode) && nAt + 2 > cb)
       break;
     const int n = GetCommandByteSize(reinterpret_cast<const net_cmd_select_t *>(p + nAt));
     if (n <= 0 || nAt + static_cast<size_t>(n) > cb)

@@ -11,6 +11,7 @@
 #pragma once
 #include <windows.h>
 #include <string>
+#include <vector>
 
 class CUnit;
 
@@ -55,6 +56,9 @@ std::string AiLevelsLabel(const char *pszLetters);
 void AiChoose(int nRow, int nLevel, int nStyle);
 // --ai-levels: a letter a row, the local player's first (AiLevelLetter), e.g. "c,e,i".
 void AiChooseList(const char *pszList);
+// A network launch's computer profiles in native computer-seat order, identical
+// on every peer. Human relay slots and credentials are deliberately absent.
+void AiChooseNet(const std::vector<int> &computers);
 // As SinglePlayerMeleeInitGame seats its players (beside TeamsSeat): each seated slot
 // takes its row's profile.
 void AiSeat();
