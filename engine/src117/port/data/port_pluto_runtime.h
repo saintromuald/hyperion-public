@@ -10,8 +10,8 @@
 // logs, configuration and bandit data share that folder but are not official install payloads.
 std::string PortPlutoRuntimeFolder();
 
-// NULL when inference has a viable process/CPU path. In particular, macOS does not claim that
-// the official x86-64 Windows engine works without a proven Wine/x86-64 transport.
+// NULL only when the OS/Rosetta and Wine 11 unified-runtime prerequisites pass. This is preflight,
+// not proof of inference: actual engine readiness, replies, and shutdown are validated separately.
 const char *PortPlutoInferenceCapabilityError();
 // Download capability is separate so --no-sb does not disable an already-installed offline runtime.
 const char *PortPlutoDownloadCapabilityError();

@@ -31,7 +31,11 @@
 #include "../../../tools/rallypoint2/bridge/pluto_download.h"
 #endif
 #if !defined(_WIN32)
+#include <errno.h>
+#include <spawn.h>
+#include <sys/wait.h>
 #include <unistd.h>
+extern char **environ;
 #endif
 
 namespace {
@@ -748,15 +752,148 @@ bool GlobalCancelled()
 }
 
 #if !defined(_WIN32)
+std::string Trimmed(const std::string &text)
+{
+  const size_t begin = text.find_first_not_of(" \t\r\n");
+  if (begin == std::string::npos)
+    return "";
+  const size_t end = text.find_last_not_of(" \t\r\n");
+  return text.substr(begin, end - begin + 1);
+}
+
+bool RunCapturedProcess(const std::string &program, const std::vector<std::string> &args,
+                        bool advertiseRosettaAvx, std::string *pOutput)
+{
+  int output[2] = {-1, -1};
+  if (pipe(output) != 0)
+    return false;
+  posix_spawn_file_actions_t actions;
+  if (posix_spawn_file_actions_init(&actions) != 0) {
+    close(output[0]);
+    close(output[1]);
+    return false;
+  }
+  const bool actionsOk = posix_spawn_file_actions_adddup2(&actions, output[1], STDOUT_FILENO) == 0 &&
+                         posix_spawn_file_actions_adddup2(&actions, output[1], STDERR_FILENO) == 0 &&
+                         posix_spawn_file_actions_addclose(&actions, output[0]) == 0 &&
+                         posix_spawn_file_actions_addclose(&actions, output[1]) == 0;
+  std::vector<char *> argv;
+  for (const std::string &arg : args)
+    argv.push_back(const_cast<char *>(arg.c_str()));
+  argv.push_back(NULL);
+  std::vector<std::string> environment;
+  std::vector<char *> envp;
+  char **childEnvironment = environ;
+  if (advertiseRosettaAvx) {
+    for (char **current = environ; current != NULL && *current != NULL; ++current) {
+      if (strncmp(*current, "ROSETTA_ADVERTISE_AVX=", 22) != 0)
+        environment.push_back(*current);
+    }
+    environment.push_back("ROSETTA_ADVERTISE_AVX=1");
+    for (std::string &entry : environment)
+      envp.push_back(&entry[0]);
+    envp.push_back(NULL);
+    childEnvironment = envp.data();
+  }
+  pid_t pid = -1;
+  const int spawned = actionsOk ? posix_spawn(&pid, program.c_str(), &actions, NULL, argv.data(), childEnvironment)
+                                : EINVAL;
+  posix_spawn_file_actions_destroy(&actions);
+  close(output[1]);
+  if (spawned != 0) {
+    close(output[0]);
+    return false;
+  }
+  std::string text;
+  for (;;) {
+    char block[256];
+    const ssize_t got = read(output[0], block, sizeof block);
+    if (got > 0) {
+      if (text.size() < 4096)
+        text.append(block, std::min(static_cast<size_t>(got), 4096 - text.size()));
+    } else if (got < 0 && errno == EINTR) {
+      continue;
+    } else {
+      break;
+    }
+  }
+  close(output[0]);
+  int status = 0;
+  pid_t waited;
+  do {
+    waited = waitpid(pid, &status, 0);
+  } while (waited < 0 && errno == EINTR);
+  *pOutput = text;
+  return waited == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+#if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
+bool TranslatedMacOsSupported()
+{
+  // CPUID and hw.optional.avx2_0 can omit AVX2 even when macOS 15 Rosetta executes it. Check the
+  // supported OS and actual x86-64 translation here; the real inference run is the AVX2 evidence.
+  static const bool available = [] {
+    std::string output;
+    if (!RunCapturedProcess("/usr/bin/arch",
+                            {"arch", "-x86_64", "/usr/sbin/sysctl", "-n", "kern.osproductversion"}, false,
+                            &output))
+      return false;
+    const std::string version = Trimmed(output);
+    char *end = NULL;
+    const long major = strtol(version.c_str(), &end, 10);
+    return end != version.c_str() && major >= 15;
+  }();
+  return available;
+}
+#endif
+
 std::string AbsoluteExecutable(const std::string &candidate)
 {
-  if (access(candidate.c_str(), X_OK) != 0)
-    return "";
   std::error_code ec;
   fs::path path(candidate);
+  if (!fs::is_regular_file(path, ec) || ec || access(candidate.c_str(), X_OK) != 0)
+    return "";
   if (!path.is_absolute())
     path = fs::absolute(path, ec);
   return ec ? "" : path.lexically_normal().string();
+}
+
+const char *ProbeWine11Unified(const std::string &wine)
+{
+  if (AbsoluteExecutable(wine).empty())
+    return "The selected Wine path is not a regular executable file.";
+  std::string version;
+  if (!RunCapturedProcess(wine, {wine, "--version"}, true, &version) ||
+      Trimmed(version).rfind("wine-11.", 0) != 0)
+    return "Pluto inference on macOS needs Wine 11; the resolved executable did not report 'wine-11.* --version'.";
+  const fs::path root = fs::path(wine).parent_path().parent_path();
+  const fs::path wineFiles = root / "lib" / "wine";
+  std::error_code ec;
+  const bool dualArchitecture =
+      fs::is_regular_file(wineFiles / "i386-windows" / "ntdll.dll", ec) && !ec &&
+      fs::is_regular_file(wineFiles / "x86_64-windows" / "ntdll.dll", ec) && !ec &&
+      !AbsoluteExecutable((wineFiles / "x86_64-unix" / "wine").string()).empty();
+  if (!dualArchitecture)
+    return "The selected Wine 11 installation lacks its unified i386/x86-64 runtime files.";
+  return NULL;
+}
+
+const char *Wine11UnifiedError(const std::string &wine)
+{
+  // Setup surfaces call this repeatedly. Cache per resolved pathname rather than starting Wine for
+  // every redraw; changing HYPERION_PLUTO_WINE selects a new probe. Restart after repairing Wine in
+  // place, just as after installing Rosetta.
+  static std::mutex lock;
+  static std::string cachedPath;
+  static const char *cachedError = NULL;
+  static bool cached = false;
+  std::lock_guard<std::mutex> hold(lock);
+  if (cached && cachedPath == wine)
+    return cachedError;
+  cachedError = ProbeWine11Unified(wine);
+  cachedPath = wine;
+  cached = true;
+  return cachedError;
 }
 
 std::string ResolveExecutableOnPath(const std::string &program)
@@ -803,7 +940,25 @@ std::string PortPlutoWineExecutable()
   return "";
 #else
   const char *wine = getenv("HYPERION_PLUTO_WINE");
-  return ResolveExecutableOnPath(wine != NULL && wine[0] != 0 ? wine : "/usr/bin/wine");
+  if (wine != NULL && wine[0] != 0)
+    return ResolveExecutableOnPath(wine);
+#if defined(__APPLE__)
+  // These are the app-bundle paths used by the official WineHQ macOS packages. A unified Wine 11
+  // loader is required: wine64-only installations cannot run Hyperion's 32-bit bridge.
+  static const char *const installed[] = {
+      "/Applications/Wine Stable.app/Contents/Resources/wine/bin/wine",
+      "/Applications/Wine Devel.app/Contents/Resources/wine/bin/wine",
+      "/Applications/Wine Staging.app/Contents/Resources/wine/bin/wine",
+  };
+  for (const char *candidate : installed) {
+    const std::string resolved = ResolveExecutableOnPath(candidate);
+    if (!resolved.empty())
+      return resolved;
+  }
+  return ResolveExecutableOnPath("wine");
+#else
+  return ResolveExecutableOnPath("/usr/bin/wine");
+#endif
 #endif
 }
 
@@ -812,7 +967,21 @@ const char *PortPlutoInferenceCapabilityError()
 #if defined(__EMSCRIPTEN__)
   return "Pluto inference is not available in the browser build.";
 #elif defined(__APPLE__)
-  return "Pluto inference is unavailable in this macOS build: the official x86-64 Windows engine needs a proven Wine/x86-64 runtime.";
+#if defined(__x86_64__) || defined(__amd64__)
+  if (!__builtin_cpu_supports("avx2"))
+    return "Pluto inference needs an x86-64 CPU with AVX2 support.";
+#elif defined(__aarch64__) || defined(__arm64__)
+  if (!TranslatedMacOsSupported())
+    return "Pluto inference on Apple Silicon needs macOS 15 or later and a working Rosetta 2 x86-64 translator. Install Rosetta with 'softwareupdate --install-rosetta --agree-to-license', then restart Hyperion.";
+#else
+  return "Pluto inference needs an Apple Silicon or x86-64 Mac with AVX2 support.";
+#endif
+  const std::string wine = PortPlutoWineExecutable();
+  if (wine.empty())
+    return "Pluto inference needs an official Wine 11 macOS package with unified 32-bit and 64-bit Windows support. Install Wine in /Applications or on PATH, or set HYPERION_PLUTO_WINE to its absolute wine executable, then retry.";
+  if (const char *wineError = Wine11UnifiedError(wine))
+    return wineError;
+  return NULL;
 #elif defined(_MSC_VER)
   if (IsProcessorFeaturePresent(PF_AVX2_INSTRUCTIONS_AVAILABLE))
     return NULL;

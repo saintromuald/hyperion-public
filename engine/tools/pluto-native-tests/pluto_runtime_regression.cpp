@@ -460,6 +460,125 @@ bool TestWineResolution()
   return ok;
 }
 
+fs::path MakeFakeWine11(const TestDirectory &dir, const std::string &version, bool dualArchitecture = true)
+{
+  const fs::path root = dir.root / "wine";
+  const fs::path executable = root / "bin" / "wine-test";
+  Write(executable, "#!/bin/sh\nprintf '%s\\n' \"$0\" > \"" + (dir.root / "invoked").string() +
+                        "\"\nprintf '%s\\n' \"$ROSETTA_ADVERTISE_AVX\" > \"" +
+                        (dir.root / "rosetta").string() + "\"\nprintf '%s\\n' '" + version + "'\n");
+  fs::permissions(executable, fs::perms::all, fs::perm_options::replace);
+  if (dualArchitecture) {
+    Write(root / "lib" / "wine" / "i386-windows" / "ntdll.dll", "i386");
+    Write(root / "lib" / "wine" / "x86_64-windows" / "ntdll.dll", "x64");
+    Write(root / "lib" / "wine" / "x86_64-unix" / "wine", "loader");
+    fs::permissions(root / "lib" / "wine" / "x86_64-unix" / "wine", fs::perms::all,
+                    fs::perm_options::replace);
+  }
+  return executable;
+}
+
+bool TestWine11UnifiedPreflight()
+{
+  bool ok = true;
+  {
+    TestDirectory dir;
+    const fs::path executable = MakeFakeWine11(dir, "wine-11.21");
+    const char *oldPath = getenv("PATH");
+    const std::string savedPath = oldPath != NULL ? oldPath : "";
+    setenv("PATH", (dir.root / "wine" / "bin").c_str(), 1);
+    setenv("HYPERION_PLUTO_WINE", "wine-test", 1);
+    const std::string resolved = PortPlutoWineExecutable();
+    ok = Check(resolved == executable.string(), "a bare Wine 11 name resolves to its absolute executable") && ok;
+    ok = Check(ProbeWine11Unified(resolved) == NULL, "Wine 11 with unified i386/x86-64 files passes preflight") && ok;
+    ok = Check(Read(dir.root / "invoked") == Bytes(executable.string() + "\n"),
+               "the version probe uses the same absolute path selected for launch") &&
+         Check(Read(dir.root / "rosetta") == Bytes("1\n"), "the Wine consumer receives ROSETTA_ADVERTISE_AVX=1") && ok;
+    setenv("PATH", savedPath.c_str(), 1);
+    unsetenv("HYPERION_PLUTO_WINE");
+  }
+  {
+    TestDirectory dir;
+    const fs::path executable = MakeFakeWine11(dir, "wine-10.0");
+    ok = Check(ProbeWine11Unified(executable.string()) != NULL, "a wrong Wine major version is refused") && ok;
+  }
+  {
+    TestDirectory dir;
+    const fs::path executable = MakeFakeWine11(dir, "wine-11.21", false);
+    ok = Check(ProbeWine11Unified(executable.string()) != NULL, "Wine 11 without unified runtime files is refused") && ok;
+  }
+  {
+    TestDirectory dir;
+    fs::create_directories(dir.root / "bin" / "wine-directory");
+    fs::permissions(dir.root / "bin" / "wine-directory", fs::perms::all, fs::perm_options::replace);
+    ok = Check(AbsoluteExecutable((dir.root / "bin" / "wine-directory").string()).empty(),
+               "an executable directory is not a Wine executable") &&
+         Check(ProbeWine11Unified((dir.root / "bin" / "wine-directory").string()) != NULL,
+               "a directory fails Wine preflight before any download") &&
+         Check(ProbeWine11Unified("/bin/true") != NULL, "/bin/true is not accepted as Wine") && ok;
+    setenv("PATH", "/bin", 1);
+    setenv("HYPERION_PLUTO_WINE", "true", 1);
+    ok = Check(PortPlutoWineExecutable() == "/bin/true" && ProbeWine11Unified("/bin/true") != NULL,
+               "a bare non-Wine name resolves but fails the meaningful Wine probe") &&
+         ok;
+    unsetenv("HYPERION_PLUTO_WINE");
+  }
+  return ok;
+}
+
+bool TestMacWineCapability()
+{
+#if defined(__APPLE__)
+  bool ok = true;
+  setenv("HYPERION_PLUTO_WINE", "/bin/true", 1);
+  ok = Check(PortPlutoInferenceCapabilityError() != NULL, "the public Mac capability rejects /bin/true") && ok;
+  {
+    TestDirectory dir;
+    fs::create_directories(dir.root / "wine-directory");
+    setenv("HYPERION_PLUTO_WINE", (dir.root / "wine-directory").c_str(), 1);
+    ok = Check(PortPlutoInferenceCapabilityError() != NULL, "the public Mac capability rejects a directory") && ok;
+  }
+  {
+    TestDirectory dir;
+    const fs::path executable = MakeFakeWine11(dir, "wine-10.0");
+    const char *oldPath = getenv("PATH");
+    const std::string savedPath = oldPath != NULL ? oldPath : "";
+    setenv("PATH", (dir.root / "wine" / "bin").c_str(), 1);
+    setenv("HYPERION_PLUTO_WINE", "wine-test", 1);
+    ok = Check(PortPlutoInferenceCapabilityError() != NULL,
+               "the public Mac capability rejects a wrong-version bare Wine name") &&
+         ok;
+    setenv("PATH", savedPath.c_str(), 1);
+  }
+  {
+    TestDirectory dir;
+    const fs::path executable = MakeFakeWine11(dir, "wine-11.21");
+    setenv("HYPERION_PLUTO_WINE", executable.c_str(), 1);
+    const char *error = PortPlutoInferenceCapabilityError();
+    if (error != NULL)
+      std::cerr << error << '\n';
+    ok = Check(error == NULL, "the public Mac capability accepts a valid Wine 11 unified installation") && ok;
+  }
+  unsetenv("HYPERION_PLUTO_WINE");
+  return ok;
+#else
+  return true;
+#endif
+}
+
+bool TestCurrentCapability()
+{
+  const std::string wine = PortPlutoWineExecutable();
+  const char *capability = PortPlutoInferenceCapabilityError();
+  if (capability != NULL)
+    std::cerr << capability << '\n';
+  return Check(!wine.empty() && fs::path(wine).is_absolute(),
+               "the current runtime resolves an absolute Wine executable") &&
+         Check(capability == NULL, "the current host must pass the production inference capability gate") &&
+         Check(fs::path(wine) == fs::path(PortPlutoWineExecutable()),
+               "capability and launch resolve the same Wine pathname");
+}
+
 bool TestNoSbDownloadCapability()
 {
   TestDirectory dir;
@@ -646,6 +765,12 @@ int main(int argc, char **argv)
     ok = TestRollbackPreservesExecutableMode();
   else if (scenario == "wine-resolution")
     ok = TestWineResolution();
+  else if (scenario == "current-capability")
+    ok = TestCurrentCapability();
+  else if (scenario == "wine-11-preflight")
+    ok = TestWine11UnifiedPreflight();
+  else if (scenario == "mac-wine-capability")
+    ok = TestMacWineCapability();
   else if (scenario == "no-sb-capability")
     ok = TestNoSbDownloadCapability();
   else

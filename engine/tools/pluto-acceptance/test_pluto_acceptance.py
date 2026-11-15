@@ -201,7 +201,7 @@ class Hxp4AcceptanceTests(unittest.TestCase):
         hxp2 = bytearray(make_frame(1))
         hxp2[0:4] = b"HXP2"
         players = struct.pack("<7I", 0, 50, 0, 8, 4, 32, 64) * 2
-        hxpf = struct.pack("<4s5I", b"HXPF", 2, 0, 1, 1, 2) + players + b"\x03\x01"
+        hxpf = struct.pack("<4s5I", b"HXFP", 2, 0, 1, 1, 2) + players + b"\x03\x01"
         records, evidence = pa.parse_hxp_capture(
             make_hxp4_frame(0, order=5, remaining_research_time=0, tech_type=44)
             + bytes(hxp2)

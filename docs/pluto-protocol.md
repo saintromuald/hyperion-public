@@ -144,7 +144,9 @@ Classic net commands appended to StarCraft's TurnBuffer (0x654880, byte count at
 
 The bridge (`engine/tools/pluto-bridge/`) runs the fork's DLL under Wine and owns
 the obs build; Hyperion only feeds game frames and receives net commands, over the
-bridge's stdin/stdout. All little-endian.
+bridge's stdin/stdout. All little-endian. The legacy protocol named HXPF uses the historical
+on-wire magic bytes `HXFP` (`0x50465848` as a little-endian u32); strict readers must not
+substitute the spelling `HXPF` for those four bytes.
 
 ### Static map/region metadata (stdin, optional once before frame 0)
 

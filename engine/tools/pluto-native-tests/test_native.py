@@ -351,6 +351,16 @@ class PortRegressionTests(unittest.TestCase):
     def test_runtime_no_sb_has_upfront_download_capability_error(self):
         self.run_regression("pluto_runtime_regression", "no-sb-capability")
 
+    def test_runtime_wine_11_version_and_dual_architecture_preflight(self):
+        self.run_regression("pluto_runtime_regression", "wine-11-preflight")
+
+    @unittest.skipUnless(
+        os.environ.get("HYPERION_PLUTO_TEST_CURRENT_CAPABILITY") == "1",
+        "explicit runtime-acceptance capability probe",
+    )
+    def test_runtime_current_host_capability(self):
+        self.run_regression("pluto_runtime_regression", "current-capability")
+
     def test_turn_remaps_ff_owner_and_seat_mismatch(self):
         self.run_regression("control_turn_regression", "storm-owner")
 

@@ -36,6 +36,10 @@ def make_config(**changes: Any) -> dict[str, Any]:
     return config
 
 
+def wire_magic(protocol: bytes) -> bytes:
+    return b"HXFP" if protocol == b"HXPF" else protocol
+
+
 def make_frame(
     frame: int,
     *,
@@ -46,7 +50,7 @@ def make_frame(
 ) -> bytes:
     # One player, no units, one tile.  This is sufficient to exercise every
     # transport framing branch without any game or inference process.
-    header = struct.pack("<4s5I", protocol, frame, 0, 1, 1, 1)
+    header = struct.pack("<4s5I", wire_magic(protocol), frame, 0, 1, 1, 1)
     player = struct.pack("<7I", race, minerals, 0, 8, 4, 32, 64)
     if protocol == b"HXP4":
         header += struct.pack("<II", 78, 119)
@@ -126,7 +130,7 @@ def make_unit_frame(
             tech_type,
             upgrade_type,
         )
-    header = struct.pack("<4s5I", protocol, frame, 1, 2, 1, 1)
+    header = struct.pack("<4s5I", wire_magic(protocol), frame, 1, 2, 1, 1)
     if protocol == b"HXP4":
         header += struct.pack("<II", 78, 119)
     player = struct.pack("<7I", 0, 50, 0, 8, 4, 32, 64)
