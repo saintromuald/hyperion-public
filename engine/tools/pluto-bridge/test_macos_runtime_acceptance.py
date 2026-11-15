@@ -4,6 +4,7 @@
 import hashlib
 from pathlib import Path
 import signal
+import shutil
 import struct
 import tempfile
 import unittest
@@ -102,8 +103,10 @@ class WinePreflightTests(unittest.TestCase):
         self.assertEqual(acceptance.probe_wine_11_unified(self.fake_wine(), {}), "wine-11.21")
 
     def test_true_directory_wrong_version_and_missing_architecture_fail(self):
+        true_executable = shutil.which("true")
+        self.assertIsNotNone(true_executable)
         with self.assertRaisesRegex(RuntimeError, "wine-11"):
-            acceptance.probe_wine_11_unified(Path("/bin/true"), {})
+            acceptance.probe_wine_11_unified(Path(true_executable), {})
         directory = self.root / "directory"
         directory.mkdir()
         directory.chmod(0o755)
