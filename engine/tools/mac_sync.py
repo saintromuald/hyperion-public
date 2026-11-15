@@ -65,7 +65,11 @@ def main() -> int:
     files += [p.relative_to(REPO).as_posix() for p in sorted(MAPS.glob("*.hxm"))] if MAPS.is_dir() else []
     if a.third is not None:
         for d in a.third or THIRD:
-            files += [p.relative_to(REPO).as_posix() for p in (ENGINE / "third_party" / d).rglob("*") if p.is_file()]
+            root = ENGINE / "third_party" / d
+            if root.is_file():
+                files.append(root.relative_to(REPO).as_posix())
+            else:
+                files += [p.relative_to(REPO).as_posix() for p in root.rglob("*") if p.is_file()]
     files = [f for f in dict.fromkeys(files) if (REPO / f).is_file()]
     origin = {"commit": git("rev-parse", "--short", "HEAD"), "branch": git("rev-parse", "--abbrev-ref", "HEAD"),
               "dirty": bool(git("status", "--porcelain", "--untracked-files=no", "--", "engine")),
