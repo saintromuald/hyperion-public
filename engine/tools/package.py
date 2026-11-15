@@ -740,7 +740,7 @@ def package_mac(args, ver: str) -> int:
 
     put("Hyperion.app/Contents/MacOS/Hyperion", program.read_bytes(), 0o755)
     put("Hyperion.app/Contents/MacOS/libSDL3.0.dylib", sdl.read_bytes(), 0o755)
-    put("Hyperion.app/Contents/MacOS/cacert.pem", ca.read_bytes())
+    put("cacert.pem", ca.read_bytes())
     m = re.search(r"v?(\d+)\.(\d+)\.(\d+)", ver)
     short = ".".join(m.groups()) if m else "0.0.0"
     number = re.search(r"HYPERION_BUILD_NUMBER (\d+)", (built / "build_id.h").read_text()) if (built / "build_id.h").exists() else None
