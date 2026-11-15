@@ -516,11 +516,19 @@ bool TestWine11UnifiedPreflight()
          Check(ProbeWine11Unified((dir.root / "bin" / "wine-directory").string()) != NULL,
                "a directory fails Wine preflight before any download") &&
          Check(ProbeWine11Unified("/bin/true") != NULL, "/bin/true is not accepted as Wine") && ok;
+    const char *oldPath = getenv("PATH");
+    const std::string savedPath = oldPath != NULL ? oldPath : "";
     setenv("PATH", "/bin", 1);
     setenv("HYPERION_PLUTO_WINE", "true", 1);
-    ok = Check(PortPlutoWineExecutable() == "/bin/true" && ProbeWine11Unified("/bin/true") != NULL,
-               "a bare non-Wine name resolves but fails the meaningful Wine probe") &&
-         ok;
+    const std::string expectedTrue = ResolveExecutableOnPath("true");
+    const std::string resolvedTrue = PortPlutoWineExecutable();
+    const char *probeError = ProbeWine11Unified(resolvedTrue);
+    std::cerr << "bare true: PATH resolves to '" << expectedTrue << "', override resolves to '" << resolvedTrue
+              << "', probe returns '" << (probeError != NULL ? probeError : "<accepted>") << "'\n";
+    ok = Check(!expectedTrue.empty(), "the host has a true executable for the bare-name rejection test") && ok;
+    ok = Check(resolvedTrue == expectedTrue, "a bare non-Wine name resolves to the host's true executable") && ok;
+    ok = Check(probeError != NULL, "the host's true executable fails the meaningful Wine probe") && ok;
+    setenv("PATH", savedPath.c_str(), 1);
     unsetenv("HYPERION_PLUTO_WINE");
   }
   return ok;
@@ -532,6 +540,18 @@ bool TestMacWineCapability()
   bool ok = true;
   setenv("HYPERION_PLUTO_WINE", "/bin/true", 1);
   ok = Check(PortPlutoInferenceCapabilityError() != NULL, "the public Mac capability rejects /bin/true") && ok;
+  {
+    const char *oldPath = getenv("PATH");
+    const std::string savedPath = oldPath != NULL ? oldPath : "";
+    setenv("PATH", "/bin", 1);
+    setenv("HYPERION_PLUTO_WINE", "true", 1);
+    const std::string resolvedTrue = PortPlutoWineExecutable();
+    const char *error = PortPlutoInferenceCapabilityError();
+    std::cerr << "public bare true capability: path='" << resolvedTrue << "', error='"
+              << (error != NULL ? error : "<accepted>") << "'\n";
+    ok = Check(error != NULL, "the public Mac capability rejects bare true") && ok;
+    setenv("PATH", savedPath.c_str(), 1);
+  }
   {
     TestDirectory dir;
     fs::create_directories(dir.root / "wine-directory");
