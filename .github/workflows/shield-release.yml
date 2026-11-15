@@ -8,11 +8,11 @@ on:
       ref:
         description: "branch, tag or commit to package"
         required: true
-        default: "release-v0.7.2"
+        default: "release-v0.7.3"
       tag:
         description: "release tag to create or update"
         required: true
-        default: "hyperion-shield-zero-v0.7.2-beta"
+        default: "hyperion-shield-zero-v0.7.3-beta"
       channel:
         description: "publish as a prerelease for testing or a final release"
         required: true

@@ -4,6 +4,18 @@ What changed in each version of Hyperion, newest first. The game shows the same 
 Patch Notes. Versions are numbered as `docs/versioning.md` says; this page is written from
 `engine/notes/release-notes.json` by `engine/tools/release_notes.py md`.
 
+## v0.7.3-beta, 2026-11-14
+
+**Pluto AI and graphics startup recovery.** Pluto AI gains official HXP4 integration and recovery snapshots, and Hyperion can recover when a graphics driver stalls during startup.
+
+### New
+
+- **Pluto AI integration and recovery.** Pluto now uses the official HXP4 integration and can restore validated recovery snapshots without weakening content checks.
+
+### Fixed
+
+- **Graphics driver startup recovery.** Hyperion remembers a graphics driver that did not finish starting, restarts after a stalled attempt, and can fall back to SDL or software rendering. An explicitly selected renderer is still always tried.
+
 ## v0.7.2-beta, 2026-11-14
 
 **Hyperion Shield Zero.** The public ShieldBattery engine package is now Hyperion Shield Zero, and the private full-install test bundle is Hyperion Zero Private.
