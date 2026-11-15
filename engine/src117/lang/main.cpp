@@ -80,22 +80,8 @@ int __stdcall SFileSetAppDataDir(const char *pszPath);                     // 29
 int __stdcall SNetGetCurrentProviderID();                                  // 147
 }
 
-// The CRT entry points InitLocale reaches, declared rather than taken from
-// <stdio.h>; fclose and fopen are spelled as gds_file.cpp spells them.
-// Hyperion: with MSVC only; elsewhere the C library's, which compat/windows.h
-// gives forms taking void *.
-#if defined(_MSC_VER)
-extern "C" {
-int    __cdecl fclose(void *pFile);
-void * __cdecl fopen(const char *pszName, const char *pszMode);
-int    __cdecl fputc(int ch, void *pFile);
-}
-#endif
-
-// Hyperion: port_front.h's and port_modcheck.h's, which bring <stdio.h> against the
-// declarations above. The SB printer is declared here too: including its C++
-// manifest header would bring <string>, and therefore the real MSVC stdio
-// declarations, into this TU before the legacy declarations above.
+// Hyperion: port_front.h's and port_modcheck.h's entry points. The manifest printer remains a
+// direct declaration because its C++ header would pull <string> into this legacy TU.
 bool PortFrontCinematicWatched(void);
 void PortModCheckRun(void);
 void SbManifestCompatibilityPrint(void);
