@@ -26,6 +26,11 @@ on:
         required: true
         default: true
         type: boolean
+      runtime-only:
+        description: "run only the bridge and real macOS runtime acceptance, skipping platform packages"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -70,6 +75,13 @@ jobs:
           ./metadata/run-tests.sh
           ./late-state/run_tests.sh
 
+      - name: Build the diagnostic x86-64 CPU feature probe
+        working-directory: engine/tools/pluto-bridge
+        run: |
+          "$MINGW/bin/x86_64-w64-mingw32-g++" -std=c++17 -O0 \
+            -ffile-prefix-map="$PWD"=. -Wl,--no-insert-timestamp \
+            cpuid_probe.cpp -o cpuid-probe.exe -static-libgcc -static-libstdc++
+
       - name: Upload only the Hyperion-owned bridge
         uses: actions/upload-artifact@v4
         with:
@@ -77,7 +89,15 @@ jobs:
           path: engine/tools/pluto-bridge/pluto-bridge.exe
           if-no-files-found: error
 
+      - name: Upload the Hyperion-owned CPU feature probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperion-pluto-cpuid-probe
+          path: engine/tools/pluto-bridge/cpuid-probe.exe
+          if-no-files-found: error
+
   windows:
+    if: ${{ !inputs.runtime-only }}
     needs: pluto-bridge
     runs-on: windows-2025
     timeout-minutes: 180
@@ -142,6 +162,7 @@ jobs:
           if-no-files-found: error
 
   linux:
+    if: ${{ !inputs.runtime-only }}
     needs: pluto-bridge
     runs-on: ubuntu-24.04
     timeout-minutes: 240
@@ -186,6 +207,7 @@ jobs:
           if-no-files-found: error
 
   mac:
+    if: ${{ !inputs.runtime-only }}
     needs: [windows, pluto-bridge]
     runs-on: macos-15
     timeout-minutes: 180
@@ -253,6 +275,12 @@ jobs:
           name: hyperion-pluto-bridge
           path: engine/tools/pluto-bridge
 
+      - name: Download the Hyperion-owned CPU feature probe
+        uses: actions/download-artifact@v4
+        with:
+          name: hyperion-pluto-cpuid-probe
+          path: engine/tools/pluto-bridge
+
       - name: Require macOS 15+ Apple Silicon and a working Rosetta translator
         run: |
           set -euo pipefail
@@ -288,6 +316,17 @@ jobs:
           test -x "$wine_root/lib/wine/x86_64-unix/wine"
           echo "HYPERION_PLUTO_WINE=$wine" >> "$GITHUB_ENV"
 
+      - name: Compare native Rosetta and Wine x86 feature detection
+        run: |
+          set -euo pipefail
+          native="$RUNNER_TEMP/cpuid-probe-macos"
+          clang++ -std=c++17 -O0 engine/tools/pluto-bridge/cpuid_probe.cpp -o "$native"
+          echo '--- native x86-64 under Rosetta ---'
+          /usr/bin/arch -x86_64 "$native"
+          echo '--- Windows x86-64 under Wine/Rosetta ---'
+          WINEPREFIX="$RUNNER_TEMP/wine-cpuid-prefix" WINEDEBUG=-all \
+            "$HYPERION_PLUTO_WINE" "$PWD/engine/tools/pluto-bridge/cpuid-probe.exe"
+
       - name: Check production capability resolution and the harness's host-only tests
         run: |
           set -euo pipefail
@@ -320,7 +359,7 @@ jobs:
             --work "$RUNNER_TEMP/pluto-macos-runtime-acceptance"
 
   publish:
-    if: ${{ inputs.publish }}
+    if: ${{ inputs.publish && !inputs.runtime-only }}
     needs: [pluto-bridge, windows, linux, mac, pluto-macos-runtime]
     runs-on: ubuntu-24.04
     permissions:
