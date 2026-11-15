@@ -14,7 +14,7 @@ from pluto_diff.worker_stalls import (
     WorkerStallError,
     analyze_worker_stalls,
 )
-from tests.helpers import LOBBY_ONLY_COMMANDS, make_reply
+from tests.helpers import LOBBY_ONLY_COMMANDS, make_reply, wire_magic
 
 
 MORPH_DRONE = struct.pack("<BH", 0x23, 41)
@@ -115,7 +115,7 @@ def frame(
             extra_bytes += struct.pack(
                 "<6H2B", value["build_type"], 228, 228, 228, 228, 0, 44, 61
             )
-    header = struct.pack("<4s5I", protocol, number, len(units), 1, 1, 1)
+    header = struct.pack("<4s5I", wire_magic(protocol), number, len(units), 1, 1, 1)
     if protocol == b"HXP4":
         header += struct.pack("<II", 78, 119)
     player = struct.pack(

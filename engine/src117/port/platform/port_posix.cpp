@@ -1332,11 +1332,13 @@ static std::vector<std::string> SplitCommandLine(const char *psz)
   return out;
 }
 
-// glibc 2.29 and later can give a spawned child a folder of its own; where the C library
-// cannot, the child keeps this process's folder, since changing that over a spawn would
-// reach every thread's relative file I/O. The one caller that asks for a folder is
-// gluMain.cpp's StarEdit button.
-#if defined(__GLIBC__) && defined(_GNU_SOURCE)
+// glibc 2.29+ and macOS can give a spawned child a folder of its own. Where the C library cannot,
+// the child keeps this process's folder, since changing that over a spawn would reach every
+// thread's relative file I/O. Pluto's bridge requires its own folder to locate the official DLL,
+// inference engine, weights, and frame FIFO.
+#if defined(__APPLE__)
+#define OC_SPAWN_CHDIR 1
+#elif defined(__GLIBC__) && defined(_GNU_SOURCE)
 #if __GLIBC_PREREQ(2, 29)
 #define OC_SPAWN_CHDIR 1
 #endif
@@ -1393,6 +1395,14 @@ BOOL __stdcall CreateProcessA(LPCSTR lpApplicationName, LPSTR lpCommandLine, LPS
     bActions = posix_spawn_file_actions_addchdir_np(&actions, OcPath(lpCurrentDirectory).c_str()) == 0;
     if (!bActions)
       posix_spawn_file_actions_destroy(&actions);
+  }
+#endif
+#if defined(__APPLE__)
+  // Running the bridge from the wrong directory would look like a successful spawn and then fail
+  // later while opening pluto.dll. Refuse the launch instead of dropping a requested chdir.
+  if (lpCurrentDirectory != NULL && !bActions) {
+    t_dwLastError = ERROR_PATH_NOT_FOUND;
+    return FALSE;
   }
 #endif
   // The child's std handles, when the caller names them (the Pluto bridge's

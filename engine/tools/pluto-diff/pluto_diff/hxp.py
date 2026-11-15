@@ -33,7 +33,8 @@ _REPLY_HEADER = struct.Struct("<4sII")
 _REPLY_TAIL = struct.Struct("<I")
 _END = struct.Struct("<4sII")
 
-FRAME_MAGICS = {b"HXP2", b"HXP3", b"HXP4", b"HXPF"}
+# The legacy protocol is named HXPF, but its historical on-wire magic is ASCII HXFP.
+FRAME_MAGICS = {b"HXP2", b"HXP3", b"HXP4", b"HXFP"}
 REPLY_MAGIC = b"HXRP"
 END_MAGIC = b"HXPE"
 HXP4_EXTRA_BYTES = 78
@@ -205,7 +206,7 @@ def _parse_frame_at(data: bytes, offset: int) -> tuple[HxFrame, int]:
         raise HxpFormatError(
             f"invalid HXP map dimensions {map_width}x{map_height} at byte {offset}"
         )
-    protocol = magic.decode("ascii")
+    protocol = "HXPF" if magic == b"HXFP" else magic.decode("ascii")
     cursor = after_header
     if magic == b"HXP4":
         size_words, cursor = _take(data, cursor, 8, "HXP4 explicit section sizes")

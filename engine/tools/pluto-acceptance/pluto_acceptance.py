@@ -1330,7 +1330,8 @@ def _parse_frame_at(data: bytes, offset: int):
     if len(data) - offset < _FRAME_HEADER.size:
         raise HXPParseError("truncated HXP frame header at byte %d" % offset)
     magic, frame, unit_count, width, height, player_count = _FRAME_HEADER.unpack_from(data, offset)
-    if magic not in (b"HXP2", b"HXP3", b"HXP4", b"HXPF"):
+    # The legacy protocol is named HXPF, but its historical on-wire magic is ASCII HXFP.
+    if magic not in (b"HXP2", b"HXP3", b"HXP4", b"HXFP"):
         raise HXPParseError("invalid HXP frame magic at byte %d" % offset)
     if unit_count > 9999 or player_count > 12 or not (1 <= width <= 256 and 1 <= height <= 256):
         raise HXPParseError("invalid HXP counts or map dimensions at byte %d" % offset)
@@ -1405,7 +1406,7 @@ def _parse_frame_at(data: bytes, offset: int):
         ]
     cursor += size
     return {
-        "protocol": magic.decode("ascii"),
+        "protocol": "HXPF" if magic == b"HXFP" else magic.decode("ascii"),
         "frame": frame,
         "unit_count": unit_count,
         "player_count": player_count,

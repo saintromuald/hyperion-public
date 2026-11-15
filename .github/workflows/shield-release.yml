@@ -227,8 +227,95 @@ jobs:
           path: engine/testrun/share/variants/**/Hyperion-Shield-Zero-*-mac-arm64.zip
           if-no-files-found: error
 
+  pluto-macos-runtime:
+    needs: pluto-bridge
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      WINE_VERSION: "11.21"
+      WINE_ARCHIVE: "wine-devel-11.21-osx64.tar.xz"
+      WINE_SHA256: "9909b486657e10ab66c7279371ae1f990345b596b3b1b3a0cf21f28af24fa0ce"
+      PLUTO_ARCHIVE_SHA256: "17544fc3ab32e3e2823646887e021cf998362348d73740817e94d1a78aa6209d"
+      ROSETTA_ADVERTISE_AVX: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Download the gated Hyperion bridge
+        uses: actions/download-artifact@v4
+        with:
+          name: hyperion-pluto-bridge
+          path: engine/tools/pluto-bridge
+
+      - name: Require macOS 15+ Apple Silicon and a working Rosetta translator
+        run: |
+          set -euo pipefail
+          sw_vers
+          test "$(uname -m)" = arm64
+          test "$(/usr/sbin/sysctl -n kern.osproductversion | cut -d. -f1)" -ge 15
+          if ! /usr/bin/arch -x86_64 /usr/bin/true >/dev/null 2>&1; then
+            sudo /usr/sbin/softwareupdate --install-rosetta --agree-to-license
+          fi
+          /usr/bin/arch -x86_64 /usr/bin/true
+
+      - name: Install the pinned official WineHQ macOS build without Homebrew
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/$WINE_ARCHIVE"
+          curl --proto '=https' --tlsv1.2 --retry 3 -fL \
+            "https://github.com/Gcenx/macOS_Wine_builds/releases/download/${WINE_VERSION}/$WINE_ARCHIVE" \
+            -o "$archive"
+          printf '%s  %s\n' "$WINE_SHA256" "$archive" | shasum -a 256 -c -
+          root="$RUNNER_TEMP/wine-$WINE_VERSION"
+          mkdir -p "$root"
+          tar -xJf "$archive" -C "$root"
+          wine_root="$root/Wine Devel.app/Contents/Resources/wine"
+          wine="$wine_root/bin/wine"
+          test -f "$wine"
+          test -x "$wine"
+          file "$wine"
+          version="$(WINEPREFIX="$RUNNER_TEMP/wine-version-prefix" "$wine" --version)"
+          printf '%s\n' "$version"
+          case "$version" in wine-11.*) ;; *) echo "Wine 11 is required" >&2; exit 1 ;; esac
+          test -f "$wine_root/lib/wine/i386-windows/ntdll.dll"
+          test -f "$wine_root/lib/wine/x86_64-windows/ntdll.dll"
+          test -x "$wine_root/lib/wine/x86_64-unix/wine"
+          echo "HYPERION_PLUTO_WINE=$wine" >> "$GITHUB_ENV"
+
+      - name: Check production capability resolution and the harness's host-only tests
+        run: |
+          set -euo pipefail
+          probe="$RUNNER_TEMP/pluto_runtime_regression"
+          python3 engine/tools/fetch_stormlib.py
+          clang++ -std=c++20 -O0 -w -Wno-c++11-narrowing -Wno-incompatible-ms-struct \
+            -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks -ffp-contract=off \
+            -fsigned-char -mms-bitfields -fno-sized-deallocation -ffunction-sections \
+            -fdata-sections -DNDEBUG -DHIGHFIRST -DSB_NETCODE_OFF -DOC_WITH_HELD \
+            -include engine/src117/h/compiler.h -Iengine/src117/compat -Iengine/src117/h \
+            engine/tools/pluto-native-tests/pluto_runtime_regression.cpp -lz -o "$probe"
+          HYPERION_PLUTO_WINE="$HYPERION_PLUTO_WINE" "$probe" current-capability
+          "$probe" wine-resolution
+          "$probe" wine-11-preflight
+          "$probe" mac-wine-capability
+          python3 engine/tools/pluto-bridge/test_macos_runtime_acceptance.py
+
+      - name: Run the real 32-bit DLL bridge and 64-bit inference on synthetic frames
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/pluto-v2.0.zip"
+          curl --proto '=https' --tlsv1.2 --retry 3 -fL \
+            "https://github.com/tscmoo/pluto/releases/download/v2.0/pluto-v2.0.zip" \
+            -o "$archive"
+          printf '%s  %s\n' "$PLUTO_ARCHIVE_SHA256" "$archive" | shasum -a 256 -c -
+          python3 engine/tools/pluto-bridge/macos_runtime_acceptance.py \
+            --wine "$HYPERION_PLUTO_WINE" \
+            --bridge engine/tools/pluto-bridge/pluto-bridge.exe \
+            --pluto-zip "$archive" \
+            --work "$RUNNER_TEMP/pluto-macos-runtime-acceptance"
+
   publish:
-    needs: [pluto-bridge, windows, linux, mac]
+    needs: [pluto-bridge, windows, linux, mac, pluto-macos-runtime]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
