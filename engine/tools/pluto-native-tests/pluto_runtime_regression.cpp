@@ -514,20 +514,24 @@ bool TestWine11UnifiedPreflight()
     ok = Check(AbsoluteExecutable((dir.root / "bin" / "wine-directory").string()).empty(),
                "an executable directory is not a Wine executable") &&
          Check(ProbeWine11Unified((dir.root / "bin" / "wine-directory").string()) != NULL,
-               "a directory fails Wine preflight before any download") &&
-         Check(ProbeWine11Unified("/bin/true") != NULL, "/bin/true is not accepted as Wine") && ok;
+               "a directory fails Wine preflight before any download") && ok;
     const char *oldPath = getenv("PATH");
     const std::string savedPath = oldPath != NULL ? oldPath : "";
-    setenv("PATH", "/bin", 1);
+    const std::string trueExecutable = ResolveExecutableOnPath("true");
+    const char *directError = ProbeWine11Unified(trueExecutable);
+    std::cerr << "discovered true: path='" << trueExecutable << "', direct probe returns '"
+              << (directError != NULL ? directError : "<accepted>") << "'\n";
+    if (!Check(!trueExecutable.empty(), "the host has a true executable for the rejection tests") ||
+        !Check(directError != NULL, "the discovered true executable fails direct Wine preflight"))
+      return false;
+    setenv("PATH", ParentPath(trueExecutable).c_str(), 1);
     setenv("HYPERION_PLUTO_WINE", "true", 1);
-    const std::string expectedTrue = ResolveExecutableOnPath("true");
     const std::string resolvedTrue = PortPlutoWineExecutable();
     const char *probeError = ProbeWine11Unified(resolvedTrue);
-    std::cerr << "bare true: PATH resolves to '" << expectedTrue << "', override resolves to '" << resolvedTrue
+    std::cerr << "bare true: parent='" << ParentPath(trueExecutable) << "', override resolves to '" << resolvedTrue
               << "', probe returns '" << (probeError != NULL ? probeError : "<accepted>") << "'\n";
-    ok = Check(!expectedTrue.empty(), "the host has a true executable for the bare-name rejection test") && ok;
-    ok = Check(resolvedTrue == expectedTrue, "a bare non-Wine name resolves to the host's true executable") && ok;
-    ok = Check(probeError != NULL, "the host's true executable fails the meaningful Wine probe") && ok;
+    ok = Check(resolvedTrue == trueExecutable, "a bare non-Wine name resolves to the discovered true executable") && ok;
+    ok = Check(probeError != NULL, "the discovered true executable fails the meaningful Wine probe") && ok;
     setenv("PATH", savedPath.c_str(), 1);
     unsetenv("HYPERION_PLUTO_WINE");
   }
@@ -538,17 +542,25 @@ bool TestMacWineCapability()
 {
 #if defined(__APPLE__)
   bool ok = true;
-  setenv("HYPERION_PLUTO_WINE", "/bin/true", 1);
-  ok = Check(PortPlutoInferenceCapabilityError() != NULL, "the public Mac capability rejects /bin/true") && ok;
+  const char *oldPath = getenv("PATH");
+  const std::string savedPath = oldPath != NULL ? oldPath : "";
+  const std::string trueExecutable = ResolveExecutableOnPath("true");
+  std::cerr << "public true discovery: path='" << trueExecutable << "'\n";
+  if (!Check(!trueExecutable.empty(), "the host has a true executable for public capability rejection"))
+    return false;
+  setenv("HYPERION_PLUTO_WINE", trueExecutable.c_str(), 1);
+  const char *directError = PortPlutoInferenceCapabilityError();
+  std::cerr << "public direct true capability: path='" << trueExecutable << "', error='"
+            << (directError != NULL ? directError : "<accepted>") << "'\n";
+  ok = Check(directError != NULL, "the public Mac capability rejects the discovered true executable") && ok;
   {
-    const char *oldPath = getenv("PATH");
-    const std::string savedPath = oldPath != NULL ? oldPath : "";
-    setenv("PATH", "/bin", 1);
+    setenv("PATH", ParentPath(trueExecutable).c_str(), 1);
     setenv("HYPERION_PLUTO_WINE", "true", 1);
     const std::string resolvedTrue = PortPlutoWineExecutable();
     const char *error = PortPlutoInferenceCapabilityError();
     std::cerr << "public bare true capability: path='" << resolvedTrue << "', error='"
               << (error != NULL ? error : "<accepted>") << "'\n";
+    ok = Check(resolvedTrue == trueExecutable, "the public Mac capability resolves bare true to the discovered path") && ok;
     ok = Check(error != NULL, "the public Mac capability rejects bare true") && ok;
     setenv("PATH", savedPath.c_str(), 1);
   }
