@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Two-client Hyperion Zero Private acceptance test, using only local development services.
+"""Two-client Zero Private acceptance test, using only local development services.
 
 The generated launch files contain session credentials. They stay in the local
 acceptance directory and are never printed or uploaded.
@@ -279,7 +279,7 @@ def manifest(setup, seat, game_id, seed, map_path, compatibility, rule, team_siz
     setup["hyperion"] = {
         "protocol": 1,
         "gameId": game_id,
-        "name": "Hyperion Zero Private acceptance",
+        "name": "Zero Private acceptance",
         "gameType": "oneVOne" if team_size == 1 else "topVBottom",
         "gameSubType": 0 if team_size == 1 else team_size,
         "seed": seed,
@@ -621,7 +621,7 @@ def main():
             result = subprocess.run([
                 str(bin_dir / "rp_dev_setup"), "coord-create", "--coordinator", coordinator_url,
                 "--tenant", "hyperion-dev", "--kid", "dev-key-1", "--client-seed", client_seed,
-                "--slots", str(args.team_size * 2), "--name", "Hyperion Zero Private acceptance",
+                "--slots", str(args.team_size * 2), "--name", "Zero Private acceptance",
                 "--formation-id", game_id,
                 "--lobby-seed", str(seed), "--out-dir", work,
             ], stdout=(work / "mint.log").open("w"), stderr=subprocess.STDOUT)
