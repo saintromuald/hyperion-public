@@ -66,6 +66,8 @@ PROGRAM = {"x64": "Hyperion.x86_64", "arm64": "Hyperion.aarch64"}
 MAC_PROGRAM = "Hyperion.arm64"
 MACOS_MIN = "13.0"
 MAC_MIN = ["-mmacosx-version-min=" + MACOS_MIN] if MAC else []
+if MAC:
+    os.environ.setdefault("MACOSX_DEPLOYMENT_TARGET", MACOS_MIN)
 SDL_LIB = "libSDL3.0.dylib" if MAC else "libSDL3.so.0"
 AR = "ar" if MAC else "llvm-ar"
 NM = "nm" if MAC else "llvm-nm"
@@ -730,7 +732,8 @@ def link_mac(objs, libs, exports, obs_obj, n_observer):
         # NSProcessInfo's activity, through the Objective-C runtime (port_posix.cpp, PortPosixKeepRunning)
         + ["-lobjc", "-framework", "Foundation"]
         # H.264, H.265 and AAC (port_sysvideo_mac.cpp)
-        + [w for f in ("VideoToolbox", "CoreMedia", "CoreVideo", "AudioToolbox", "CoreFoundation")
+        + [w for f in ("VideoToolbox", "CoreMedia", "CoreVideo", "AudioToolbox", "CoreFoundation",
+                       "SystemConfiguration")
            for w in ("-framework", f)],
         "link Hyperion")
     # the debug info gathered from the objects, for naming a crash report's frames elsewhere
