@@ -11,12 +11,62 @@ on:
       tag:
         description: "the release's tag, for example v0.7.0-beta"
         required: true
+      channel:
+        description: "release channel recorded in release.json"
+        required: true
+        default: "prerelease"
+        type: choice
+        options:
+          - prerelease
+          - release
 
 permissions:
   contents: write
 
 jobs:
+  pluto-bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      LLVM_MINGW_VERSION: "20261020"
+      LLVM_MINGW_SHA256: "ceb8c5acc6f76e143f9c714772d2fa677027802561ce68c396e8dc990a80f0b6"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Install the pinned llvm-mingw toolchain
+        run: |
+          set -euo pipefail
+          name="llvm-mingw-${LLVM_MINGW_VERSION}-msvcrt-ubuntu-22.04-x86_64"
+          archive="$RUNNER_TEMP/$name.tar.xz"
+          curl --proto '=https' --tlsv1.2 --retry 3 -fL \
+            "https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/$name.tar.xz" \
+            -o "$archive"
+          printf '%s  %s\n' "$LLVM_MINGW_SHA256" "$archive" | sha256sum -c -
+          tar -xJf "$archive" -C "$RUNNER_TEMP"
+          echo "MINGW=$RUNNER_TEMP/$name" >> "$GITHUB_ENV"
+
+      - name: Clean bridge build and tests
+        working-directory: engine/tools/pluto-bridge
+        run: |
+          set -euo pipefail
+          test ! -e pluto-bridge.exe
+          ./build.sh
+          ./host/run-tests.sh
+          ./lifecycle/run-tests.sh
+          ./metadata/run-tests.sh
+          ./late-state/run_tests.sh
+
+      - name: Upload only the Hyperion-owned bridge
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperion-pluto-bridge
+          path: engine/tools/pluto-bridge/pluto-bridge.exe
+          if-no-files-found: error
+
   mac:
+    needs: pluto-bridge
     runs-on: macos-15
     timeout-minutes: 120
     env:
@@ -35,13 +85,22 @@ jobs:
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern mac-inputs.tar.gz --dir "$RUNNER_TEMP"
           tar xzf "$RUNNER_TEMP/mac-inputs.tar.gz"
 
+      - name: Download the authoritative gated bridge
+        uses: actions/download-artifact@v4
+        with:
+          name: hyperion-pluto-bridge
+          path: engine/tools/pluto-bridge
+
       - name: Build
         working-directory: engine
         run: python3 tools/build_engine_linux.py
 
-      - name: Package
+      - name: Package and test Shield
         working-directory: engine
-        run: python3 tools/package.py --mac --out "$RUNNER_TEMP/out"
+        run: |
+          python3 tools/package.py --mac --edition shield --channel "${{ inputs.channel }}" --out "$RUNNER_TEMP/out"
+          python3 tools/test_package_variants.py
+          python3 tools/test_package_variants.py --package-root "$RUNNER_TEMP/out"
 
       - name: Starts
         run: |

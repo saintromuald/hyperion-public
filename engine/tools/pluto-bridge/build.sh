@@ -1,38 +1,50 @@
 #!/bin/sh
-# Build the official-DLL prototype with an image-backed StarCraft reservation.
+# Build the Hyperion-owned bridge with an image-backed StarCraft reservation.
+# All BWAPI sources and the case-insensitive Windows.h shim are vendored below.
+# SOURCE.json records their upstream commit, local changes, and the pinned CI toolchain.
 set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$SCRIPT_DIR"
-MINGW=${MINGW:-/home/saintbellarmine/Downloads/llvm-mingw-20261020-msvcrt-ubuntu-22.04-x86_64}
-BWAPI=${BWAPI:-/home/saintbellarmine/Github/bwapi/bwapi}
-PLUTO_SHIM=${PLUTO_SHIM:-/home/saintbellarmine/Github/pluto/rig/shim}
-CXX="$MINGW/bin/i686-w64-mingw32-g++"
-OBJCOPY="$MINGW/bin/llvm-objcopy"
+export LC_ALL=C
+export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-0}
+
+if [ -n "${MINGW:-}" ]; then
+  CXX=${CXX:-$MINGW/bin/i686-w64-mingw32-g++}
+  OBJCOPY=${OBJCOPY:-$MINGW/bin/llvm-objcopy}
+else
+  CXX=${CXX:-i686-w64-mingw32-g++}
+  OBJCOPY=${OBJCOPY:-llvm-objcopy}
+fi
+command -v "$CXX" >/dev/null 2>&1 || {
+  echo "missing llvm-mingw i686 compiler: $CXX (set MINGW or CXX)" >&2
+  exit 1
+}
+command -v "$OBJCOPY" >/dev/null 2>&1 || {
+  echo "missing llvm-objcopy: $OBJCOPY (set MINGW or OBJCOPY)" >&2
+  exit 1
+}
+
+BWAPI="$SCRIPT_DIR/vendor/bwapi"
+PLUTO_SHIM="$SCRIPT_DIR/vendor/shim"
 SRC="$BWAPI/BWAPIClient/Source"
 LIB="$BWAPI/BWAPILIB/Source"
 SHARED="$BWAPI/Shared"
 mkdir -p dump
-
-# NOTE on patched BWAPI headers (local copy of v4.4.0, for this rig only):
-#  - include/BWAPI/Client/{UnitImpl,PlayerImpl,GameImpl}.h: include the full
-#    interface class headers (<BWAPI/Unit.h> etc.) before inheriting from them;
-#  - include/BWAPI/Client/CommandTemp.h: `class Command;` forward in BWAPI.
-#
-# Host-provenance limitation: PLUTO_SHIM is an external include overlay and the
-# BWAPI checkout carries the local header edits above.  They affect the host ABI
-# and are NOT covered by the official pluto.dll digest or vendored by this build.
-# Review/pin those dependencies separately when reproducing the host binary.
+rm -f dump/pluto-bridge-linked.exe dump/pluto-bridge.debug \
+  dump/pluto-bridge-stripped.exe pluto-bridge.exe
 
 # Link fixed at 0x800000 with every real function/data item in its own input
-# section.  Debug data is separated before pluto_pe.py adds .game/.hdr, because
-# the full debug section table leaves no room in SizeOfHeaders.  The transform
+# section. Debug data is separated before pluto_pe.py adds .game/.hdr, because
+# the full debug section table leaves no room in SizeOfHeaders. The transform
 # moves the final image base to 0x400000 without moving any linked virtual
 # address, adds the RWX .game reservation at 0x401000..0x800000, and rewrites
-# RVAs/imports/TLS/debug metadata.  LAA is required for the 0xF0B5D710 stack.
+# RVAs/imports/TLS/debug metadata. LAA is required for the 0xF0B5D710 stack.
+# Prefix maps and no-insert-timestamp make identical inputs produce identical bytes.
 "$CXX" -std=c++17 -O1 -g -m32 -ffunction-sections -fdata-sections \
-  -I"$PLUTO_SHIM" \
+  -ffile-prefix-map="$SCRIPT_DIR"=. -fdebug-prefix-map="$SCRIPT_DIR"=. \
+  -I"$PLUTO_SHIM" -I"$BWAPI/include/BWAPI/Client" \
   -I"$BWAPI/include" -I"$BWAPI/BWAPI/Source" -I"$SHARED" \
-  -I"$SRC" -I"$BWAPI/BWAPI/Source/BWAPI" -I"$BWAPI/bwapi" -I"$BWAPI/Util/Source" \
+  -I"$SRC" -I"$BWAPI/BWAPI/Source/BWAPI" -I"$BWAPI/Util/Source" \
   pluto-bridge.cpp \
   "$SRC/GameImpl.cpp" "$SRC/UnitImpl.cpp" "$SRC/PlayerImpl.cpp" \
   "$SRC/BulletImpl.cpp" "$SRC/ForceImpl.cpp" "$SRC/RegionImpl.cpp" "$SRC/Client.cpp" \
@@ -46,13 +58,24 @@ mkdir -p dump
   "$LIB/Event.cpp" "$BWAPI/BWAPILIB/UnitCommand.cpp" "$LIB/Filters.cpp" \
   "$BWAPI/Util/Source/Util/Sha1.cpp" \
   -Wl,--image-base,0x800000 -Wl,--disable-dynamicbase \
-  -Wl,--disable-reloc-section -Wl,--large-address-aware \
-  -o pluto-bridge-linked.exe -lwinmm -lws2_32 -static-libgcc -static-libstdc++
-"$OBJCOPY" --only-keep-debug pluto-bridge-linked.exe dump/pluto-bridge.debug
-"$OBJCOPY" --strip-debug pluto-bridge-linked.exe pluto-bridge-stripped.exe
-python3 pluto_pe.py pluto-bridge-stripped.exe pluto-bridge.exe
+  -Wl,--disable-reloc-section -Wl,--large-address-aware -Wl,--no-insert-timestamp \
+  -o dump/pluto-bridge-linked.exe -lwinmm -lws2_32 -static-libgcc -static-libstdc++
+"$OBJCOPY" --only-keep-debug dump/pluto-bridge-linked.exe dump/pluto-bridge.debug
+"$OBJCOPY" --strip-debug dump/pluto-bridge-linked.exe dump/pluto-bridge-stripped.exe
+python3 pluto_pe.py dump/pluto-bridge-stripped.exe pluto-bridge.exe
 python3 verify_pe.py pluto-bridge.exe
-printf '%s  %s\n' \
-  603fea2f77a4b652f29b832c2977cf5bc9d83bbcb927febd04499220020ce3bc pluto.dll \
-  | sha256sum -c -
-echo "OK -> pluto-bridge.exe (official pluto.dll only)"
+
+# A local official DLL remains an optional validation input, never a build input
+# copied into an artifact. Runtime verification in official-dll.h is unconditional.
+PLUTO_DLL=${PLUTO_DLL:-$SCRIPT_DIR/pluto.dll}
+if [ -f "$PLUTO_DLL" ]; then
+  printf '%s  %s\n' \
+    603fea2f77a4b652f29b832c2977cf5bc9d83bbcb927febd04499220020ce3bc "$PLUTO_DLL" \
+    | sha256sum -c -
+elif [ "${REQUIRE_OFFICIAL_PLUTO_DLL:-0}" = 1 ]; then
+  echo "official pluto.dll is required but missing: $PLUTO_DLL" >&2
+  exit 1
+else
+  echo "official pluto.dll not supplied; bridge runtime will verify it before loading"
+fi
+echo "OK -> pluto-bridge.exe (official pluto.dll is not bundled)"

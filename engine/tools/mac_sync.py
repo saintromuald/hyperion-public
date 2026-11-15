@@ -61,6 +61,8 @@ def main() -> int:
     files = [] if a.extras else git("ls-files", "-co", "--exclude-standard", "engine").splitlines()
     files += [p.relative_to(REPO).as_posix() for p in (ENGINE / "src117" / "build" / "x64" / "shaders").rglob("*.h")]
     files += ["engine/src117/build/web/play/" + n for n in ("hyperion.js", "hyperion.wasm")]
+    # The bridge is a downloaded CI artifact, so git ls-files cannot discover it.
+    files += ["engine/tools/pluto-bridge/pluto-bridge.exe"]
     files += [] if a.extras else ["docs/" + n for n in PACKAGE_DOCS]
     files += [p.relative_to(REPO).as_posix() for p in sorted(MAPS.glob("*.hxm"))] if MAPS.is_dir() else []
     if a.third is not None:

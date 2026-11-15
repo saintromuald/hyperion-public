@@ -1,0 +1,10 @@
+BWAPI 4.4.0 source and license
+
+The bridge statically links code from BWAPI 4.4.0, licensed under LGPL v3.
+The complete corresponding source subset, including the four header changes,
+is distributed with Hyperion's source at engine/tools/pluto-bridge/vendor/bwapi.
+Upstream: https://github.com/bwapi/bwapi.git
+Commit: 7687da8abc4726f8366401f11ab648d421385793
+
+See COPYING beside this notice in the source tree, or COPYING.BWAPI beside
+this notice in a packaged release, for the license terms.

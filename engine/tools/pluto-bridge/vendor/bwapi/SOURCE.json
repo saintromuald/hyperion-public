@@ -1,0 +1,21 @@
+{
+  "project": "BWAPI",
+  "version": "4.4.0",
+  "source": "https://github.com/bwapi/bwapi.git",
+  "commit": "7687da8abc4726f8366401f11ab648d421385793",
+  "license": "LGPL-3.0-only; see COPYING",
+  "contents": "Only the public headers and source files needed to compile pluto-bridge.exe and its layout tests. These are the corresponding sources for the statically linked BWAPI code in the bridge.",
+  "localChanges": [
+    "include/BWAPI/Client/GameImpl.h includes BWAPI/Game.h before deriving GameImpl from Game",
+    "include/BWAPI/Client/PlayerImpl.h includes BWAPI/Player.h before deriving PlayerImpl from Player",
+    "include/BWAPI/Client/UnitImpl.h includes BWAPI/Unit.h before deriving UnitImpl from Unit",
+    "include/BWAPI/Client/CommandTemp.h forward-declares BWAPI::Command"
+  ],
+  "toolchain": {
+    "project": "llvm-mingw",
+    "release": "20261020",
+    "archive": "llvm-mingw-20261020-msvcrt-ubuntu-22.04-x86_64.tar.xz",
+    "url": "https://github.com/mstorsjo/llvm-mingw/releases/download/20261020/llvm-mingw-20261020-msvcrt-ubuntu-22.04-x86_64.tar.xz",
+    "sha256": "ceb8c5acc6f76e143f9c714772d2fa677027802561ce68c396e8dc990a80f0b6"
+  }
+}

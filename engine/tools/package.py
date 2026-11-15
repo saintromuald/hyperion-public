@@ -55,10 +55,12 @@ contents go where the Linux package's go. ditto zips it, keeping the signature.
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 import io
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tarfile
@@ -70,6 +72,11 @@ ENGINE = Path(__file__).resolve().parents[1]
 REPO = ENGINE.parent
 BUILT = ENGINE / "src117" / "build" / "x64" / "Hyperion.exe"
 SDL3 = ENGINE / "third_party" / "SDL3-3.4.16" / "lib" / "x64" / "SDL3.dll"
+PLUTO_DIR = ENGINE / "tools" / "pluto-bridge"
+PLUTO_BRIDGE = PLUTO_DIR / "pluto-bridge.exe"
+PLUTO_BRIDGE_ARCHIVE = "Data/pluto/pluto-bridge.exe"
+PLUTO_BWAPI = PLUTO_DIR / "vendor" / "bwapi"
+OFFICIAL_PLUTO_FILENAMES = frozenset({"pluto.dll", "pluto_infer.exe", "pluto_weights.bin"})
 MODS = ENGINE / "mods"
 # Hyperion's mods for its own testing, in no package or install (the user, 2026-10-27: "For
 # public release those don't go with the build for now as its testing use"): the Hybrid Test the
@@ -561,6 +568,9 @@ def edition_metadata(args, ver: str, platform: str) -> bytes:
         "visibility": "private" if zero else "public",
         "platform": platform,
         "gameFilesBundled": zero,
+        "plutoSetupMode": "official-download",
+        "plutoBridgeBundled": True,
+        "plutoOfficialFilesBundled": False,
     }, indent=2) + "\n")
 
 
@@ -612,13 +622,53 @@ def validate_variant(args) -> None:
         sys.exit(f"Hyperion Zero Private's game install is empty: {source}")
 
 
+def pluto_pe_verifier():
+    """Load the bridge's own verifier without making its hyphenated directory a Python package."""
+    name = "_hyperion_pluto_verify_pe"
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, PLUTO_DIR / "verify_pe.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def validated_pluto_bridge() -> Path:
+    """The only Pluto executable a package may carry, checked before any output is written."""
+    try:
+        data = PLUTO_BRIDGE.read_bytes()
+        pluto_pe_verifier().verify(data)
+    except (OSError, struct.error, pluto_pe_verifier().PeVerificationError) as error:
+        sys.exit(f"missing or invalid {PLUTO_BRIDGE_ARCHIVE}: {error}; run tools/pluto-bridge/build.sh")
+    return PLUTO_BRIDGE
+
+
+def pluto_entries() -> list:
+    """The Hyperion-owned bridge and BWAPI's required license/corresponding-source notice."""
+    return [
+        (PLUTO_BRIDGE_ARCHIVE, validated_pluto_bridge()),
+        ("Data/pluto/COPYING.BWAPI", PLUTO_BWAPI / "COPYING"),
+        ("Data/pluto/SOURCE.BWAPI.txt", PLUTO_BWAPI / "SOURCE.txt"),
+    ]
+
+
+def validate_no_official_pluto_payloads(entries: list) -> None:
+    for entry in entries:
+        archive_name = entry[0].replace("\\", "/")
+        if archive_name.rsplit("/", 1)[-1].lower() in OFFICIAL_PLUTO_FILENAMES:
+            sys.exit(f"refusing to package official Pluto payload: {archive_name}")
+
+
 def game_file_entries(args) -> list:
     """The private Remastered install, as archive-relative paths only."""
     if args.edition != "zero":
         return []
     source = args.game_files
-    return [("Game/" + p.relative_to(source).as_posix(), p)
-            for p in sorted(source.rglob("*")) if p.is_file()]
+    entries = [("Game/" + p.relative_to(source).as_posix(), p)
+               for p in sorted(source.rglob("*")) if p.is_file()]
+    validate_no_official_pluto_payloads(entries)
+    return entries
 
 
 def variant_entries(args, ver: str, platform: str, program: str = "") -> list:
@@ -661,6 +711,7 @@ def package_linux(args, ver: str) -> int:
     for p in [program, sdl, *DOCS]:
         if not p.exists():
             sys.exit(f"missing {p} (python tools/build_engine_linux.py --arch {args.linux})")
+    pluto = pluto_entries()
     out = args.out / f"{edition_prefix(args).lower()}_{ver}_linux-{args.linux}_{time.strftime('%Y%m%d_%H%M%S')}"
     out.mkdir(parents=True)
     listing = []
@@ -668,12 +719,15 @@ def package_linux(args, ver: str) -> int:
     now = int(time.time())
     with tarfile.open(archive, "w:gz") as t:
         def put(name: str, data: bytes, mode: int = 0o644):
+            validate_no_official_pluto_payloads([(name,)])
             info = tarfile.TarInfo(name)
             info.size, info.mode, info.mtime = len(data), mode, now
             t.addfile(info, io.BytesIO(data))
             listing.append(f"{name}  {len(data)} bytes  sha1 {hashlib.sha1(data).hexdigest()}")
         put(name, program.read_bytes(), 0o755)
         put("libSDL3.so.0", sdl.read_bytes(), 0o755)
+        for pluto_name, source in pluto:
+            put(pluto_name, source.read_bytes())
         for f in shipped_mod_files():
             put("Data/mods/" + f.relative_to(MODS).as_posix(), f.read_bytes())
         for f in sorted((NOTES / "media").rglob("*")) if (NOTES / "media").is_dir() else []:
@@ -722,6 +776,7 @@ def package_mac(args, ver: str) -> int:
     for p in [program, sdl, *DOCS]:
         if not p.exists():
             sys.exit(f"missing {p} (python3 tools/build_engine_linux.py)")
+    pluto = pluto_entries()
     out = args.out / f"{edition_prefix(args).lower()}_{ver}_mac-arm64_{time.strftime('%Y%m%d_%H%M%S')}"
     stage = out / f"{edition_prefix(args)}-{ver}-mac"
     app = stage / "Hyperion.app" / "Contents"
@@ -730,6 +785,7 @@ def package_mac(args, ver: str) -> int:
     listing = []
 
     def put(name: str, data: bytes, mode: int = 0o644):
+        validate_no_official_pluto_payloads([(name,)])
         path = stage / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
@@ -738,6 +794,8 @@ def package_mac(args, ver: str) -> int:
 
     put("Hyperion.app/Contents/MacOS/Hyperion", program.read_bytes(), 0o755)
     put("Hyperion.app/Contents/MacOS/libSDL3.0.dylib", sdl.read_bytes(), 0o755)
+    for pluto_name, source in pluto:
+        put(pluto_name, source.read_bytes())
     m = re.search(r"v?(\d+)\.(\d+)\.(\d+)", ver)
     short = ".".join(m.groups()) if m else "0.0.0"
     number = re.search(r"HYPERION_BUILD_NUMBER (\d+)", (built / "build_id.h").read_text()) if (built / "build_id.h").exists() else None
@@ -805,7 +863,7 @@ def package_mac(args, ver: str) -> int:
 
 def windows_files(ver: str, args) -> list:
     """The Windows zip's files: each its name in the zip and its source, a file or the bytes."""
-    files = [("Hyperion.exe", BUILT), ("SDL3.dll", SDL3)]
+    files = [("Hyperion.exe", BUILT), ("SDL3.dll", SDL3), *pluto_entries()]
     for f in shipped_mod_files():
         files.append(("Data/mods/" + f.relative_to(MODS).as_posix(), f))
     for f in sorted((NOTES / "media").rglob("*")) if (NOTES / "media").is_dir() else []:
@@ -835,6 +893,7 @@ def windows_files(ver: str, args) -> list:
     for name, data, _ in variant_entries(args, ver, "windows"):
         files.append((name, data))
     files.extend(game_file_entries(args))
+    validate_no_official_pluto_payloads(files)
     return files
 
 
@@ -947,6 +1006,31 @@ def install_folders() -> list:
     return [Path(l) for l in lines if l]
 
 
+def package_windows(args, ver: str) -> int:
+    for p in [BUILT, SDL3, *DOCS]:
+        if not p.exists():
+            sys.exit(f"missing {p}")
+    files = windows_files(ver, args)
+    out = args.out / f"{edition_prefix(args).lower()}_{ver}_{time.strftime('%Y%m%d_%H%M%S')}"
+    out.mkdir(parents=True)
+    listing = []
+    build_zip = out / f"{edition_prefix(args)}-{ver}-windows-x64.zip"
+    with zipfile.ZipFile(build_zip, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, src in files:
+            if isinstance(src, Path):
+                z.write(src, name)
+                listing.append(f"{name}  {src.stat().st_size} bytes  sha1 {sha1(src)}")
+            else:
+                z.writestr(name, src)
+                listing.append(f"{name}  {len(src)} bytes")
+    maps = [name for name, _ in files if name.startswith("Data/maps/")]
+    (out / "contents.txt").write_bytes(crlf("\n".join(listing) + "\n"))
+    keep_symbols(ver, release=True)
+    print(f"{build_zip}  ({build_zip.stat().st_size:,} bytes)")
+    print(f"{len(maps)} test maps; contents.txt lists everything")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--build", action="store_true", help="build Hyperion.exe first")
@@ -984,32 +1068,7 @@ def main() -> int:
         if not folders:
             sys.exit(f"--install: no folder given and none in {INSTALL_TO}")
         return install(folders, version(), args)
-    for p in [BUILT, SDL3, *DOCS]:
-        if not p.exists():
-            sys.exit(f"missing {p}")
-
-    ver = version()
-    out = args.out / f"{edition_prefix(args).lower()}_{ver}_{time.strftime('%Y%m%d_%H%M%S')}"
-    out.mkdir(parents=True)
-    listing = []
-
-    build_zip = out / f"{edition_prefix(args)}-{ver}-windows-x64.zip"
-    files = windows_files(ver, args)
-    with zipfile.ZipFile(build_zip, "w", zipfile.ZIP_DEFLATED) as z:
-        for name, src in files:
-            if isinstance(src, Path):
-                z.write(src, name)
-                listing.append(f"{name}  {src.stat().st_size} bytes  sha1 {sha1(src)}")
-            else:
-                z.writestr(name, src)
-                listing.append(f"{name}  {len(src)} bytes")
-
-    maps = [name for name, _ in files if name.startswith("Data/maps/")]
-    (out / "contents.txt").write_bytes(crlf("\n".join(listing) + "\n"))
-    keep_symbols(ver, release=True)
-    print(f"{build_zip}  ({build_zip.stat().st_size:,} bytes)")
-    print(f"{len(maps)} test maps; contents.txt lists everything")
-    return 0
+    return package_windows(args, version())
 
 
 if __name__ == "__main__":
