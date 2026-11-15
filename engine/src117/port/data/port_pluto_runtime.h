@@ -10,8 +10,9 @@
 // logs, configuration and bandit data share that folder but are not official install payloads.
 std::string PortPlutoRuntimeFolder();
 
-// NULL only when the OS/Rosetta and Wine 11 unified-runtime prerequisites pass. This is preflight,
-// not proof of inference: actual engine readiness, replies, and shutdown are validated separately.
+// NULL only when the platform prerequisites pass: native AVX2 plus unified Wine 11 on Intel Macs,
+// or macOS 26.4+ plus MetalSharp Wine on Apple Silicon. This is preflight, not proof of inference:
+// actual engine readiness, replies, and shutdown are validated separately.
 const char *PortPlutoInferenceCapabilityError();
 // Download capability is separate so --no-sb does not disable an already-installed offline runtime.
 const char *PortPlutoDownloadCapabilityError();

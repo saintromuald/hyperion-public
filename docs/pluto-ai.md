@@ -44,9 +44,10 @@ every peer deterministically, and the match must produce consistent results and 
 
 Requirements: x86-64 with AVX2 (AVX-VNNI doubles the step rate); a step every 6 game
 frames, ~20-60 ms on a current CPU; the game slows rather than the bot playing worse. On Apple
-Silicon, macOS 15+ Rosetta and an official unified Wine 11 build are required, with
-`ROSETTA_ADVERTISE_AVX=1` set for translated consumers. See `pluto-macos-runtime.md` for the exact
-prerequisite and release gate; preflight alone is not inference evidence.
+Silicon, macOS 26.4+ and the signed MetalSharp Wine 6.0 (Wine 11) ARM64/FEX app are required.
+Generic WineHQ/Rosetta is incompatible and is not accepted by preflight. Native Intel Macs retain
+their AVX2 and unified Wine 11 path. See `pluto-macos-runtime.md` for the exact prerequisite and
+release gate; preflight alone is not inference evidence.
 
 ## The protocol, as read from the binaries
 

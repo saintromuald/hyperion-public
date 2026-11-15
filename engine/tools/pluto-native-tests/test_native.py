@@ -354,6 +354,9 @@ class PortRegressionTests(unittest.TestCase):
     def test_runtime_wine_11_version_and_dual_architecture_preflight(self):
         self.run_regression("pluto_runtime_regression", "wine-11-preflight")
 
+    def test_runtime_apple_silicon_requires_metalsharp_wine(self):
+        self.run_regression("pluto_runtime_regression", "metalsharp-preflight")
+
     @unittest.skipUnless(
         os.environ.get("HYPERION_PLUTO_TEST_CURRENT_CAPABILITY") == "1",
         "explicit runtime-acceptance capability probe",

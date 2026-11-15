@@ -827,21 +827,33 @@ bool RunCapturedProcess(const std::string &program, const std::vector<std::strin
   return waited == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
-#if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
-bool TranslatedMacOsSupported()
+bool MacOsVersionAtLeast(const std::string &text, long minimumMajor, long minimumMinor)
 {
-  // CPUID and hw.optional.avx2_0 can omit AVX2 even when macOS 15 Rosetta executes it. Check the
-  // supported OS and actual x86-64 translation here; the real inference run is the AVX2 evidence.
+  const std::string version = Trimmed(text);
+  char *end = NULL;
+  const long major = strtol(version.c_str(), &end, 10);
+  if (end == version.c_str())
+    return false;
+  long minor = 0;
+  if (*end == '.') {
+    const char *minorStart = end + 1;
+    minor = strtol(minorStart, &end, 10);
+    if (end == minorStart)
+      return false;
+  }
+  if (*end != 0 && *end != '.')
+    return false;
+  return major > minimumMajor || (major == minimumMajor && minor >= minimumMinor);
+}
+
+#if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
+bool MetalSharpMacOsSupported()
+{
   static const bool available = [] {
     std::string output;
-    if (!RunCapturedProcess("/usr/bin/arch",
-                            {"arch", "-x86_64", "/usr/sbin/sysctl", "-n", "kern.osproductversion"}, false,
-                            &output))
-      return false;
-    const std::string version = Trimmed(output);
-    char *end = NULL;
-    const long major = strtol(version.c_str(), &end, 10);
-    return end != version.c_str() && major >= 15;
+    return RunCapturedProcess("/usr/sbin/sysctl", {"sysctl", "-n", "kern.osproductversion"}, false,
+                              &output) &&
+           MacOsVersionAtLeast(output, 26, 4);
   }();
   return available;
 }
@@ -856,6 +868,39 @@ std::string AbsoluteExecutable(const std::string &candidate)
   if (!path.is_absolute())
     path = fs::absolute(path, ec);
   return ec ? "" : path.lexically_normal().string();
+}
+
+const char kMetalSharpWinePath[] = "/Applications/MetalSharp-Wine.app/Contents/MacOS/wine";
+const char kAppManagedMetalSharpWineRelativePath[] =
+    "Library/Application Support/Hyperion/MetalSharp-Wine-6.0.app/Contents/MacOS/wine";
+
+const char *ProbeMetalSharpWine(const std::string &wine)
+{
+  if (AbsoluteExecutable(wine).empty())
+    return "The selected MetalSharp Wine path is not a regular executable file.";
+  std::string version;
+  const bool wine11 = RunCapturedProcess(wine, {wine, "--version"}, false, &version);
+  const std::string identity = Trimmed(version);
+  if (!wine11 || identity.rfind("wine-11.", 0) != 0 || identity.find("MetalSharp Wine") == std::string::npos)
+    return "Pluto inference on Apple Silicon needs Wine 11 with MetalSharp Wine identity. Generic WineHQ and Rosetta are not compatible; select the official MetalSharp Wine app's Contents/MacOS/wine executable.";
+
+  const fs::path executable(wine);
+  const fs::path contents = executable.parent_path().parent_path();
+  if (executable.filename() != "wine" || executable.parent_path().filename() != "MacOS" ||
+      contents.filename() != "Contents" || contents.parent_path().extension() != ".app")
+    return "HYPERION_PLUTO_WINE must name Contents/MacOS/wine inside a MetalSharp Wine .app bundle.";
+
+  const fs::path wineFiles = contents / "lib" / "wine";
+  std::error_code ec;
+  const bool i386 = fs::is_regular_file(wineFiles / "i386-windows" / "ntdll.dll", ec) && !ec;
+  const bool runtimeFiles = i386 &&
+                            !AbsoluteExecutable((contents / "MacOS" / "wineserver").string()).empty() &&
+                            !AbsoluteExecutable((wineFiles / "aarch64-unix" / "wine").string()).empty();
+  if (!runtimeFiles)
+    return "The selected MetalSharp Wine app lacks its required wineserver, i386 Windows runtime, or aarch64 Unix loader.";
+  if (!fs::is_regular_file(contents / "embedded.provisionprofile", ec) || ec)
+    return "The selected MetalSharp Wine app lacks Contents/embedded.provisionprofile, which is required for cross-architecture execution.";
+  return NULL;
 }
 
 const char *ProbeWine11Unified(const std::string &wine)
@@ -882,7 +927,7 @@ const char *Wine11UnifiedError(const std::string &wine)
 {
   // Setup surfaces call this repeatedly. Cache per resolved pathname rather than starting Wine for
   // every redraw; changing HYPERION_PLUTO_WINE selects a new probe. Restart after repairing Wine in
-  // place, just as after installing Rosetta.
+  // place.
   static std::mutex lock;
   static std::string cachedPath;
   static const char *cachedError = NULL;
@@ -919,6 +964,43 @@ std::string ResolveExecutableOnPath(const std::string &program)
   }
   return "";
 }
+
+std::string AppManagedMetalSharpWinePath(const char *home)
+{
+  if (home == NULL || home[0] == 0)
+    return "";
+  return JoinPath(home, kAppManagedMetalSharpWineRelativePath);
+}
+
+std::string ResolveAppleSiliconWineExecutable(const char *overridePath, const char *home,
+                                              const char *systemPath)
+{
+  if (overridePath != NULL && overridePath[0] != 0)
+    return ResolveExecutableOnPath(overridePath);
+  const std::string appManaged = AppManagedMetalSharpWinePath(home);
+  if (!appManaged.empty()) {
+    const std::string resolved = ResolveExecutableOnPath(appManaged);
+    if (!resolved.empty())
+      return resolved;
+  }
+  return ResolveExecutableOnPath(systemPath);
+}
+
+const char *MetalSharpWineError(const std::string &wine)
+{
+  // Cache per resolved pathname just like the Intel Wine probe; repair requires a restart.
+  static std::mutex lock;
+  static std::string cachedPath;
+  static const char *cachedError = NULL;
+  static bool cached = false;
+  std::lock_guard<std::mutex> hold(lock);
+  if (cached && cachedPath == wine)
+    return cachedError;
+  cachedError = ProbeMetalSharpWine(wine);
+  cachedPath = wine;
+  cached = true;
+  return cachedError;
+}
 #endif
 
 }  // namespace
@@ -940,10 +1022,13 @@ std::string PortPlutoWineExecutable()
   return "";
 #else
   const char *wine = getenv("HYPERION_PLUTO_WINE");
+#if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
+  return ResolveAppleSiliconWineExecutable(wine, getenv("HOME"), kMetalSharpWinePath);
+#else
   if (wine != NULL && wine[0] != 0)
     return ResolveExecutableOnPath(wine);
 #if defined(__APPLE__)
-  // These are the app-bundle paths used by the official WineHQ macOS packages. A unified Wine 11
+  // Native Intel Macs retain the official WineHQ app-bundle and PATH search. A unified Wine 11
   // loader is required: wine64-only installations cannot run Hyperion's 32-bit bridge.
   static const char *const installed[] = {
       "/Applications/Wine Stable.app/Contents/Resources/wine/bin/wine",
@@ -960,6 +1045,7 @@ std::string PortPlutoWineExecutable()
   return ResolveExecutableOnPath("/usr/bin/wine");
 #endif
 #endif
+#endif
 }
 
 const char *PortPlutoInferenceCapabilityError()
@@ -970,18 +1056,24 @@ const char *PortPlutoInferenceCapabilityError()
 #if defined(__x86_64__) || defined(__amd64__)
   if (!__builtin_cpu_supports("avx2"))
     return "Pluto inference needs an x86-64 CPU with AVX2 support.";
-#elif defined(__aarch64__) || defined(__arm64__)
-  if (!TranslatedMacOsSupported())
-    return "Pluto inference on Apple Silicon needs macOS 15 or later and a working Rosetta 2 x86-64 translator. Install Rosetta with 'softwareupdate --install-rosetta --agree-to-license', then restart Hyperion.";
-#else
-  return "Pluto inference needs an Apple Silicon or x86-64 Mac with AVX2 support.";
-#endif
   const std::string wine = PortPlutoWineExecutable();
   if (wine.empty())
     return "Pluto inference needs an official Wine 11 macOS package with unified 32-bit and 64-bit Windows support. Install Wine in /Applications or on PATH, or set HYPERION_PLUTO_WINE to its absolute wine executable, then retry.";
   if (const char *wineError = Wine11UnifiedError(wine))
     return wineError;
   return NULL;
+#elif defined(__aarch64__) || defined(__arm64__)
+  if (!MetalSharpMacOsSupported())
+    return "Pluto inference on Apple Silicon needs macOS 26.4 or later. Update macOS, then restart Hyperion.";
+  const std::string wine = PortPlutoWineExecutable();
+  if (wine.empty())
+    return "Pluto inference on Apple Silicon needs MetalSharp Wine 6.0 (Wine 11). Install MetalSharp-Wine-6.0.app in '$HOME/Library/Application Support/Hyperion' (no admin access) or MetalSharp-Wine.app in /Applications, or set HYPERION_PLUTO_WINE to its Contents/MacOS/wine executable, then retry.";
+  if (const char *wineError = MetalSharpWineError(wine))
+    return wineError;
+  return NULL;
+#else
+  return "Pluto inference needs an Apple Silicon or x86-64 Mac with AVX2 support.";
+#endif
 #elif defined(_MSC_VER)
   if (IsProcessorFeaturePresent(PF_AVX2_INSTRUCTIONS_AVAILABLE))
     return NULL;

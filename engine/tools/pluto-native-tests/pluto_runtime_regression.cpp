@@ -478,6 +478,29 @@ fs::path MakeFakeWine11(const TestDirectory &dir, const std::string &version, bo
   return executable;
 }
 
+fs::path MakeFakeMetalSharpWine(const TestDirectory &dir,
+                                const std::string &version = "wine-11.20 (MetalSharp Wine 6.0)",
+                                bool complete = true, bool profile = true)
+{
+  const fs::path contents = dir.root / "MetalSharp-Wine.app" / "Contents";
+  const fs::path executable = contents / "MacOS" / "wine";
+  Write(executable, "#!/bin/sh\nprintf '%s\\n' \"$0\" > \"" + (dir.root / "invoked").string() +
+                        "\"\nprintf '%s\\n' \"$ROSETTA_ADVERTISE_AVX\" > \"" +
+                        (dir.root / "rosetta").string() + "\"\nprintf '%s\\n' '" + version + "'\n");
+  fs::permissions(executable, fs::perms::all, fs::perm_options::replace);
+  if (complete) {
+    Write(contents / "MacOS" / "wineserver", "wineserver");
+    Write(contents / "lib" / "wine" / "i386-windows" / "ntdll.dll", "i386");
+    Write(contents / "lib" / "wine" / "aarch64-unix" / "wine", "loader");
+    fs::permissions(contents / "MacOS" / "wineserver", fs::perms::all, fs::perm_options::replace);
+    fs::permissions(contents / "lib" / "wine" / "aarch64-unix" / "wine", fs::perms::all,
+                    fs::perm_options::replace);
+  }
+  if (profile)
+    Write(contents / "embedded.provisionprofile", "synthetic provisioning profile");
+  return executable;
+}
+
 bool TestWine11UnifiedPreflight()
 {
   bool ok = true;
@@ -538,6 +561,125 @@ bool TestWine11UnifiedPreflight()
   return ok;
 }
 
+bool TestMetalSharpWinePreflight()
+{
+  bool ok = Check(MacOsVersionAtLeast("26.4\n", 26, 4), "macOS 26.4 meets the MetalSharp minimum") &&
+            Check(MacOsVersionAtLeast("26.4.1", 26, 4), "a macOS patch release is accepted") &&
+            Check(MacOsVersionAtLeast("26.10", 26, 4), "macOS minor versions compare numerically") &&
+            Check(MacOsVersionAtLeast("27", 26, 4), "a later macOS major version is accepted") &&
+            Check(!MacOsVersionAtLeast("26.3.9", 26, 4), "macOS 26.3 is refused") &&
+            Check(!MacOsVersionAtLeast("25.9", 26, 4), "an earlier macOS major version is refused") &&
+            Check(!MacOsVersionAtLeast("26.x", 26, 4), "a malformed macOS minor version is refused") &&
+            Check(!MacOsVersionAtLeast("not-a-version", 26, 4), "a malformed macOS version is refused");
+
+  {
+    TestDirectory dir;
+    const fs::path executable = MakeFakeMetalSharpWine(dir);
+    unsetenv("ROSETTA_ADVERTISE_AVX");
+    ok = Check(ProbeMetalSharpWine(executable.string()) == NULL,
+               "Wine 11 MetalSharp with its complete app layout passes preflight") &&
+         ok;
+    ok = Check(Read(dir.root / "invoked") == Bytes(executable.string() + "\n"),
+               "the MetalSharp version probe uses the selected absolute executable") &&
+         ok;
+    ok = Check(Read(dir.root / "rosetta") == Bytes("\n"),
+               "the MetalSharp probe does not inject Rosetta environment variables") &&
+         ok;
+    const fs::path home = dir.root / "home";
+    const fs::path appManaged = home / "Library" / "Application Support" / "Hyperion" /
+                                "MetalSharp-Wine-6.0.app" / "Contents" / "MacOS" / "wine";
+    const fs::path system = dir.root / "Applications" / "MetalSharp-Wine.app" / "Contents" / "MacOS" / "wine";
+    Write(appManaged, "app-managed");
+    Write(system, "existing system Wine");
+    fs::permissions(appManaged, fs::perms::all, fs::perm_options::replace);
+    fs::permissions(system, fs::perms::all, fs::perm_options::replace);
+    ok = Check(AppManagedMetalSharpWinePath(home.c_str()) == appManaged.string(),
+               "the app-managed runtime uses the versioned Hyperion Library path") &&
+         ok;
+    ok = Check(std::string(kMetalSharpWinePath) ==
+                   "/Applications/MetalSharp-Wine.app/Contents/MacOS/wine",
+               "the system fallback is the signed MetalSharp app's wine loader") &&
+         ok;
+    ok = Check(ResolveAppleSiliconWineExecutable(executable.c_str(), home.c_str(), system.c_str()) ==
+                   executable.string(),
+               "an explicit Apple Silicon Wine override wins over both installed locations") &&
+         ok;
+    ok = Check(ResolveAppleSiliconWineExecutable(NULL, home.c_str(), system.c_str()) == appManaged.string(),
+               "the app-managed MetalSharp runtime is preferred over the system installation") &&
+         ok;
+    ok = Check(ResolveAppleSiliconWineExecutable(NULL, (dir.root / "missing-home").c_str(), system.c_str()) ==
+                   system.string(),
+               "the system MetalSharp installation remains the fallback") &&
+         ok;
+    ok = Check(Read(system) == Bytes("existing system Wine"),
+               "runtime discovery does not replace an existing system Wine") &&
+         ok;
+    const char *oldPath = getenv("PATH");
+    const std::string savedPath = oldPath != NULL ? oldPath : "";
+    setenv("PATH", executable.parent_path().c_str(), 1);
+    ok = Check(ResolveAppleSiliconWineExecutable("wine", home.c_str(), system.c_str()) == executable.string(),
+               "an explicit bare override still resolves through PATH before installed locations") &&
+         ok;
+    ok = Check(ResolveAppleSiliconWineExecutable(NULL, (dir.root / "missing-home").c_str(), "/missing/default")
+                   .empty(),
+               "Apple Silicon does not fall back to a generic Wine on PATH") &&
+         ok;
+    setenv("PATH", savedPath.c_str(), 1);
+  }
+  {
+    TestDirectory dir;
+    const fs::path executable = MakeFakeWine11(dir, "wine-11.21");
+    const char *error = ProbeMetalSharpWine(executable.string());
+    ok = Check(error != NULL && std::string(error).find("Generic WineHQ") != std::string::npos,
+               "generic WineHQ is explicitly incompatible with Apple Silicon preflight") &&
+         ok;
+  }
+  {
+    TestDirectory dir;
+    const fs::path executable = MakeFakeMetalSharpWine(dir, "wine-10.0 (MetalSharp Wine 6.0)");
+    ok = Check(ProbeMetalSharpWine(executable.string()) != NULL, "MetalSharp with the wrong Wine major is refused") &&
+         ok;
+  }
+  {
+    TestDirectory dir;
+    const fs::path executable = MakeFakeWine11(dir, "wine-11.20 (MetalSharp Wine 6.0)");
+    const char *error = ProbeMetalSharpWine(executable.string());
+    ok = Check(error != NULL && std::string(error).find("Contents/MacOS/wine") != std::string::npos,
+               "MetalSharp identity outside the signed app layout is refused") &&
+         ok;
+  }
+  {
+    TestDirectory dir;
+    const fs::path executable = MakeFakeMetalSharpWine(dir);
+    fs::remove(executable.parent_path().parent_path() / "lib" / "wine" / "i386-windows" / "ntdll.dll");
+    ok = Check(ProbeMetalSharpWine(executable.string()) != NULL, "MetalSharp without its i386 runtime is refused") &&
+         ok;
+  }
+  {
+    TestDirectory dir;
+    const fs::path executable = MakeFakeMetalSharpWine(dir);
+    fs::remove(executable.parent_path().parent_path() / "lib" / "wine" / "aarch64-unix" / "wine");
+    ok = Check(ProbeMetalSharpWine(executable.string()) != NULL, "MetalSharp without its aarch64 loader is refused") &&
+         ok;
+  }
+  {
+    TestDirectory dir;
+    const fs::path executable = MakeFakeMetalSharpWine(dir);
+    fs::remove(executable.parent_path() / "wineserver");
+    ok = Check(ProbeMetalSharpWine(executable.string()) != NULL, "MetalSharp without wineserver is refused") && ok;
+  }
+  {
+    TestDirectory dir;
+    const fs::path executable = MakeFakeMetalSharpWine(dir, "wine-11.20 (MetalSharp Wine 6.0)", true, false);
+    const char *error = ProbeMetalSharpWine(executable.string());
+    ok = Check(error != NULL && std::string(error).find("embedded.provisionprofile") != std::string::npos,
+               "MetalSharp without its cross-architecture provisioning profile is refused") &&
+         ok;
+  }
+  unsetenv("ROSETTA_ADVERTISE_AVX");
+  return ok;
+}
+
 bool TestMacWineCapability()
 {
 #if defined(__APPLE__)
@@ -584,12 +726,33 @@ bool TestMacWineCapability()
   }
   {
     TestDirectory dir;
+#if defined(__aarch64__) || defined(__arm64__)
+    const fs::path executable = MakeFakeMetalSharpWine(dir);
+    setenv("HYPERION_PLUTO_WINE", executable.c_str(), 1);
+    const char *error = PortPlutoInferenceCapabilityError();
+    if (error != NULL)
+      std::cerr << error << '\n';
+    if (MetalSharpMacOsSupported())
+      ok = Check(error == NULL, "the public Apple Silicon capability accepts a complete MetalSharp installation") && ok;
+    else
+      ok = Check(error != NULL && std::string(error).find("macOS 26.4") != std::string::npos,
+                 "the public Apple Silicon capability enforces macOS 26.4 before Wine") &&
+           ok;
+    const fs::path generic = MakeFakeWine11(dir, "wine-11.21");
+    setenv("HYPERION_PLUTO_WINE", generic.c_str(), 1);
+    error = PortPlutoInferenceCapabilityError();
+    if (MetalSharpMacOsSupported())
+      ok = Check(error != NULL && std::string(error).find("Generic WineHQ") != std::string::npos,
+                 "the public Apple Silicon capability rejects compatible-looking generic WineHQ") &&
+           ok;
+#else
     const fs::path executable = MakeFakeWine11(dir, "wine-11.21");
     setenv("HYPERION_PLUTO_WINE", executable.c_str(), 1);
     const char *error = PortPlutoInferenceCapabilityError();
     if (error != NULL)
       std::cerr << error << '\n';
-    ok = Check(error == NULL, "the public Mac capability accepts a valid Wine 11 unified installation") && ok;
+    ok = Check(error == NULL, "the public Intel Mac capability accepts a valid Wine 11 unified installation") && ok;
+#endif
   }
   unsetenv("HYPERION_PLUTO_WINE");
   return ok;
@@ -801,6 +964,8 @@ int main(int argc, char **argv)
     ok = TestCurrentCapability();
   else if (scenario == "wine-11-preflight")
     ok = TestWine11UnifiedPreflight();
+  else if (scenario == "metalsharp-preflight")
+    ok = TestMetalSharpWinePreflight();
   else if (scenario == "mac-wine-capability")
     ok = TestMacWineCapability();
   else if (scenario == "no-sb-capability")

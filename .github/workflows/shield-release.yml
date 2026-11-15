@@ -32,9 +32,9 @@ on:
         default: false
         type: boolean
       mac-backend:
-        description: "runtime-only diagnostic backend; non-default backends cannot publish"
+        description: "MetalSharp Wine/FEX for release; Rosetta is diagnostic-only and cannot publish"
         required: true
-        default: "rosetta"
+        default: "fex-probe"
         type: choice
         options:
           - rosetta
@@ -55,10 +55,10 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
-      - name: Restrict alternate Mac backends to diagnostic runs
+      - name: Restrict the incompatible Rosetta backend to diagnostic runs
         run: |
-          if [ "${{ inputs.mac-backend }}" != rosetta ] && [ "${{ inputs.runtime-only }}" != true ]; then
-            echo "Alternate Mac backends are probe-only; use runtime-only with publish=false." >&2
+          if [ "${{ inputs.mac-backend }}" != fex-probe ] && [ "${{ inputs.runtime-only }}" != true ]; then
+            echo "Rosetta cannot run Pluto; use runtime-only with publish=false for its diagnostic probe." >&2
             exit 1
           fi
 
@@ -280,7 +280,6 @@ jobs:
       FEX_WINE_ARCHIVE: "MetalSharp-Wine-6.0-arm64.zip"
       FEX_WINE_SHA256: "25f7dff91000c03c835b800980878acb12c1f952a4b7853f77de7f21fb87046f"
       PLUTO_ARCHIVE_SHA256: "17544fc3ab32e3e2823646887e021cf998362348d73740817e94d1a78aa6209d"
-      ROSETTA_ADVERTISE_AVX: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -298,11 +297,16 @@ jobs:
           name: hyperion-pluto-cpuid-probe
           path: engine/tools/pluto-bridge
 
-      - name: Require macOS 15+ Apple Silicon and a working Rosetta translator
+      - name: Require Apple Silicon
         run: |
           set -euo pipefail
           sw_vers
           test "$(uname -m)" = arm64
+
+      - name: Require macOS 15+ and Rosetta for the diagnostic backend
+        if: ${{ inputs.mac-backend == 'rosetta' }}
+        run: |
+          set -euo pipefail
           test "$(/usr/sbin/sysctl -n kern.osproductversion | cut -d. -f1)" -ge 15
           if ! /usr/bin/arch -x86_64 /usr/bin/true >/dev/null 2>&1; then
             sudo /usr/sbin/softwareupdate --install-rosetta --agree-to-license
@@ -347,7 +351,7 @@ jobs:
           test -x "$wine_root/lib/wine/x86_64-unix/wine"
           echo "HYPERION_PLUTO_WINE=$wine" >> "$GITHUB_ENV"
 
-      - name: Install the pinned signed MetalSharp Wine/FEX diagnostic runtime
+      - name: Install the pinned signed MetalSharp Wine/FEX runtime
         if: ${{ inputs.mac-backend == 'fex-probe' }}
         run: |
           set -euo pipefail
@@ -378,7 +382,7 @@ jobs:
           echo '--- native x86-64 under Rosetta ---'
           /usr/bin/arch -x86_64 "$native"
           echo '--- Windows x86-64 under Wine/Rosetta ---'
-          WINEPREFIX="$RUNNER_TEMP/wine-cpuid-prefix" WINEDEBUG=-all \
+          ROSETTA_ADVERTISE_AVX=1 WINEPREFIX="$RUNNER_TEMP/wine-cpuid-prefix" WINEDEBUG=-all \
             "$HYPERION_PLUTO_WINE" "$PWD/engine/tools/pluto-bridge/cpuid-probe.exe"
 
       - name: Probe x86 feature detection through signed Wine/FEX
@@ -388,8 +392,8 @@ jobs:
           WINEPREFIX="$RUNNER_TEMP/wine-fex-cpuid-prefix" WINEDEBUG=-all \
             "$HYPERION_PLUTO_WINE" "$PWD/engine/tools/pluto-bridge/cpuid-probe.exe"
 
-      - name: Check production Wine/Rosetta capability resolution
-        if: ${{ inputs.mac-backend == 'rosetta' }}
+      - name: Check production MetalSharp capability resolution
+        if: ${{ inputs.mac-backend == 'fex-probe' }}
         run: |
           set -euo pipefail
           probe="$RUNNER_TEMP/pluto_runtime_regression"
@@ -403,6 +407,7 @@ jobs:
           HYPERION_PLUTO_WINE="$HYPERION_PLUTO_WINE" "$probe" current-capability
           "$probe" wine-resolution
           "$probe" wine-11-preflight
+          "$probe" metalsharp-preflight
           "$probe" mac-wine-capability
 
       - name: Check the macOS harness's host-only tests
@@ -426,7 +431,7 @@ jobs:
             --work "$RUNNER_TEMP/pluto-macos-runtime-acceptance"
 
   publish:
-    if: ${{ inputs.publish && !inputs.runtime-only && inputs.mac-backend == 'rosetta' }}
+    if: ${{ inputs.publish && !inputs.runtime-only && inputs.mac-backend == 'fex-probe' }}
     needs: [pluto-bridge, windows, linux, mac, pluto-macos-runtime]
     runs-on: ubuntu-24.04
     permissions:
