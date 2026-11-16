@@ -1902,6 +1902,27 @@ int main(int argc, char **argv) {
   AddUnit(UnitTypes::Enum::Terran_Marine, 1, 3272, 3272, 40);
   fprintf(stderr, "[bridge] %d units\n", g->initialUnitCount);
   fflush(stdout);
+
+  // Native Windows requires the process's MZ header to stay intact while a thread starts.
+  // UpdateScMemory uses 0x400001 as the SC fixture's empty string, so create the pipe worker
+  // first; it waits on the publication state machine before touching the module or client.
+  snprintf(name, sizeof name, "\\\\.\\pipe\\bwapi_pipe_%lu", pid);
+  HANDLE hPipe = CreateNamedPipeA(name, PIPE_ACCESS_DUPLEX,
+                                  PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                                  1, 4096, 4096, 2000, NULL);
+  if (hPipe == INVALID_HANDLE_VALUE) {
+    fprintf(stderr, "[bridge] pipe failed (%lu)\n", GetLastError());
+    return 1;
+  }
+  if (bDebug)
+    fprintf(stderr, "[bridge] pipe name %s\n", name);
+  InitializeCriticalSection(&g_stateLock);
+  InitializeConditionVariable(&g_stateChanged);
+  s_pipeThread = CreateThread(NULL, 0, ServePipe, hPipe, 0, NULL);
+  if (s_pipeThread == NULL) {
+    fprintf(stderr, "[bridge] pipe thread creation failed (%lu)\n", GetLastError());
+    return 1;
+  }
   UpdateScMemory();
 
   // 2. The game list the client's connect() opens.
@@ -1917,18 +1938,6 @@ int main(int argc, char **argv) {
   table->gameInstances[0].serverProcessID = pid;
   table->gameInstances[0].isConnected = false;
   table->gameInstances[0].lastKeepAliveTime = GetTickCount();
-
-  // 3. The pipe, listening before the bot's thread starts.
-  snprintf(name, sizeof name, "\\\\.\\pipe\\bwapi_pipe_%lu", pid);
-  HANDLE hPipe = CreateNamedPipeA(name, PIPE_ACCESS_DUPLEX,
-                                  PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                                  1, 4096, 4096, 2000, NULL);
-  if (hPipe == INVALID_HANDLE_VALUE) {
-    fprintf(stderr, "[bridge] pipe failed (%lu)\n", GetLastError());
-    return 1;
-  }
-  if (bDebug)
-    fprintf(stderr, "[bridge] pipe name %s\n", name);
 
   // 4. Open the explicit official path with read sharing only.  Win32 sharing
   // rules then reject existing writers and deny new write/delete opens while
@@ -2152,14 +2161,6 @@ int main(int argc, char **argv) {
   // so connection is optional and cannot gate host progress by itself.  Once a
   // real client connects, ServePipe and PublicationState apply backpressure
   // until each delivered generation has been consumed and acknowledged.
-  InitializeCriticalSection(&g_stateLock);
-  InitializeConditionVariable(&g_stateChanged);
-  s_pipeThread = CreateThread(NULL, 0, ServePipe, hPipe, 0, NULL);
-  if (s_pipeThread == NULL) {
-    fprintf(stderr, "[bridge] pipe thread creation failed (%lu)\n", GetLastError());
-    return 1;
-  }
-
   // 6. Drive the module through its own vtable, as the bridge does: its layout is not
   // BWAPI 4.4.0's AIModule (no virtual destructor; slots read from the disassembly):
   //   [1] onStart(), [2] onEnd(bool), [3] onFrame().

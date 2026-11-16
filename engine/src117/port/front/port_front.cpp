@@ -1220,10 +1220,11 @@ static void FrontHandBack(bool bComesBack = false)
   }
 }
 
-// A seat of a LAN room (--join) where the front end cannot draw, a browser's: no
-// screen, the room's lobby being the page's, until the room launches a match, which goes as
-// the front end's does, or has it watch one (W3), whose replay starts as the front end's
-// Watch starts it; 0xFFF0, the menu again, when the window closes first.
+// A seat of a LAN room (--join) or command-line relay match (--sb-setup) where the front end
+// cannot draw: no screen, with the room's lobby on the browser's page or the relay launch read
+// directly, until the match starts as the front end's does. A room can instead have this seat
+// watch a match (W3), whose replay starts as the front end's Watch starts it; 0xFFF0, the menu
+// again, when the window closes first.
 static int SeatWait(void)
 {
 #if defined(__EMSCRIPTEN__)
@@ -1262,7 +1263,9 @@ static int SeatWait(void)
 int PortFrontMainMenu(int *pbExpansion)
 {
   FrontOn();
-  if (!PortPresentGpu() && PortCommandOptions()->szJoin[0])
+  const PortOptions *pOptions = PortCommandOptions();
+  if (!PortPresentGpu() &&
+      (pOptions->szJoin[0] || (pOptions->szSbSetup[0] && pOptions->szSbRole[0])))
     return SeatWait();
   if (!g_bOn || !PortPresentGpu())
     return -1;
