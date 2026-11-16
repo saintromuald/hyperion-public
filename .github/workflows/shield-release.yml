@@ -476,7 +476,8 @@ jobs:
             echo "Release $TAG already exists; choose a new version instead of replacing its assets." >&2
             exit 1
           fi
-          gh release create "$TAG" --target "${{ inputs.ref }}" --title "Hyperion Shield Zero $TAG" \
+          version="${TAG#hyperion-shield-zero-v}"
+          gh release create "$TAG" --target "${{ inputs.ref }}" --title "Hyperion Shield Zero $version" \
             --notes "Hyperion Shield Zero, without StarCraft game files. Supply your own StarCraft: Remastered or classic Brood War install." \
             "${prerelease[@]}"
           find packages -type f \( -name 'Hyperion-Shield-Zero-*.zip' -o -name 'Hyperion-Shield-Zero-*.tar.gz' \) \
