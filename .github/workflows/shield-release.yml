@@ -408,6 +408,10 @@ jobs:
           "$probe" wine-resolution
           "$probe" wine-11-preflight
           "$probe" metalsharp-preflight
+          "$probe" metalsharp-install-success
+          "$probe" metalsharp-install-validation
+          "$probe" metalsharp-install-rollback
+          "$probe" metalsharp-combined
           "$probe" mac-wine-capability
 
       - name: Check the macOS harness's host-only tests

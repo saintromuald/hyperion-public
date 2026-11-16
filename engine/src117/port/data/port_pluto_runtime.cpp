@@ -1,9 +1,10 @@
 // port_pluto_runtime.cpp -- official Pluto runtime resolution, verification and repair.
 //
 // The three closed-source payloads are fetched directly from tscmoo/pluto's pinned v2.0 release.
-// Nothing is mirrored or bundled here. A download lands in a sibling staging directory, its outer
-// and inner SHA-256 digests are checked, and only those three known paths are atomically replaced.
-// The bridge, logs, configuration and bandit data in the runtime folder are left alone.
+// Apple Silicon first installs the pinned signed MetalSharp Wine dependency when needed. Nothing is
+// mirrored or bundled here. Downloads land in owned staging, their pinned digests are checked, and
+// only the app-managed Wine bundle and three known payload paths are replaced. The bridge, logs,
+// configuration, bandit data, and every other Wine installation are left alone.
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,6 +33,8 @@
 #endif
 #if !defined(_WIN32)
 #include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
 #include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -70,6 +73,14 @@ const PlutoRuntimeSpec &OfficialSpec()
         kPayloadMax},
        {"pluto/pluto_weights.bin", "c53a559b4910777dc0e1c561c0d89d243091f465d8e9fc0f5f72e56597067d86",
         347935248, kPayloadMax}}};
+  return spec;
+}
+
+const PlutoRuntimeSpec &OfficialMetalSharpSpec()
+{
+  static const PlutoRuntimeSpec spec = {
+      "https://github.com/metalsharp/MetalSharp-Wine/releases/download/v6.0/MetalSharp-Wine-6.0-arm64.zip",
+      "25f7dff91000c03c835b800980878acb12c1f952a4b7853f77de7f21fb87046f", 1356725682, {}};
   return spec;
 }
 
@@ -368,8 +379,9 @@ bool Cancelled(const CancelFn &cancel, std::string *pError)
 
 class ArchiveSink {
 public:
-  ArchiveSink(const std::string &path, uint64_t cbExpected, CancelFn cancel, ProgressFn progress)
-      : m_expected(cbExpected), m_cancel(std::move(cancel)), m_progress(std::move(progress))
+  ArchiveSink(const std::string &path, uint64_t cbExpected, CancelFn cancel, ProgressFn progress,
+              const char *stage = "downloading")
+      : m_expected(cbExpected), m_cancel(std::move(cancel)), m_progress(std::move(progress)), m_stage(stage)
   {
     m_file = fopen(path.c_str(), "wb");
   }
@@ -404,7 +416,7 @@ public:
       m_hash.Update(pData, cb);
     m_received += cb;
     if (m_progress)
-      m_progress(m_received, m_expected, "downloading");
+      m_progress(m_received, m_expected, m_stage.c_str());
     return true;
   }
 
@@ -434,6 +446,7 @@ private:
   uint64_t m_expected, m_received = 0;
   CancelFn m_cancel;
   ProgressFn m_progress;
+  std::string m_stage;
   FILE *m_file = NULL;
   bool m_failed = false;
   pluto_bridge::Sha256 m_hash;
@@ -827,6 +840,94 @@ bool RunCapturedProcess(const std::string &program, const std::vector<std::strin
   return waited == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
+bool RunCancellableProcess(const std::string &program, const std::vector<std::string> &args,
+                           const CancelFn &cancel, std::string *pOutput)
+{
+  int output[2] = {-1, -1};
+  if (pipe(output) != 0)
+    return false;
+  posix_spawn_file_actions_t actions;
+  if (posix_spawn_file_actions_init(&actions) != 0) {
+    close(output[0]);
+    close(output[1]);
+    return false;
+  }
+  const bool actionsOk = posix_spawn_file_actions_adddup2(&actions, output[1], STDOUT_FILENO) == 0 &&
+                         posix_spawn_file_actions_adddup2(&actions, output[1], STDERR_FILENO) == 0 &&
+                         posix_spawn_file_actions_addclose(&actions, output[0]) == 0 &&
+                         posix_spawn_file_actions_addclose(&actions, output[1]) == 0;
+  posix_spawnattr_t attributes;
+  const bool attributesInitialized = posix_spawnattr_init(&attributes) == 0;
+  const bool attributesOk = attributesInitialized &&
+                            posix_spawnattr_setpgroup(&attributes, 0) == 0 &&
+                            posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETPGROUP) == 0;
+  std::vector<char *> argv;
+  for (const std::string &arg : args)
+    argv.push_back(const_cast<char *>(arg.c_str()));
+  argv.push_back(NULL);
+  pid_t pid = -1;
+  const int spawned = actionsOk && attributesOk
+                          ? posix_spawn(&pid, program.c_str(), &actions, &attributes, argv.data(), environ)
+                          : EINVAL;
+  if (attributesInitialized)
+    posix_spawnattr_destroy(&attributes);
+  posix_spawn_file_actions_destroy(&actions);
+  close(output[1]);
+  if (spawned != 0) {
+    close(output[0]);
+    return false;
+  }
+
+  const bool nonblocking = fcntl(output[0], F_SETFL, fcntl(output[0], F_GETFL, 0) | O_NONBLOCK) >= 0;
+  if (!nonblocking) {
+    kill(-pid, SIGKILL);
+    kill(pid, SIGKILL);
+    int ignored = 0;
+    while (waitpid(pid, &ignored, 0) < 0 && errno == EINTR) {
+    }
+    close(output[0]);
+    return false;
+  }
+
+  std::string text;
+  int status = 0;
+  pid_t waited = 0;
+  bool killed = false;
+  while (waited == 0) {
+    for (;;) {
+      char block[256];
+      const ssize_t got = read(output[0], block, sizeof block);
+      if (got > 0) {
+        if (text.size() < 4096)
+          text.append(block, std::min(static_cast<size_t>(got), 4096 - text.size()));
+      } else if (got < 0 && errno == EINTR) {
+        continue;
+      } else {
+        break;
+      }
+    }
+    pid_t result;
+    do {
+      result = waitpid(pid, &status, WNOHANG);
+    } while (result < 0 && errno == EINTR);
+    if (result != 0) {
+      waited = result;
+      break;
+    }
+    if (!killed && cancel && cancel()) {
+      // The tool and any children it spawned share this owned process group. They only touch the
+      // dependency's staging directory, never the active app or Pluto runtime.
+      kill(-pid, SIGKILL);
+      kill(pid, SIGKILL);
+      killed = true;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  close(output[0]);
+  *pOutput = text;
+  return !killed && waited == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
 bool MacOsVersionAtLeast(const std::string &text, long minimumMajor, long minimumMinor)
 {
   const std::string version = Trimmed(text);
@@ -871,6 +972,8 @@ std::string AbsoluteExecutable(const std::string &candidate)
 }
 
 const char kMetalSharpWinePath[] = "/Applications/MetalSharp-Wine.app/Contents/MacOS/wine";
+const char kAppManagedMetalSharpWineAppRelativePath[] =
+    "Library/Application Support/Hyperion/MetalSharp-Wine-6.0.app";
 const char kAppManagedMetalSharpWineRelativePath[] =
     "Library/Application Support/Hyperion/MetalSharp-Wine-6.0.app/Contents/MacOS/wine";
 
@@ -965,6 +1068,13 @@ std::string ResolveExecutableOnPath(const std::string &program)
   return "";
 }
 
+std::string AppManagedMetalSharpWineAppPath(const char *home)
+{
+  if (home == NULL || home[0] == 0)
+    return "";
+  return JoinPath(home, kAppManagedMetalSharpWineAppRelativePath);
+}
+
 std::string AppManagedMetalSharpWinePath(const char *home)
 {
   if (home == NULL || home[0] == 0)
@@ -986,20 +1096,268 @@ std::string ResolveAppleSiliconWineExecutable(const char *overridePath, const ch
   return ResolveExecutableOnPath(systemPath);
 }
 
+struct MetalSharpProbeCache {
+  std::mutex lock;
+  std::string path;
+  const char *error = NULL;
+  bool valid = false;
+};
+
+MetalSharpProbeCache &GlobalMetalSharpProbeCache()
+{
+  static MetalSharpProbeCache cache;
+  return cache;
+}
+
 const char *MetalSharpWineError(const std::string &wine)
 {
-  // Cache per resolved pathname just like the Intel Wine probe; repair requires a restart.
-  static std::mutex lock;
-  static std::string cachedPath;
-  static const char *cachedError = NULL;
-  static bool cached = false;
-  std::lock_guard<std::mutex> hold(lock);
-  if (cached && cachedPath == wine)
-    return cachedError;
-  cachedError = ProbeMetalSharpWine(wine);
-  cachedPath = wine;
-  cached = true;
-  return cachedError;
+  // Setup surfaces call this repeatedly, so only a resolved-path change or dependency activation
+  // starts another Wine process.
+  MetalSharpProbeCache &cache = GlobalMetalSharpProbeCache();
+  std::lock_guard<std::mutex> hold(cache.lock);
+  if (cache.valid && cache.path == wine)
+    return cache.error;
+  cache.error = ProbeMetalSharpWine(wine);
+  cache.path = wine;
+  cache.valid = true;
+  return cache.error;
+}
+
+void InvalidateMetalSharpWineProbeCache()
+{
+  MetalSharpProbeCache &cache = GlobalMetalSharpProbeCache();
+  std::lock_guard<std::mutex> hold(cache.lock);
+  cache.valid = false;
+  cache.path.clear();
+  cache.error = NULL;
+}
+
+using MetalSharpToolFn = std::function<bool(const std::string &, const std::vector<std::string> &,
+                                            const CancelFn &, std::string *)>;
+using MetalSharpMoveFn = std::function<bool(const std::string &, const std::string &, std::string *)>;
+
+struct MetalSharpTools {
+  std::string ditto = "/usr/bin/ditto";
+  std::string codesign = "/usr/bin/codesign";
+  MetalSharpToolFn run = RunCancellableProcess;
+  MetalSharpMoveFn move = MoveAtomic;
+};
+
+bool PathEntryExists(const std::string &path, bool *pExists, std::string *pError)
+{
+  std::error_code ec;
+  const fs::file_status status = fs::symlink_status(NativePath(path), ec);
+  if (ec == std::errc::no_such_file_or_directory) {
+    *pExists = false;
+    return true;
+  }
+  if (ec) {
+    *pError = "Could not inspect " + path + ": " + ec.message();
+    return false;
+  }
+  *pExists = fs::exists(status);
+  return true;
+}
+
+bool MakeFreshDirectory(const std::string &path, std::string *pError)
+{
+  std::error_code ec;
+  const bool created = fs::create_directory(NativePath(path), ec);
+  if (ec || !created) {
+    *pError = "Could not create the owned fresh staging directory " + path +
+              (ec ? ": " + ec.message() : " because it already exists.");
+    return false;
+  }
+  fs::permissions(NativePath(path), fs::perms::owner_all, fs::perm_options::replace, ec);
+  if (ec) {
+    *pError = "Could not restrict the dependency staging directory: " + ec.message();
+    CleanupStage(path);
+    return false;
+  }
+  return true;
+}
+
+bool RunMetalSharpTool(const MetalSharpTools &tools, const std::string &program,
+                       const std::vector<std::string> &args, const CancelFn &cancel,
+                       const char *failure, std::string *pError)
+{
+  std::string output;
+  if (!tools.run || !tools.run(program, args, cancel, &output)) {
+    if (Cancelled(cancel, pError))
+      return false;
+    const std::string detail = Trimmed(output);
+    *pError = failure + (detail.empty() ? std::string(".") : ": " + detail);
+    return false;
+  }
+  return !Cancelled(cancel, pError);
+}
+
+bool InstallMetalSharpRuntime(const PlutoRuntimeSpec &spec, const std::string &target,
+                              const MetalSharpTools &tools, const TransportFn &transport,
+                              const CancelFn &cancel, const ProgressFn &progress, std::string *pError)
+{
+  if (target.empty()) {
+    *pError = "The app-managed MetalSharp Wine destination is empty.";
+    return false;
+  }
+  if (Cancelled(cancel, pError))
+    return false;
+  const std::string activeWine = JoinPath(JoinPath(target, "Contents"), "MacOS/wine");
+  if (ProbeMetalSharpWine(activeWine) == NULL)
+    return true;
+
+  const std::string parent = ParentPath(target);
+  if (!MakeDirectories(parent, pError))
+    return false;
+  static std::atomic<unsigned> serial{0};
+  const auto ticks = std::chrono::steady_clock::now().time_since_epoch().count();
+  const std::string stage = JoinPath(parent, ".metalsharp-install-" + std::to_string(ticks) + "-" +
+                                               std::to_string(++serial));
+  if (!MakeFreshDirectory(stage, pError))
+    return false;
+  bool preserveStage = false;
+  auto fail = [&] {
+    Log("Pluto install: MetalSharp dependency failed: %s", *pError);
+    if (!preserveStage)
+      CleanupStage(stage);
+    else
+      Log("Pluto install: dependency staging retained for recovery at %s", stage);
+    return false;
+  };
+
+  Log("Pluto install: MetalSharp download begins: %s (%llu bytes)", spec.url,
+      static_cast<unsigned long long>(spec.cbArchive));
+  const std::string archive = JoinPath(stage, "MetalSharp-Wine-6.0-arm64.zip");
+  if (progress)
+    progress(0, spec.cbArchive, "downloading-wine");
+  {
+    ArchiveSink sink(archive, spec.cbArchive, cancel, progress, "downloading-wine");
+    if (!sink.Open(pError))
+      return fail();
+    if (Cancelled(cancel, pError) || !transport(spec, sink, pError) || !sink.Finish(pError))
+      return fail();
+    if (sink.sha256() != spec.sha256) {
+      *pError = "The downloaded MetalSharp Wine ZIP failed its pinned SHA-256 check.";
+      return fail();
+    }
+  }
+  std::error_code ec;
+  const uint64_t archiveSize = fs::file_size(NativePath(archive), ec);
+  if (ec || archiveSize != spec.cbArchive) {
+    *pError = "The downloaded MetalSharp Wine ZIP does not have its pinned exact byte size.";
+    return fail();
+  }
+  if (Cancelled(cancel, pError))
+    return fail();
+
+  const std::string unpacked = JoinPath(stage, "unpacked");
+  if (!MakeDirectories(unpacked, pError))
+    return fail();
+  if (progress)
+    progress(spec.cbArchive, spec.cbArchive, "extracting-wine");
+  if (!RunMetalSharpTool(tools, tools.ditto,
+                         {tools.ditto, "-x", "-k", archive, unpacked}, cancel,
+                         "macOS ditto could not extract the signed MetalSharp Wine archive", pError))
+    return fail();
+
+  const std::string stagedApp = JoinPath(unpacked, "MetalSharp-Wine.app");
+  const fs::file_status appStatus = fs::symlink_status(NativePath(stagedApp), ec);
+  if (ec || !fs::is_directory(appStatus) || fs::is_symlink(appStatus)) {
+    *pError = "The MetalSharp archive did not produce a real MetalSharp-Wine.app directory in owned staging.";
+    return fail();
+  }
+  if (progress)
+    progress(spec.cbArchive, spec.cbArchive, "validating-wine");
+  if (!RunMetalSharpTool(tools, tools.codesign,
+                         {tools.codesign, "--verify", "--strict", "--deep", stagedApp}, cancel,
+                         "MetalSharp Wine failed codesign --verify --strict --deep", pError))
+    return fail();
+  if (const char *wineError = ProbeMetalSharpWine(JoinPath(JoinPath(stagedApp, "Contents"), "MacOS/wine"))) {
+    *pError = std::string("The downloaded MetalSharp Wine app failed pre-activation validation: ") + wineError;
+    return fail();
+  }
+  if (Cancelled(cancel, pError))
+    return fail();
+
+  if (progress)
+    progress(spec.cbArchive, spec.cbArchive, "activating-wine");
+  bool hadOld = false;
+  if (!PathEntryExists(target, &hadOld, pError))
+    return fail();
+  const std::string backup = JoinPath(stage, "previous.app");
+  bool oldMoved = false;
+  auto restorePrevious = [&] {
+    if (!oldMoved)
+      return true;
+    std::string restoreError;
+    if (tools.move && tools.move(backup, target, &restoreError)) {
+      oldMoved = false;
+      return true;
+    }
+    preserveStage = true;
+    *pError += " The previous app-managed bundle could not be restored and remains at " + backup;
+    if (!restoreError.empty())
+      *pError += ": " + restoreError;
+    return false;
+  };
+
+  if (hadOld) {
+    if (!tools.move || !tools.move(target, backup, pError))
+      return fail();
+    oldMoved = true;
+  }
+  if (Cancelled(cancel, pError)) {
+    restorePrevious();
+    return fail();
+  }
+  if (!tools.move || !tools.move(stagedApp, target, pError)) {
+    restorePrevious();
+    return fail();
+  }
+  CleanupStage(stage);  // the active app is complete; this also discards the superseded app bundle
+  Log("Pluto install: verified MetalSharp Wine installed at %s", target);
+  return true;
+}
+
+using WineExecutableFn = std::function<std::string()>;
+using InferenceCapabilityFn = std::function<const char *()>;
+
+bool InstallAppleSiliconRuntime(const PlutoRuntimeSpec &spec, const PlutoRuntimeSpec &wineSpec,
+                                const std::string &folder, const char *home,
+                                const MetalSharpTools &tools, const TransportFn &transport,
+                                const WineExecutableFn &wineExecutable,
+                                const InferenceCapabilityFn &capability, const CancelFn &cancel,
+                                const ProgressFn &progress, std::string *pError)
+{
+  if (Cancelled(cancel, pError))
+    return false;
+  if (progress)
+    progress(0, wineSpec.cbArchive, "checking-wine");
+  const std::string selected = wineExecutable ? wineExecutable() : "";
+  const bool wineReady = !selected.empty() && MetalSharpWineError(selected) == NULL;
+  if (!wineReady) {
+    const std::string target = AppManagedMetalSharpWineAppPath(home);
+    if (target.empty()) {
+      *pError = "Could not determine HOME for the admin-free MetalSharp Wine installation.";
+      return false;
+    }
+    if (!InstallMetalSharpRuntime(wineSpec, target, tools, transport, cancel, progress, pError))
+      return false;
+    InvalidateMetalSharpWineProbeCache();
+  }
+  if (Cancelled(cancel, pError))
+    return false;
+  if (capability) {
+    if (const char *capabilityError = capability()) {
+      *pError = std::string("Pluto inference preflight still fails after MetalSharp Wine setup; no Pluto "
+                            "payloads were replaced: ") +
+                capabilityError;
+      return false;
+    }
+  }
+  if (progress)
+    progress(0, spec.cbArchive, "downloading");
+  return InstallRuntime(spec, folder, transport, cancel, progress, pError);
 }
 #endif
 
@@ -1093,6 +1451,12 @@ const char *PortPlutoDownloadCapabilityError()
 {
 #ifdef SB_NETCODE_OFF
   return "This build cannot download Pluto AI because its HTTPS downloader is not included (built with --no-sb).";
+#elif defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
+  if (!MetalSharpMacOsSupported())
+    return "Pluto setup on Apple Silicon needs macOS 26.4 or later. Update macOS, then restart Hyperion.";
+  // A missing or invalid app-managed Wine is the dependency this action installs. Inference keeps
+  // its stricter gate and is checked again after dependency activation, before Pluto replacement.
+  return NULL;
 #else
   return PortPlutoInferenceCapabilityError();
 #endif
@@ -1152,12 +1516,23 @@ bool PortPlutoInstallStartOrCancel(bool bInGame)
   if (installer.worker.joinable())
     installer.worker.join();  // the previous worker published its terminal state while unlocked
   installer.cancel.store(false);
+#if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
+  installer.status = {PORT_PLUTO_INSTALL_RUNNING, 0, OfficialMetalSharpSpec().cbArchive, "checking-wine", ""};
+#else
   installer.status = {PORT_PLUTO_INSTALL_RUNNING, 0, OfficialSpec().cbArchive, "downloading", ""};
+#endif
   try {
     installer.worker = std::thread([] {
       std::string error;
+#if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
+      const bool installed = InstallAppleSiliconRuntime(
+          OfficialSpec(), OfficialMetalSharpSpec(), PortPlutoRuntimeFolder(), getenv("HOME"),
+          MetalSharpTools{}, RustTransport, PortPlutoWineExecutable, PortPlutoInferenceCapabilityError,
+          GlobalCancelled, Progress, &error);
+#else
       const bool installed = InstallRuntime(OfficialSpec(), PortPlutoRuntimeFolder(), RustTransport,
                                             GlobalCancelled, Progress, &error);
+#endif
       if (installed)
         SetPhase(PORT_PLUTO_INSTALL_SUCCEEDED);
       else
@@ -1198,29 +1573,55 @@ std::string PortPlutoInstallText(const PortPlutoInstallStatus &status)
   case PORT_PLUTO_INSTALL_SUCCEEDED:
     return "Pluto AI v2.0 runtime is installed and verified. Repair downloads the official files again.";
   case PORT_PLUTO_INSTALL_RUNNING:
-    if (status.stage == "verifying")
-      return "Verifying the official ZIP and every runtime file's SHA-256...";
-    if (status.stage == "installing")
-      return "Installing verified files; the bridge, logs, configuration and bandit data are preserved...";
     if (GlobalCancelled())
-      return "Cancelling the Pluto AI download...";
+      return "Cancelling Pluto AI setup; no partial app or runtime will be activated...";
+    if (status.stage == "checking-wine")
+      return "Checking whether the signed MetalSharp Wine 6.0 dependency is needed...";
+    if (status.stage == "extracting-wine")
+      return "Extracting the hash-verified MetalSharp Wine archive with macOS ditto...";
+    if (status.stage == "validating-wine")
+      return "Verifying MetalSharp Wine's signature, provisioning profile, runtime layout and identity...";
+    if (status.stage == "activating-wine")
+      return "Activating verified MetalSharp Wine; the previous app-managed bundle can be restored...";
+    if (status.stage == "verifying")
+      return "Verifying the official Pluto ZIP and every runtime file's SHA-256...";
+    if (status.stage == "installing")
+      return "Installing verified Pluto files; the bridge, logs, configuration and bandit data are preserved...";
     {
       const unsigned percent = status.cbTotal != 0
                                    ? static_cast<unsigned>(std::min<uint64_t>(100, status.cbReceived * 100 /
                                                                                          status.cbTotal))
                                    : 0;
-      snprintf(text, sizeof text, "Downloading official Pluto AI: %u%% (%llu / %llu MiB).", percent,
-               static_cast<unsigned long long>(status.cbReceived / 1048576),
-               static_cast<unsigned long long>(status.cbTotal / 1048576));
+      if (status.stage == "downloading-wine") {
+        snprintf(text, sizeof text, "Downloading signed MetalSharp Wine 6.0: %u%% (%llu / %llu MiB).", percent,
+                 static_cast<unsigned long long>(status.cbReceived / 1048576),
+                 static_cast<unsigned long long>(status.cbTotal / 1048576));
+      } else {
+        snprintf(text, sizeof text, "Downloading official Pluto AI: %u%% (%llu / %llu MiB).", percent,
+                 static_cast<unsigned long long>(status.cbReceived / 1048576),
+                 static_cast<unsigned long long>(status.cbTotal / 1048576));
+      }
       return text;
     }
   case PORT_PLUTO_INSTALL_FAILED:
     return "Pluto AI setup failed: " + status.error + " Use Retry to start cleanly.";
   case PORT_PLUTO_INSTALL_CANCELLED:
-    return "Pluto AI download cancelled. Partial staging files were not marked ready; retry when ready.";
+    return "Pluto AI setup cancelled. No partial app was activated and no partial runtime was marked ready; retry when ready.";
   default:
     if (const char *capability = PortPlutoDownloadCapabilityError())
       return capability;
+#if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
+    {
+      const std::string wine = PortPlutoWineExecutable();
+      if (wine.empty() || MetalSharpWineError(wine) != NULL) {
+        snprintf(text, sizeof text,
+                 "Download signed MetalSharp Wine 6.0 (%llu MiB), then official Pluto AI v2.0 (%llu MiB); both are hash-verified.",
+                 static_cast<unsigned long long>(OfficialMetalSharpSpec().cbArchive / 1048576),
+                 static_cast<unsigned long long>(OfficialSpec().cbArchive / 1048576));
+        return text;
+      }
+    }
+#endif
     return "Download Pluto AI v2.0 directly from the official tscmoo/pluto release: 295 MiB, SHA-256 verified.";
   }
 }

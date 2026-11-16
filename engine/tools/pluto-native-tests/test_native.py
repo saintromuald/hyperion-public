@@ -358,6 +358,18 @@ class PortRegressionTests(unittest.TestCase):
     def test_runtime_apple_silicon_requires_metalsharp_wine(self):
         self.run_regression("pluto_runtime_regression", "metalsharp-preflight")
 
+    def test_runtime_metalsharp_install_preserves_layout_and_system_wine(self):
+        self.run_regression("pluto_runtime_regression", "metalsharp-install-success")
+
+    def test_runtime_metalsharp_rejects_invalid_archives_and_apps(self):
+        self.run_regression("pluto_runtime_regression", "metalsharp-install-validation")
+
+    def test_runtime_metalsharp_cancellation_and_activation_rollback(self):
+        self.run_regression("pluto_runtime_regression", "metalsharp-install-rollback")
+
+    def test_runtime_apple_silicon_combined_dependency_and_pluto_install(self):
+        self.run_regression("pluto_runtime_regression", "metalsharp-combined")
+
     @unittest.skipUnless(
         os.environ.get("HYPERION_PLUTO_TEST_CURRENT_CAPABILITY") == "1",
         "explicit runtime-acceptance capability probe",

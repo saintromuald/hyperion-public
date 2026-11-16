@@ -139,8 +139,9 @@ include Hyperion's bridge and either the complete, unmodified runtime or the bui
 **Download Pluto AI** setup on the first-run screen and in Settings. Do not bundle or mirror the
 official DLL, inference executable, or weights without the author's redistribution permission;
 the built-in setup downloads them directly from the official Pluto release and verifies their
-published hashes. Apple Silicon also requires macOS 26.4+ and a separate signed MetalSharp Wine
-6.0 ARM64/FEX installation; the current **Download Pluto AI** action does not install that dependency.
+published hashes. On Apple Silicon with macOS 26.4+, the same action first installs the pinned,
+signed MetalSharp Wine 6.0 ARM64/FEX dependency when needed into Hyperion's app-managed Library
+folder, verifies its signature and runtime layout, and leaves every other Wine installation intact.
 Run a real packaged-engine Pluto match and a two-client multiplayer match with
 a Pluto slot before publication or promotion. Multiplayer needs one authoritative inference
 owner, deterministic commands on every peer, consistent results, and valid replays. Native
