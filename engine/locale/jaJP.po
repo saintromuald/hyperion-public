@@ -183,7 +183,7 @@ msgstr "最高速度"
 #: src117/port/front/port_front_campaign.cpp:58
 #: src117/port/front/port_front_mutators.cpp:1039
 #: src117/port/front/port_front_replays.cpp:50
-#: src117/port/front/port_front_skirmish.cpp:1629
+#: src117/port/front/port_front_skirmish.cpp:1631
 #: src117/port/front/port_front_trainer.cpp:48
 #: src117/port/tools/port_benchview.cpp:1307
 msgid "Zerg"
@@ -194,7 +194,7 @@ msgstr "ザーグ"
 #: src117/port/front/port_front_campaign.cpp:57
 #: src117/port/front/port_front_mutators.cpp:1039
 #: src117/port/front/port_front_replays.cpp:50
-#: src117/port/front/port_front_skirmish.cpp:1629
+#: src117/port/front/port_front_skirmish.cpp:1631
 #: src117/port/front/port_front_trainer.cpp:48
 #: src117/port/tools/port_benchview.cpp:1307
 msgid "Terran"
@@ -205,7 +205,7 @@ msgstr "テラン"
 #: src117/port/front/port_front_campaign.cpp:56
 #: src117/port/front/port_front_mutators.cpp:1039
 #: src117/port/front/port_front_replays.cpp:50
-#: src117/port/front/port_front_skirmish.cpp:1629
+#: src117/port/front/port_front_skirmish.cpp:1631
 #: src117/port/front/port_front_trainer.cpp:48
 #: src117/port/tools/port_benchview.cpp:1307
 msgid "Protoss"
@@ -214,9 +214,9 @@ msgstr "プロトス"
 #: src117/port/front/port_front_bench.cpp:107
 #: src117/port/front/port_front_bench.cpp:1423
 #: src117/port/front/port_front_replays.cpp:877
-#: src117/port/front/port_front_skirmish.cpp:1636
-#: src117/port/front/port_front_skirmish.cpp:2813
-#: src117/port/front/port_front_skirmish.cpp:2821
+#: src117/port/front/port_front_skirmish.cpp:1638
+#: src117/port/front/port_front_skirmish.cpp:2839
+#: src117/port/front/port_front_skirmish.cpp:2847
 #: src117/port/front/port_front_trainer.cpp:48
 msgid "Random"
 msgstr "ランダム"
@@ -226,13 +226,13 @@ msgid "Sixty-four computers on Big Game Hunters 8x8, 1,024 tiles a side, as fast
 msgstr "Big Game Hunters 8x8 (1 辺 1,024 タイル) でコンピューター 64 体を、30 分間できる限り速く動かします。現時点で Hyperion が目標とする 32 プレイヤー・512 タイルを超える、扱える限界の構成です。マップは maps\\Hyperion\\Experimental\\ にあります。"
 
 #: src117/port/front/port_front_bench.cpp:1088
-#: src117/port/front/port_front_skirmish.cpp:2041
-#: src117/port/front/port_front_skirmish.cpp:2045
+#: src117/port/front/port_front_skirmish.cpp:2043
+#: src117/port/front/port_front_skirmish.cpp:2047
 msgid "Player {0}"
 msgstr "プレイヤー {0}"
 
 #: src117/port/front/port_front_bench.cpp:1090
-#: src117/port/front/port_front_skirmish.cpp:2042
+#: src117/port/front/port_front_skirmish.cpp:2044
 msgid "Starts by slot: player {0} starts where the map’s picture shows {0}."
 msgstr "スロット順の開始位置: プレイヤー {0} は、マップの画像で {0} と示された場所から始まります。"
 
@@ -244,10 +244,10 @@ msgstr "開始位置はシードから抽選されるため、スロットはマ
 #: src117/port/front/port_front_replays.cpp:880
 #: src117/port/front/port_front_score.cpp:720
 #: src117/port/front/port_front_score.cpp:731
-#: src117/port/front/port_front_skirmish.cpp:2082
-#: src117/port/front/port_front_skirmish.cpp:2086
-#: src117/port/front/port_front_skirmish.cpp:2090
-#: src117/port/front/port_front_skirmish.cpp:3113
+#: src117/port/front/port_front_skirmish.cpp:2084
+#: src117/port/front/port_front_skirmish.cpp:2088
+#: src117/port/front/port_front_skirmish.cpp:2092
+#: src117/port/front/port_front_skirmish.cpp:3139
 #: src117/port/lan/port_front_lanhost.cpp:464
 #: src117/port/lan/port_front_lanhost.cpp:1104
 msgid "Computer"
@@ -259,7 +259,7 @@ msgid "Its own"
 msgstr "個別の色"
 
 #: src117/port/front/port_front_bench.cpp:1104
-#: src117/port/front/port_front_skirmish.cpp:2161
+#: src117/port/front/port_front_skirmish.cpp:2163
 msgid "Colours by team"
 msgstr "チームごとのカラー"
 
@@ -277,7 +277,7 @@ msgstr "各スロットはゲームが定めた色でプレイします。チー
 
 #: src117/port/front/port_front_bench.cpp:1119
 #: src117/port/front/port_front_bench.cpp:1168
-#: src117/port/front/port_front_skirmish.cpp:2399
+#: src117/port/front/port_front_skirmish.cpp:2418
 msgid "Race"
 msgstr "種族"
 
@@ -286,7 +286,7 @@ msgid "Random is drawn from the seed: the same seed gives the same races."
 msgstr "ランダムはシードから抽選されます。同じシードなら同じ種族になります。"
 
 #: src117/port/front/port_front_bench.cpp:1121
-#: src117/port/front/port_front_skirmish.cpp:2222
+#: src117/port/front/port_front_skirmish.cpp:2224
 msgid "Handicap"
 msgstr "ハンディキャップ"
 
@@ -295,31 +295,31 @@ msgid "A player’s units at a share of their life, as in SC2. Not available yet
 msgstr "SC2 と同じように、プレイヤーのユニットの体力を一定の割合にします。まだ利用できません。"
 
 #: src117/port/front/port_front_bench.cpp:1128
-#: src117/port/front/port_front_skirmish.cpp:2256
+#: src117/port/front/port_front_skirmish.cpp:2275
 msgid "Computer level"
 msgstr "コンピューターのレベル"
 
 #: src117/port/front/port_front_bench.cpp:1129
 #: src117/port/front/port_front_bench.cpp:1187
-#: src117/port/front/port_front_skirmish.cpp:2261
-#: src117/port/front/port_front_skirmish.cpp:2421
+#: src117/port/front/port_front_skirmish.cpp:2280
+#: src117/port/front/port_front_skirmish.cpp:2447
 #: src117/port/gameplay/port_ai.cpp:70
 msgid "Its own script"
 msgstr "独自のスクリプト"
 
 #: src117/port/front/port_front_bench.cpp:1129
-#: src117/port/front/port_front_skirmish.cpp:2261
+#: src117/port/front/port_front_skirmish.cpp:2280
 msgid "Personality"
 msgstr "性格"
 
 #: src117/port/front/port_front_bench.cpp:1130
-#: src117/port/front/port_front_skirmish.cpp:2262
+#: src117/port/front/port_front_skirmish.cpp:2281
 msgid "How the computer plays: turtle, rusher, expander and the like. Not available yet."
 msgstr "コンピューターの戦い方: 守り重視、ラッシュ、拡張重視など。まだ利用できません。"
 
 #: src117/port/front/port_front_bench.cpp:1155
-#: src117/port/front/port_front_skirmish.cpp:2385
-#: src117/port/front/port_front_skirmish.cpp:2426
+#: src117/port/front/port_front_skirmish.cpp:2404
+#: src117/port/front/port_front_skirmish.cpp:2452
 msgid "All computers:"
 msgstr "すべてのコンピューター:"
 
@@ -336,32 +336,32 @@ msgid "Sets every slot’s race at once; each slot’s own list changes it after
 msgstr "すべてのスロットの種族を一度に設定します。その後は各スロットのリストで変更できます。ランダムはシードから抽選されます。"
 
 #: src117/port/front/port_front_bench.cpp:1182
-#: src117/port/front/port_front_skirmish.cpp:2413
+#: src117/port/front/port_front_skirmish.cpp:2436
 msgid "Level"
 msgstr "レベル"
 
 #: src117/port/front/port_front_bench.cpp:1186
-#: src117/port/front/port_front_skirmish.cpp:2420
+#: src117/port/front/port_front_skirmish.cpp:2444
 msgid "Every computer’s level"
 msgstr "すべてのコンピューターのレベル"
 
 #: src117/port/front/port_front_bench.cpp:1187
-#: src117/port/front/port_front_skirmish.cpp:2421
+#: src117/port/front/port_front_skirmish.cpp:2447
 msgid "Every computer’s personality"
 msgstr "すべてのコンピューターの性格"
 
 #: src117/port/front/port_front_bench.cpp:1188
-#: src117/port/front/port_front_skirmish.cpp:2422
+#: src117/port/front/port_front_skirmish.cpp:2448
 msgid "How the computers play: turtle, rusher, expander and the like. Not available yet."
 msgstr "コンピューターの戦い方: 守り重視、ラッシュ、拡張重視など。まだ利用できません。"
 
 #: src117/port/front/port_front_bench.cpp:1197
-#: src117/port/front/port_front_skirmish.cpp:2441
+#: src117/port/front/port_front_skirmish.cpp:2467
 msgid "New Team"
 msgstr "新しいチーム"
 
 #: src117/port/front/port_front_bench.cpp:1201
-#: src117/port/front/port_front_skirmish.cpp:2447
+#: src117/port/front/port_front_skirmish.cpp:2473
 #: src117/port/front/port_frontlobby.cpp:156
 msgid "New team"
 msgstr "新しいチーム"
@@ -380,8 +380,8 @@ msgstr "クリープの拡大と後退"
 
 #: src117/port/front/port_front_bench.cpp:1210
 #: src117/port/front/port_front_bench.cpp:1213
-#: src117/port/front/port_front_skirmish.cpp:2456
-#: src117/port/front/port_front_skirmish.cpp:2461
+#: src117/port/front/port_front_skirmish.cpp:2482
+#: src117/port/front/port_front_skirmish.cpp:2487
 msgid "Quick layout"
 msgstr "簡易レイアウト"
 
@@ -434,11 +434,11 @@ msgid "empty: choose it in a slot’s Team list"
 msgstr "空: スロットの「チーム」リストで選んでください"
 
 #: src117/port/front/port_front_bench.cpp:1302
-#: src117/port/front/port_front_skirmish.cpp:2336
-#: src117/port/front/port_front_skirmish.cpp:2373
-#: src117/port/front/port_front_skirmish.cpp:2585
+#: src117/port/front/port_front_skirmish.cpp:2355
+#: src117/port/front/port_front_skirmish.cpp:2392
+#: src117/port/front/port_front_skirmish.cpp:2611
 #: src117/port/front/port_front_trainer.cpp:427
-#: src117/port/lan/port_front_lan.cpp:1163
+#: src117/port/lan/port_front_lan.cpp:1165
 #: src117/port/platform/port_discord.cpp:613
 #: src117/port/platform/port_discord.cpp:616
 #: src117/port/tools/port_benchview.cpp:761
@@ -471,7 +471,7 @@ msgstr "{2} 件中 {0}〜{1} 件を表示、ホイールでスクロール"
 #: src117/port/front/port_front_bench.cpp:1341
 #: src117/port/front/port_front_bench.cpp:1404
 #: src117/port/front/port_front_score.cpp:65
-#: src117/port/front/port_front_skirmish.cpp:1468
+#: src117/port/front/port_front_skirmish.cpp:1470
 #: src117/port/tools/port_benchview.cpp:830
 #: src117/port/tools/port_benchview.cpp:858
 msgid "Players"
@@ -489,12 +489,12 @@ msgid "Melee, all allied"
 msgstr "メレー、全員同盟"
 
 #: src117/port/front/port_front_bench.cpp:1345
-#: src117/port/front/port_front_skirmish.cpp:2738
+#: src117/port/front/port_front_skirmish.cpp:2764
 msgid "Team Match"
 msgstr "チームマッチ"
 
 #: src117/port/front/port_front_bench.cpp:1355
-#: src117/port/front/port_front_skirmish.cpp:2731
+#: src117/port/front/port_front_skirmish.cpp:2757
 #: src117/port/tools/port_benchview.cpp:863
 msgid "Game type"
 msgstr "ゲームタイプ"
@@ -504,10 +504,10 @@ msgid "Free For All: every computer for itself. Melee: the original’s, where e
 msgstr "フリー・フォー・オール: 各コンピューターがそれぞれ個別に戦います。メレー: オリジナルの方式で、すべてのコンピューターが同じ陣営に入り戦闘が起きません。比較用に残しています。チームマッチ: コンピューターがチームを組み、同盟して視界を共有し、ともに勝ちます。「簡易レイアウト」でマップの開始位置からチームを決められます。チームマッチは Hyperion のルールで動きます。実行が同じゲームになるのは、チームと開始位置が同じときだけです。"
 
 #: src117/port/front/port_front_bench.cpp:1364
-#: src117/port/front/port_front_skirmish.cpp:1992
-#: src117/port/front/port_front_skirmish.cpp:2079
-#: src117/port/front/port_front_skirmish.cpp:2090
-#: src117/port/front/port_front_skirmish.cpp:2645
+#: src117/port/front/port_front_skirmish.cpp:1994
+#: src117/port/front/port_front_skirmish.cpp:2081
+#: src117/port/front/port_front_skirmish.cpp:2092
+#: src117/port/front/port_front_skirmish.cpp:2671
 msgid "You"
 msgstr "あなた"
 
@@ -588,9 +588,9 @@ msgstr[0] "{0} の開始位置は {1} か所です。"
 
 #: src117/port/front/port_front_bench.cpp:1421
 #: src117/port/front/port_front_bench.cpp:1427
-#: src117/port/front/port_front_skirmish.cpp:2811
-#: src117/port/front/port_front_skirmish.cpp:2817
-#: src117/port/front/port_front_skirmish.cpp:2822
+#: src117/port/front/port_front_skirmish.cpp:2837
+#: src117/port/front/port_front_skirmish.cpp:2843
+#: src117/port/front/port_front_skirmish.cpp:2848
 msgid "Start positions"
 msgstr "開始位置"
 
@@ -603,8 +603,8 @@ msgid "drawn from the seed"
 msgstr "シードから抽選"
 
 #: src117/port/front/port_front_bench.cpp:1423
-#: src117/port/front/port_front_skirmish.cpp:2174
-#: src117/port/front/port_front_skirmish.cpp:2813
+#: src117/port/front/port_front_skirmish.cpp:2176
+#: src117/port/front/port_front_skirmish.cpp:2839
 msgid "By slot"
 msgstr "スロット順"
 
@@ -618,18 +618,18 @@ msgstr "マップの開始位置を読み取れなかったため、シードか
 
 #: src117/port/front/port_front_bench.cpp:1437
 #: src117/port/front/port_front_bench.cpp:1442
-#: src117/port/front/port_front_skirmish.cpp:2831
-#: src117/port/front/port_front_skirmish.cpp:2838
+#: src117/port/front/port_front_skirmish.cpp:2857
+#: src117/port/front/port_front_skirmish.cpp:2864
 msgid "Colours"
 msgstr "カラー"
 
 #: src117/port/front/port_front_bench.cpp:1438
-#: src117/port/front/port_front_skirmish.cpp:2832
+#: src117/port/front/port_front_skirmish.cpp:2858
 msgid "By player"
 msgstr "プレイヤーごと"
 
 #: src117/port/front/port_front_bench.cpp:1438
-#: src117/port/front/port_front_skirmish.cpp:2832
+#: src117/port/front/port_front_skirmish.cpp:2858
 msgid "By team"
 msgstr "チームごと"
 
@@ -643,8 +643,8 @@ msgstr "チームごとのカラーはチームマッチでのみ使えます。
 
 #: src117/port/front/port_front_bench.cpp:1452
 #: src117/port/front/port_front_settings.cpp:895
-#: src117/port/front/port_front_skirmish.cpp:2759
-#: src117/port/front/port_front_skirmish.cpp:2763
+#: src117/port/front/port_front_skirmish.cpp:2785
+#: src117/port/front/port_front_skirmish.cpp:2789
 msgid "Game speed"
 msgstr "ゲームスピード"
 
@@ -739,9 +739,9 @@ msgstr "各コンピューターが持てる供給の上限です。オリジナ
 
 #: src117/port/front/port_front_bench.cpp:1583
 #: src117/port/front/port_front_bench.cpp:1591
-#: src117/port/front/port_front_skirmish.cpp:2791
-#: src117/port/front/port_front_skirmish.cpp:2801
-#: src117/port/front/port_front_skirmish.cpp:2803
+#: src117/port/front/port_front_skirmish.cpp:2817
+#: src117/port/front/port_front_skirmish.cpp:2827
+#: src117/port/front/port_front_skirmish.cpp:2829
 msgid "Unit limit"
 msgstr "ユニット数の上限"
 
@@ -896,8 +896,8 @@ msgstr "ベンチマークを開始"
 #: src117/port/front/port_front_campaign.cpp:667
 #: src117/port/front/port_front_campaign.cpp:904
 #: src117/port/front/port_front_home.cpp:735
-#: src117/port/front/port_front_skirmish.cpp:1531
-#: src117/port/front/port_front_skirmish.cpp:3015
+#: src117/port/front/port_front_skirmish.cpp:1533
+#: src117/port/front/port_front_skirmish.cpp:3041
 #: src117/port/front/port_front_trainer.cpp:542
 #: src117/port/front/port_front_trainer.cpp:684
 msgid "Back"
@@ -1113,7 +1113,7 @@ msgid "Classic AI is the original’s own computer. The others play by Hyperion�
 msgstr "クラシック AI はオリジナル自身のコンピューターです。それ以外は Hyperion のルールで動きます。StarCraft II のレベルで、「非常にやさしい」から「エリート」まで、遅く小規模なものから速いものへと上がり、チーター系のレベルはエリートと同じ強さで、StarCraft II と同じようにチートします。視界はマップ全体が見えます。資源はそれに加えて 1 往復で多く持ち帰り、20 分で 1.5 倍まで増えます。インセインは最初から 1.2 倍持ち帰り、2 倍まで増えます。"
 
 #: src117/port/front/port_front_bench.cpp:541
-#: src117/port/front/port_front_skirmish.cpp:2473
+#: src117/port/front/port_front_skirmish.cpp:2499
 msgid "Teams by hand"
 msgstr "チームを手動で設定"
 
@@ -1185,9 +1185,9 @@ msgstr "{0} フレーム"
 #: src117/port/front/port_front_bench.cpp:1058
 #: src117/port/front/port_front_replays.cpp:1001
 #: src117/port/front/port_front_score.cpp:927
-#: src117/port/front/port_front_skirmish.cpp:2580
+#: src117/port/front/port_front_skirmish.cpp:2606
 #: src117/port/hud/port_hudstats.cpp:514
-#: src117/port/lan/port_front_lan.cpp:1161
+#: src117/port/lan/port_front_lan.cpp:1163
 #: src117/port/lan/port_front_lanhost.cpp:242
 #: src117/port/platform/port_discord.cpp:611
 #: src117/port/platform/port_discord.cpp:615
@@ -1321,8 +1321,8 @@ msgstr "ミッション {0}"
 #: src117/port/front/port_front_profile.cpp:760
 #: src117/port/front/port_front_profile.cpp:1166
 #: src117/port/lan/port_front_lan.cpp:424
-#: src117/port/lan/port_front_lan.cpp:1164
-#: src117/port/lan/port_lanlobby.cpp:117
+#: src117/port/lan/port_front_lan.cpp:1166
+#: src117/port/lan/port_lanlobby.cpp:120
 msgid "{0} and {1}"
 msgstr "{0} と {1}"
 
@@ -1472,10 +1472,10 @@ msgstr "今すぐプレイ"
 #: src117/port/front/port_front_score.cpp:1120
 #: src117/port/front/port_front_settings.cpp:2052
 #: src117/port/front/port_front_settings.cpp:2284
-#: src117/port/front/port_front_skirmish.cpp:1608
+#: src117/port/front/port_front_skirmish.cpp:1610
 #: src117/port/gameplay/port_trainerview.cpp:1496
-#: src117/port/lan/port_front_lan.cpp:1070
-#: src117/port/lan/port_front_lan.cpp:1613
+#: src117/port/lan/port_front_lan.cpp:1072
+#: src117/port/lan/port_front_lan.cpp:1615
 #: src117/port/lan/port_front_lanhost.cpp:235
 #: src117/port/lan/port_front_lanhost.cpp:249
 #: src117/port/lan/port_front_lanhost.cpp:323
@@ -1550,7 +1550,7 @@ msgid "Watch Again"
 msgstr "もう一度見る"
 
 #: src117/port/front/port_front_campaign.cpp:899
-#: src117/port/lan/port_front_lan.cpp:1833
+#: src117/port/lan/port_front_lan.cpp:1835
 #: src117/port/lan/port_front_lanhost.cpp:500
 msgid "Watch"
 msgstr "見る"
@@ -2290,7 +2290,7 @@ msgid "Right column"
 msgstr "右の列"
 
 #: src117/port/front/port_front_hud.cpp:678
-#: src117/port/front/port_front_skirmish.cpp:1481
+#: src117/port/front/port_front_skirmish.cpp:1483
 msgid "Size"
 msgstr "サイズ"
 
@@ -2383,13 +2383,13 @@ msgstr "キャンペーン"
 #: src117/port/front/port_front_load.cpp:334
 #: src117/port/front/port_front_load.cpp:399
 #: src117/port/front/port_front_load.cpp:400
-#: src117/port/front/port_front_skirmish.cpp:2947
+#: src117/port/front/port_front_skirmish.cpp:2973
 #: src117/port/platform/port_discord.cpp:707
 msgid "Skirmish"
 msgstr "スカーミッシュ"
 
 #: src117/port/front/port_front_internal.h:31
-#: src117/port/lan/port_front_lan.cpp:1656
+#: src117/port/lan/port_front_lan.cpp:1658
 msgid "Multiplayer"
 msgstr "マルチプレイ"
 
@@ -2558,7 +2558,7 @@ msgstr "削除"
 #: src117/port/front/port_front_mods.cpp:341
 #: src117/port/front/port_front_notes.cpp:787
 #: src117/port/front/port_front_profile.cpp:1213
-#: src117/port/front/port_front_skirmish.cpp:3125
+#: src117/port/front/port_front_skirmish.cpp:3151
 #: src117/port/gameplay/port_trainerview.cpp:1569
 #: src117/port/gameplay/port_trainerview.cpp:1587
 #: src117/port/hud/port_hudstats.cpp:722
@@ -2867,7 +2867,7 @@ msgid "Harder than Classic."
 msgstr "クラシックより難しくなります。"
 
 #: src117/port/front/port_front_mutators.cpp:1596
-#: src117/port/front/port_front_skirmish.cpp:2725
+#: src117/port/front/port_front_skirmish.cpp:2751
 msgid "GAME OPTIONS"
 msgstr "ゲームオプション"
 
@@ -3254,7 +3254,7 @@ msgstr "このゲーム"
 #: src117/port/front/port_front_replays.cpp:54
 #: src117/port/front/port_front_replays.cpp:1010
 #: src117/port/front/port_front_score.cpp:929
-#: src117/port/front/port_front_skirmish.cpp:2770
+#: src117/port/front/port_front_skirmish.cpp:2796
 #: src117/port/gameplay/port_mutators.cpp:80
 #: src117/port/gameplay/port_mutators.cpp:96
 #: src117/port/gameplay/port_mutators.cpp:97
@@ -3579,7 +3579,7 @@ msgid "Make a profile to play. It keeps your campaign and your saves."
 msgstr "プレイするにはプロフィールを作成してください。キャンペーンの進行状況とセーブデータが保存されます。"
 
 #: src117/port/front/port_front_profile.cpp:1201
-#: src117/port/front/port_front_skirmish.cpp:1603
+#: src117/port/front/port_front_skirmish.cpp:1605
 msgid "Choose"
 msgstr "選択"
 
@@ -3741,7 +3741,7 @@ msgid "Made {0}"
 msgstr "作成日 {0}"
 
 #: src117/port/front/port_front_profile.cpp:838
-#: src117/port/lan/port_front_lan.cpp:1640
+#: src117/port/lan/port_front_lan.cpp:1642
 msgid "In {0}"
 msgstr "{0} 内"
 
@@ -3778,7 +3778,7 @@ msgid "New profile"
 msgstr "新しいプロフィール"
 
 #: src117/port/front/port_front_profile.cpp:869
-#: src117/port/front/port_front_skirmish.cpp:1444
+#: src117/port/front/port_front_skirmish.cpp:1446
 #: src117/port/lan/port_front_lanhost.cpp:603
 msgid "and {0} more"
 msgstr "ほか {0} 件"
@@ -3800,7 +3800,7 @@ msgid "{0} frames at {1}"
 msgstr "{1} で {0} フレーム"
 
 #: src117/port/front/port_front_replays.cpp:1010
-#: src117/port/front/port_front_skirmish.cpp:2769
+#: src117/port/front/port_front_skirmish.cpp:2795
 msgid "Rules"
 msgstr "ルール"
 
@@ -3934,7 +3934,7 @@ msgid "Campaign mission"
 msgstr "キャンペーンのミッション"
 
 #: src117/port/front/port_front_replays.cpp:300
-#: src117/port/front/port_front_skirmish.cpp:1350
+#: src117/port/front/port_front_skirmish.cpp:1352
 #: src117/port/front/port_front_trainer.cpp:423
 msgid "Unreadable"
 msgstr "読み取れません"
@@ -4013,8 +4013,8 @@ msgid "My Replays"
 msgstr "自分のリプレイ"
 
 #: src117/port/front/port_front_replays.cpp:53
-#: src117/port/lan/port_front_lan.cpp:1674
-#: src117/port/lan/port_front_lan.cpp:1675
+#: src117/port/lan/port_front_lan.cpp:1676
+#: src117/port/lan/port_front_lan.cpp:1677
 msgid "Online"
 msgstr "オンライン"
 
@@ -4064,13 +4064,13 @@ msgid "REPLAY"
 msgstr "リプレイ"
 
 #: src117/port/front/port_front_replays.cpp:745
-#: src117/port/front/port_front_skirmish.cpp:1238
+#: src117/port/front/port_front_skirmish.cpp:1240
 msgid "MAP"
 msgstr "マップ"
 
 #: src117/port/front/port_front_replays.cpp:745
-#: src117/port/front/port_front_skirmish.cpp:1240
-#: src117/port/front/port_front_skirmish.cpp:2583
+#: src117/port/front/port_front_skirmish.cpp:1242
+#: src117/port/front/port_front_skirmish.cpp:2609
 #: src117/port/hud/port_hudstats.cpp:532
 #: src117/port/hud/port_hudstats.cpp:1084
 #: src117/port/tools/port_benchview.cpp:1668
@@ -4289,23 +4289,23 @@ msgid "Spent"
 msgstr "消費"
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2485
+#: src117/port/front/port_front_skirmish.cpp:2511
 msgid "Auto"
 msgstr "自動"
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2485
+#: src117/port/front/port_front_skirmish.cpp:2511
 msgid "Rows"
 msgstr "行"
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2485
+#: src117/port/front/port_front_skirmish.cpp:2511
 #: src117/port/tools/port_benchview.cpp:2234
 msgid "Compact"
 msgstr "コンパクト"
 
 #: src117/port/front/port_front_score.cpp:64
-#: src117/port/front/port_front_skirmish.cpp:2485
+#: src117/port/front/port_front_skirmish.cpp:2511
 msgid "Columns"
 msgstr "列"
 
@@ -4314,7 +4314,7 @@ msgid "By Team"
 msgstr "チームごと"
 
 #: src117/port/front/port_front_score.cpp:65
-#: src117/port/front/port_front_skirmish.cpp:2746
+#: src117/port/front/port_front_skirmish.cpp:2772
 msgid "Teams"
 msgstr "チーム"
 
@@ -4351,8 +4351,8 @@ msgid "{0} of {1} by score"
 msgstr "スコアで {1} 人中 {0} 位"
 
 #: src117/port/front/port_front_score.cpp:959
-#: src117/port/front/port_front_skirmish.cpp:2330
-#: src117/port/front/port_front_skirmish.cpp:2371
+#: src117/port/front/port_front_skirmish.cpp:2349
+#: src117/port/front/port_front_skirmish.cpp:2390
 #: src117/port/hud/port_hudinput.cpp:675
 msgid "{0} of {1}"
 msgstr "{1} 人中 {0} 位"
@@ -4819,8 +4819,8 @@ msgid "Browse"
 msgstr "参照"
 
 #: src117/port/front/port_front_settings.cpp:1972
-#: src117/port/front/port_front_skirmish.cpp:2093
-#: src117/port/front/port_front_skirmish.cpp:3112
+#: src117/port/front/port_front_skirmish.cpp:2095
+#: src117/port/front/port_front_skirmish.cpp:3138
 msgid "Open"
 msgstr "開く"
 
@@ -5376,658 +5376,678 @@ msgstr ""
 msgid "Group 6"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:1240
+#: src117/port/front/port_front_skirmish.cpp:1242
 msgid "SIZE"
 msgstr "サイズ"
 
-#: src117/port/front/port_front_skirmish.cpp:1240
+#: src117/port/front/port_front_skirmish.cpp:1242
 msgid "TILESET"
 msgstr "タイルセット"
 
-#: src117/port/front/port_front_skirmish.cpp:1240
+#: src117/port/front/port_front_skirmish.cpp:1242
 msgid "RULES"
 msgstr "ルール"
 
-#: src117/port/front/port_front_skirmish.cpp:1318
+#: src117/port/front/port_front_skirmish.cpp:1320
 msgid "Up One Level"
 msgstr "1 つ上へ"
 
-#: src117/port/front/port_front_skirmish.cpp:1325
+#: src117/port/front/port_front_skirmish.cpp:1327
 msgid "To {0} · Backspace"
 msgstr "{0} へ · Backspace"
 
-#: src117/port/front/port_front_skirmish.cpp:1327
+#: src117/port/front/port_front_skirmish.cpp:1329
 msgid "Folder"
 msgstr "フォルダー"
 
-#: src117/port/front/port_front_skirmish.cpp:1336
+#: src117/port/front/port_front_skirmish.cpp:1338
 msgid "{0} map"
 msgid_plural "{0} maps"
 msgstr[0] "マップ {0} 件"
 
-#: src117/port/front/port_front_skirmish.cpp:1336
+#: src117/port/front/port_front_skirmish.cpp:1338
 msgid "No maps"
 msgstr "マップなし"
 
-#: src117/port/front/port_front_skirmish.cpp:1348
+#: src117/port/front/port_front_skirmish.cpp:1350
 msgid "Either"
 msgstr "どちらでも"
 
-#: src117/port/front/port_front_skirmish.cpp:1350
+#: src117/port/front/port_front_skirmish.cpp:1352
 msgid "Too many"
 msgstr "多すぎます"
 
-#: src117/port/front/port_front_skirmish.cpp:1366
+#: src117/port/front/port_front_skirmish.cpp:1368
 msgid "No maps in this folder."
 msgstr "このフォルダーにマップはありません。"
 
-#: src117/port/front/port_front_skirmish.cpp:1367
+#: src117/port/front/port_front_skirmish.cpp:1369
 msgid "No map in this folder has that many players at that size."
 msgstr "このフォルダーに、そのサイズでその人数のマップはありません。"
 
-#: src117/port/front/port_front_skirmish.cpp:1403
-#: src117/port/front/port_front_skirmish.cpp:2889
+#: src117/port/front/port_front_skirmish.cpp:1405
+#: src117/port/front/port_front_skirmish.cpp:2915
 msgid "{0} starts · {1} × {2} tiles · {3}"
 msgstr "開始位置 {0} か所 · {1} × {2} タイル · {3}"
 
-#: src117/port/front/port_front_skirmish.cpp:1410
+#: src117/port/front/port_front_skirmish.cpp:1412
 msgid "Plays under Hyperion rules: past the original’s 8 players."
 msgstr "Hyperion のルールでプレイします。オリジナルの 8 プレイヤーを超えています。"
 
-#: src117/port/front/port_front_skirmish.cpp:1411
+#: src117/port/front/port_front_skirmish.cpp:1413
 msgid "Plays under Hyperion rules: past the original’s 256 tiles."
 msgstr "Hyperion のルールでプレイします。オリジナルの 256 タイルを超えています。"
 
-#: src117/port/front/port_front_skirmish.cpp:1414
+#: src117/port/front/port_front_skirmish.cpp:1416
 msgid "Classic or Hyperion rules."
 msgstr "クラシックと Hyperion のどちらのルールでもプレイできます。"
 
-#: src117/port/front/port_front_skirmish.cpp:1433
+#: src117/port/front/port_front_skirmish.cpp:1435
 msgid "{0} map, counting its folders"
 msgid_plural "{0} maps, counting its folders"
 msgstr[0] "サブフォルダーを含めてマップ {0} 件"
 
-#: src117/port/front/port_front_skirmish.cpp:1448
+#: src117/port/front/port_front_skirmish.cpp:1450
 msgid "Double-click or Enter opens it."
 msgstr "ダブルクリックまたは Enter で開きます。"
 
-#: src117/port/front/port_front_skirmish.cpp:1459
+#: src117/port/front/port_front_skirmish.cpp:1461
 msgid "CHOOSE A MAP"
 msgstr "マップを選択"
 
-#: src117/port/front/port_front_skirmish.cpp:1491
+#: src117/port/front/port_front_skirmish.cpp:1493
 msgid "Maps for Brood War"
 msgstr "Brood War のマップ"
 
-#: src117/port/front/port_front_skirmish.cpp:1491
+#: src117/port/front/port_front_skirmish.cpp:1493
 msgid "Maps for StarCraft"
 msgstr "StarCraft のマップ"
 
-#: src117/port/front/port_front_skirmish.cpp:1526
-#: src117/port/front/port_front_skirmish.cpp:1603
+#: src117/port/front/port_front_skirmish.cpp:1528
+#: src117/port/front/port_front_skirmish.cpp:1605
 msgid "Open Folder"
 msgstr "フォルダーを開く"
 
-#: src117/port/front/port_front_skirmish.cpp:1526
+#: src117/port/front/port_front_skirmish.cpp:1528
 msgid "Choose Map"
 msgstr "マップを選択"
 
-#: src117/port/front/port_front_skirmish.cpp:1539
+#: src117/port/front/port_front_skirmish.cpp:1541
 msgid "The set-up waits: choose {0} again to keep it."
 msgstr "設定は保留中です。この内容のままにするには、もう一度 {0} を選んでください。"
 
-#: src117/port/front/port_front_skirmish.cpp:1541
+#: src117/port/front/port_front_skirmish.cpp:1543
 msgid "Slots, races and options come next."
 msgstr "次にスロット、種族、オプションを設定します。"
 
-#: src117/port/front/port_front_skirmish.cpp:1742
+#: src117/port/front/port_front_skirmish.cpp:1744
 msgid "{0}: player {1}’s colour. Picking it swaps the two."
 msgstr "{0}: プレイヤー {1} のカラーです。選ぶと 2 人のカラーが入れ替わります。"
 
-#: src117/port/front/port_front_skirmish.cpp:1744
+#: src117/port/front/port_front_skirmish.cpp:1746
 msgid "{0}: reads as player {1}’s colour {2}. Picking it swaps the two."
 msgstr "{0}: プレイヤー {1} のカラー {2} と同じに見えます。選ぶと 2 人のカラーが入れ替わります。"
 
-#: src117/port/front/port_front_skirmish.cpp:1747
+#: src117/port/front/port_front_skirmish.cpp:1749
 msgid "{0}: hard to tell from player {1}’s colour {2}."
 msgstr "{0}: プレイヤー {1} のカラー {2} と見分けにくいです。"
 
-#: src117/port/front/port_front_skirmish.cpp:1780
+#: src117/port/front/port_front_skirmish.cpp:1782
 msgid "Now its own colour, {0}"
 msgstr "現在は本来のカラー {0} です"
 
-#: src117/port/front/port_front_skirmish.cpp:1781
+#: src117/port/front/port_front_skirmish.cpp:1783
 msgid "Now {0}"
 msgstr "現在は {0} です"
 
-#: src117/port/front/port_front_skirmish.cpp:1788
+#: src117/port/front/port_front_skirmish.cpp:1790
 msgid "A number: that player’s colour. Picking it swaps the two."
 msgstr "数字はそのプレイヤーのカラーです。選ぶと 2 人のカラーが入れ替わります。"
 
-#: src117/port/front/port_front_skirmish.cpp:1791
+#: src117/port/front/port_front_skirmish.cpp:1793
 msgid "Orange rim: hard to tell from a player’s colour."
 msgstr "オレンジの枠は、他のプレイヤーのカラーと見分けにくいことを示します。"
 
-#: src117/port/front/port_front_skirmish.cpp:1828
+#: src117/port/front/port_front_skirmish.cpp:1830
 msgid "The units"
 msgstr "ユニット"
 
-#: src117/port/front/port_front_skirmish.cpp:1835
+#: src117/port/front/port_front_skirmish.cpp:1837
 msgid "The minimap"
 msgstr "ミニマップ"
 
-#: src117/port/front/port_front_skirmish.cpp:1840
+#: src117/port/front/port_front_skirmish.cpp:1842
 msgid "Nobody else to compare with."
 msgstr "比較する相手がいません。"
 
-#: src117/port/front/port_front_skirmish.cpp:1841
+#: src117/port/front/port_front_skirmish.cpp:1843
 msgid "Clear of every other player, on the minimap and in the units."
 msgstr "ミニマップでもユニットでも、他のすべてのプレイヤーと区別できます。"
 
-#: src117/port/front/port_front_skirmish.cpp:1846
+#: src117/port/front/port_front_skirmish.cpp:1848
 msgid "Reads as player {0}’s colour {1}. Choose another, or give player {0} a new colour first."
 msgstr "プレイヤー {0} のカラー {1} と同じに見えます。別のカラーを選ぶか、先にプレイヤー {0} のカラーを変えてください。"
 
-#: src117/port/front/port_front_skirmish.cpp:1849
+#: src117/port/front/port_front_skirmish.cpp:1851
 msgid "Close to player {0}’s colour {1}. Allowed, and marked on both."
 msgstr "プレイヤー {0} のカラー {1} に近い色です。使用はできますが、両方に印が付きます。"
 
-#: src117/port/front/port_front_skirmish.cpp:1860
+#: src117/port/front/port_front_skirmish.cpp:1862
 msgid "Use This Colour"
 msgstr "このカラーを使う"
 
-#: src117/port/front/port_front_skirmish.cpp:1920
+#: src117/port/front/port_front_skirmish.cpp:1922
 msgid "Close colours"
 msgstr "近いカラー"
 
-#: src117/port/front/port_front_skirmish.cpp:1921
+#: src117/port/front/port_front_skirmish.cpp:1923
 msgid "Hard to tell from player {0}’s colour {1}. Pick another, or press Distinct Colours to separate every player’s."
 msgstr "プレイヤー {0} のカラー {1} と見分けにくいです。別のカラーを選ぶか、「カラーを分ける」を押して全プレイヤーのカラーを離してください。"
 
-#: src117/port/front/port_front_skirmish.cpp:1947
+#: src117/port/front/port_front_skirmish.cpp:1949
 msgid "Colour for player {0}"
 msgstr "プレイヤー {0} のカラー"
 
-#: src117/port/front/port_front_skirmish.cpp:1948
+#: src117/port/front/port_front_skirmish.cpp:1950
 msgid "The game’s colours"
 msgstr "ゲームのカラー"
 
-#: src117/port/front/port_front_skirmish.cpp:1948
+#: src117/port/front/port_front_skirmish.cpp:1950
 msgid "Any colour"
 msgstr "すべてのカラー"
 
-#: src117/port/front/port_front_skirmish.cpp:1972
+#: src117/port/front/port_front_skirmish.cpp:1974
 msgid "Observer 1"
 msgstr "観戦者 1"
 
-#: src117/port/front/port_front_skirmish.cpp:1973
+#: src117/port/front/port_front_skirmish.cpp:1975
 msgid "An observer has no seat: they watch every seat play, the whole map shown."
 msgstr "観戦者は席を持ちません。マップ全体を見ながら、すべての席のプレイを観戦します。"
 
-#: src117/port/front/port_front_skirmish.cpp:1992
+#: src117/port/front/port_front_skirmish.cpp:1994
 msgid "Empty"
 msgstr "空き"
 
-#: src117/port/front/port_front_skirmish.cpp:1995
-#: src117/port/front/port_front_skirmish.cpp:2116
-#: src117/port/front/port_front_skirmish.cpp:2120
-#: src117/port/front/port_front_skirmish.cpp:2199
+#: src117/port/front/port_front_skirmish.cpp:1997
+#: src117/port/front/port_front_skirmish.cpp:2118
+#: src117/port/front/port_front_skirmish.cpp:2122
+#: src117/port/front/port_front_skirmish.cpp:2201
 #: src117/port/front/port_frontkit.cpp:384
 msgid "Use Map Settings"
 msgstr "マップ設定使用"
 
-#: src117/port/front/port_front_skirmish.cpp:1996
-#: src117/port/front/port_front_skirmish.cpp:2117
+#: src117/port/front/port_front_skirmish.cpp:1998
+#: src117/port/front/port_front_skirmish.cpp:2119
 msgid "The map seats the players and runs the game, and expects you in your seat. Watching a game of computers is for melee games."
 msgstr "マップがプレイヤーを配置してゲームを進めるため、自分の席でプレイする必要があります。コンピューター同士のゲームの観戦はメレーのゲーム用です。"
 
-#: src117/port/front/port_front_skirmish.cpp:1999
+#: src117/port/front/port_front_skirmish.cpp:2001
 msgid "Observer"
 msgstr "観戦者"
 
-#: src117/port/front/port_front_skirmish.cpp:2000
+#: src117/port/front/port_front_skirmish.cpp:2002
 msgid "Watch instead of playing: your seat becomes a computer, and you watch every seat play with the whole map shown, the replay’s controls and speeds up to 16 times Fastest."
 msgstr "プレイせずに観戦します。自分の席はコンピューターになり、マップ全体を見ながらすべての席のプレイを観戦できます。リプレイの操作が使え、最速の 16 倍までの速度が選べます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2013
+#: src117/port/front/port_front_skirmish.cpp:2015
 msgid "The whole map shown, the replay’s controls, up to 16 times Fastest"
 msgstr "マップ全体の表示、リプレイの操作、最速の 16 倍までの速度"
 
-#: src117/port/front/port_front_skirmish.cpp:2021
+#: src117/port/front/port_front_skirmish.cpp:2023
 msgid "EMPTY"
 msgstr "空き"
 
-#: src117/port/front/port_front_skirmish.cpp:2023
+#: src117/port/front/port_front_skirmish.cpp:2025
 msgid "watching is for melee games"
 msgstr "観戦はメレーのゲーム用です"
 
-#: src117/port/front/port_front_skirmish.cpp:2024
+#: src117/port/front/port_front_skirmish.cpp:2026
 msgid "choose You to watch a game of computers"
 msgstr "コンピューター同士のゲームを観戦するには「あなた」を選んでください"
 
-#: src117/port/front/port_front_skirmish.cpp:2046
+#: src117/port/front/port_front_skirmish.cpp:2048
 msgid "Starts are drawn at random in a melee game, so a slot is not a place on the map. Choose Start positions: By slot to give each player a start."
 msgstr "メレーのゲームでは開始位置がランダムに決まるため、スロットはマップ上の場所と対応しません。各プレイヤーに開始位置を割り当てるには「開始位置: スロット順」を選んでください。"
 
-#: src117/port/front/port_front_skirmish.cpp:2079
+#: src117/port/front/port_front_skirmish.cpp:2081
 msgid "You, the host"
 msgstr "あなた (ホスト)"
 
-#: src117/port/front/port_front_skirmish.cpp:2079
+#: src117/port/front/port_front_skirmish.cpp:2081
 msgid "The host"
 msgstr "ホスト"
 
-#: src117/port/front/port_front_skirmish.cpp:2086
+#: src117/port/front/port_front_skirmish.cpp:2088
 msgid "Closed"
 msgstr "参加不可"
 
-#: src117/port/front/port_front_skirmish.cpp:2106
-#: src117/port/lan/port_front_lan.cpp:1861
+#: src117/port/front/port_front_skirmish.cpp:2108
+#: src117/port/lan/port_front_lan.cpp:1863
 msgid "{0} (you)"
 msgstr "{0} (あなた)"
 
-#: src117/port/front/port_front_skirmish.cpp:2120
+#: src117/port/front/port_front_skirmish.cpp:2122
 msgid "The map seats the players and runs the game."
 msgstr "マップがプレイヤーを配置してゲームを進めます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2122
+#: src117/port/front/port_front_skirmish.cpp:2124
 msgid "Your seat"
 msgstr "自分の席"
 
-#: src117/port/front/port_front_skirmish.cpp:2123
+#: src117/port/front/port_front_skirmish.cpp:2125
 msgid "Play it yourself, or make it a computer and watch: every seat a computer, the whole map shown, with the replay’s controls and speeds up to 16 times Fastest."
 msgstr "自分でプレイするか、コンピューターにして観戦します。すべての席がコンピューターになり、マップ全体を見ながら、リプレイの操作と最速の 16 倍までの速度で観戦できます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2126
+#: src117/port/front/port_front_skirmish.cpp:2128
 msgid "The seat"
 msgstr "席"
 
-#: src117/port/front/port_front_skirmish.cpp:2127
+#: src117/port/front/port_front_skirmish.cpp:2129
 msgid "Open: the next person in the room to join takes it. A person seated here goes back to the room when the seat is made a computer, closed or open. The host may give up their own seat to run the room, and take any seat that is not a person's again."
 msgstr "オープン: 次に部屋に参加した人がこの席に入ります。ここに座っている人は、席がコンピューター、参加不可、オープンに変えられると部屋に戻ります。ホストは自分の席を手放して部屋の進行役になり、人がいない席であればいつでも座り直せます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2146
+#: src117/port/front/port_front_skirmish.cpp:2148
 msgid "OPEN"
 msgstr "オープン"
 
-#: src117/port/front/port_front_skirmish.cpp:2146
+#: src117/port/front/port_front_skirmish.cpp:2148
 msgid "CLOSED"
 msgstr "参加不可"
 
-#: src117/port/front/port_front_skirmish.cpp:2148
+#: src117/port/front/port_front_skirmish.cpp:2150
 msgid "for the next person to join"
 msgstr "次に参加する人のための席"
 
-#: src117/port/front/port_front_skirmish.cpp:2162
+#: src117/port/front/port_front_skirmish.cpp:2164
 msgid "Each team plays in shades of its colour. Choose Colours: By player to pick each player’s."
 msgstr "各チームはそのチームの色の濃淡でプレイします。プレイヤーごとに選ぶには「カラー: プレイヤーごと」を選んでください。"
 
-#: src117/port/front/port_front_skirmish.cpp:2174
-#: src117/port/front/port_front_skirmish.cpp:2821
+#: src117/port/front/port_front_skirmish.cpp:2176
+#: src117/port/front/port_front_skirmish.cpp:2847
 msgid "The map’s"
 msgstr "マップ指定"
 
-#: src117/port/front/port_front_skirmish.cpp:2198
+#: src117/port/front/port_front_skirmish.cpp:2200
 msgid "Their race"
 msgstr "各自の種族"
 
-#: src117/port/front/port_front_skirmish.cpp:2200
-#: src117/port/front/port_front_skirmish.cpp:2224
+#: src117/port/front/port_front_skirmish.cpp:2202
+#: src117/port/front/port_front_skirmish.cpp:2226
 msgid "The host’s"
 msgstr "ホストが選択"
 
-#: src117/port/front/port_front_skirmish.cpp:2201
+#: src117/port/front/port_front_skirmish.cpp:2203
 msgid "Each person in the room chooses their own race."
 msgstr "部屋にいる各人が自分の種族を選びます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2202
+#: src117/port/front/port_front_skirmish.cpp:2204
 msgid "The map gives the computers their races."
 msgstr "コンピューターの種族はマップが決めます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2203
+#: src117/port/front/port_front_skirmish.cpp:2205
 msgid "The host chooses the computers’ races."
 msgstr "コンピューターの種族はホストが選びます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2223
+#: src117/port/front/port_front_skirmish.cpp:2225
 msgid "Their handicap"
 msgstr "各自のハンディキャップ"
 
-#: src117/port/front/port_front_skirmish.cpp:2226
+#: src117/port/front/port_front_skirmish.cpp:2228
 msgid "Each person in the room chooses their own handicap."
 msgstr "部屋にいる各人が自分のハンディキャップを選びます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2227
+#: src117/port/front/port_front_skirmish.cpp:2229
 msgid "The host chooses the computers’ handicaps."
 msgstr "コンピューターのハンディキャップはホストが選びます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2245
+#: src117/port/front/port_front_skirmish.cpp:2247
 msgid "READY"
 msgstr "準備完了"
 
-#: src117/port/front/port_front_skirmish.cpp:2245
+#: src117/port/front/port_front_skirmish.cpp:2247
 msgid "NOT READY"
 msgstr "準備中"
 
-#: src117/port/front/port_front_skirmish.cpp:2257
+#: src117/port/front/port_front_skirmish.cpp:2260
+#: src117/port/front/port_front_skirmish.cpp:2432
+#: src117/port/gameplay/port_ai.cpp:66
+#: src117/port/tools/port_benchview.cpp:870
+msgid "Classic AI"
+msgstr "クラシック AI"
+
+#: src117/port/front/port_front_skirmish.cpp:2262
+#: src117/port/gameplay/port_ai.cpp:68
+msgid "Pluto"
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:2276
 msgid "Use Map Settings: the map runs its computers."
 msgstr "マップ設定使用: コンピューターはマップが制御します。"
 
-#: src117/port/front/port_front_skirmish.cpp:2258
-msgid "A room’s computers are the original’s own, Classic AI. Other levels in a room are not available yet."
-msgstr "部屋のコンピューターはオリジナル自身のもの (クラシック AI) です。部屋での他のレベルはまだ利用できません。"
+#: src117/port/front/port_front_skirmish.cpp:2277
+msgid "Pluto requires Hyperion rules. This room uses Classic AI."
+msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:2292
-#: src117/port/front/port_front_skirmish.cpp:2428
+#: src117/port/front/port_front_skirmish.cpp:2278
+msgid "Classic AI, or one Pluto computer shared by every seat. Only the host's chosen owner runs inference."
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:2311
+#: src117/port/front/port_front_skirmish.cpp:2454
 msgid "Distinct Colours ({0})"
 msgstr "カラーを分ける ({0})"
 
-#: src117/port/front/port_front_skirmish.cpp:2293
+#: src117/port/front/port_front_skirmish.cpp:2312
 msgid "Distinct Colours"
 msgstr "カラーを分ける"
 
-#: src117/port/front/port_front_skirmish.cpp:2296
+#: src117/port/front/port_front_skirmish.cpp:2315
 msgid "Distinct colours"
 msgstr "カラーを分ける"
 
-#: src117/port/front/port_front_skirmish.cpp:2297
+#: src117/port/front/port_front_skirmish.cpp:2316
 msgid "Some players’ colours are close to another’s. Gives each player the colour farthest from those already taken; you keep yours. Hotkey: T"
 msgstr "一部のプレイヤーのカラーが他と近くなっています。各プレイヤーに、すでに使われているカラーから最も離れたカラーを割り当てます。自分のカラーはそのままです。ホットキー: T"
 
-#: src117/port/front/port_front_skirmish.cpp:2299
+#: src117/port/front/port_front_skirmish.cpp:2318
 msgid "No two colours are close. Gives each player the colour farthest from those already taken; you keep yours. Hotkey: T"
 msgstr "近いカラーはありません。各プレイヤーに、すでに使われているカラーから最も離れたカラーを割り当てます。自分のカラーはそのままです。ホットキー: T"
 
-#: src117/port/front/port_front_skirmish.cpp:2335
+#: src117/port/front/port_front_skirmish.cpp:2354
 #: src117/port/platform/port_discord.cpp:656
 msgid "{0} person"
 msgid_plural "{0} people"
 msgstr[0] "{0} 人"
 
-#: src117/port/front/port_front_skirmish.cpp:2338
+#: src117/port/front/port_front_skirmish.cpp:2357
 msgid "{0} open"
 msgstr "オープン {0} 席"
 
-#: src117/port/front/port_front_skirmish.cpp:2340
+#: src117/port/front/port_front_skirmish.cpp:2359
 msgid "{0} of {1} ready"
 msgstr "{1} 人中 {0} 人が準備完了"
 
-#: src117/port/front/port_front_skirmish.cpp:2347
-#: src117/port/front/port_front_skirmish.cpp:2380
-#: src117/port/front/port_front_skirmish.cpp:2425
+#: src117/port/front/port_front_skirmish.cpp:2366
+#: src117/port/front/port_front_skirmish.cpp:2399
+#: src117/port/front/port_front_skirmish.cpp:2451
 msgid "Fill Empty"
 msgstr "空き席を埋める"
 
-#: src117/port/front/port_front_skirmish.cpp:2349
+#: src117/port/front/port_front_skirmish.cpp:2368
 msgid "Fill empty"
 msgstr "空き席を埋める"
 
-#: src117/port/front/port_front_skirmish.cpp:2350
+#: src117/port/front/port_front_skirmish.cpp:2369
 msgid "A computer of a random race in each closed seat; open seats wait for people. Hotkey: F"
 msgstr "参加不可の席にランダムな種族のコンピューターを入れます。オープンの席は人を待ちます。ホットキー: F"
 
-#: src117/port/front/port_front_skirmish.cpp:2375
+#: src117/port/front/port_front_skirmish.cpp:2394
 msgid "{0} empty"
 msgstr "空き {0} 席"
 
-#: src117/port/front/port_front_skirmish.cpp:2448
+#: src117/port/front/port_front_skirmish.cpp:2445
+msgid "Set every computer to Classic AI. Choose Pluto for at most one row above."
+msgstr ""
+
+#: src117/port/front/port_front_skirmish.cpp:2474
 msgid "Adds a team; choose it in a player’s Team list to move them to it. Hotkey: N"
 msgstr "チームを追加します。プレイヤーの「チーム」リストで選ぶと、そのプレイヤーが移ります。ホットキー: N"
 
-#: src117/port/front/port_front_skirmish.cpp:2463
+#: src117/port/front/port_front_skirmish.cpp:2489
 msgid "This map’s starts could not be read, so no layout can be worked out from them. New Team and each player’s Team list make the teams."
 msgstr "このマップの開始位置を読み取れなかったため、そこからレイアウトを決められません。「新しいチーム」と各プレイヤーの「チーム」リストでチームを作ってください。"
 
-#: src117/port/front/port_front_skirmish.cpp:2465
+#: src117/port/front/port_front_skirmish.cpp:2491
 msgid "Sets the teams from where the map’s starts are: halves of the map, or groups of nearby starts. Each player starts in their team’s part (Start positions: By slot). Move anyone with their Team list after."
 msgstr "マップの開始位置からチームを決めます。マップを半分に分けるか、近い開始位置をまとめます。各プレイヤーは自分のチームの区画から始まります (開始位置: スロット順)。後から各プレイヤーの「チーム」リストで移動できます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2489
+#: src117/port/front/port_front_skirmish.cpp:2515
 msgid "Each team a column of chips, for games past 24 players. Not available yet."
 msgstr "24 プレイヤーを超えるゲーム向けに、各チームをチップの列で表示します。まだ利用できません。"
 
-#: src117/port/front/port_front_skirmish.cpp:2579
+#: src117/port/front/port_front_skirmish.cpp:2605
 msgid "empty: choose it in a player’s Team list"
 msgstr "空: プレイヤーの「チーム」リストで選んでください"
 
-#: src117/port/front/port_front_skirmish.cpp:2584
+#: src117/port/front/port_front_skirmish.cpp:2610
 msgid "{0} slots"
 msgstr "{0} スロット"
 
-#: src117/port/front/port_front_skirmish.cpp:2606
+#: src117/port/front/port_front_skirmish.cpp:2632
 msgid "{0} to {1} shown, the wheel scrolls"
 msgstr "{0}〜{1} を表示、ホイールでスクロール"
 
-#: src117/port/front/port_front_skirmish.cpp:2614
+#: src117/port/front/port_front_skirmish.cpp:2640
 msgid "Use Map Settings: the map seats the players and runs the game."
 msgstr "マップ設定使用: マップがプレイヤーを配置してゲームを進めます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2639
+#: src117/port/front/port_front_skirmish.cpp:2665
 msgid "OBSERVERS"
 msgstr "観戦者"
 
-#: src117/port/front/port_front_skirmish.cpp:2645
-#: src117/port/front/port_front_skirmish.cpp:2647
+#: src117/port/front/port_front_skirmish.cpp:2671
+#: src117/port/front/port_front_skirmish.cpp:2673
 #: src117/port/lan/port_front_lanhost.cpp:54
 msgid "Nobody"
 msgstr "なし"
 
-#: src117/port/front/port_front_skirmish.cpp:2645
+#: src117/port/front/port_front_skirmish.cpp:2671
 msgid "Multiplayer only"
 msgstr "マルチプレイのみ"
 
-#: src117/port/front/port_front_skirmish.cpp:2646
+#: src117/port/front/port_front_skirmish.cpp:2672
 #: src117/port/lan/port_front_lanhost.cpp:54
 msgid "Anyone in the room"
 msgstr "部屋の全員"
 
-#: src117/port/front/port_front_skirmish.cpp:2654
+#: src117/port/front/port_front_skirmish.cpp:2680
 msgid "Observers watch a multiplayer game without playing. They come with multiplayer, which is not available yet."
 msgstr "観戦者はプレイせずにマルチプレイのゲームを観戦します。マルチプレイと同時に実装されるため、まだ利用できません。"
 
-#: src117/port/front/port_front_skirmish.cpp:2657
+#: src117/port/front/port_front_skirmish.cpp:2683
 msgid "The room’s people who are not seated can watch the match once it starts, {0} s behind the players."
 msgstr "部屋にいて席に着いていない人は、試合が始まるとプレイヤーより {0} 秒遅れで観戦できます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2660
+#: src117/port/front/port_front_skirmish.cpp:2686
 #: src117/port/lan/port_front_lan.cpp:762
-#: src117/port/lan/port_lanroom_proto.cpp:745
+#: src117/port/lan/port_lanroom_proto.cpp:762
 msgid "The host has turned watching off."
 msgstr "ホストが観戦を無効にしています。"
 
-#: src117/port/front/port_front_skirmish.cpp:2689
+#: src117/port/front/port_front_skirmish.cpp:2715
 msgid "The host chooses it."
 msgstr "ホストが選びます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2733
+#: src117/port/front/port_front_skirmish.cpp:2759
 msgid "Free For All while you watch"
 msgstr "観戦中はフリー・フォー・オール"
 
-#: src117/port/front/port_front_skirmish.cpp:2739
+#: src117/port/front/port_front_skirmish.cpp:2765
 msgid "Players on teams: teammates are allied, share vision and win together, and every other team is an enemy. Quick layout sets the teams from the map’s starts; New Team and each player’s Team list change them. Plays by Hyperion’s rules."
 msgstr "プレイヤーがチームを組みます。味方同士は同盟し、視界を共有してともに勝ち、他のチームはすべて敵になります。「簡易レイアウト」でマップの開始位置からチームを決められます。「新しいチーム」と各プレイヤーの「チーム」リストで変更できます。Hyperion のルールで動きます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2746
+#: src117/port/front/port_front_skirmish.cpp:2772
 #: src117/port/front/port_frontkit.cpp:388
 msgid "Top vs Bottom"
 msgstr "トップvsボトム"
 
-#: src117/port/front/port_front_skirmish.cpp:2755
+#: src117/port/front/port_front_skirmish.cpp:2781
 msgid "Fastest ×{0}"
 msgstr "最速 ×{0}"
 
-#: src117/port/front/port_front_skirmish.cpp:2777
-#: src117/port/front/port_front_skirmish.cpp:2780
+#: src117/port/front/port_front_skirmish.cpp:2803
+#: src117/port/front/port_front_skirmish.cpp:2806
 msgid "Rule set"
 msgstr "ルールセット"
 
-#: src117/port/front/port_front_skirmish.cpp:2778
+#: src117/port/front/port_front_skirmish.cpp:2804
 msgid "The host chooses the rules the room’s match plays by."
 msgstr "部屋の試合で使うルールはホストが選びます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2781
+#: src117/port/front/port_front_skirmish.cpp:2807
 msgid "Classic plays as the original does, to the frame. Hyperion has the improvements, starting with pathing. The replay keeps the choice."
 msgstr "クラシックはフレーム単位でオリジナルと同じように動きます。Hyperion は経路探索をはじめとする改良を含みます。この選択はリプレイにも記録されます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2785
+#: src117/port/front/port_front_skirmish.cpp:2811
 msgid "Hyperion rules, required"
 msgstr "Hyperion のルール (必須)"
 
-#: src117/port/front/port_front_skirmish.cpp:2786
+#: src117/port/front/port_front_skirmish.cpp:2812
 msgid "Because of {0}. The original never had such games, so there is nothing to match."
 msgstr "{0} のためです。オリジナルにはこうしたゲームがないため、一致させる対象がありません。"
 
-#: src117/port/front/port_front_skirmish.cpp:2801
+#: src117/port/front/port_front_skirmish.cpp:2827
 msgid "The host chooses the most units the game holds."
 msgstr "ゲームが扱えるユニット数の上限はホストが選びます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2804
+#: src117/port/front/port_front_skirmish.cpp:2830
 msgid "The most units the game holds at once, every player’s and the map’s minerals and geysers together. The original holds 1,700. Automatic: the original’s in a game it could play, and in a bigger game or with a supply cap past 200, room for the map’s own and for each player’s whole supply cap in units. A number plays by Hyperion’s rules."
 msgstr "ゲームが同時に扱えるユニット数の上限です。全プレイヤーのユニットと、マップのミネラルやヴェスピン・ガイザーを合わせた数です。オリジナルは 1,700 です。自動: オリジナルが扱える範囲ではオリジナルと同じにし、より大きなゲームや供給の上限が 200 を超える場合は、マップ自身のぶんと各プレイヤーの供給の上限ぶんのユニットが収まるようにします。数値を指定すると Hyperion のルールで動きます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2811
+#: src117/port/front/port_front_skirmish.cpp:2837
 msgid "The map sets them"
 msgstr "マップが決めます"
 
-#: src117/port/front/port_front_skirmish.cpp:2818
+#: src117/port/front/port_front_skirmish.cpp:2844
 msgid "Random: the original draws each player a start. By slot: each player starts where the map’s picture shows their number. Either plays by the original’s rules."
 msgstr "ランダム: オリジナルが各プレイヤーの開始位置を抽選します。スロット順: マップの画像でその番号が示された場所から始まります。どちらもオリジナルのルールで動きます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2824
-#: src117/port/front/port_front_skirmish.cpp:2893
+#: src117/port/front/port_front_skirmish.cpp:2850
+#: src117/port/front/port_front_skirmish.cpp:2919
 msgid "The map places the players."
 msgstr "プレイヤーの配置はマップが決めます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2825
+#: src117/port/front/port_front_skirmish.cpp:2851
 msgid "This game type draws the starts at random. Choosing them is not available for it."
 msgstr "このゲームタイプでは開始位置がランダムに決まります。指定はできません。"
 
-#: src117/port/front/port_front_skirmish.cpp:2839
+#: src117/port/front/port_front_skirmish.cpp:2865
 msgid "By player: each player’s own colour. By team: each team in shades of one colour, so a team reads at a glance."
 msgstr "プレイヤーごと: 各プレイヤー本来のカラーになります。チームごと: 各チームが 1 色の濃淡になり、チームが一目で分かります。"
 
-#: src117/port/front/port_front_skirmish.cpp:2856
-#: src117/port/front/port_front_skirmish.cpp:2858
+#: src117/port/front/port_front_skirmish.cpp:2882
+#: src117/port/front/port_front_skirmish.cpp:2884
 msgid "Lock teams"
 msgstr "チームを固定"
 
-#: src117/port/front/port_front_skirmish.cpp:2859
+#: src117/port/front/port_front_skirmish.cpp:2885
 msgid "Keeps players from changing team in a multiplayer lobby. Not available yet."
 msgstr "マルチプレイのロビーで、プレイヤーがチームを変更できないようにします。まだ利用できません。"
 
-#: src117/port/front/port_front_skirmish.cpp:2895
+#: src117/port/front/port_front_skirmish.cpp:2921
 msgid "Starts by slot: each number is that player’s start."
 msgstr "スロット順の開始位置: 各番号がそのプレイヤーの開始位置です。"
 
-#: src117/port/front/port_front_skirmish.cpp:2896
+#: src117/port/front/port_front_skirmish.cpp:2922
 msgid "Random starts: the numbers are the map’s, not the players’."
 msgstr "ランダムな開始位置: 番号はマップのもので、プレイヤーのものではありません。"
 
-#: src117/port/front/port_front_skirmish.cpp:2900
+#: src117/port/front/port_front_skirmish.cpp:2926
 msgid "Enlarge"
 msgstr "拡大"
 
-#: src117/port/front/port_front_skirmish.cpp:2946
+#: src117/port/front/port_front_skirmish.cpp:2972
 msgid "{0} on {1}"
 msgstr "{1} で {0}"
 
-#: src117/port/front/port_front_skirmish.cpp:2948
-#: src117/port/front/port_front_skirmish.cpp:3087
+#: src117/port/front/port_front_skirmish.cpp:2974
+#: src117/port/front/port_front_skirmish.cpp:3113
 msgid "{0} starts"
 msgstr "開始位置 {0} か所"
 
-#: src117/port/front/port_front_skirmish.cpp:2963
+#: src117/port/front/port_front_skirmish.cpp:2989
 msgid "Mod: {0}"
 msgstr "MOD: {0}"
 
-#: src117/port/front/port_front_skirmish.cpp:2963
+#: src117/port/front/port_front_skirmish.cpp:2989
 msgid "Game: {0}"
 msgstr "ゲーム: {0}"
 
-#: src117/port/front/port_front_skirmish.cpp:2966
-#: src117/port/front/port_front_skirmish.cpp:2971
+#: src117/port/front/port_front_skirmish.cpp:2992
+#: src117/port/front/port_front_skirmish.cpp:2997
 msgid "The game"
 msgstr "ゲーム"
 
-#: src117/port/front/port_front_skirmish.cpp:2967
+#: src117/port/front/port_front_skirmish.cpp:2993
 msgid "{0}, a mod on {1}: its units, weapons and rules are in every game started here. The Mods screen chooses another mod, or the original game."
 msgstr "{0} は {1} をベースにした MOD です。ここで始めるすべてのゲームに、その MOD のユニット、武器、ルールが適用されます。別の MOD やオリジナルのゲームは「MOD」画面で選べます。"
 
-#: src117/port/front/port_front_skirmish.cpp:2972
+#: src117/port/front/port_front_skirmish.cpp:2998
 msgid "StarCraft, Brood War or a mod built on one, chosen for each game: it sets the races, the maps and the rules. For now it is the one Hyperion started in; choosing it here is not available yet."
 msgstr "StarCraft、Brood War、またはそれらをベースにした MOD を、ゲームごとに選びます。種族、マップ、ルールはこれで決まります。現時点では Hyperion を起動したときのものになり、ここで選ぶことはまだできません。"
 
-#: src117/port/front/port_front_skirmish.cpp:2978
+#: src117/port/front/port_front_skirmish.cpp:3004
 msgid "Change Map"
 msgstr "マップを変更"
 
-#: src117/port/front/port_front_skirmish.cpp:2980
+#: src117/port/front/port_front_skirmish.cpp:3006
 msgid "The map"
 msgstr "マップ"
 
-#: src117/port/front/port_front_skirmish.cpp:2980
+#: src117/port/front/port_front_skirmish.cpp:3006
 msgid "The host chooses the map."
 msgstr "マップはホストが選びます。"
 
-#: src117/port/front/port_front_skirmish.cpp:3010
+#: src117/port/front/port_front_skirmish.cpp:3036
 msgid "Start Game"
 msgstr "ゲームを開始"
 
-#: src117/port/front/port_front_skirmish.cpp:3015
+#: src117/port/front/port_front_skirmish.cpp:3041
 #: src117/port/gameplay/port_trainerview.cpp:851
 msgid "Leave"
 msgstr "退出"
 
-#: src117/port/front/port_front_skirmish.cpp:3033
+#: src117/port/front/port_front_skirmish.cpp:3059
 msgid "ONLINE (RELAY)"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:3033
+#: src117/port/front/port_front_skirmish.cpp:3059
 msgid "THIS NETWORK"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:3038
+#: src117/port/front/port_front_skirmish.cpp:3064
 msgid "Online (relay)"
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:3038
+#: src117/port/front/port_front_skirmish.cpp:3064
 #: src117/port/lan/port_front_lanhost.cpp:1235
 msgid "This network"
 msgstr "このネットワーク"
 
-#: src117/port/front/port_front_skirmish.cpp:3039
+#: src117/port/front/port_front_skirmish.cpp:3065
 msgid "The host set this match to play online: at its start the room asks its coordinator for a session, and every seat joins it over the internet. The host toggles this."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:3040
+#: src117/port/front/port_front_skirmish.cpp:3066
 msgid "The host set this match to play on the room's own network relay. The host toggles this."
 msgstr ""
 
-#: src117/port/front/port_front_skirmish.cpp:3057
+#: src117/port/front/port_front_skirmish.cpp:3083
 msgid "MOD RULES"
 msgstr "MOD のルール"
 
-#: src117/port/front/port_front_skirmish.cpp:3057
+#: src117/port/front/port_front_skirmish.cpp:3083
 msgid "HYPERION RULES"
 msgstr "HYPERION のルール"
 
-#: src117/port/front/port_front_skirmish.cpp:3060
+#: src117/port/front/port_front_skirmish.cpp:3086
 msgid "Mod rules"
 msgstr "MOD のルール"
 
-#: src117/port/front/port_front_skirmish.cpp:3060
+#: src117/port/front/port_front_skirmish.cpp:3086
 #: src117/port/front/port_front_trainer.cpp:432
 msgid "Hyperion rules"
 msgstr "Hyperion のルール"
 
-#: src117/port/front/port_front_skirmish.cpp:3061
+#: src117/port/front/port_front_skirmish.cpp:3087
 msgid "Required by {0}. Its replay and save are Hyperion’s and say so."
 msgstr "{0} のため必須です。リプレイとセーブデータは Hyperion のものになり、そのことが記録されます。"
 
-#: src117/port/front/port_front_skirmish.cpp:3285
+#: src117/port/front/port_front_skirmish.cpp:3311
 msgid "Choose a map first."
 msgstr "先にマップを選んでください。"
 
-#: src117/port/front/port_front_skirmish.cpp:3292
+#: src117/port/front/port_front_skirmish.cpp:3318
 msgid "A session needs at least one computer."
 msgstr "セッションには少なくとも 1 体のコンピューターが必要です。"
 
@@ -6035,15 +6055,15 @@ msgstr "セッションには少なくとも 1 体のコンピューターが必
 msgid "Classic AI is the original’s own computer, and plays by either rules. The others play by Hyperion’s rules: StarCraft II’s levels, Very Easy to Elite, from slower and smaller to faster, and the Cheater levels, which play as Elite and cheat as StarCraft II’s do. Vision sees the whole map; resources sees it too and brings back more from each trip, growing to half as much again by 20 minutes; insane brings back a fifth more from the start, growing to twice as much."
 msgstr "クラシック AI はオリジナル自身のコンピューターで、どちらのルールでもプレイできます。それ以外は Hyperion のルールで動きます。StarCraft II のレベルで、「非常にやさしい」から「エリート」まで、遅く小規模なものから速いものへと上がり、チーター系のレベルはエリートと同じ強さで、StarCraft II と同じようにチートします。視界はマップ全体が見えます。資源はそれに加えて 1 往復で多く持ち帰り、20 分で 1.5 倍まで増えます。インセインは最初から 1.2 倍持ち帰り、2 倍まで増えます。"
 
-#: src117/port/front/port_front_skirmish.cpp:769
+#: src117/port/front/port_front_skirmish.cpp:771
 msgid "Brood War map (.scx)"
 msgstr "Brood War のマップ (.scx)"
 
-#: src117/port/front/port_front_skirmish.cpp:771
+#: src117/port/front/port_front_skirmish.cpp:773
 msgid "Hyperion map (.hxm)"
 msgstr "Hyperion のマップ (.hxm)"
 
-#: src117/port/front/port_front_skirmish.cpp:772
+#: src117/port/front/port_front_skirmish.cpp:774
 msgid "StarCraft map (.scm)"
 msgstr "StarCraft のマップ (.scm)"
 
@@ -6051,66 +6071,66 @@ msgstr "StarCraft のマップ (.scm)"
 msgid "The player’s units and buildings at this share of their life and shields, as in StarCraft II, to even a game between players of different skill. Damage, energy and speed stay as they are. Below 100% the game plays by Hyperion’s rules."
 msgstr "StarCraft II と同じように、プレイヤーのユニットと建設物の体力とシールドをこの割合にして、実力差のあるプレイヤー同士のゲームを均衡させます。ダメージ、エネルギー、速度は変わりません。100% 未満では Hyperion のルールで動きます。"
 
-#: src117/port/front/port_front_skirmish.cpp:825
-#: src117/port/front/port_front_skirmish.cpp:894
-#: src117/port/front/port_front_skirmish.cpp:1419
+#: src117/port/front/port_front_skirmish.cpp:827
+#: src117/port/front/port_front_skirmish.cpp:896
+#: src117/port/front/port_front_skirmish.cpp:1421
 msgid "That map could not be read."
 msgstr "そのマップを読み取れませんでした。"
 
-#: src117/port/front/port_front_skirmish.cpp:829
-#: src117/port/front/port_front_skirmish.cpp:895
-#: src117/port/front/port_front_skirmish.cpp:1418
+#: src117/port/front/port_front_skirmish.cpp:831
+#: src117/port/front/port_front_skirmish.cpp:897
+#: src117/port/front/port_front_skirmish.cpp:1420
 msgid "That map has more players than Hyperion holds."
 msgstr "そのマップのプレイヤー数は Hyperion が扱える数を超えています。"
 
-#: src117/port/front/port_front_skirmish.cpp:859
+#: src117/port/front/port_front_skirmish.cpp:861
 msgid "the mod {0}, which brings its own data"
 msgstr "独自のデータを持つ MOD「{0}」"
 
-#: src117/port/front/port_front_skirmish.cpp:861
+#: src117/port/front/port_front_skirmish.cpp:863
 msgid "{0} players (the original allows 8)"
 msgstr "{0} プレイヤー (オリジナルは 8 まで)"
 
-#: src117/port/front/port_front_skirmish.cpp:863
+#: src117/port/front/port_front_skirmish.cpp:865
 msgid "a {0} × {1} map (the original allows 256)"
 msgstr "{0} × {1} のマップ (オリジナルは 256 まで)"
 
-#: src117/port/front/port_front_skirmish.cpp:866
+#: src117/port/front/port_front_skirmish.cpp:868
 msgid "Team Match (the original has no teams in a game against computers)"
 msgstr "チームマッチ (オリジナルにはコンピューター戦でのチームがありません)"
 
-#: src117/port/front/port_front_skirmish.cpp:869
+#: src117/port/front/port_front_skirmish.cpp:871
 msgid "a computer at {0} (the original has one computer, its own)"
 msgstr "レベル {0} のコンピューター (オリジナルのコンピューターは 1 種類だけです)"
 
-#: src117/port/front/port_front_skirmish.cpp:873
+#: src117/port/front/port_front_skirmish.cpp:875
 msgid "a handicap (the original has none)"
 msgstr "ハンディキャップ (オリジナルにはありません)"
 
-#: src117/port/front/port_front_skirmish.cpp:878
+#: src117/port/front/port_front_skirmish.cpp:880
 msgid "a unit limit of {0} (the original holds 1,700)"
 msgstr "ユニット数の上限 {0} (オリジナルは 1,700)"
 
-#: src117/port/front/port_front_skirmish.cpp:881
+#: src117/port/front/port_front_skirmish.cpp:883
 msgid "mutators ({0})"
 msgstr "ミューテーター ({0})"
 
-#: src117/port/front/port_front_skirmish.cpp:897
+#: src117/port/front/port_front_skirmish.cpp:899
 msgid "That map has no room for a computer opponent in this game type."
 msgstr "このゲームタイプでは、そのマップにコンピューターの相手を入れる余地がありません。"
-
-#: src117/port/front/port_front_skirmish.cpp:898
-msgid "That game type does not fit this map."
-msgstr "そのゲームタイプはこのマップに合いません。"
-
-#: src117/port/front/port_front_skirmish.cpp:899
-msgid "The game could not be made."
-msgstr "ゲームを作成できませんでした。"
 
 #: src117/port/front/port_front_skirmish.cpp:90
 #: src117/port/lan/port_front_landevices.cpp:451
 msgid "All"
 msgstr "すべて"
+
+#: src117/port/front/port_front_skirmish.cpp:900
+msgid "That game type does not fit this map."
+msgstr "そのゲームタイプはこのマップに合いません。"
+
+#: src117/port/front/port_front_skirmish.cpp:901
+msgid "The game could not be made."
+msgstr "ゲームを作成できませんでした。"
 
 #: src117/port/front/port_front_skirmish.cpp:95
 msgid "Any size"
@@ -6128,12 +6148,12 @@ msgstr "256 まで"
 msgid "Past 256"
 msgstr "256 超"
 
-#: src117/port/front/port_front_skirmish.cpp:972
+#: src117/port/front/port_front_skirmish.cpp:974
 msgid "A skirmish needs at least one computer."
 msgstr "スカーミッシュには少なくとも 1 体のコンピューターが必要です。"
 
-#: src117/port/front/port_front_skirmish.cpp:977
-#: src117/port/front/port_front_skirmish.cpp:3297
+#: src117/port/front/port_front_skirmish.cpp:979
+#: src117/port/front/port_front_skirmish.cpp:3323
 msgid "That map is no longer there."
 msgstr "そのマップは見つかりません。"
 
@@ -6719,11 +6739,6 @@ msgid "the Confederacy’s capital, two billion people"
 msgstr "テラン連邦の首都、人口 20 億"
 
 #: src117/port/gameplay/port_ai.cpp:66
-#: src117/port/tools/port_benchview.cpp:870
-msgid "Classic AI"
-msgstr "クラシック AI"
-
-#: src117/port/gameplay/port_ai.cpp:66
 msgid "Very Easy"
 msgstr "非常にやさしい"
 
@@ -6758,10 +6773,6 @@ msgstr "チーター: 資源"
 #: src117/port/gameplay/port_ai.cpp:67
 msgid "Cheater: insane"
 msgstr "チーター: インセイン"
-
-#: src117/port/gameplay/port_ai.cpp:68
-msgid "Pluto"
-msgstr ""
 
 #: src117/port/gameplay/port_camkeys.cpp:103
 msgid "Location {0} saved."
@@ -7984,122 +7995,122 @@ msgctxt "figure letter"
 msgid "W"
 msgstr "W"
 
-#: src117/port/lan/port_front_lan.cpp:1038
+#: src117/port/lan/port_front_lan.cpp:1040
 msgid "Console"
 msgstr "コンソール"
 
-#: src117/port/lan/port_front_lan.cpp:1038
-#: src117/port/lan/port_front_lan.cpp:1145
+#: src117/port/lan/port_front_lan.cpp:1040
+#: src117/port/lan/port_front_lan.cpp:1147
 #: src117/port/lan/port_front_lanhost.cpp:1202
 msgid "The Room"
 msgstr "部屋"
 
-#: src117/port/lan/port_front_lan.cpp:1040
+#: src117/port/lan/port_front_lan.cpp:1042
 msgid "The host’s console"
 msgstr "ホストのコンソール"
 
-#: src117/port/lan/port_front_lan.cpp:1040
-#: src117/port/lan/port_front_lan.cpp:1771
+#: src117/port/lan/port_front_lan.cpp:1042
+#: src117/port/lan/port_front_lan.cpp:1773
 msgid "The room"
 msgstr "部屋"
 
-#: src117/port/lan/port_front_lan.cpp:1041
+#: src117/port/lan/port_front_lan.cpp:1043
 msgid "Everyone in the room, the matches and this machine’s load. Hotkey: R"
 msgstr "部屋にいる全員、試合、このマシンの負荷を表示します。ホットキー: R"
 
-#: src117/port/lan/port_front_lan.cpp:1042
+#: src117/port/lan/port_front_lan.cpp:1044
 msgid "Who is in the room and what they play. Leave goes back to Multiplayer. Hotkey: R"
 msgstr "部屋にいる人と、その人がプレイしている内容を表示します。「退出」でマルチプレイに戻ります。ホットキー: R"
 
-#: src117/port/lan/port_front_lan.cpp:1049
+#: src117/port/lan/port_front_lan.cpp:1051
 msgid "Choose a map first"
 msgstr "先にマップを選んでください"
 
-#: src117/port/lan/port_front_lan.cpp:1060
+#: src117/port/lan/port_front_lan.cpp:1062
 msgid "A match needs two players or more"
 msgstr "試合には 2 人以上のプレイヤーが必要です"
 
-#: src117/port/lan/port_front_lan.cpp:1061
+#: src117/port/lan/port_front_lan.cpp:1063
 msgid "Open a seat for the room, or make one a computer."
 msgstr "部屋のために席をオープンにするか、どれかをコンピューターにしてください。"
 
-#: src117/port/lan/port_front_lan.cpp:1066
+#: src117/port/lan/port_front_lan.cpp:1068
 msgid "{0} Is Not Ready"
 msgstr "{0} が準備できていません"
 
-#: src117/port/lan/port_front_lan.cpp:1067
+#: src117/port/lan/port_front_lan.cpp:1069
 msgid "Every seat says Ready before the match starts."
 msgstr "試合は、すべての席が「準備完了」になってから始まります。"
 
-#: src117/port/lan/port_front_lan.cpp:1068
+#: src117/port/lan/port_front_lan.cpp:1070
 msgid "Wait for {0}"
 msgstr "{0} を待つ"
 
-#: src117/port/lan/port_front_lan.cpp:1068
+#: src117/port/lan/port_front_lan.cpp:1070
 msgid "The match starts when every seat is ready."
 msgstr "すべての席が準備完了になると試合が始まります。"
 
-#: src117/port/lan/port_front_lan.cpp:1069
+#: src117/port/lan/port_front_lan.cpp:1071
 msgid "Start Anyway"
 msgstr "このまま開始"
 
-#: src117/port/lan/port_front_lan.cpp:1069
+#: src117/port/lan/port_front_lan.cpp:1071
 msgid "The match starts now, with everyone seated."
 msgstr "着席している全員で、今すぐ試合を始めます。"
 
-#: src117/port/lan/port_front_lan.cpp:1084
+#: src117/port/lan/port_front_lan.cpp:1086
 msgid "Not Ready"
 msgstr "準備中"
 
-#: src117/port/lan/port_front_lan.cpp:1084
-#: src117/port/lan/port_front_lan.cpp:1255
+#: src117/port/lan/port_front_lan.cpp:1086
+#: src117/port/lan/port_front_lan.cpp:1257
 msgid "Ready"
 msgstr "準備完了"
 
-#: src117/port/lan/port_front_lan.cpp:1096
+#: src117/port/lan/port_front_lan.cpp:1098
 msgid "You left the room"
 msgstr "部屋から退出しました"
 
-#: src117/port/lan/port_front_lan.cpp:1165
+#: src117/port/lan/port_front_lan.cpp:1167
 msgid "{0} in a browser, {1} installed"
 msgstr "ブラウザー {0}、インストール版 {1}"
 
-#: src117/port/lan/port_front_lan.cpp:1168
+#: src117/port/lan/port_front_lan.cpp:1170
 msgid "When it starts: {0} from the host"
 msgstr "開始時: ホストから {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1169
+#: src117/port/lan/port_front_lan.cpp:1171
 msgid "{0} new stream"
 msgid_plural "{0} new streams"
 msgstr[0] "新しい配信 {0} 件"
 
-#: src117/port/lan/port_front_lan.cpp:1182
+#: src117/port/lan/port_front_lan.cpp:1184
 #: src117/port/lan/port_front_landevices.cpp:279
 msgid "{0}, the host’s own"
 msgstr "{0} (ホスト自身)"
 
-#: src117/port/lan/port_front_lan.cpp:1213
+#: src117/port/lan/port_front_lan.cpp:1215
 msgid "Chat"
 msgstr "チャット"
 
-#: src117/port/lan/port_front_lan.cpp:1238
+#: src117/port/lan/port_front_lan.cpp:1240
 msgid "Nothing said yet. Enter types a line."
 msgstr "まだ発言がありません。Enter で入力できます。"
 
-#: src117/port/lan/port_front_lan.cpp:1246
+#: src117/port/lan/port_front_lan.cpp:1248
 msgid "Enter to chat"
 msgstr "Enter でチャット"
 
-#: src117/port/lan/port_front_lan.cpp:1252
-#: src117/port/lan/port_front_lan.cpp:1255
+#: src117/port/lan/port_front_lan.cpp:1254
+#: src117/port/lan/port_front_lan.cpp:1257
 msgid "A match in the room"
 msgstr "部屋での試合"
 
-#: src117/port/lan/port_front_lan.cpp:1252
+#: src117/port/lan/port_front_lan.cpp:1254
 msgid "Start Match"
 msgstr "試合を開始"
 
-#: src117/port/lan/port_front_lan.cpp:1253
+#: src117/port/lan/port_front_lan.cpp:1255
 msgid "The seats, the game options and who is in the room come next, then Start Match."
 msgstr "次に席、ゲームオプション、部屋にいる人を確認し、「試合を開始」を押します。"
 
@@ -8112,295 +8123,295 @@ msgstr "サーバーを起動できませんでした"
 msgid "Another room or game on this machine has its port. Close it, then start the server."
 msgstr "このマシンの別の部屋かゲームがそのポートを使っています。閉じてからサーバーを起動してください。"
 
-#: src117/port/lan/port_front_lan.cpp:1336
+#: src117/port/lan/port_front_lan.cpp:1338
 msgid "Nothing answers at {0}"
 msgstr "{0} から応答がありません"
 
-#: src117/port/lan/port_front_lan.cpp:1337
+#: src117/port/lan/port_front_lan.cpp:1339
 msgid "A room is joined on port 6112, and found on 6111."
 msgstr "部屋への参加はポート 6112、検索は 6111 を使います。"
 
-#: src117/port/lan/port_front_lan.cpp:1367
+#: src117/port/lan/port_front_lan.cpp:1369
 msgid "That is not an address"
 msgstr "アドレスの形式が正しくありません"
 
-#: src117/port/lan/port_front_lan.cpp:1368
+#: src117/port/lan/port_front_lan.cpp:1370
 msgid "An address on this network is four numbers, like 192.168.1.20."
 msgstr "このネットワークのアドレスは、192.168.1.20 のような 4 つの数字です。"
 
-#: src117/port/lan/port_front_lan.cpp:1426
+#: src117/port/lan/port_front_lan.cpp:1428
 msgid "The game, installed here"
 msgstr "このマシンにインストールされたゲーム"
 
-#: src117/port/lan/port_front_lan.cpp:1427
+#: src117/port/lan/port_front_lan.cpp:1429
 msgid "{0}, from this PC’s copy"
 msgstr "{0} (この PC のコピーから)"
 
-#: src117/port/lan/port_front_lan.cpp:1427
-#: src117/port/lan/port_front_lan.cpp:1579
+#: src117/port/lan/port_front_lan.cpp:1429
+#: src117/port/lan/port_front_lan.cpp:1581
 msgid "StarCraft and Brood War"
 msgstr "StarCraftとBrood War"
 
-#: src117/port/lan/port_front_lan.cpp:1428
+#: src117/port/lan/port_front_lan.cpp:1430
 msgid "A wired network"
 msgstr "有線のネットワーク"
 
-#: src117/port/lan/port_front_lan.cpp:1428
+#: src117/port/lan/port_front_lan.cpp:1430
 msgid "Wi-Fi works, with more delay"
 msgstr "Wi-Fi でも動きますが、遅延が増えます"
 
-#: src117/port/lan/port_front_lan.cpp:1429
+#: src117/port/lan/port_front_lan.cpp:1431
 msgid "A graphics card that makes video"
 msgstr "映像を生成できるグラフィックカード"
 
-#: src117/port/lan/port_front_lan.cpp:1430
+#: src117/port/lan/port_front_lan.cpp:1432
 msgid "For players in a browser, which is not available yet"
 msgstr "ブラウザーで参加するプレイヤー向けで、まだ利用できません"
 
-#: src117/port/lan/port_front_lan.cpp:1449
+#: src117/port/lan/port_front_lan.cpp:1451
 msgid "Rooms on This Network"
 msgstr "このネットワークの部屋"
 
-#: src117/port/lan/port_front_lan.cpp:1456
+#: src117/port/lan/port_front_lan.cpp:1458
 msgid "No room answers on this network yet. A room appears here a moment after its host starts it."
 msgstr "このネットワークで応答する部屋はまだありません。ホストが部屋を開くと、少し後にここに表示されます。"
 
-#: src117/port/lan/port_front_lan.cpp:1480
+#: src117/port/lan/port_front_lan.cpp:1482
 msgid "A room"
 msgstr "部屋"
 
-#: src117/port/lan/port_front_lan.cpp:1488
-#: src117/port/lan/port_front_lan.cpp:1773
+#: src117/port/lan/port_front_lan.cpp:1490
+#: src117/port/lan/port_front_lan.cpp:1775
 msgid "{0} device in the room"
 msgid_plural "{0} devices in the room"
 msgstr[0] "部屋のデバイス {0} 台"
 
-#: src117/port/lan/port_front_lan.cpp:1489
+#: src117/port/lan/port_front_lan.cpp:1491
 msgid "{0} match running"
 msgid_plural "{0} matches running"
 msgstr[0] "進行中の試合 {0} 件"
 
-#: src117/port/lan/port_front_lan.cpp:1490
+#: src117/port/lan/port_front_lan.cpp:1492
 msgid "asks for a password"
 msgstr "パスワードが必要"
 
-#: src117/port/lan/port_front_lan.cpp:1506
-#: src117/port/lan/port_front_lan.cpp:1535
-#: src117/port/lan/port_front_lan.cpp:1609
+#: src117/port/lan/port_front_lan.cpp:1508
+#: src117/port/lan/port_front_lan.cpp:1537
+#: src117/port/lan/port_front_lan.cpp:1611
 msgid "Join"
 msgstr "参加"
 
-#: src117/port/lan/port_front_lan.cpp:1509
+#: src117/port/lan/port_front_lan.cpp:1511
 msgid "Can’t join"
 msgstr "参加できません"
 
-#: src117/port/lan/port_front_lan.cpp:1523
+#: src117/port/lan/port_front_lan.cpp:1525
 msgid "Or an address"
 msgstr "またはアドレスを入力"
 
-#: src117/port/lan/port_front_lan.cpp:1544
+#: src117/port/lan/port_front_lan.cpp:1546
 msgid "Two Ways to Play"
 msgstr "2 つの参加方法"
 
-#: src117/port/lan/port_front_lan.cpp:1549
+#: src117/port/lan/port_front_lan.cpp:1551
 msgid "In a browser, streamed"
 msgstr "ブラウザーで配信を受けて"
 
-#: src117/port/lan/port_front_lan.cpp:1550
+#: src117/port/lan/port_front_lan.cpp:1552
 msgid "Phones, tablets, Macs, Chromebooks, a television: anything with a browser. The host runs that player’s game and sends it as video; nothing is installed and nothing of the game leaves the host. Not available yet."
 msgstr "スマートフォン、タブレット、Mac、Chromebook、テレビなど、ブラウザーがあるものすべてで使えます。ホストがそのプレイヤーのゲームを動かして映像として送るため、何もインストールせず、ゲームのファイルもホストから出ません。まだ利用できません。"
 
-#: src117/port/lan/port_front_lan.cpp:1552
+#: src117/port/lan/port_front_lan.cpp:1554
 msgid "Installed, from the host"
 msgstr "インストール版で、ホスト経由で"
 
-#: src117/port/lan/port_front_lan.cpp:1553
+#: src117/port/lan/port_front_lan.cpp:1555
 msgid "Windows and Linux PCs, x64 or ARM. Each plays the game itself at its own resolution, and sends its commands through the host."
 msgstr "x64 または ARM の Windows と Linux の PC が対象です。各 PC が自身の解像度でゲームを動かし、コマンドをホスト経由で送ります。"
 
-#: src117/port/lan/port_front_lan.cpp:1570
+#: src117/port/lan/port_front_lan.cpp:1572
 msgid "Both kinds play in one match: every seat sends its commands through the host, and every seat computes the same game from them."
 msgstr "どちらの方式も同じ試合で一緒にプレイできます。すべての席がコマンドをホスト経由で送り、すべての席がそこから同じゲームを計算します。"
 
-#: src117/port/lan/port_front_lan.cpp:1572
+#: src117/port/lan/port_front_lan.cpp:1574
 msgid "THIS COPY"
 msgstr "このコピー"
 
-#: src117/port/lan/port_front_lan.cpp:1575
+#: src117/port/lan/port_front_lan.cpp:1577
 msgid "the mod {0}"
 msgstr "MOD「{0}」"
 
-#: src117/port/lan/port_front_lan.cpp:1576
+#: src117/port/lan/port_front_lan.cpp:1578
 msgid "no mod"
 msgstr "MOD なし"
 
-#: src117/port/lan/port_front_lan.cpp:1578
+#: src117/port/lan/port_front_lan.cpp:1580
 msgid "{0}, {1}, {2}"
 msgstr "{0}、{1}、{2}"
 
-#: src117/port/lan/port_front_lan.cpp:1582
+#: src117/port/lan/port_front_lan.cpp:1584
 msgid "A room plays only with copies that match it: the same version, the same game data ({0}), the same mod."
 msgstr "部屋でプレイできるのは、条件が一致するコピーだけです。同じバージョン、同じゲームデータ ({0})、同じ MOD が必要です。"
 
-#: src117/port/lan/port_front_lan.cpp:1586
+#: src117/port/lan/port_front_lan.cpp:1588
 msgid "Rooms are for this network only, and everyone playing needs their own copy of StarCraft."
 msgstr "部屋はこのネットワーク内のみで使えます。プレイする全員が自分の StarCraft のコピーを持っている必要があります。"
 
-#: src117/port/lan/port_front_lan.cpp:1596
+#: src117/port/lan/port_front_lan.cpp:1598
 msgid "Join {0}"
 msgstr "{0} に参加"
 
-#: src117/port/lan/port_front_lan.cpp:1597
+#: src117/port/lan/port_front_lan.cpp:1599
 msgid "The room asks for its password. The host’s console shows it, under Join This Room."
 msgstr "この部屋にはパスワードが必要です。ホストのコンソールの「この部屋に参加」に表示されています。"
 
-#: src117/port/lan/port_front_lan.cpp:1602
+#: src117/port/lan/port_front_lan.cpp:1604
 msgid "the password"
 msgstr "パスワード"
 
-#: src117/port/lan/port_front_lan.cpp:1646
+#: src117/port/lan/port_front_lan.cpp:1648
 msgid "Couldn’t join {0}"
 msgstr "{0} に参加できませんでした"
 
-#: src117/port/lan/port_front_lan.cpp:1650
+#: src117/port/lan/port_front_lan.cpp:1652
 msgid "Nothing answers in {0}"
 msgstr "{0} 以内に応答がありません"
 
-#: src117/port/lan/port_front_lan.cpp:1650
+#: src117/port/lan/port_front_lan.cpp:1652
 msgid "The room may have stopped."
 msgstr "部屋が閉じられた可能性があります。"
 
-#: src117/port/lan/port_front_lan.cpp:1657
+#: src117/port/lan/port_front_lan.cpp:1659
 msgid "Joining {0}…"
 msgstr "{0} に参加しています…"
 
-#: src117/port/lan/port_front_lan.cpp:1658
+#: src117/port/lan/port_front_lan.cpp:1660
 msgid "Couldn’t join: {0} {1}"
 msgstr "参加できませんでした: {0} {1}"
 
-#: src117/port/lan/port_front_lan.cpp:1659
+#: src117/port/lan/port_front_lan.cpp:1661
 msgid "Play with others on this network: host a room here, or join one"
 msgstr "このネットワークの他の人と遊べます。ここで部屋を開くか、どれかに参加してください"
 
-#: src117/port/lan/port_front_lan.cpp:1669
+#: src117/port/lan/port_front_lan.cpp:1671
 msgid "This Network"
 msgstr "このネットワーク"
 
-#: src117/port/lan/port_front_lan.cpp:1676
+#: src117/port/lan/port_front_lan.cpp:1678
 msgid "Not available yet. Online play comes later, on the same connection the network uses."
 msgstr "まだ利用できません。オンライン対戦は後から、ネットワークと同じ接続方式で対応します。"
 
-#: src117/port/lan/port_front_lan.cpp:1681
+#: src117/port/lan/port_front_lan.cpp:1683
 msgid "The Original’s Screens"
 msgstr "オリジナルの画面"
 
-#: src117/port/lan/port_front_lan.cpp:1685
+#: src117/port/lan/port_front_lan.cpp:1687
 msgid "The original’s screens"
 msgstr "オリジナルの画面"
 
-#: src117/port/lan/port_front_lan.cpp:1686
+#: src117/port/lan/port_front_lan.cpp:1688
 msgid "StarCraft’s own multiplayer screens, as the original draws them: Local Area Network, its game list and chat room. Hotkey: O"
 msgstr "StarCraft 自身のマルチプレイ画面を、オリジナルと同じ描画で表示します。ローカルエリアネットワーク、ゲーム一覧、チャットルームです。ホットキー: O"
 
-#: src117/port/lan/port_front_lan.cpp:1694
+#: src117/port/lan/port_front_lan.cpp:1696
 msgid "Host a Room"
 msgstr "部屋を開く"
 
-#: src117/port/lan/port_front_lan.cpp:1695
+#: src117/port/lan/port_front_lan.cpp:1697
 msgid "This machine hosts. Everyone else on the network joins with Hyperion installed, from Join a Room."
 msgstr "このマシンがホストになります。ネットワークの他の人は Hyperion をインストールし、「部屋に参加」から参加します。"
 
-#: src117/port/lan/port_front_lan.cpp:1696
+#: src117/port/lan/port_front_lan.cpp:1698
 msgid "Your room is running: H opens its console."
 msgstr "部屋が動作中です。H でコンソールを開きます。"
 
-#: src117/port/lan/port_front_lan.cpp:1697
+#: src117/port/lan/port_front_lan.cpp:1699
 msgid "Installed players cost the host next to nothing; as many as the network holds."
 msgstr "インストール版のプレイヤーはホストにほとんど負荷をかけないため、ネットワークが許す限り参加できます。"
 
-#: src117/port/lan/port_front_lan.cpp:1704
+#: src117/port/lan/port_front_lan.cpp:1706
 msgid "{0} room found on this network"
 msgid_plural "{0} rooms found on this network"
 msgstr[0] "このネットワークで部屋が {0} 件見つかりました"
 
-#: src117/port/lan/port_front_lan.cpp:1705
+#: src117/port/lan/port_front_lan.cpp:1707
 msgid "Join a Room"
 msgstr "部屋に参加"
 
-#: src117/port/lan/port_front_lan.cpp:1706
+#: src117/port/lan/port_front_lan.cpp:1708
 msgid "Play in a room on this network. Pick one below, or type its address. This copy plays there itself, as one of the room’s installed players."
 msgstr "このネットワークの部屋でプレイします。下から選ぶか、アドレスを入力してください。このコピーは、部屋のインストール版プレイヤーの 1 人として自分でゲームを動かします。"
 
-#: src117/port/lan/port_front_lan.cpp:1708
+#: src117/port/lan/port_front_lan.cpp:1710
 msgid "{0}, {1} this copy can join"
 msgstr "{0} のうち、このコピーが参加できるのは {1} 件"
 
-#: src117/port/lan/port_front_lan.cpp:1772
+#: src117/port/lan/port_front_lan.cpp:1774
 msgid "Hosted on {0}"
 msgstr "ホスト: {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1783
+#: src117/port/lan/port_front_lan.cpp:1785
 msgid "The Lobby"
 msgstr "ロビー"
 
-#: src117/port/lan/port_front_lan.cpp:1786
+#: src117/port/lan/port_front_lan.cpp:1788
 msgid "The lobby"
 msgstr "ロビー"
 
-#: src117/port/lan/port_front_lan.cpp:1787
+#: src117/port/lan/port_front_lan.cpp:1789
 msgid "The host seats you in a match; its lobby opens then."
 msgstr "ホストが試合の席に着かせると、そのロビーが開きます。"
 
-#: src117/port/lan/port_front_lan.cpp:1792
+#: src117/port/lan/port_front_lan.cpp:1794
 msgid "Leave Room"
 msgstr "部屋から退出"
 
-#: src117/port/lan/port_front_lan.cpp:1796
+#: src117/port/lan/port_front_lan.cpp:1798
 msgid "Matches"
 msgstr "試合"
 
-#: src117/port/lan/port_front_lan.cpp:1799
+#: src117/port/lan/port_front_lan.cpp:1801
 msgid "No match yet. The host opens one, and seats the room’s people in it."
 msgstr "試合がまだありません。ホストが試合を開き、部屋の人を席に着かせます。"
 
-#: src117/port/lan/port_front_lan.cpp:1813
+#: src117/port/lan/port_front_lan.cpp:1815
 #: src117/port/lan/port_front_lanhost.cpp:543
 msgid "Choosing a map"
 msgstr "マップを選択中"
 
-#: src117/port/lan/port_front_lan.cpp:1814
+#: src117/port/lan/port_front_lan.cpp:1816
 msgid "in its lobby"
 msgstr "ロビーで待機中"
 
-#: src117/port/lan/port_front_lan.cpp:1815
+#: src117/port/lan/port_front_lan.cpp:1817
 #: src117/port/lan/port_front_lanhost.cpp:545
 msgid "starting"
 msgstr "開始中"
 
-#: src117/port/lan/port_front_lan.cpp:1816
+#: src117/port/lan/port_front_lan.cpp:1818
 msgid "playing for {0}"
 msgstr "{0} 経過"
 
-#: src117/port/lan/port_front_lan.cpp:1817
+#: src117/port/lan/port_front_lan.cpp:1819
 #: src117/port/lan/port_front_lanhost.cpp:546
 msgid "ended"
 msgstr "終了"
 
-#: src117/port/lan/port_front_lan.cpp:1818
+#: src117/port/lan/port_front_lan.cpp:1820
 #: src117/port/lan/port_front_lanhost.cpp:547
 msgid "ended: {0}"
 msgstr "終了: {0}"
 
-#: src117/port/lan/port_front_lan.cpp:1835
+#: src117/port/lan/port_front_lan.cpp:1837
 #: src117/port/lan/port_front_lanhost.cpp:503
 msgid "Watch this match"
 msgstr "この試合を観戦"
 
-#: src117/port/lan/port_front_lan.cpp:1838
+#: src117/port/lan/port_front_lan.cpp:1840
 msgid "From this machine, {0} s behind the players, with the replay player’s camera."
 msgstr "このマシンから、プレイヤーより {0} 秒遅れで、リプレイと同じカメラ操作で観戦します。"
 
-#: src117/port/lan/port_front_lan.cpp:1844
+#: src117/port/lan/port_front_lan.cpp:1846
 msgid "In the Room"
 msgstr "部屋にいる人"
 
@@ -8414,34 +8425,34 @@ msgstr "部屋はまだ開いています"
 msgid "This console is back in it."
 msgstr "このコンソールが部屋に戻りました。"
 
-#: src117/port/lan/port_front_lan.cpp:1977
+#: src117/port/lan/port_front_lan.cpp:1979
 msgid "The Match Did Not Come"
 msgstr "試合を受け取れませんでした"
 
-#: src117/port/lan/port_front_lan.cpp:1977
+#: src117/port/lan/port_front_lan.cpp:1979
 msgid "The room sent nothing of it. It may have ended."
 msgstr "部屋から試合の情報が届きませんでした。終了した可能性があります。"
 
-#: src117/port/lan/port_front_lan.cpp:2125
+#: src117/port/lan/port_front_lan.cpp:2127
 msgid "The server stopped"
 msgstr "サーバーが停止しました"
 
-#: src117/port/lan/port_front_lan.cpp:2125
+#: src117/port/lan/port_front_lan.cpp:2127
 msgid "Nobody can join until it starts again."
 msgstr "再び起動するまで、だれも参加できません。"
 
-#: src117/port/lan/port_front_lan.cpp:2132
+#: src117/port/lan/port_front_lan.cpp:2134
 msgid "The match did not start"
 msgstr "試合が開始されませんでした"
 
-#: src117/port/lan/port_front_lan.cpp:2145
-#: src117/port/lan/port_front_lan.cpp:2154
-#: src117/port/lan/port_front_lan.cpp:2168
+#: src117/port/lan/port_front_lan.cpp:2147
+#: src117/port/lan/port_front_lan.cpp:2156
+#: src117/port/lan/port_front_lan.cpp:2170
 msgid "The match could not start here"
 msgstr "このマシンでは試合を開始できませんでした"
 
 #: src117/port/lan/port_front_lan.cpp:345
-#: src117/port/lan/port_front_lan.cpp:1180
+#: src117/port/lan/port_front_lan.cpp:1182
 #: src117/port/lan/port_front_lanhost.cpp:366
 #: src117/port/lan/port_front_lanhost.cpp:371
 msgid "This machine"
@@ -8486,9 +8497,9 @@ msgid "Playing {0}"
 msgstr "{0} をプレイ中"
 
 #: src117/port/lan/port_front_lan.cpp:423
-#: src117/port/lan/port_front_lan.cpp:1825
+#: src117/port/lan/port_front_lan.cpp:1827
 #: src117/port/lan/port_front_lanhost.cpp:578
-#: src117/port/lan/port_lanlobby.cpp:112
+#: src117/port/lan/port_lanlobby.cpp:115
 msgid "a computer"
 msgid_plural "{0} computers"
 msgstr[0] "コンピューター {0} 体"
@@ -8531,7 +8542,7 @@ msgid "Getting the game from the host"
 msgstr "ホストからゲームを取得中"
 
 #: src117/port/lan/port_front_lan.cpp:437
-#: src117/port/lan/port_front_lan.cpp:1200
+#: src117/port/lan/port_front_lan.cpp:1202
 #: src117/port/lan/port_front_landevices.cpp:30
 #: src117/port/lan/port_front_landevices.cpp:300
 #: src117/port/lan/port_front_lanhost.cpp:921
@@ -8755,7 +8766,7 @@ msgid "By time in the room"
 msgstr "部屋にいる時間順"
 
 #: src117/port/lan/port_front_landevices.cpp:335
-#: src117/port/lan/port_lanroom_proto.cpp:743
+#: src117/port/lan/port_lanroom_proto.cpp:760
 msgid "That match is not being played now."
 msgstr "その試合は現在進行していません。"
 
@@ -9459,7 +9470,7 @@ msgid "Its host plays the mod {0}, which this copy does not have active."
 msgstr "ホストは MOD「{0}」を使用していますが、このコピーでは有効になっていません。"
 
 #: src117/port/lan/port_lanclient.cpp:268
-#: src117/port/lan/port_lanroom_proto.cpp:412
+#: src117/port/lan/port_lanroom_proto.cpp:413
 msgid "Turn it off under Mods, then join."
 msgstr "「MOD」で解除してから参加してください。"
 
@@ -9511,64 +9522,64 @@ msgstr "{0} · {1} 秒遅れ"
 msgid "L goes back to {0} s behind"
 msgstr "L で {0} 秒遅れの時点に戻ります"
 
-#: src117/port/lan/port_lanlobby.cpp:118
+#: src117/port/lan/port_lanlobby.cpp:121
 #: src117/port/platform/port_discord.cpp:615
 msgid "{0}, {1}"
 msgstr "{0}、{1}"
 
-#: src117/port/lan/port_lanlobby.cpp:188
+#: src117/port/lan/port_lanlobby.cpp:210
 msgid "A match"
 msgstr "試合"
 
-#: src117/port/lan/port_lanlobby.cpp:759
+#: src117/port/lan/port_lanlobby.cpp:818
 msgid "Starting the match"
 msgstr "試合を開始しています"
 
-#: src117/port/lan/port_lanroom_proto.cpp:366
+#: src117/port/lan/port_lanroom_proto.cpp:367
 msgid "The host's web\\play folder is from another build of Hyperion; play streamed meanwhile."
 msgstr "ホストの web\\play フォルダーは別のビルドの Hyperion のものです。それまでは配信でプレイしてください。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:397
+#: src117/port/lan/port_lanroom_proto.cpp:398
 msgid "The room is not taking anyone now."
 msgstr "この部屋は現在、参加を受け付けていません。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:398
+#: src117/port/lan/port_lanroom_proto.cpp:399
 msgid "Ask the host to start the server."
 msgstr "ホストにサーバーの起動を頼んでください。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:401
+#: src117/port/lan/port_lanroom_proto.cpp:402
 msgid "Choose another name."
 msgstr "別の名前を選んでください。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:403
+#: src117/port/lan/port_lanroom_proto.cpp:404
 msgid "The room asks for its password."
 msgstr "この部屋にはパスワードが必要です。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:403
+#: src117/port/lan/port_lanroom_proto.cpp:404
 msgid "That is not the room's password."
 msgstr "部屋のパスワードが違います。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:404
+#: src117/port/lan/port_lanroom_proto.cpp:405
 msgid "The host's console shows it, under Join This Room."
 msgstr "ホストのコンソールの「この部屋に参加」に表示されています。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:408
+#: src117/port/lan/port_lanroom_proto.cpp:409
 msgid "The host's page offers the room's version to install."
 msgstr "ホストのページで、部屋と同じバージョンをインストールできます。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:412
+#: src117/port/lan/port_lanroom_proto.cpp:413
 msgid "Activate it under Mods, then join."
 msgstr "「MOD」で使用してから参加してください。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:415
+#: src117/port/lan/port_lanroom_proto.cpp:416
 msgid "The host's page has the game data to install."
 msgstr "ホストのページでインストール用のゲームデータを提供しています。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:588
+#: src117/port/lan/port_lanroom_proto.cpp:605
 msgid "The room has a new password."
 msgstr "部屋のパスワードが変更されました。"
 
-#: src117/port/lan/port_lanroom_proto.cpp:613
+#: src117/port/lan/port_lanroom_proto.cpp:630
 msgid "The server stops after the last match; nobody new can join."
 msgstr "最後の試合の後にサーバーが停止します。新しく参加することはできません。"
 
