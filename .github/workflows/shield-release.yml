@@ -414,6 +414,16 @@ jobs:
           "$probe" metalsharp-combined
           "$probe" mac-wine-capability
 
+      - name: Run real production MetalSharp installer acceptance
+        if: ${{ inputs.mac-backend == 'fex-probe' }}
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/$FEX_WINE_ARCHIVE"
+          test -f "$archive"
+          HYPERION_PLUTO_TEST_REAL_METALSHARP_ACCEPTANCE=1 \
+            HYPERION_PLUTO_TEST_REAL_METALSHARP_ARCHIVE="$archive" \
+            "$RUNNER_TEMP/pluto_runtime_regression" metalsharp-real-installer
+
       - name: Check the macOS harness's host-only tests
         run: python3 engine/tools/pluto-bridge/test_macos_runtime_acceptance.py
 

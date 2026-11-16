@@ -840,9 +840,13 @@ bool RunCapturedProcess(const std::string &program, const std::vector<std::strin
   return waited == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
-bool RunCancellableProcess(const std::string &program, const std::vector<std::string> &args,
-                           const CancelFn &cancel, std::string *pOutput)
+// Acceptance can use pInterrupted to distinguish an actual SIGKILL interruption from a tool that
+// exited normally before cancellation. Normal installer callers use the wrapper below.
+bool RunCancellableProcessObserved(const std::string &program, const std::vector<std::string> &args,
+                                   const CancelFn &cancel, std::string *pOutput, bool *pInterrupted)
 {
+  if (pInterrupted != NULL)
+    *pInterrupted = false;
   int output[2] = {-1, -1};
   if (pipe(output) != 0)
     return false;
@@ -925,7 +929,15 @@ bool RunCancellableProcess(const std::string &program, const std::vector<std::st
   }
   close(output[0]);
   *pOutput = text;
+  if (pInterrupted != NULL)
+    *pInterrupted = killed && waited == pid && WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL;
   return !killed && waited == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+bool RunCancellableProcess(const std::string &program, const std::vector<std::string> &args,
+                           const CancelFn &cancel, std::string *pOutput)
+{
+  return RunCancellableProcessObserved(program, args, cancel, pOutput, NULL);
 }
 
 bool MacOsVersionAtLeast(const std::string &text, long minimumMajor, long minimumMinor)
@@ -1194,7 +1206,8 @@ bool RunMetalSharpTool(const MetalSharpTools &tools, const std::string &program,
 
 bool InstallMetalSharpRuntime(const PlutoRuntimeSpec &spec, const std::string &target,
                               const MetalSharpTools &tools, const TransportFn &transport,
-                              const CancelFn &cancel, const ProgressFn &progress, std::string *pError)
+                              const CancelFn &cancel, const ProgressFn &progress, std::string *pError,
+                              bool forceReinstall = false)
 {
   if (target.empty()) {
     *pError = "The app-managed MetalSharp Wine destination is empty.";
@@ -1203,7 +1216,9 @@ bool InstallMetalSharpRuntime(const PlutoRuntimeSpec &spec, const std::string &t
   if (Cancelled(cancel, pError))
     return false;
   const std::string activeWine = JoinPath(JoinPath(target, "Contents"), "MacOS/wine");
-  if (ProbeMetalSharpWine(activeWine) == NULL)
+  // Real installer acceptance forces one repair so cancellation can be observed with a valid previous
+  // app. Normal production setup always reuses a valid dependency.
+  if (!forceReinstall && ProbeMetalSharpWine(activeWine) == NULL)
     return true;
 
   const std::string parent = ParentPath(target);

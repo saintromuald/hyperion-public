@@ -149,17 +149,19 @@ The MetalSharp job:
 3. compiles the production runtime capability code and requires its real current-host probe plus
    synthetic MetalSharp installer, validation, cancellation, rollback, and combined-setup regressions
    to pass;
-4. downloads the official Pluto v2.0 ZIP only after those checks, verifies its outer SHA-256 and all
+4. runs the real production dependency installer acceptance using the already verified archive and
+   real macOS tools, including fresh, reuse, repair, and interrupted-extraction cases;
+5. downloads the official Pluto v2.0 ZIP only after those checks, verifies its outer SHA-256 and all
    three inner payload hashes, and extracts only the pinned files;
-5. checks that the gated bridge and DLL are i386 and the inference engine is x86-64;
-6. runs the real bridge and official binaries in a fresh isolated Wine prefix with 54 generated,
+6. checks that the gated bridge and DLL are i386 and the inference engine is x86-64;
+7. runs the real bridge and official binaries in a fresh isolated Wine prefix with 54 generated,
    public HXPF frames (no StarCraft installation, map, replay, or other proprietary game file);
-7. requires the expected inference-ready model handshake, a nonzero official engine step count in
+8. requires the expected inference-ready model handshake, a nonzero official engine step count in
    its clean `shutdown after N steps; exiting` record, contiguous HXRP replies 0 through 54, at least
    one strictly parsed classic command, zero `win` in every in-game reply, exit status zero, and
    `[bridge] done (clean EOF)`. Optional per-observation timings are summarized when present but are
    not required from a release build that omits them;
-8. permits no owned surviving inference/bridge process. Ownership is limited to the acceptance
+9. permits no owned surviving inference/bridge process. Ownership is limited to the acceptance
    process group or a Wine process naming the isolated `Z:` runtime, never a global substring match.
    Every failure, including a survivor discovered after normal bridge exit, triggers cleanup of owned
    survivors before the error is raised. Unrelated Wine/Pluto processes are not flagged or signalled.
@@ -170,6 +172,53 @@ acceptance on **macOS 26.7.2**, using signed MetalSharp Wine 6.0 ARM64/FEX at
 preflight tests are not a replacement for it. It predates the combined one-click dependency
 installer and is not evidence of a real app-managed installation. A real installer acceptance must
 separately exercise fresh installation and repair on macOS without touching another Wine.
+
+### Real production installer acceptance
+
+The fex-probe job's **Run real production MetalSharp installer acceptance** step runs the standalone
+`metalsharp-real-installer` scenario after the official archive has been downloaded and SHA-256
+verified. It reuses `$RUNNER_TEMP/MetalSharp-Wine-6.0-arm64.zip`; it does not perform a second HTTPS
+download. The scenario requires Apple Silicon macOS 26.4+, an explicit acceptance opt-in, and an
+absolute archive path:
+
+```sh
+HYPERION_PLUTO_TEST_REAL_METALSHARP_ACCEPTANCE=1 \
+HYPERION_PLUTO_TEST_REAL_METALSHARP_ARCHIVE=/absolute/path/to/MetalSharp-Wine-6.0-arm64.zip \
+  "$RUNNER_TEMP/pluto_runtime_regression" metalsharp-real-installer
+```
+
+The local transport streams that verified file through the production `ArchiveSink`, which checks its
+exact size and hash again during each staged installation. This deliberately tests the production
+installer with a local verified-archive transport; the workflow's existing official HTTPS download
+and hash check remain the network evidence. The combined `InstallAppleSiliconRuntime` runs use tiny
+synthetic Pluto payloads because this scenario targets dependency installation. The separate real
+official-payload bridge/inference acceptance is unchanged.
+
+With real `/usr/bin/ditto`, `/usr/bin/codesign`, the signed app, provisioning profile, and loaders, the
+scenario requires:
+
+1. a fresh app-managed install through the combined production path and real inference preflight;
+2. a second combined run that reuses valid Wine with no additional Wine transport and an unchanged
+   recursive app metadata/symlink/inode snapshot;
+3. deletion of the embedded profile followed by real repair that restores a valid signed app; and
+4. a forced repair cancelled while real ditto extraction is still running. The force-reinstall argument
+   is an acceptance-only hook; normal setup reuses valid Wine. The extraction observer must see the
+   staged app and the process observer must confirm termination by the runner's SIGKILL. If ditto exits
+   first, the scenario fails instead of claiming cancellation. The previously valid app must remain
+   active with an unchanged snapshot, and no `.metalsharp-install-*` staging directory may survive.
+
+A passing workflow log contains all of these distinct evidence lines:
+
+```text
+REAL archive: local workflow-verified transport, bytes=1356725682 sha256=25f7dff91000c03c835b800980878acb12c1f952a4b7853f77de7f21fb87046f
+REAL fresh: production combined install, ditto/codesign/layout/profile/preflight passed; identity=wine-11.* (MetalSharp Wine 6.0)
+REAL reuse: valid app unchanged; wine_transports=1
+REAL repair: damaged profile restored through real archive, ditto and codesign
+REAL cancellation: extraction_observed=1 ditto_interrupted=1 previous_valid_app_unchanged=1 staging_survivors=0
+REAL MetalSharp installer acceptance: PASS
+```
+
+This document does not claim that the new scenario has passed; inspect its named step in a new CI run.
 
 The harness is `engine/tools/pluto-bridge/macos_runtime_acceptance.py`. It uses direct-pipe mode for
 a deterministic game-free transport test. Its JSON summary contains counts, hashes, Wine identity,

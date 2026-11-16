@@ -142,6 +142,8 @@ the built-in setup downloads them directly from the official Pluto release and v
 published hashes. On Apple Silicon with macOS 26.4+, the same action first installs the pinned,
 signed MetalSharp Wine 6.0 ARM64/FEX dependency when needed into Hyperion's app-managed Library
 folder, verifies its signature and runtime layout, and leaves every other Wine installation intact.
+The fex-probe release gate also runs real production installer acceptance for fresh install, reuse,
+repair, and interrupted extraction using the workflow-verified archive and real macOS tools.
 Run a real packaged-engine Pluto match and a two-client multiplayer match with
 a Pluto slot before publication or promotion. Multiplayer needs one authoritative inference
 owner, deterministic commands on every peer, consistent results, and valid replays. Native
