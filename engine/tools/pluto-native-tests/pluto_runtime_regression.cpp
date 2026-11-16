@@ -7,6 +7,9 @@
 #include <cstdarg>
 #include <fstream>
 #include <iostream>
+#if !defined(_WIN32)
+#include <sys/stat.h>
+#endif
 
 namespace {
 std::string g_testData;
@@ -579,6 +582,106 @@ bool NoMetalSharpStages(const fs::path &parent)
   return true;
 }
 
+bool SnapshotTree(const fs::path &root, std::vector<std::string> *pEntries, std::string *pError)
+{
+  pEntries->clear();
+  std::error_code ec;
+  fs::recursive_directory_iterator it(root, fs::directory_options::none, ec), end;
+  if (ec) {
+    *pError = "Could not snapshot " + root.string() + ": " + ec.message();
+    return false;
+  }
+  while (it != end) {
+    const fs::path path = it->path();
+    const fs::file_status status = it->symlink_status(ec);
+    if (ec)
+      break;
+    std::string record = path.lexically_relative(root).generic_string() + "|" +
+                         std::to_string(static_cast<int>(status.type())) + "|" +
+                         std::to_string(static_cast<unsigned>(status.permissions()));
+    struct stat identity;
+    if (lstat(path.c_str(), &identity) != 0) {
+      ec = std::error_code(errno, std::generic_category());
+      break;
+    }
+    record += "|" + std::to_string(static_cast<unsigned long long>(identity.st_dev)) + ":" +
+              std::to_string(static_cast<unsigned long long>(identity.st_ino));
+    if (fs::is_regular_file(status)) {
+      const uintmax_t size = fs::file_size(path, ec);
+      if (ec)
+        break;
+      record += "|" + std::to_string(static_cast<unsigned long long>(size));
+    }
+    if (fs::is_symlink(status)) {
+      record += "|" + fs::read_symlink(path, ec).generic_string();
+      if (ec)
+        break;
+    } else {
+      const auto modified = fs::last_write_time(path, ec).time_since_epoch().count();
+      if (ec)
+        break;
+      record += "|" + std::to_string(static_cast<long long>(modified));
+    }
+    pEntries->push_back(record);
+    it.increment(ec);
+    if (ec)
+      break;
+  }
+  if (ec) {
+    pEntries->clear();
+    *pError = "Could not finish the app snapshot: " + ec.message();
+    return false;
+  }
+  std::sort(pEntries->begin(), pEntries->end());
+  return true;
+}
+
+bool StreamLocalArchive(const fs::path &archive, ArchiveSink &sink, std::string *pError)
+{
+  FILE *file = fopen(archive.c_str(), "rb");
+  if (file == NULL) {
+    *pError = "Could not open the workflow-verified MetalSharp archive.";
+    return false;
+  }
+  std::vector<uint8_t> block(1024 * 1024);
+  bool ok = true;
+  for (;;) {
+    const size_t got = fread(block.data(), 1, block.size(), file);
+    if (got != 0 && !sink.Write(block.data(), got)) {
+      *pError = sink.IsCancelled() ? kCancelled : "Could not stage the workflow-verified archive.";
+      ok = false;
+      break;
+    }
+    if (got != block.size()) {
+      ok = ferror(file) == 0;
+      break;
+    }
+  }
+  ok = fclose(file) == 0 && ok;
+  if (!ok && pError->empty())
+    *pError = "Could not read the workflow-verified MetalSharp archive.";
+  return ok;
+}
+
+struct WineOverrideGuard {
+  explicit WineOverrideGuard(const std::string &wine)
+  {
+    const char *old = getenv("HYPERION_PLUTO_WINE");
+    hadOld = old != NULL;
+    oldValue = hadOld ? old : "";
+    setenv("HYPERION_PLUTO_WINE", wine.c_str(), 1);
+  }
+  ~WineOverrideGuard()
+  {
+    if (hadOld)
+      setenv("HYPERION_PLUTO_WINE", oldValue.c_str(), 1);
+    else
+      unsetenv("HYPERION_PLUTO_WINE");
+  }
+  bool hadOld;
+  std::string oldValue;
+};
+
 bool TestWine11UnifiedPreflight()
 {
   bool ok = true;
@@ -1016,11 +1119,12 @@ bool TestMetalSharpActivationRollback()
     });
     const auto started = std::chrono::steady_clock::now();
     std::string output;
-    const bool ran = RunCancellableProcess("/bin/sh", {"sh", "-c", "sleep 30"},
-                                           [&] { return cancelled.load(); }, &output);
+    bool interrupted = false;
+    const bool ran = RunCancellableProcessObserved("/bin/sh", {"sh", "-c", "sleep 30"},
+                                                   [&] { return cancelled.load(); }, &output, &interrupted);
     cancelWorker.join();
     const auto elapsed = std::chrono::steady_clock::now() - started;
-    ok = Check(!ran && elapsed < std::chrono::seconds(5),
+    ok = Check(!ran && interrupted && elapsed < std::chrono::seconds(5),
                "the production tool runner kills and reaps its owned process group on cancellation") &&
          ok;
   }
@@ -1188,6 +1292,166 @@ bool TestAppleSiliconCombinedInstaller()
          ok;
   }
   return ok;
+}
+
+bool TestRealMetalSharpInstallerAcceptance()
+{
+#if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
+  const bool supportedPlatform = true;
+#else
+  const bool supportedPlatform = false;
+#endif
+  if (!supportedPlatform) {
+    std::cerr << "real MetalSharp installer acceptance requires Apple Silicon macOS 26.4+\n";
+    return false;
+  }
+  const char *optIn = getenv("HYPERION_PLUTO_TEST_REAL_METALSHARP_ACCEPTANCE");
+  if (optIn == NULL || std::string(optIn) != "1")
+    return Check(false, "real installer acceptance requires HYPERION_PLUTO_TEST_REAL_METALSHARP_ACCEPTANCE=1");
+#if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__))
+  if (!MetalSharpMacOsSupported())
+    return Check(false, "real installer acceptance requires macOS 26.4+");
+#endif
+  const char *archiveArgument = getenv("HYPERION_PLUTO_TEST_REAL_METALSHARP_ARCHIVE");
+  if (archiveArgument == NULL || archiveArgument[0] == 0)
+    return Check(false, "real installer acceptance requires the workflow-verified archive pathname");
+  const fs::path archive(archiveArgument);
+  if (!archive.is_absolute())
+    return Check(false, "the workflow-verified MetalSharp archive path must be absolute");
+  const PlutoRuntimeSpec &wineSpec = OfficialMetalSharpSpec();
+  std::error_code ec;
+  const uint64_t archiveSize = fs::file_size(archive, ec);
+  std::string archiveHash, error;
+  if (ec || archiveSize != wineSpec.cbArchive || !HashFile(archive.string(), &archiveHash, &error) ||
+      archiveHash != wineSpec.sha256) {
+    std::cerr << "workflow-verified MetalSharp archive failed its size/hash boundary: " << error << '\n';
+    return false;
+  }
+  std::cerr << "REAL archive: local workflow-verified transport, bytes=" << archiveSize
+            << " sha256=" << archiveHash << '\n';
+
+  TestDirectory dir;
+  const fs::path home = dir.root / "home";
+  const fs::path target = AppManagedMetalSharpWineAppPath(home.c_str());
+  const fs::path activeWine = target / "Contents" / "MacOS" / "wine";
+  const fs::path profile = target / "Contents" / "embedded.provisionprofile";
+  Write(dir.root / "Data" / "pluto" / "pluto-bridge.exe", "real installer acceptance bridge");
+  const auto entries = GoodEntries();
+  const auto plutoZip = TestZip(entries);
+  PlutoRuntimeSpec plutoSpec = SpecFor(plutoZip, entries);
+  plutoSpec.url = "synthetic-pluto-for-real-Wine-installer";
+  WineOverrideGuard override(activeWine.string());
+  MetalSharpTools realTools;
+  int wineTransports = 0;
+  TransportFn transport = [&](const PlutoRuntimeSpec &requested, ArchiveSink &sink, std::string *transportError) {
+    if (requested.url == plutoSpec.url)
+      return Serve(plutoZip)(requested, sink, transportError);
+    if (requested.url != wineSpec.url) {
+      *transportError = "Unexpected real-acceptance download URL.";
+      return false;
+    }
+    ++wineTransports;
+    return StreamLocalArchive(archive, sink, transportError);
+  };
+  std::vector<std::string> stages;
+  ProgressFn progress = [&](uint64_t, uint64_t, const char *stage) {
+    if (stages.empty() || stages.back() != stage)
+      stages.push_back(stage);
+  };
+
+  const bool fresh = InstallAppleSiliconRuntime(
+      plutoSpec, wineSpec, dir.runtime, home.c_str(), realTools, transport, PortPlutoWineExecutable,
+      PortPlutoInferenceCapabilityError, CancelFn(), progress, &error);
+  if (!Check(fresh, error.c_str()) ||
+      !Check(RuntimeReady(plutoSpec, dir.runtime, &error), "fresh combined setup verifies its synthetic Pluto payloads") ||
+      !Check(ProbeMetalSharpWine(activeWine.string()) == NULL,
+             "fresh app-managed install has the real signed layout, profile and Wine identity") ||
+      !Check(wineTransports == 1 && NoMetalSharpStages(target.parent_path()),
+             "fresh install uses one local archive transport and leaves no staging"))
+    return false;
+  std::string version;
+  if (!RunCapturedProcess(activeWine.string(), {activeWine.string(), "--version"}, false, &version))
+    return Check(false, "could not read the activated real Wine identity");
+  std::cerr << "REAL fresh: production combined install, ditto/codesign/layout/profile/preflight passed; identity="
+            << Trimmed(version) << '\n';
+
+  std::vector<std::string> beforeReuse, afterReuse;
+  if (!SnapshotTree(target, &beforeReuse, &error))
+    return Check(false, error.c_str());
+  error.clear();
+  const bool reused = InstallAppleSiliconRuntime(
+      plutoSpec, wineSpec, dir.runtime, home.c_str(), realTools, transport, PortPlutoWineExecutable,
+      PortPlutoInferenceCapabilityError, CancelFn(), progress, &error);
+  if (!SnapshotTree(target, &afterReuse, &error))
+    return Check(false, error.c_str());
+  if (!Check(reused && beforeReuse == afterReuse && wineTransports == 1,
+             "second run reuses valid Wine without archive transport or app metadata changes") ||
+      !Check(NoMetalSharpStages(target.parent_path()), "dependency reuse leaves no staging"))
+    return false;
+  std::cerr << "REAL reuse: valid app unchanged; wine_transports=" << wineTransports << '\n';
+
+  fs::remove(profile, ec);
+  if (ec || fs::exists(profile))
+    return Check(false, "could not damage the app-managed provisioning profile for repair acceptance");
+  error.clear();
+  const bool repaired = InstallMetalSharpRuntime(wineSpec, target.string(), realTools, transport,
+                                                 CancelFn(), progress, &error);
+  if (!Check(repaired, error.c_str()) ||
+      !Check(fs::is_regular_file(profile) && ProbeMetalSharpWine(activeWine.string()) == NULL &&
+                 wineTransports == 2,
+             "repair replaces a damaged app and restores its signed profile/layout") ||
+      !Check(NoMetalSharpStages(target.parent_path()), "real repair leaves no staging"))
+    return false;
+  std::cerr << "REAL repair: damaged profile restored through real archive, ditto and codesign\n";
+
+  std::vector<std::string> beforeCancel, afterCancel;
+  if (!SnapshotTree(target, &beforeCancel, &error))
+    return Check(false, error.c_str());
+  std::atomic<bool> cancelled{false};
+  bool watching = false, dittoAttempted = false, extractionObserved = false, dittoInterrupted = false;
+  fs::path extractedContents;
+  realTools.run = [&](const std::string &program, const std::vector<std::string> &args,
+                      const CancelFn &toolCancel, std::string *output) {
+    if (program == realTools.ditto) {
+      dittoAttempted = true;
+      extractedContents = fs::path(args.back()) / "MetalSharp-Wine.app" / "Contents";
+      watching = true;
+      CancelFn observeExtraction = [&] {
+        if (watching && !extractionObserved) {
+          std::error_code existsError;
+          if (fs::is_directory(extractedContents, existsError) && !existsError) {
+            extractionObserved = true;
+            cancelled.store(true);
+          }
+        }
+        return cancelled.load();
+      };
+      const bool result = RunCancellableProcessObserved(program, args, observeExtraction, output, &dittoInterrupted);
+      watching = false;
+      return result;
+    }
+    if (dittoAttempted && !dittoInterrupted) {
+      *output = "real ditto completed before the requested interruption";
+      return false;
+    }
+    return RunCancellableProcess(program, args, toolCancel, output);
+  };
+  error.clear();
+  const bool cancelledInstall = InstallMetalSharpRuntime(
+      wineSpec, target.string(), realTools, transport, [&] { return cancelled.load(); }, progress, &error, true);
+  if (!SnapshotTree(target, &afterCancel, &error))
+    return Check(false, error.c_str());
+  if (!Check(!cancelledInstall && error == kCancelled && extractionObserved && dittoInterrupted,
+             "real cancellation must interrupt running ditto after extraction has begun") ||
+      !Check(beforeCancel == afterCancel && ProbeMetalSharpWine(activeWine.string()) == NULL,
+             "real cancellation leaves the previously valid app active and unchanged") ||
+      !Check(NoMetalSharpStages(target.parent_path()) && wineTransports == 3,
+             "real cancellation cleans all owned staging"))
+    return false;
+  std::cerr << "REAL cancellation: extraction_observed=1 ditto_interrupted=1 previous_valid_app_unchanged=1 "
+               "staging_survivors=0\n";
+  std::cerr << "REAL MetalSharp installer acceptance: PASS\n";
+  return true;
 }
 
 bool TestMacWineCapability()
@@ -1506,6 +1770,8 @@ int main(int argc, char **argv)
     ok = TestMetalSharpActivationRollback();
   else if (scenario == "metalsharp-combined")
     ok = TestAppleSiliconCombinedInstaller();
+  else if (scenario == "metalsharp-real-installer")
+    ok = TestRealMetalSharpInstallerAcceptance();
   else if (scenario == "mac-wine-capability")
     ok = TestMacWineCapability();
   else if (scenario == "no-sb-capability")
