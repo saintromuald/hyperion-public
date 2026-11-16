@@ -59,7 +59,9 @@ struct PortHdArt {
 // left black. Its creep edges too: <name>.dds.grp beside it, the HD frames of the edge GRP
 // 1.17 draws over a megatile at creep's border, each in a cell a megatile's size,
 // PORT_HD_CREEP_ROW to a row, its size kept.
-enum { PORT_HD_TILESETS = 8, PORT_HD_TILES_ROW = 64, PORT_HD_CREEP_ROW = 8, PORT_HD_CREEP_MAX = 64 };
+// 96 keeps the largest 4x terrain atlas (desert, 9386 tiles) at 12288x12544,
+// below Vulkan's 16384 texels-a-side limit on the cards Hyperion supports.
+enum { PORT_HD_TILESETS = 8, PORT_HD_TILES_ROW = 96, PORT_HD_CREEP_ROW = 8, PORT_HD_CREEP_MAX = 64 };
 
 struct PortHdTerrain {
   int nEra;       // the tileset, as the map's ERA names it: 0 badlands to 7 twilight
