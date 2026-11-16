@@ -879,7 +879,7 @@ def main():
             str(hx), "--sb-identity", "--install-folder", args.game,
         ], env={**os.environ, "HYPERION_WINDOW": "hidden", "SDL_AUDIO_DRIVER": "dummy"}, text=True))
         if args.pluto:
-            if identity.get("engineBuild") != "Hyperion-v0.7.4-beta":
+            if identity.get("engineBuild") != "Hyperion-v0.7.5-beta":
                 raise RuntimeError(f"the Pluto acceptance requires the 0.7.4 engine identity: {identity}")
             if "plutoComputer" not in identity.get("features", []):
                 raise RuntimeError(f"the engine does not advertise its Pluto computer feature: {identity}")

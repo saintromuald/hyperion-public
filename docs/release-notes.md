@@ -4,6 +4,14 @@ What changed in each version of Hyperion, newest first. The game shows the same 
 Patch Notes. Versions are numbered as `docs/versioning.md` says; this page is written from
 `engine/notes/release-notes.json` by `engine/tools/release_notes.py md`.
 
+## v0.7.5-beta, 2026-11-16
+
+**HD terrain for the largest maps.** Hyperion's HD terrain atlas now holds 96 tiles to a row, so the largest 4x terrain sets fit below the graphics driver's texture-size limit.
+
+### Fixed
+
+- **4x desert terrain in HD.** The HD terrain atlas is 96 tiles to a row instead of 64, keeping the largest 4x terrain set (desert, 9386 tiles) at 12288x12544, below Vulkan's 16384 texels-a-side limit on the cards Hyperion supports. Terrain and its water masks use the same row width.
+
 ## v0.7.4-beta, 2026-11-15
 
 **One-click Pluto AI and multiplayer.** Install Pluto AI from its official release on first run or repair it in Settings. Custom multiplayer matches can include a Pluto opponent with one authoritative brain, synchronized commands, and ordinary replays.

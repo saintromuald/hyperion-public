@@ -3,6 +3,23 @@
   "about": "Hyperion's release notes, newest first (docs/versioning.md). Hyperion.exe carries them: the build compiles this file in, the home screen shows the first three entries as notifications (each with its line), and Patch Notes shows them all. tools/release_notes.py checks it against hyperion/version.h and writes docs/release-notes.md from it.",
   "entries": [
     {
+      "id": "v0.7.5-beta",
+      "kind": "release",
+      "version": "0.7.5-beta",
+      "date": "2026-11-16",
+      "title": "HD terrain for the largest maps",
+      "summary": "Hyperion's HD terrain atlas now holds 96 tiles to a row, so the largest 4x terrain sets fit below the graphics driver's texture-size limit.",
+      "line": "HD terrain now fits 4x desert maps without exceeding the graphics driver's texture limit.",
+      "new": [],
+      "changed": [],
+      "fixed": [
+        {
+          "title": "4x desert terrain in HD",
+          "text": "The HD terrain atlas is 96 tiles to a row instead of 64, keeping the largest 4x terrain set (desert, 9386 tiles) at 12288x12544, below Vulkan's 16384 texels-a-side limit on the cards Hyperion supports. Terrain and its water masks use the same row width."
+        }
+      ]
+    },
+    {
       "id": "v0.7.4-beta",
       "kind": "release",
       "version": "0.7.4-beta",

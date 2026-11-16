@@ -406,7 +406,7 @@ class ManifestCompatibilityTests(unittest.TestCase):
             ENGINE, "--sb-identity", "--install-folder", INSTALL,
         ], env={**os.environ, "HYPERION_WINDOW": "hidden", "SDL_AUDIO_DRIVER": "dummy"}, text=True)
         compatibility = json.loads(answer)
-        self.assertEqual(compatibility["engineBuild"], "Hyperion-v0.7.4-beta")
+        self.assertEqual(compatibility["engineBuild"], "Hyperion-v0.7.5-beta")
         self.assertEqual(compatibility["simRevision"], 23)
         self.assertIsInstance(compatibility.get("features"), list)
         self.assertIn("plutoComputer", compatibility["features"])
