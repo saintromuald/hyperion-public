@@ -703,7 +703,7 @@ bool HdTerrainAt(float2 pos, out float3 c, out float water)
   if (s.tile != (tx | (ty << 16)) || mtx >= gTiles || (bEdge && ((s.edgeFrame >> 31) == 0u || nEdge >= gCreepCount)))
     return false;
   uint2 local = min(uint2(frac(m / 32.0) * float(gTileSize)), uint2(gTileSize - 1u, gTileSize - 1u));
-  float4 ground = gTerrain.Load(int3(uint2(mtx % 64u, mtx / 64u) * gTileSize + local, 0));
+  float4 ground = gTerrain.Load(int3(uint2(mtx % 96u, mtx / 96u) * gTileSize + local, 0));
   // the space platform's tiles are clear where space is, and the star field shows there
   c = gStarField.z != 0u && ground.a < 1.0 ? lerp(HdStars(pos), ground.rgb, ground.a) : ground.rgb;
   if (bEdge) {
@@ -721,7 +721,7 @@ bool HdTerrainAt(float2 pos, out float3 c, out float water)
     uint nMask = gWaterOf.Load(mtx * 4u);
     if (nMask != 0u) {
       nMask -= 1u;
-      water = gWaterMask.Load(int3(uint2(nMask % 64u, nMask / 64u) * gTileSize + local, 0)).r;
+      water = gWaterMask.Load(int3(uint2(nMask % 96u, nMask / 96u) * gTileSize + local, 0)).r;
     }
   }
   return true;
