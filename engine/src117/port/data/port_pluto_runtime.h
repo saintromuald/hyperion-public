@@ -15,6 +15,8 @@ std::string PortPlutoRuntimeFolder();
 // actual engine readiness, replies, and shutdown are validated separately.
 const char *PortPlutoInferenceCapabilityError();
 // Download capability is separate so --no-sb does not disable an already-installed offline runtime.
+// Apple Silicon permits a missing Wine dependency here because this action installs it; inference
+// remains blocked until dependency activation and its own preflight succeed.
 const char *PortPlutoDownloadCapabilityError();
 // Complete, read-only preflight: official payloads, Hyperion's bridge, and POSIX execute access.
 bool PortPlutoRuntimeReady(std::string *pError = NULL);
@@ -33,15 +35,15 @@ enum PortPlutoInstallPhase {
 struct PortPlutoInstallStatus {
   PortPlutoInstallPhase phase;
   uint64_t cbReceived, cbTotal;
-  std::string stage;  // downloading, verifying, or installing
+  std::string stage;  // current dependency or payload stage
   std::string error;
 };
 
 // Re-read the installed files when a setup surface opens. No-op while a worker is active.
 void PortPlutoInstallRefresh();
 PortPlutoInstallStatus PortPlutoInstallGetStatus();
-// Starts the one-click official download, or asks an active one to cancel. In-game starts are
-// refused. False means the action was refused or an existing worker was asked to cancel.
+// Starts the one-click official dependency/payload download, or asks an active one to cancel.
+// In-game starts are refused. False means refusal or an existing worker was asked to cancel.
 bool PortPlutoInstallStartOrCancel(bool bInGame);
 void PortPlutoInstallCancel();
 // Blocks a game transition or orderly shutdown until no installer worker can touch the runtime.

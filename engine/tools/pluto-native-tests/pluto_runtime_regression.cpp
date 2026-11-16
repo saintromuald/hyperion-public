@@ -478,11 +478,11 @@ fs::path MakeFakeWine11(const TestDirectory &dir, const std::string &version, bo
   return executable;
 }
 
-fs::path MakeFakeMetalSharpWine(const TestDirectory &dir,
-                                const std::string &version = "wine-11.20 (MetalSharp Wine 6.0)",
-                                bool complete = true, bool profile = true)
+fs::path MakeFakeMetalSharpWineAt(const TestDirectory &dir, const fs::path &app,
+                                  const std::string &version = "wine-11.20 (MetalSharp Wine 6.0)",
+                                  bool complete = true, bool profile = true)
 {
-  const fs::path contents = dir.root / "MetalSharp-Wine.app" / "Contents";
+  const fs::path contents = app / "Contents";
   const fs::path executable = contents / "MacOS" / "wine";
   Write(executable, "#!/bin/sh\nprintf '%s\\n' \"$0\" > \"" + (dir.root / "invoked").string() +
                         "\"\nprintf '%s\\n' \"$ROSETTA_ADVERTISE_AVX\" > \"" +
@@ -499,6 +499,84 @@ fs::path MakeFakeMetalSharpWine(const TestDirectory &dir,
   if (profile)
     Write(contents / "embedded.provisionprofile", "synthetic provisioning profile");
   return executable;
+}
+
+fs::path MakeFakeMetalSharpWine(const TestDirectory &dir,
+                                const std::string &version = "wine-11.20 (MetalSharp Wine 6.0)",
+                                bool complete = true, bool profile = true)
+{
+  return MakeFakeMetalSharpWineAt(dir, dir.root / "MetalSharp-Wine.app", version, complete, profile);
+}
+
+struct FakeDependencyTools {
+  explicit FakeDependencyTools(TestDirectory &directory) : dir(directory)
+  {
+    tools.ditto = "synthetic-ditto";
+    tools.codesign = "synthetic-codesign";
+    tools.run = [this](const std::string &program, const std::vector<std::string> &args,
+                       const CancelFn &cancel, std::string *output) {
+      calls.push_back(args);
+      if (cancel && cancel())
+        return false;
+      if (program == tools.ditto) {
+        if (cancelOnDitto && cancellation != NULL)
+          cancellation->store(true);
+        if (failDitto) {
+          *output = "synthetic ditto failure";
+          return false;
+        }
+        if (cancel && cancel())
+          return false;
+        if (createApp) {
+          const fs::path app = fs::path(args.back()) / "MetalSharp-Wine.app";
+          MakeFakeMetalSharpWineAt(dir, app, identity, complete, profile);
+          std::error_code ec;
+          fs::create_symlink("lib", app / "Contents" / "library-link", ec);
+          if (ec)
+            std::abort();
+        }
+        return true;
+      }
+      if (program == tools.codesign) {
+        if (cancelOnCodesign && cancellation != NULL)
+          cancellation->store(true);
+        if (failCodesign) {
+          *output = "synthetic signature mismatch";
+          return false;
+        }
+        return !cancel || !cancel();
+      }
+      *output = "unexpected synthetic tool";
+      return false;
+    };
+  }
+
+  TestDirectory &dir;
+  MetalSharpTools tools;
+  std::vector<std::vector<std::string>> calls;
+  std::string identity = "wine-11.20 (MetalSharp Wine 6.0)";
+  std::atomic<bool> *cancellation = NULL;
+  bool createApp = true, complete = true, profile = true;
+  bool failDitto = false, failCodesign = false;
+  bool cancelOnDitto = false, cancelOnCodesign = false;
+};
+
+bool InstallDependency(const PlutoRuntimeSpec &spec, const fs::path &target,
+                       const std::vector<uint8_t> &archive, MetalSharpTools &tools, std::string *error,
+                       CancelFn cancel = CancelFn(), ProgressFn progress = ProgressFn())
+{
+  return InstallMetalSharpRuntime(spec, target.string(), tools, Serve(archive), cancel, progress, error);
+}
+
+bool NoMetalSharpStages(const fs::path &parent)
+{
+  if (!fs::exists(parent))
+    return true;
+  for (const fs::directory_entry &entry : fs::directory_iterator(parent)) {
+    if (entry.path().filename().string().find(".metalsharp-install-") == 0)
+      return false;
+  }
+  return true;
 }
 
 bool TestWine11UnifiedPreflight()
@@ -596,6 +674,10 @@ bool TestMetalSharpWinePreflight()
     ok = Check(AppManagedMetalSharpWinePath(home.c_str()) == appManaged.string(),
                "the app-managed runtime uses the versioned Hyperion Library path") &&
          ok;
+    ok = Check(AppManagedMetalSharpWineAppPath(home.c_str()) ==
+                   appManaged.parent_path().parent_path().parent_path().string(),
+               "the dependency installer targets the app bundle, not its loader executable") &&
+         ok;
     ok = Check(std::string(kMetalSharpWinePath) ==
                    "/Applications/MetalSharp-Wine.app/Contents/MacOS/wine",
                "the system fallback is the signed MetalSharp app's wine loader") &&
@@ -677,6 +759,434 @@ bool TestMetalSharpWinePreflight()
          ok;
   }
   unsetenv("ROSETTA_ADVERTISE_AVX");
+  return ok;
+}
+
+bool TestMetalSharpInstallSuccess()
+{
+  TestDirectory dir;
+  const std::vector<uint8_t> archive = Bytes("tiny synthetic MetalSharp archive");
+  PlutoRuntimeSpec spec = SpecFor(archive, {});
+  spec.url = "synthetic-wine";
+  const fs::path home = dir.root / "home";
+  const fs::path target = AppManagedMetalSharpWineAppPath(home.c_str());
+  const fs::path system = dir.root / "Applications" / "MetalSharp-Wine.app" / "Contents" / "MacOS" / "wine";
+  Write(system, "existing system Wine");
+  FakeDependencyTools fake(dir);
+  std::vector<std::pair<uint64_t, std::string>> progress;
+  std::string error;
+  bool ok = Check(InstallDependency(spec, target, archive, fake.tools, &error, CancelFn(),
+                                    [&](uint64_t, uint64_t total, const char *stage) {
+                                      progress.push_back({total, stage});
+                                    }),
+                  error.c_str());
+  const fs::path activeWine = target / "Contents" / "MacOS" / "wine";
+  ok = Check(ProbeMetalSharpWine(activeWine.string()) == NULL,
+             "the activated app passes native identity, layout and profile preflight") &&
+       ok;
+  ok = Check(fs::is_symlink(target / "Contents" / "library-link"),
+             "app activation preserves ditto-provided symlinks") &&
+       ok;
+  ok = Check(Read(system) == Bytes("existing system Wine"),
+             "dependency installation never replaces another Wine installation") &&
+       ok;
+  ok = Check(fake.calls.size() == 2, "a new dependency invokes only ditto and codesign") && ok;
+  if (fake.calls.size() == 2) {
+    ok = Check(fake.calls[0].size() == 5 && fake.calls[0][0] == "synthetic-ditto" &&
+                   fake.calls[0][1] == "-x" && fake.calls[0][2] == "-k",
+               "extraction uses ditto -x -k to preserve the signed app layout") &&
+         ok;
+    ok = Check(fake.calls[1].size() == 5 && fake.calls[1][0] == "synthetic-codesign" &&
+                   fake.calls[1][1] == "--verify" && fake.calls[1][2] == "--strict" &&
+                   fake.calls[1][3] == "--deep",
+               "activation requires codesign --verify --strict --deep") &&
+         ok;
+  }
+  for (const char *stage : {"downloading-wine", "extracting-wine", "validating-wine", "activating-wine"}) {
+    ok = Check(std::find_if(progress.begin(), progress.end(), [&](const auto &event) {
+                 return event.second == stage && event.first == spec.cbArchive;
+               }) != progress.end(),
+               stage) &&
+         ok;
+  }
+  ok = Check(NoMetalSharpStages(target.parent_path()), "successful activation cleans owned staging") && ok;
+  const size_t calls = fake.calls.size();
+  ok = Check(InstallDependency(spec, target, archive, fake.tools, &error),
+             "an already valid app-managed dependency is not downloaded again") &&
+       Check(fake.calls.size() == calls, "dependency reuse invokes no extraction or signature tools") && ok;
+  return ok;
+}
+
+bool TestMetalSharpInstallValidationFailures()
+{
+  bool ok = true;
+  {
+    TestDirectory dir;
+    const std::vector<uint8_t> archive = Bytes("hash mismatch");
+    PlutoRuntimeSpec spec = SpecFor(archive, {});
+    spec.sha256 = std::string(64, '0');
+    const fs::path target = dir.root / "home" / "MetalSharp-Wine-6.0.app";
+    FakeDependencyTools fake(dir);
+    std::string error;
+    ok = Check(!InstallDependency(spec, target, archive, fake.tools, &error) &&
+                   error.find("SHA-256") != std::string::npos && fake.calls.empty() && !fs::exists(target),
+               "a Wine archive hash mismatch is rejected before extraction or activation") &&
+         ok;
+    ok = Check(NoMetalSharpStages(target.parent_path()), "hash failure cleans owned staging") && ok;
+    spec.sha256 = Hash(archive);
+    ok = Check(InstallDependency(spec, target, archive, fake.tools, &error),
+               "retry after a dependency hash failure starts cleanly") &&
+         Check(fake.calls.size() == 2 && ProbeMetalSharpWine((target / "Contents" / "MacOS" / "wine").string()) == NULL,
+               "retry extracts, verifies and activates a complete app") &&
+         ok;
+  }
+  {
+    TestDirectory dir;
+    const std::vector<uint8_t> archive = Bytes("short archive");
+    PlutoRuntimeSpec spec = SpecFor(archive, {});
+    ++spec.cbArchive;
+    const fs::path target = dir.root / "home" / "MetalSharp-Wine-6.0.app";
+    FakeDependencyTools fake(dir);
+    std::string error;
+    ok = Check(!InstallDependency(spec, target, archive, fake.tools, &error) &&
+                   error.find("wrong size") != std::string::npos && fake.calls.empty() && !fs::exists(target),
+               "a Wine archive size mismatch is rejected before extraction or activation") &&
+         ok;
+  }
+  {
+    TestDirectory dir;
+    const std::vector<uint8_t> archive = Bytes("ditto failure");
+    const PlutoRuntimeSpec spec = SpecFor(archive, {});
+    const fs::path target = dir.root / "home" / "MetalSharp-Wine-6.0.app";
+    FakeDependencyTools fake(dir);
+    fake.failDitto = true;
+    std::string error;
+    ok = Check(!InstallDependency(spec, target, archive, fake.tools, &error) &&
+                   error.find("synthetic ditto failure") != std::string::npos && !fs::exists(target),
+               "ditto failure leaves no active app") &&
+         ok;
+  }
+  {
+    TestDirectory dir;
+    const std::vector<uint8_t> archive = Bytes("signature failure");
+    const PlutoRuntimeSpec spec = SpecFor(archive, {});
+    const fs::path target = dir.root / "home" / "MetalSharp-Wine-6.0.app";
+    FakeDependencyTools fake(dir);
+    fake.failCodesign = true;
+    std::string error;
+    ok = Check(!InstallDependency(spec, target, archive, fake.tools, &error) &&
+                   error.find("synthetic signature mismatch") != std::string::npos && !fs::exists(target),
+               "a strict signature failure leaves no active app") &&
+         ok;
+  }
+  {
+    TestDirectory dir;
+    const std::vector<uint8_t> archive = Bytes("wrong identity");
+    const PlutoRuntimeSpec spec = SpecFor(archive, {});
+    const fs::path target = dir.root / "home" / "MetalSharp-Wine-6.0.app";
+    FakeDependencyTools fake(dir);
+    fake.identity = "wine-11.20";
+    std::string error;
+    ok = Check(!InstallDependency(spec, target, archive, fake.tools, &error) &&
+                   error.find("pre-activation validation") != std::string::npos && !fs::exists(target),
+               "Wine 11 without MetalSharp identity is not activated") &&
+         ok;
+  }
+  {
+    TestDirectory dir;
+    const std::vector<uint8_t> archive = Bytes("missing profile");
+    const PlutoRuntimeSpec spec = SpecFor(archive, {});
+    const fs::path target = dir.root / "home" / "MetalSharp-Wine-6.0.app";
+    FakeDependencyTools fake(dir);
+    fake.profile = false;
+    std::string error;
+    ok = Check(!InstallDependency(spec, target, archive, fake.tools, &error) &&
+                   error.find("embedded.provisionprofile") != std::string::npos && !fs::exists(target),
+               "an app without its provisioning profile is not activated") &&
+         ok;
+  }
+  {
+    TestDirectory dir;
+    const std::vector<uint8_t> archive = Bytes("cancel extraction");
+    const PlutoRuntimeSpec spec = SpecFor(archive, {});
+    const fs::path target = dir.root / "home" / "MetalSharp-Wine-6.0.app";
+    FakeDependencyTools fake(dir);
+    std::atomic<bool> cancelled{false};
+    fake.cancellation = &cancelled;
+    fake.cancelOnDitto = true;
+    std::string error;
+    ok = Check(!InstallDependency(spec, target, archive, fake.tools, &error,
+                                  [&] { return cancelled.load(); }) &&
+                   error == kCancelled && !fs::exists(target),
+               "cancelling extraction leaves no partial active app") &&
+         ok;
+    ok = Check(NoMetalSharpStages(target.parent_path()), "tool cancellation cleans owned staging") && ok;
+  }
+  return ok;
+}
+
+bool TestMetalSharpActivationRollback()
+{
+  bool ok = true;
+  {
+    TestDirectory dir;
+    const std::vector<uint8_t> archive = Bytes("activation failure");
+    const PlutoRuntimeSpec spec = SpecFor(archive, {});
+    const fs::path target = dir.root / "home" / "MetalSharp-Wine-6.0.app";
+    Write(target / "Contents" / "old-marker", "previous complete app");
+    FakeDependencyTools fake(dir);
+    fake.tools.move = [&](const std::string &from, const std::string &to, std::string *error) {
+      if (to == target.string() && from.find("/unpacked/MetalSharp-Wine.app") != std::string::npos) {
+        *error = "synthetic activation failure";
+        return false;
+      }
+      return MoveAtomic(from, to, error);
+    };
+    std::string error;
+    ok = Check(!InstallDependency(spec, target, archive, fake.tools, &error) &&
+                   error.find("synthetic activation failure") != std::string::npos,
+               "an activation rename failure is surfaced") &&
+         ok;
+    ok = Check(Read(target / "Contents" / "old-marker") == Bytes("previous complete app") &&
+                   !fs::exists(target / "Contents" / "MacOS" / "wine"),
+               "activation failure restores the previous app-managed bundle") &&
+         ok;
+    ok = Check(NoMetalSharpStages(target.parent_path()), "successful rollback cleans staging and its backup") && ok;
+  }
+  {
+    TestDirectory dir;
+    const std::vector<uint8_t> archive = Bytes("cancel activation");
+    const PlutoRuntimeSpec spec = SpecFor(archive, {});
+    const fs::path target = dir.root / "home" / "MetalSharp-Wine-6.0.app";
+    Write(target / "Contents" / "old-marker", "previous complete app");
+    FakeDependencyTools fake(dir);
+    std::atomic<bool> cancelled{false};
+    fake.tools.move = [&](const std::string &from, const std::string &to, std::string *error) {
+      if (from == target.string() && to.find("previous.app") != std::string::npos)
+        cancelled.store(true);
+      return MoveAtomic(from, to, error);
+    };
+    std::string error;
+    ok = Check(!InstallDependency(spec, target, archive, fake.tools, &error,
+                                  [&] { return cancelled.load(); }) &&
+                   error == kCancelled,
+               "cancellation after backup reports cancellation") &&
+         ok;
+    ok = Check(Read(target / "Contents" / "old-marker") == Bytes("previous complete app") &&
+                   !fs::exists(target / "Contents" / "MacOS" / "wine"),
+               "cancellation before activation restores the previous app-managed bundle") &&
+         ok;
+    ok = Check(NoMetalSharpStages(target.parent_path()), "cancellation rollback cleans owned staging") && ok;
+  }
+  {
+    TestDirectory dir;
+    const std::vector<uint8_t> archive = Bytes("rollback recovery");
+    const PlutoRuntimeSpec spec = SpecFor(archive, {});
+    const fs::path target = dir.root / "home" / "MetalSharp-Wine-6.0.app";
+    Write(target / "Contents" / "old-marker", "recovery bytes");
+    FakeDependencyTools fake(dir);
+    fake.tools.move = [&](const std::string &from, const std::string &to, std::string *error) {
+      if (to == target.string() && from.find("/unpacked/MetalSharp-Wine.app") != std::string::npos) {
+        *error = "synthetic activation failure";
+        return false;
+      }
+      if (to == target.string() && from.find("previous.app") != std::string::npos) {
+        *error = "synthetic restore failure";
+        return false;
+      }
+      return MoveAtomic(from, to, error);
+    };
+    std::string error;
+    ok = Check(!InstallDependency(spec, target, archive, fake.tools, &error) &&
+                   error.find("could not be restored") != std::string::npos && !fs::exists(target),
+               "a failed restore leaves no partial active app and identifies recovery data") &&
+         ok;
+    bool recoveryPreserved = false;
+    for (const fs::directory_entry &entry : fs::directory_iterator(target.parent_path())) {
+      if (entry.path().filename().string().find(".metalsharp-install-") == 0)
+        recoveryPreserved = Read(entry.path() / "previous.app" / "Contents" / "old-marker") == Bytes("recovery bytes");
+    }
+    ok = Check(recoveryPreserved, "rollback recovery bytes are never deleted as staging garbage") && ok;
+  }
+  {
+    std::atomic<bool> cancelled{false};
+    std::thread cancelWorker([&] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      cancelled.store(true);
+    });
+    const auto started = std::chrono::steady_clock::now();
+    std::string output;
+    const bool ran = RunCancellableProcess("/bin/sh", {"sh", "-c", "sleep 30"},
+                                           [&] { return cancelled.load(); }, &output);
+    cancelWorker.join();
+    const auto elapsed = std::chrono::steady_clock::now() - started;
+    ok = Check(!ran && elapsed < std::chrono::seconds(5),
+               "the production tool runner kills and reaps its owned process group on cancellation") &&
+         ok;
+  }
+  return ok;
+}
+
+bool TestAppleSiliconCombinedInstaller()
+{
+  bool ok = true;
+  {
+    TestDirectory dir;
+    const std::vector<SyntheticEntry> oldEntries = {{"pluto.dll", Bytes("working old DLL")},
+                                                    {"pluto/pluto_infer.exe", Bytes("working old inference")},
+                                                    {"pluto/pluto_weights.bin", Bytes("working old weights")}};
+    const auto newEntries = GoodEntries();
+    const auto plutoZip = TestZip(newEntries);
+    PlutoRuntimeSpec plutoSpec = SpecFor(plutoZip, newEntries);
+    plutoSpec.url = "synthetic-pluto";
+    WritePayloads(dir, oldEntries);
+    Write(dir.root / "Data" / "pluto" / "pluto-bridge.exe", "packaged bridge");
+    Write(dir.root / "Data" / "pluto" / "bridge.log", "preserve log");
+    Write(dir.root / "Data" / "pluto" / "pluto" / "pluto_config.json", "preserve config");
+    Write(dir.root / "Data" / "pluto" / "pluto" / "bandit.json", "preserve bandit");
+    const std::vector<uint8_t> wineArchive = Bytes("combined Wine archive");
+    PlutoRuntimeSpec wineSpec = SpecFor(wineArchive, {});
+    wineSpec.url = "synthetic-wine";
+    const fs::path home = dir.root / "home";
+    const fs::path target = AppManagedMetalSharpWineAppPath(home.c_str());
+    const fs::path activeWine = target / "Contents" / "MacOS" / "wine";
+    FakeDependencyTools fake(dir);
+    std::vector<std::string> downloads;
+    bool wineActiveBeforePluto = false, capabilitySawWine = false;
+    TransportFn transport = [&](const PlutoRuntimeSpec &requested, ArchiveSink &sink, std::string *transportError) {
+      downloads.push_back(requested.url);
+      const bool pluto = requested.url == plutoSpec.url;
+      if (pluto)
+        wineActiveBeforePluto = fs::exists(activeWine);
+      return Serve(pluto ? plutoZip : wineArchive)(requested, sink, transportError);
+    };
+    std::string error;
+    ok = Check(InstallAppleSiliconRuntime(
+                   plutoSpec, wineSpec, dir.runtime, home.c_str(), fake.tools, transport,
+                   [&] { return activeWine.string(); },
+                   [&]() -> const char * {
+                     capabilitySawWine = fs::exists(activeWine);
+                     return NULL;
+                   },
+                   CancelFn(), ProgressFn(), &error),
+               error.c_str());
+    ok = Check(downloads.size() == 2 && downloads[0] == wineSpec.url && downloads[1] == plutoSpec.url,
+               "one action downloads Wine before Pluto") &&
+         ok;
+    ok = Check(wineActiveBeforePluto && capabilitySawWine,
+               "Wine is active and inference capability is rechecked before Pluto replacement") &&
+         ok;
+    ok = Check(RuntimeReady(plutoSpec, dir.runtime, &error), "the combined action installs verified Pluto payloads") &&
+         ok;
+    ok = Check(MetalSharpWineError(activeWine.string()) == NULL,
+               "dependency activation invalidates a cached missing-Wine probe") &&
+         ok;
+    ok = Check(Read(dir.root / "Data" / "pluto" / "bridge.log") == Bytes("preserve log") &&
+                   Read(dir.root / "Data" / "pluto" / "pluto" / "pluto_config.json") == Bytes("preserve config") &&
+                   Read(dir.root / "Data" / "pluto" / "pluto" / "bandit.json") == Bytes("preserve bandit"),
+               "combined repair preserves logs, configuration and bandit state") &&
+         ok;
+  }
+  {
+    TestDirectory dir;
+    const auto oldEntries = GoodEntries();
+    WritePayloads(dir, oldEntries);
+    Write(dir.root / "Data" / "pluto" / "pluto-bridge.exe", "packaged bridge");
+    const auto plutoZip = TestZip(oldEntries);
+    PlutoRuntimeSpec plutoSpec = SpecFor(plutoZip, oldEntries);
+    plutoSpec.url = "synthetic-pluto";
+    const std::vector<uint8_t> wineArchive = Bytes("bad Wine hash");
+    PlutoRuntimeSpec wineSpec = SpecFor(wineArchive, {});
+    wineSpec.url = "synthetic-wine";
+    wineSpec.sha256 = std::string(64, '0');
+    const fs::path home = dir.root / "home";
+    const fs::path target = AppManagedMetalSharpWineAppPath(home.c_str());
+    FakeDependencyTools fake(dir);
+    int plutoDownloads = 0;
+    TransportFn transport = [&](const PlutoRuntimeSpec &requested, ArchiveSink &sink, std::string *transportError) {
+      if (requested.url == plutoSpec.url)
+        ++plutoDownloads;
+      return Serve(wineArchive)(requested, sink, transportError);
+    };
+    std::string error;
+    ok = Check(!InstallAppleSiliconRuntime(
+                   plutoSpec, wineSpec, dir.runtime, home.c_str(), fake.tools, transport,
+                   [&] { return (target / "Contents" / "MacOS" / "wine").string(); },
+                   []() -> const char * { return NULL; }, CancelFn(), ProgressFn(), &error),
+               "a Wine hash failure refuses combined setup") &&
+         ok;
+    const PlutoRuntimeSpec oldSpec = SpecFor(TestZip(oldEntries), oldEntries);
+    ok = Check(plutoDownloads == 0 && RuntimeReady(oldSpec, dir.runtime, &error),
+               "Wine failure never downloads or replaces working Pluto payloads") &&
+         ok;
+  }
+  {
+    TestDirectory dir;
+    const auto oldEntries = GoodEntries();
+    WritePayloads(dir, oldEntries);
+    Write(dir.root / "Data" / "pluto" / "pluto-bridge.exe", "packaged bridge");
+    const auto plutoZip = TestZip(oldEntries);
+    PlutoRuntimeSpec plutoSpec = SpecFor(plutoZip, oldEntries);
+    plutoSpec.url = "synthetic-pluto";
+    const std::vector<uint8_t> wineArchive = Bytes("post-install capability failure");
+    PlutoRuntimeSpec wineSpec = SpecFor(wineArchive, {});
+    wineSpec.url = "synthetic-wine";
+    const fs::path home = dir.root / "home";
+    const fs::path target = AppManagedMetalSharpWineAppPath(home.c_str());
+    const fs::path activeWine = target / "Contents" / "MacOS" / "wine";
+    FakeDependencyTools fake(dir);
+    int plutoDownloads = 0;
+    TransportFn transport = [&](const PlutoRuntimeSpec &requested, ArchiveSink &sink, std::string *transportError) {
+      if (requested.url == plutoSpec.url)
+        ++plutoDownloads;
+      return Serve(wineArchive)(requested, sink, transportError);
+    };
+    std::string error;
+    ok = Check(!InstallAppleSiliconRuntime(
+                   plutoSpec, wineSpec, dir.runtime, home.c_str(), fake.tools, transport,
+                   [&] { return activeWine.string(); },
+                   []() -> const char * { return "synthetic inference rejection"; }, CancelFn(), ProgressFn(), &error) &&
+                   error.find("no Pluto payloads were replaced") != std::string::npos,
+               "post-install inference preflight remains fail-closed") &&
+         ok;
+    const PlutoRuntimeSpec oldSpec = SpecFor(TestZip(oldEntries), oldEntries);
+    ok = Check(plutoDownloads == 0 && RuntimeReady(oldSpec, dir.runtime, &error) &&
+                   ProbeMetalSharpWine(activeWine.string()) == NULL,
+               "capability failure leaves old Pluto intact and only a complete verified Wine app active") &&
+         ok;
+  }
+  {
+    TestDirectory dir;
+    const auto entries = GoodEntries();
+    WritePayloads(dir, entries);
+    Write(dir.root / "Data" / "pluto" / "pluto-bridge.exe", "packaged bridge");
+    const auto plutoZip = TestZip(entries);
+    PlutoRuntimeSpec plutoSpec = SpecFor(plutoZip, entries);
+    plutoSpec.url = "synthetic-pluto";
+    const std::vector<uint8_t> wineArchive = Bytes("dependency must be skipped");
+    PlutoRuntimeSpec wineSpec = SpecFor(wineArchive, {});
+    wineSpec.url = "synthetic-wine";
+    const fs::path systemWine = MakeFakeMetalSharpWineAt(dir, dir.root / "elsewhere" / "MetalSharp-Wine.app");
+    const fs::path home = dir.root / "home";
+    const fs::path target = AppManagedMetalSharpWineAppPath(home.c_str());
+    FakeDependencyTools fake(dir);
+    int wineDownloads = 0;
+    TransportFn transport = [&](const PlutoRuntimeSpec &requested, ArchiveSink &sink, std::string *transportError) {
+      if (requested.url == wineSpec.url)
+        ++wineDownloads;
+      return Serve(plutoZip)(requested, sink, transportError);
+    };
+    std::string error;
+    ok = Check(InstallAppleSiliconRuntime(
+                   plutoSpec, wineSpec, dir.runtime, home.c_str(), fake.tools, transport,
+                   [&] { return systemWine.string(); }, []() -> const char * { return NULL; },
+                   CancelFn(), ProgressFn(), &error),
+               "a valid selected MetalSharp runtime permits Pluto-only repair") &&
+         ok;
+    ok = Check(wineDownloads == 0 && fake.calls.empty() && !fs::exists(target),
+               "a valid external runtime skips dependency download, extraction and app-managed activation") &&
+         ok;
+  }
   return ok;
 }
 
@@ -879,6 +1389,7 @@ bool TestInGameLock()
 bool TestOfficialPins()
 {
   const PlutoRuntimeSpec &spec = OfficialSpec();
+  const PlutoRuntimeSpec &wine = OfficialMetalSharpSpec();
   return Check(spec.url == "https://github.com/tscmoo/pluto/releases/download/v2.0/pluto-v2.0.zip",
                "official release URL") &&
          Check(spec.cbArchive == 309686477, "official outer byte count") &&
@@ -891,7 +1402,13 @@ bool TestOfficialPins()
                "official inference SHA-256") &&
          Check(spec.payloads[2].sha256 == "c53a559b4910777dc0e1c561c0d89d243091f465d8e9fc0f5f72e56597067d86" &&
                    spec.payloads[2].cbSize == 347935248,
-               "official weights SHA-256 and size");
+               "official weights SHA-256 and size") &&
+         Check(wine.url == "https://github.com/metalsharp/MetalSharp-Wine/releases/download/v6.0/MetalSharp-Wine-6.0-arm64.zip",
+               "official MetalSharp archive URL") &&
+         Check(wine.cbArchive == 1356725682, "official MetalSharp exact byte count") &&
+         Check(wine.sha256 == "25f7dff91000c03c835b800980878acb12c1f952a4b7853f77de7f21fb87046f" &&
+                   wine.payloads.empty(),
+               "official MetalSharp SHA-256 and archive-only specification");
 }
 
 bool TestResolutionAndQuantizedText()
@@ -913,6 +1430,21 @@ bool TestResolutionAndQuantizedText()
        Check(first.find("33%") != std::string::npos && first.find("100 / 295 MiB") != std::string::npos,
              "progress contains whole percent and MiB") &&
        Check(PortPlutoInstallButtonText(status) == "Cancel Pluto AI download", "running action is cancellable") && ok;
+  status.stage = "downloading-wine";
+  status.cbTotal = OfficialMetalSharpSpec().cbArchive;
+  const std::string wineProgress = PortPlutoInstallText(status);
+  ok = Check(wineProgress.find("MetalSharp Wine 6.0") != std::string::npos &&
+                 wineProgress.find("1293 MiB") != std::string::npos,
+             "Wine download text names the dependency and its honest whole-MiB total") &&
+       ok;
+  status.stage = "extracting-wine";
+  ok = Check(PortPlutoInstallText(status).find("ditto") != std::string::npos,
+             "dependency extraction has an explicit non-percent stage") &&
+       ok;
+  status.stage = "validating-wine";
+  ok = Check(PortPlutoInstallText(status).find("signature") != std::string::npos,
+             "dependency validation text includes the code signature") &&
+       ok;
   status.phase = PORT_PLUTO_INSTALL_FAILED;
   ok = Check(PortPlutoInstallButtonText(status) == "Retry Pluto AI download", "failed action exposes retry") && ok;
   return ok;
@@ -966,6 +1498,14 @@ int main(int argc, char **argv)
     ok = TestWine11UnifiedPreflight();
   else if (scenario == "metalsharp-preflight")
     ok = TestMetalSharpWinePreflight();
+  else if (scenario == "metalsharp-install-success")
+    ok = TestMetalSharpInstallSuccess();
+  else if (scenario == "metalsharp-install-validation")
+    ok = TestMetalSharpInstallValidationFailures();
+  else if (scenario == "metalsharp-install-rollback")
+    ok = TestMetalSharpActivationRollback();
+  else if (scenario == "metalsharp-combined")
+    ok = TestAppleSiliconCombinedInstaller();
   else if (scenario == "mac-wine-capability")
     ok = TestMacWineCapability();
   else if (scenario == "no-sb-capability")

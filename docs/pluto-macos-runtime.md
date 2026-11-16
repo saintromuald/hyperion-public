@@ -21,9 +21,10 @@ The OS and Wine checks only permit an attempt; they do not claim inference works
 bridge/inference readiness, strict command handling, replies, and clean shutdown are the runtime
 proof.
 
-Restart Hyperion after repairing or replacing Wine in place. The OS result and the Wine probe for
-each resolved pathname are cached for the life of the native Hyperion process. If a prerequisite
-check fails, installing or repairing the Pluto payload ZIP cannot override that refusal.
+Restart Hyperion after manually repairing or replacing Wine in place. The OS result and the Wine
+probe for each resolved pathname are cached for the life of the native Hyperion process. The
+one-click installer invalidates the Wine probe after dependency activation, then checks inference
+capability again before replacing any Pluto payload.
 
 Native Intel Mac behavior is unchanged: Pluto uses the native x86-64 AVX2 check, the existing
 WineHQ Stable/Devel/Staging and `PATH` resolution, and the Wine 11 unified i386/x86-64 preflight.
@@ -32,9 +33,11 @@ result below is not evidence for every Intel/Wine combination.
 
 ## MetalSharp Wine installation, without Homebrew
 
-Wine/FEX is a separate prerequisite. Hyperion does not bundle it, and **Download Pluto AI does not
-currently download or install it**. A successful Pluto payload download is never reported as a
-successful inference run.
+Wine/FEX is a separate prerequisite and is not bundled. On Apple Silicon, **Download/Repair Pluto
+AI** installs it automatically when the selected runtime is missing or invalid, then installs the
+official Pluto payloads in the same action. A valid explicit override or system MetalSharp
+installation is used as-is and is not replaced. A successful payload download is never reported as
+a successful inference run.
 
 Install the signed app from the official MetalSharp Wine 6.0 release, preserving the complete app
 bundle and its provisioning profile. For an admin-free installation, name it
@@ -45,12 +48,28 @@ bundle and its provisioning profile. For an admin-free installation, name it
 |---|---|
 | Archive | `MetalSharp-Wine-6.0-arm64.zip` |
 | URL | `https://github.com/metalsharp/MetalSharp-Wine/releases/download/v6.0/MetalSharp-Wine-6.0-arm64.zip` |
+| Exact size | `1356725682` bytes (1293 whole MiB displayed during download) |
 | SHA-256 | `25f7dff91000c03c835b800980878acb12c1f952a4b7853f77de7f21fb87046f` |
 | App-managed loader | `$HOME/Library/Application Support/Hyperion/MetalSharp-Wine-6.0.app/Contents/MacOS/wine` |
 | System loader | `/Applications/MetalSharp-Wine.app/Contents/MacOS/wine` |
 
-After verifying the archive and extracting it with macOS `ditto`, the app's signature can be checked
-before installation:
+The automatic installer streams the archive into an owned fresh sibling staging directory, enforces
+its exact byte count and SHA-256 before extraction, and extracts with `ditto -x -k` to preserve the
+signed app's symlinks and layout. Before activation it requires all of these to pass:
+
+1. `codesign --verify --strict --deep` on the staged app;
+2. the embedded provisioning profile, i386 runtime, aarch64 loader, wineserver, and app-layout checks;
+3. Wine 11 plus MetalSharp Wine identity from the staged loader.
+
+Activation renames the verified app only to the versioned app-managed destination. Any previous
+app-managed bundle is moved to a rollback backup first and restored if activation is cancelled or
+fails. Failure never exposes a partially extracted active app; recovery bytes are retained if a
+rollback itself cannot complete. Cancellation stops downloads and owned tool process groups, and
+retry starts with fresh staging. The installer never targets `/Applications` or another Wine
+installation.
+
+Manual installation remains supported. After verifying the archive and extracting it with macOS
+`ditto`, the app's signature can be checked before installation:
 
 ```sh
 codesign --verify --strict --deep /path/to/MetalSharp-Wine.app
@@ -85,21 +104,28 @@ MetalSharp Wine identity, and checks this layout relative to the selected loader
 - `Contents/embedded.provisionprofile`.
 
 An executable directory, a script reporting the wrong version or identity, a WineHQ layout, and an
-incomplete MetalSharp app all fail before any Pluto download. The release acceptance job additionally
-verifies the app's code signature. These checks reject invalid prerequisites; they do not substitute
-for the real runtime acceptance run.
+incomplete MetalSharp app fail inference preflight. The download action is allowed to repair a
+missing or invalid dependency; a persistent failure after dependency setup stops before Pluto
+payload replacement. Both the dependency installer and release acceptance verify the app's code
+signature. These checks reject invalid prerequisites; they do not substitute for the real runtime
+acceptance run.
 
 The default Linux `/usr/bin/wine` resolution and native Windows direct-process behavior are
 unchanged; the macOS preflight is not imposed on those platforms.
 
 ## Runtime and launch checks
 
-The existing installer still downloads only the official Pluto v2.0 ZIP and verifies its outer hash
-and every DLL/engine/weight hash before installation. On Apple Silicon that installer cannot start
-unless the macOS 26.4 and MetalSharp Wine checks pass. File installation is evidence of integrity,
-not a substitute for runtime acceptance. Installing MetalSharp Wine/FEX itself through the same
-one-click flow remains separate work; that installer must target only the versioned app-managed
-location and leave any existing system Wine untouched.
+The combined Apple Silicon action checks macOS 26.4+, installs or reuses MetalSharp Wine, reruns
+inference preflight, and only then enters the existing Pluto payload commit path. The Pluto phase
+still verifies the official v2.0 ZIP's outer hash and every DLL/engine/weight hash, atomically
+replaces only those three payloads, and preserves the bridge, logs, configuration, and bandit data.
+Dependency failure therefore leaves working Pluto payloads untouched. Linux, Windows, and native
+Intel Mac setup remains Pluto-only.
+
+Progress reports separate honest byte totals for MetalSharp Wine (1293 whole MiB) and Pluto AI
+(295 whole MiB), followed by explicit checking, extraction, signature/layout validation, activation,
+and Pluto verification stages. File installation is evidence of integrity, not a substitute for
+runtime acceptance.
 
 The POSIX process launcher gives the bridge its own runtime directory. macOS uses
 `posix_spawn_file_actions_addchdir_np`; failure to apply that directory refuses the spawn instead of
@@ -120,8 +146,9 @@ The MetalSharp job:
 2. downloads and SHA-256-checks the pinned MetalSharp archive directly without Homebrew, verifies the
    signed app with `codesign --verify --strict --deep`, and checks its provisioning profile and
    i386/aarch64 runtime files;
-3. compiles the production runtime capability code and requires its real current-host probe and
-   synthetic MetalSharp regressions to pass;
+3. compiles the production runtime capability code and requires its real current-host probe plus
+   synthetic MetalSharp installer, validation, cancellation, rollback, and combined-setup regressions
+   to pass;
 4. downloads the official Pluto v2.0 ZIP only after those checks, verifies its outer SHA-256 and all
    three inner payload hashes, and extracts only the pinned files;
 5. checks that the gated bridge and DLL are i386 and the inference engine is x86-64;
@@ -140,7 +167,9 @@ The MetalSharp job:
 Workflow run **43758320180** passed this complete bridge, inference, strict-command, and clean-shutdown
 acceptance on **macOS 26.7.2**, using signed MetalSharp Wine 6.0 ARM64/FEX at
 `MetalSharp-Wine.app/Contents/MacOS/wine`. That run is the real ARM64 runtime evidence; synthetic
-preflight tests are not a replacement for it.
+preflight tests are not a replacement for it. It predates the combined one-click dependency
+installer and is not evidence of a real app-managed installation. A real installer acceptance must
+separately exercise fresh installation and repair on macOS without touching another Wine.
 
 The harness is `engine/tools/pluto-bridge/macos_runtime_acceptance.py`. It uses direct-pipe mode for
 a deterministic game-free transport test. Its JSON summary contains counts, hashes, Wine identity,
@@ -179,11 +208,12 @@ This is the release workflow, not a dry-run command: if every job succeeds, its 
 the named prerelease unless `publish=false` or `runtime-only=true` is supplied. Inspect the
 `pluto-macos-runtime` job's summary before treating macOS as validated.
 
-Host-only tests use synthetic executables and app bundles rather than a real Wine installation and
-do not use official payloads:
+Host-only tests use tiny synthetic archives, fake `ditto`/`codesign` tools, and synthetic executables
+and app bundles. They cover hash/size refusal, signature/layout/identity failures, symlink retention,
+cancellation, activation rollback, and Pluto preservation without network access, official payloads,
+a real code signature, or a real installation:
 
 ```sh
-python3 engine/tools/pluto-native-tests/test_native.py \
-  PortRegressionTests.test_runtime_apple_silicon_requires_metalsharp_wine
+python3 engine/tools/pluto-native-tests/test_native.py PortRegressionTests
 python3 engine/tools/pluto-bridge/test_macos_runtime_acceptance.py
 ```
